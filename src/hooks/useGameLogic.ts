@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
 import {
@@ -49,6 +49,21 @@ export function useGameLogic() {
   const [waitingForNextRound, setWaitingForNextRound] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
+  const gameStateRef = useRef<GameState>(gameState);
+  const isResolvingVotesRef = useRef(false);
+  const resolveVotesRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  
+  // AI speech queue for press-to-advance
+  const speechQueueRef = useRef<{
+    segments: string[];
+    currentIndex: number;
+    player: Player;
+    afterSpeech?: (s: GameState) => Promise<void>;
+  } | null>(null);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   const humanPlayer = gameState.players.find((p) => p.isHuman) || null;
   const isNight = gameState.phase.includes("NIGHT");
@@ -89,6 +104,22 @@ export function useGameLogic() {
     const ms = Math.floor(minMs + Math.random() * (maxMs - minMs));
     return delay(ms);
   };
+
+  const maybeResolveVotes = useCallback(async (state: GameState) => {
+    if (isResolvingVotesRef.current) return;
+    if (state.phase !== "DAY_VOTE") return;
+
+    const aliveIds = state.players.filter((p) => p.alive).map((p) => p.playerId);
+    const allVoted = aliveIds.every((id) => typeof state.votes[id] === "number");
+    if (!allVoted) return;
+
+    isResolvingVotesRef.current = true;
+    try {
+      await resolveVotesRef.current(state);
+    } finally {
+      isResolvingVotesRef.current = false;
+    }
+  }, []);
 
   // 开始游戏
   const startGame = useCallback(async () => {
@@ -508,7 +539,7 @@ export function useGameLogic() {
     }
   }, []);
 
-  // AI 发言（分段输出）
+  // AI 发言（分段输出，需要用户按键推进）
   const runAISpeech = useCallback(async (
     state: GameState,
     player: Player,
@@ -524,39 +555,57 @@ export function useGameLogic() {
       segments = ["（发言出错）"];
     }
 
-    // 逐条显示并添加到消息列表
-    let currentState = state;
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      
-      // 显示当前正在说的话
-      setCurrentDialogue({ speaker: player.displayName, text: segment, isStreaming: true });
-      
-      // 模拟打字时间
-      await delay(Math.min(segment.length * 50, 1500));
-      
-      // 添加到消息列表
-      currentState = addPlayerMessage(currentState, player.playerId, segment);
-      setGameState(currentState);
-      
-      // 段落之间的停顿
-      if (i < segments.length - 1) {
-        setCurrentDialogue({ speaker: player.displayName, text: "...", isStreaming: true });
-        await randomDelay(800, 1500);
-      }
+    // 初始化队列，显示第一条
+    speechQueueRef.current = {
+      segments,
+      currentIndex: 0,
+      player,
+      afterSpeech: options?.afterSpeech,
+    };
+
+    if (segments.length > 0) {
+      setCurrentDialogue({ speaker: player.displayName, text: segments[0], isStreaming: true });
     }
+  }, [apiKey]);
 
-    clearDialogue();
-    setIsWaitingForAI(false);
-
-    if (options?.afterSpeech) {
-      await options.afterSpeech(currentState);
+  // 推进到下一句话（用户按 Enter/Right/点击 时调用）
+  const advanceSpeech = useCallback(async () => {
+    const queue = speechQueueRef.current;
+    if (!queue) {
+      // 没有队列，可能是等待下一轮
       return;
     }
 
-    // 等待用户点击"下一轮"按钮
-    setWaitingForNextRound(true);
-  }, [apiKey, clearDialogue]);
+    const { segments, currentIndex, player, afterSpeech } = queue;
+    
+    // 将当前句子添加到消息列表
+    const currentSegment = segments[currentIndex];
+    if (currentSegment) {
+      const newState = addPlayerMessage(gameStateRef.current, player.playerId, currentSegment);
+      setGameState(newState);
+    }
+
+    const nextIndex = currentIndex + 1;
+    
+    if (nextIndex < segments.length) {
+      // 还有下一句，显示它
+      speechQueueRef.current = { ...queue, currentIndex: nextIndex };
+      setCurrentDialogue({ speaker: player.displayName, text: segments[nextIndex], isStreaming: true });
+    } else {
+      // 发言结束
+      speechQueueRef.current = null;
+      clearDialogue();
+      setIsWaitingForAI(false);
+
+      if (afterSpeech) {
+        await afterSpeech(gameStateRef.current);
+        return;
+      }
+
+      // 等待用户点击"下一轮"按钮
+      setWaitingForNextRound(true);
+    }
+  }, [clearDialogue]);
 
   // 下一个发言者
   const moveToNextSpeaker = useCallback(async (state: GameState) => {
@@ -592,22 +641,35 @@ export function useGameLogic() {
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.voteStart);
     setDialogue("主持人", UI_TEXT.votePrompt, false);
     setGameState(currentState);
-
-    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
-    for (const aiPlayer of aiPlayers) {
-      setIsWaitingForAI(true);
-      const targetSeat = await generateAIVote(apiKey!, currentState, aiPlayer);
-      currentState = { ...currentState, votes: { ...currentState.votes, [aiPlayer.playerId]: targetSeat } };
-      setGameState(currentState);
-    }
-    setIsWaitingForAI(false);
+    gameStateRef.current = currentState;
 
     if (humanPlayer?.alive) {
       setDialogue("提示", UI_TEXT.clickToVote, false);
-    } else {
-      await resolveVotes(currentState);
     }
-  }, [apiKey, humanPlayer]);
+
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
+    for (const aiPlayer of aiPlayers) {
+      if (gameStateRef.current.phase !== "DAY_VOTE") break;
+      setIsWaitingForAI(true);
+      const latestState = gameStateRef.current;
+      const targetSeat = await generateAIVote(apiKey!, latestState, aiPlayer);
+
+      if (gameStateRef.current.phase !== "DAY_VOTE") break;
+
+      const nextState = {
+        ...gameStateRef.current,
+        votes: { ...gameStateRef.current.votes, [aiPlayer.playerId]: targetSeat },
+      };
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+      await maybeResolveVotes(nextState);
+    }
+    setIsWaitingForAI(false);
+
+    if (!humanPlayer?.alive) {
+      await maybeResolveVotes(gameStateRef.current);
+    }
+  }, [apiKey, humanPlayer, maybeResolveVotes]);
 
   // 结算投票
   const resolveVotes = useCallback(async (state: GameState) => {
@@ -679,6 +741,10 @@ export function useGameLogic() {
     await proceedToNight(currentState);
   }, [startLastWordsPhase, runNightPhase, setGameState, setDialogue, maybeGenerateDailySummary]);
 
+  useEffect(() => {
+    resolveVotesRef.current = resolveVotes;
+  }, [resolveVotes]);
+
   // 游戏结束
   const endGame = useCallback(async (state: GameState, winner: "village" | "wolf") => {
     let currentState = transitionPhase(state, "GAME_END");
@@ -746,15 +812,19 @@ export function useGameLogic() {
   const handleHumanVote = useCallback(async (targetSeat: number) => {
     if (!humanPlayer) return;
 
-    let currentState = {
-      ...gameState,
-      votes: { ...gameState.votes, [humanPlayer.playerId]: targetSeat },
-    };
-    setGameState(currentState);
+    const baseState = gameStateRef.current;
+    if (baseState.phase !== "DAY_VOTE") return;
 
-    await delay(500);
-    await resolveVotes(currentState);
-  }, [humanPlayer, gameState, resolveVotes]);
+    const nextState: GameState = {
+      ...baseState,
+      votes: { ...baseState.votes, [humanPlayer.playerId]: targetSeat },
+    };
+    setGameState(nextState);
+    gameStateRef.current = nextState;
+
+    await delay(200);
+    await maybeResolveVotes(nextState);
+  }, [humanPlayer, maybeResolveVotes]);
 
   // 夜晚行动 - 支持所有角色
   const handleNightAction = useCallback(async (targetSeat: number, witchAction?: "save" | "poison" | "pass") => {
@@ -1053,5 +1123,6 @@ export function useGameLogic() {
     handleNightAction,
     handleNextRound,
     scrollToBottom,
+    advanceSpeech,
   };
 }

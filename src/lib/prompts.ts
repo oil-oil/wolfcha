@@ -30,6 +30,13 @@ export const CHARACTER_GENERATION_PROMPT = (count: number) => `你是一个狼�
 - riskBias: "safe" | "balanced" | "aggressive"
 - backgroundStory: 一句话简单背景
 
+可选增强（用于增加人物差异，但仍要自然，不要尬演）：
+- catchphrases: 1-3个口头禅（短）
+- logicStyle: "intuition" | "logic" | "chaos"
+- triggerTopics: 1-3个“被怀疑/被带节奏时”的常见反应关键词（短）
+- socialHabit: 一句话描述TA在局里更像哪类人（带节奏/和事佬/沉默观察/爱提问等）
+- humorStyle: 一句话描述幽默方式（冷幽默/碎碎念/网络梗克制使用等）
+
 返回JSON格式：
 {
   "characters": [
@@ -39,7 +46,12 @@ export const CHARACTER_GENERATION_PROMPT = (count: number) => `你是一个狼�
         "styleLabel": "风格标签",
         "voiceRules": ["特点1", "特点2"],
         "riskBias": "balanced",
-        "backgroundStory": "背景"
+        "backgroundStory": "背景",
+        "catchphrases": ["口头禅1", "口头禅2"],
+        "logicStyle": "logic",
+        "triggerTopics": ["被怀疑会急", "喜欢反问"],
+        "socialHabit": "爱提问，喜欢逼别人表态",
+        "humorStyle": "偶尔自嘲，梗不过量"
       }
     }
   ]
@@ -125,6 +137,9 @@ const buildPersonaSection = (player: Player): string => {
 ${persona.voiceRules.map((r) => `- ${r}`).join("\n")}
 口头禅: ${persona.catchphrases?.join("、") || "无"}
 逻辑流派: ${persona.logicStyle ? logicStyleMap[persona.logicStyle] : "平衡"}
+被怀疑时反应: ${persona.triggerTopics?.join("、") || "无"}
+社交习惯: ${persona.socialHabit || "无"}
+幽默方式: ${persona.humorStyle || "无"}
 背景: ${persona.backgroundStory}
 策略: ${persona.riskBias === "aggressive" ? "激进" : persona.riskBias === "safe" ? "保守" : "平衡"}`;
 };
@@ -340,6 +355,9 @@ export const SPEECH_PROMPT = (state: GameState, player: Player) => {
   const context = buildGameContext(state, player);
   const persona = buildPersonaSection(player);
 
+  const todayTranscript = buildTodayTranscript(state, 9000);
+  const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
+
   const isLastWords = state.phase === "DAY_LAST_WORDS";
 
   const roleHints = player.role === "Werewolf"
@@ -375,6 +393,10 @@ ${roleHints ? `- ${roleHints}` : ""}
 ["我觉得3号有点奇怪啊", "刚才发言的时候一直在踩5号", "我先投3号看看反应"]`;
 
   const user = `${context}
+
+${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : "【本日讨论记录】\n（无）"}
+
+${selfSpeech ? `【你本日已说过的话】\n"${selfSpeech}"` : "【你本日已说过的话】\n（无）"}
 
 轮到你发言，返回JSON数组：`;
 
@@ -459,7 +481,8 @@ ${persona}
 ${roleHints}
 
 【格式】
-只回复座位数字，如: 3`;
+只回复座位数字，如: 3
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
@@ -505,7 +528,8 @@ ${alreadyChecked.length > 0 ? `\n已查验过: ${alreadyChecked.map(p => `${p.se
 可选: ${uncheckedPlayers.length > 0 ? uncheckedPlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ") : alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
 
 【格式】
-只回复座位数字，如: 5`;
+只回复座位数字，如: 5
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
@@ -559,7 +583,8 @@ ${teammateVotesStr ? `\n【队友意向】\n${teammateVotesStr}\n提示：建议
 可选: ${villagers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
 
 【格式】
-只回复座位数字，如: 2`;
+只回复座位数字，如: 2
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
@@ -650,7 +675,8 @@ ${persona}
 ${lastTarget !== undefined ? `\n上晚保护了${lastTarget + 1}号，今晚不能选` : ""}
 
 【格式】
-只回复座位数字，如: 3`;
+只回复座位数字，如: 3
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
@@ -708,7 +734,8 @@ ${canPoison ? `- 输入 "poison X" 毒杀X号玩家（如 "poison 3"）` : "- �
 可毒目标: ${alivePlayers.map((p) => `${p.seat + 1}号`).join(", ")}
 
 【格式】
-回复: save / poison X / pass`;
+回复: save / poison X / pass
+只输出上述指令本身，不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
@@ -743,7 +770,8 @@ ${persona}
 
 【格式】
 只回复座位数字，如: 5
-如果不想开枪，回复: pass`;
+如果不想开枪，回复: pass
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 

@@ -157,6 +157,27 @@ export async function generateJSON<T>(
   try {
     return JSON.parse(jsonStr) as T;
   } catch {
+    // 尝试提取 JSON 对象或数组
+    const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
+    const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
+    
+    // 优先使用对象格式（因为我们通常期望 { characters: [...] }）
+    if (objectMatch) {
+      try {
+        return JSON.parse(objectMatch[0]) as T;
+      } catch {
+        // 对象解析失败，尝试数组
+      }
+    }
+    
+    if (arrayMatch) {
+      try {
+        return JSON.parse(arrayMatch[0]) as T;
+      } catch {
+        // 数组解析也失败
+      }
+    }
+    
     throw new Error(`Failed to parse JSON response: ${result.content}`);
   }
 }

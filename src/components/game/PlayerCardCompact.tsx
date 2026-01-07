@@ -17,6 +17,7 @@ interface PlayerCardCompactProps {
   canClick: boolean;
   isSelected: boolean;
   onClick: () => void;
+  onDetailClick?: () => void; // 点击查看详情
   animationDelay?: number;
   showWolfBadge?: boolean; // 显示狼人标记（狼人队友可见）
   seerCheckResult?: "wolf" | "good" | null; // 预言家查验结果
@@ -65,6 +66,7 @@ export function PlayerCardCompact({
   canClick,
   isSelected,
   onClick,
+  onDetailClick,
   animationDelay = 0,
   showWolfBadge = false,
   seerCheckResult = null,
@@ -78,44 +80,55 @@ export function PlayerCardCompact({
     player.role === "Werewolf" && 
     !player.isHuman;
 
+  const persona = player.agentProfile?.persona;
+  const styleLabel = persona?.styleLabel || (isMe ? "你" : "");
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (canClick) {
+      onClick();
+    } else if (onDetailClick) {
+      onDetailClick();
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: animationDelay }}
-      whileHover={canClick ? { scale: 1.02 } : {}}
-      whileTap={canClick ? { scale: 0.98 } : {}}
-      onClick={onClick}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={handleClick}
       className={`
-        bg-[var(--bg-card)] border border-transparent rounded-md px-2.5 py-2
-        flex items-center gap-2.5 transition-all duration-200 cursor-default
-        shadow-[0_1px_3px_rgba(0,0,0,0.05)]
-        hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:-translate-y-px
+        bg-[var(--bg-card)] border border-transparent rounded-xl px-3 py-2.5
+        flex items-center gap-3 transition-all duration-200 cursor-pointer
+        shadow-[0_2px_8px_rgba(0,0,0,0.06)]
+        hover:shadow-[0_6px_16px_rgba(0,0,0,0.1)] hover:-translate-y-0.5
         ${isDead ? "opacity-50 grayscale" : ""}
         ${isSpeaking ? "border-[var(--color-accent)] bg-[var(--color-accent-bg)] animate-[speaker-pulse_2s_ease-in-out_infinite]" : ""}
-        ${canClick ? "cursor-pointer border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]" : ""}
+        ${canClick ? "border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]" : ""}
         ${isSelected ? "bg-[var(--color-accent-bg)] border-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-accent-bg)]" : ""}
         ${isWolfTeammate ? "border-[var(--color-wolf)] bg-[var(--color-wolf-bg)]" : ""}
         ${isMe ? "border-l-4 border-l-[var(--color-accent)]" : ""}
       `}
     >
-      <div className="w-12 h-12 rounded-full shrink-0 relative">
-        <img src={dicebearUrl(player.playerId)} alt={player.displayName} className="w-full h-full object-cover" />
+      <div className="w-11 h-11 rounded-full shrink-0 relative">
+        <img src={dicebearUrl(player.playerId)} alt={player.displayName} className="w-full h-full object-cover rounded-full border-2 border-white shadow-sm" />
         {isDead && (
           <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
             <span className="text-[10px] font-bold text-white">RIP</span>
           </div>
         )}
       </div>
-      {/* 狼人队友标记 - 移到头像外面 */}
+      {/* 狼人队友标记 */}
       {isWolfTeammate && !isDead && (
-        <div className="absolute top-1 left-1 w-4 h-4 bg-[var(--color-wolf)] rounded-full flex items-center justify-center border border-white z-10">
+        <div className="absolute top-1.5 left-1.5 w-4 h-4 bg-[var(--color-wolf)] rounded-full flex items-center justify-center border border-white z-10">
           <WerewolfIcon size={10} className="text-white" />
         </div>
       )}
       {/* 预言家查验结果 */}
       {seerCheckResult && !isDead && (
-        <div className={`absolute top-1 left-1 w-4 h-4 rounded-full flex items-center justify-center border border-white z-10 ${seerCheckResult === 'wolf' ? 'bg-[var(--color-wolf)]' : 'bg-[var(--color-success)]'}`}>
+        <div className={`absolute top-1.5 left-1.5 w-4 h-4 rounded-full flex items-center justify-center border border-white z-10 ${seerCheckResult === 'wolf' ? 'bg-[var(--color-wolf)]' : 'bg-[var(--color-success)]'}`}>
           {seerCheckResult === 'wolf' ? (
             <WerewolfIcon size={10} className="text-white" />
           ) : (
@@ -125,7 +138,7 @@ export function PlayerCardCompact({
       )}
       {/* 自己的身份图标 */}
       {isMe && !isDead && (
-        <div className="absolute top-1 left-1 w-5 h-5 bg-white rounded-full flex items-center justify-center border shadow-sm text-[var(--color-accent)] z-10">
+        <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center border shadow-sm text-[var(--color-accent)] z-10">
           {getRoleIcon(player.role)}
         </div>
       )}
@@ -137,13 +150,19 @@ export function PlayerCardCompact({
             <span className="text-[10px] bg-[var(--color-accent)] text-white px-1 rounded-sm font-bold leading-none py-0.5">YOU</span>
           )}
         </div>
-        <div className="flex-1 w-full text-xs leading-tight font-medium break-words whitespace-normal line-clamp-2" title={player.displayName}>
+        <div className="text-sm font-semibold text-[var(--text-primary)] truncate" title={player.displayName}>
           {player.displayName}
         </div>
+        {/* 背景信息标签 */}
+        {styleLabel && (
+          <div className="text-[10px] text-[var(--text-muted)] mt-0.5 truncate">
+            {styleLabel}
+          </div>
+        )}
       </div>
       
       {isSpeaking && (
-        <div className="w-2 h-2 bg-[var(--color-accent)] rounded-full animate-pulse shrink-0 ml-1" />
+        <div className="w-2 h-2 bg-[var(--color-accent)] rounded-full animate-pulse shrink-0" />
       )}
     </motion.div>
   );

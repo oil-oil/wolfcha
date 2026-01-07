@@ -2,8 +2,6 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  PaperPlaneTilt,
-  CheckCircle,
   CaretRight,
   X,
   Skull,
@@ -11,7 +9,6 @@ import {
   Eye,
   Shield,
   Crosshair,
-  FastForward,
 } from "@phosphor-icons/react";
 import { ArrowClockwise } from "@phosphor-icons/react";
 import {
@@ -27,16 +24,10 @@ interface BottomActionPanelProps {
   gameState: GameState;
   humanPlayer: Player | null;
   selectedSeat: number | null;
-  inputText: string;
   isWaitingForAI: boolean;
-  waitingForNextRound: boolean;
-  onInputChange: (text: string) => void;
-  onSendMessage: () => void;
-  onFinishSpeaking: () => void;
   onConfirmAction: () => void;
   onCancelSelection: () => void;
   onNightAction: (seat: number, actionType?: WitchActionType) => void;
-  onNextRound: () => void;
   onRestart: () => void;
 }
 
@@ -44,104 +35,17 @@ export function BottomActionPanel({
   gameState,
   humanPlayer,
   selectedSeat,
-  inputText,
   isWaitingForAI,
-  waitingForNextRound,
-  onInputChange,
-  onSendMessage,
-  onFinishSpeaking,
   onConfirmAction,
   onCancelSelection,
   onNightAction,
-  onNextRound,
   onRestart,
 }: BottomActionPanelProps) {
   const phase = gameState.phase;
-  const showTurnPrompt =
-    !!humanPlayer?.alive &&
-    (phase === "DAY_SPEECH" || phase === "DAY_LAST_WORDS") &&
-    gameState.currentSpeakerSeat === humanPlayer?.seat;
 
   return (
     <div className="min-h-[40px] flex items-center justify-center w-full">
       <AnimatePresence mode="wait">
-        {/* 下一轮按钮 - 优先级最高 */}
-        {waitingForNextRound && (phase === "DAY_SPEECH" || phase === "DAY_LAST_WORDS") && (
-          <motion.div
-            key="next-round"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex justify-center w-full"
-          >
-            <button
-              onClick={onNextRound}
-              className="inline-flex items-center justify-center gap-2 h-10 px-8 text-sm font-medium rounded cursor-pointer bg-[var(--color-accent)] text-white hover:bg-[#a07608] transition-all"
-            >
-              <FastForward size={18} weight="fill" />
-              下一位发言
-            </button>
-          </motion.div>
-        )}
-
-        {/* 发言输入区域 */}
-        {!(waitingForNextRound && (phase === "DAY_SPEECH" || phase === "DAY_LAST_WORDS")) && 
-         (phase === "DAY_SPEECH" || phase === "DAY_LAST_WORDS") && 
-         gameState.currentSpeakerSeat === humanPlayer?.seat && (
-          <motion.div
-            key="speech-input"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="flex flex-col gap-2 w-full"
-          >
-            {showTurnPrompt && (
-              <div className="w-full">
-                <div className="w-full px-3 py-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-primary)]">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
-                      {phase === "DAY_LAST_WORDS" ? "轮到你发表遗言" : "轮到你发言"}
-                    </div>
-                    <div className="text-xs text-[var(--text-muted)]">
-                      Enter 发送
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 w-full items-center">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => onInputChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onSendMessage()}
-              placeholder={phase === "DAY_LAST_WORDS" ? "留下遗言..." : "请输入发言..."}
-              className="flex-1 h-10 px-3 text-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-bg)] transition-all"
-              autoFocus
-            />
-            <button 
-              onClick={onSendMessage} 
-              className="inline-flex items-center justify-center w-9 h-9 rounded cursor-pointer bg-[var(--color-accent)] text-white hover:bg-[#a07608] disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0" 
-              disabled={!inputText.trim()}
-              title="发送"
-            >
-              <PaperPlaneTilt size={18} weight="fill" />
-            </button>
-            <div className="w-px h-8 bg-[var(--border-color)] mx-1" />
-            <button 
-              onClick={onFinishSpeaking} 
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium rounded cursor-pointer bg-[var(--bg-secondary)] text-[var(--text-primary)] hover:bg-[var(--border-color)] transition-all shrink-0"
-              title="结束发言"
-            >
-              <CheckCircle size={16} />
-              <span>结束</span>
-            </button>
-            </div>
-          </motion.div>
-        )}
-
         {/* 选择确认 (投票/夜间行动) */}
         {(() => {
           const isCorrectRoleForPhase = 
@@ -151,7 +55,11 @@ export function BottomActionPanel({
             (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
             (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter");
 
-          if (isCorrectRoleForPhase && selectedSeat !== null && !isWaitingForAI) {
+          if (
+            isCorrectRoleForPhase &&
+            selectedSeat !== null &&
+            (phase === "DAY_VOTE" || !isWaitingForAI)
+          ) {
             return (
               <motion.div
                 key="action-confirm"

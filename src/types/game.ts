@@ -32,6 +32,9 @@ export interface Persona {
   backgroundStory: string;
   catchphrases?: string[];
   logicStyle?: "intuition" | "logic" | "chaos";
+  triggerTopics?: string[];
+  socialHabit?: string;
+  humorStyle?: string;
 }
 
 export interface AgentProfile {
@@ -116,9 +119,9 @@ export interface GameState {
 export const AVAILABLE_MODELS: ModelRef[] = [
   // { provider: "openrouter", model: "google/gemini-3-flash-preview" },
   // { provider: "openrouter", model: "deepseek/deepseek-v3.2" },
-  { provider: "openrouter", model: "anthropic/claude-haiku-4.5" },
+  // { provider: "openrouter", model: "anthropic/claude-haiku-4.5" },
   // { provider: "openrouter", model: "qwen/qwen3-next-80b-a3b-instruct" },
-  // { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
+  { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
   // { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
 ];
 

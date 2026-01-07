@@ -37,6 +37,8 @@ import { PlayerCardCompact } from "@/components/game/PlayerCardCompact";
 import { DialogArea } from "@/components/game/DialogArea";
 import { BottomActionPanel } from "@/components/game/BottomActionPanel";
 import { Notebook } from "@/components/game/Notebook";
+import { GameBackground } from "@/components/game/GameBackground";
+import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
 
 // ============ 工具函数 ============
 
@@ -70,11 +72,13 @@ export default function Home() {
     handleNextRound,
     waitingForNextRound,
     scrollToBottom,
+    advanceSpeech,
   } = useGameLogic();
 
   // UI 状态
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
 
   // Typewriter effect
   const { displayedText, isTyping } = useTypewriter({
@@ -83,16 +87,20 @@ export default function Home() {
     enabled: !!currentDialogue?.isStreaming,
   });
 
-  // Enter key to skip to next speaker during AI speech
+  // Enter/Right key to advance AI speech or move to next round
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        // 当AI在发言时，按Enter跳过到下一位
-        const isAISpeaking = gameState.phase === "DAY_SPEECH" && 
-          gameState.currentSpeakerSeat !== humanPlayer?.seat &&
-          !isWaitingForAI;
+      // Enter or Right arrow to advance
+      if ((e.key === "Enter" && !e.shiftKey) || e.key === "ArrowRight") {
+        // 当AI在发言时（有currentDialogue），按键推进下一句
+        if (currentDialogue) {
+          e.preventDefault();
+          advanceSpeech();
+          return;
+        }
         
-        if (isAISpeaking || waitingForNextRound) {
+        // 等待下一轮时，按键进入下一轮
+        if (waitingForNextRound) {
           e.preventDefault();
           handleNextRound();
         }
@@ -101,7 +109,7 @@ export default function Home() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [gameState.phase, gameState.currentSpeakerSeat, humanPlayer?.seat, isWaitingForAI, waitingForNextRound, handleNextRound]);
+  }, [currentDialogue, waitingForNextRound, advanceSpeech, handleNextRound]);
 
   // API Key 检查
   useEffect(() => {
@@ -310,7 +318,7 @@ export default function Home() {
               {/* 新布局：左侧玩家 | 中间对话 | 右侧玩家 */}
               <div className="flex-1 flex gap-4 px-6 py-5 overflow-hidden w-full justify-center">
                 {/* 左侧玩家卡片 */}
-                <div className="w-[220px] flex flex-col gap-2.5 overflow-y-auto shrink-0 pr-2">
+                <div className="w-[220px] flex flex-col gap-2.5 shrink-0 pr-2">
                   <AnimatePresence>
                     {leftPlayers.map((player, index) => {
                       const checkResult =
@@ -333,6 +341,7 @@ export default function Home() {
                           canClick={canClickSeat(player)}
                           isSelected={selectedSeat === player.seat}
                           onClick={() => handleSeatClick(player)}
+                          onDetailClick={() => setDetailPlayer(player)}
                           animationDelay={index * 0.05}
                           humanPlayer={humanPlayer}
                           seerCheckResult={seerResult}
@@ -342,28 +351,25 @@ export default function Home() {
                   </AnimatePresence>
                 </div>
 
-                {/* 中间对话区域 */}
-                <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 h-full max-w-[1000px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg overflow-hidden">
-                  {/* 头部：人类玩家信息 */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
-                    <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
-                      <SpeechIcon size={16} />
-                      <span>对话记录</span>
-                    </div>
-                    {humanPlayer && (
-                      <div className="flex items-center gap-2 text-sm">
+                {/* 中间对话区域 - 简化容器 */}
+                <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full max-w-[1000px] overflow-hidden">
+                  {/* 头部：玩家身份标签 - Glass Panel 风格 */}
+                  {humanPlayer && (
+                    <div className="flex items-center justify-between px-4 py-2 mb-2">
+                      <div className="glass-panel px-3 py-1.5 rounded-full flex items-center gap-2 text-sm" style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
+                        <SpeechIcon size={14} className="opacity-60" />
                         <span className="font-medium text-[var(--text-primary)]">{humanPlayer.displayName}</span>
-                        <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${
+                        <span className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                           humanPlayer.role === "Werewolf" 
                             ? "text-[var(--color-wolf)] bg-[var(--color-wolf-bg)]" 
                             : "text-[var(--color-accent)] bg-[var(--color-accent-bg)]"
                         }`}>
-                          {humanPlayer.role === "Werewolf" && <WerewolfIcon size={14} />}
-                          {humanPlayer.role === "Seer" && <SeerIcon size={14} />}
-                          {humanPlayer.role === "Witch" && <WitchIcon size={14} />}
-                          {humanPlayer.role === "Hunter" && <HunterIcon size={14} />}
-                          {humanPlayer.role === "Guard" && <GuardIcon size={14} />}
-                          {humanPlayer.role === "Villager" && <VillagerIcon size={14} />}
+                          {humanPlayer.role === "Werewolf" && <WerewolfIcon size={12} />}
+                          {humanPlayer.role === "Seer" && <SeerIcon size={12} />}
+                          {humanPlayer.role === "Witch" && <WitchIcon size={12} />}
+                          {humanPlayer.role === "Hunter" && <HunterIcon size={12} />}
+                          {humanPlayer.role === "Guard" && <GuardIcon size={12} />}
+                          {humanPlayer.role === "Villager" && <VillagerIcon size={12} />}
                           {humanPlayer.role === "Werewolf" ? "狼人" :
                            humanPlayer.role === "Seer" ? "预言家" :
                            humanPlayer.role === "Witch" ? "女巫" :
@@ -371,8 +377,8 @@ export default function Home() {
                            humanPlayer.role === "Guard" ? "守卫" : "村民"}
                         </span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* 对话内容 */}
                   <div className="flex-1 overflow-hidden relative min-h-0">
@@ -382,34 +388,39 @@ export default function Home() {
                       currentDialogue={currentDialogue}
                       displayedText={displayedText}
                       isTyping={isTyping}
-                      showFullHistory={true}
-                    />
-                  </div>
-
-                  {/* 底部操作面板 - 集成在对话框内 */}
-                  <div className="px-4 py-3 border-t border-[var(--border-color)] bg-[var(--bg-card)]">
-                    <BottomActionPanel
-                      gameState={gameState}
-                      humanPlayer={humanPlayer}
-                      selectedSeat={selectedSeat}
-                      inputText={inputText}
-                      isWaitingForAI={isWaitingForAI}
+                      onAdvanceDialogue={currentDialogue ? advanceSpeech : handleNextRound}
+                      isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
                       waitingForNextRound={waitingForNextRound}
+                      inputText={inputText}
                       onInputChange={setInputText}
                       onSendMessage={handleHumanSpeech}
                       onFinishSpeaking={handleFinishSpeaking}
-                      onConfirmAction={confirmSelectedSeat}
-                      onCancelSelection={() => setSelectedSeat(null)}
-                      onNightAction={handleNightActionConfirm}
-                      onNextRound={handleNextRound}
-                      onRestart={restartGame}
                     />
                   </div>
+
+                  {/* 底部操作面板 - 仅在需要时显示 */}
+                  {(selectedSeat !== null || 
+                    (gameState.phase === "NIGHT_WITCH_ACTION" && humanPlayer?.role === "Witch" && !isWaitingForAI) ||
+                    gameState.phase === "GAME_END") && (
+                    <div className="px-4 py-3">
+                      <div className="glass-panel rounded-2xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.5)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                        <BottomActionPanel
+                          gameState={gameState}
+                          humanPlayer={humanPlayer}
+                          selectedSeat={selectedSeat}
+                          isWaitingForAI={isWaitingForAI}
+                          onConfirmAction={confirmSelectedSeat}
+                          onCancelSelection={() => setSelectedSeat(null)}
+                          onNightAction={handleNightActionConfirm}
+                          onRestart={restartGame}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* 右侧面板：玩家 + 笔记本 */}
-                <div className="w-[220px] flex flex-col gap-3 shrink-0 pl-2 h-full min-h-0">
-                  <div className="flex flex-col gap-2.5 shrink-0 overflow-y-auto max-h-[50%] pr-1">
+                {/* 右侧面板：玩家 */}
+                <div className="w-[220px] flex flex-col gap-2.5 shrink-0 pl-2">
                     <AnimatePresence>
                       {rightPlayers.map((player, index) => {
                          const checkResult = humanPlayer?.role === "Seer" 
@@ -425,6 +436,7 @@ export default function Home() {
                           canClick={canClickSeat(player)}
                           isSelected={selectedSeat === player.seat}
                           onClick={() => handleSeatClick(player)}
+                          onDetailClick={() => setDetailPlayer(player)}
                           animationDelay={index * 0.05}
                           humanPlayer={humanPlayer}
                           seerCheckResult={seerResult}
@@ -432,9 +444,6 @@ export default function Home() {
                       );
                       })}
                     </AnimatePresence>
-                  </div>
-                  
-                  {/* 笔记本 */}
                 </div>
               </div>
             </>
@@ -469,6 +478,14 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 玩家详情弹窗 */}
+      <PlayerDetailModal
+        player={detailPlayer}
+        isOpen={detailPlayer !== null}
+        onClose={() => setDetailPlayer(null)}
+        humanPlayer={humanPlayer}
+      />
     </div>
   );
 }

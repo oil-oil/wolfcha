@@ -1,0 +1,229 @@
+"use client";
+
+import { motion, AnimatePresence } from "framer-motion";
+import { X } from "@phosphor-icons/react";
+import type { Player } from "@/types/game";
+import { 
+  WerewolfIcon,
+  SeerIcon,
+  VillagerIcon,
+  WitchIcon,
+  HunterIcon,
+  GuardIcon
+} from "@/components/icons/FlatIcons";
+
+interface PlayerDetailModalProps {
+  player: Player | null;
+  isOpen: boolean;
+  onClose: () => void;
+  humanPlayer?: Player | null;
+}
+
+const avatarBgColors = [
+  'e8d5c4', 'd4e5d7', 'd5dce8', 'e8d4d9', 'ddd4e8',
+  'd4e8e5', 'e8e4d4', 'd4d8e8', 'e5d4d4', 'dae8d4',
+];
+
+const getPlayerBgColor = (seed: string) => {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return avatarBgColors[Math.abs(hash) % avatarBgColors.length];
+};
+
+const dicebearUrl = (seed: string) =>
+  `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${getPlayerBgColor(seed)}`;
+
+const getRoleIcon = (role: string, size: number = 20) => {
+  switch (role) {
+    case "Werewolf": return <WerewolfIcon size={size} />;
+    case "Seer": return <SeerIcon size={size} />;
+    case "Witch": return <WitchIcon size={size} />;
+    case "Hunter": return <HunterIcon size={size} />;
+    case "Guard": return <GuardIcon size={size} />;
+    default: return <VillagerIcon size={size} />;
+  }
+};
+
+const getRoleName = (role: string) => {
+  switch (role) {
+    case "Werewolf": return "狼人";
+    case "Seer": return "预言家";
+    case "Witch": return "女巫";
+    case "Hunter": return "猎人";
+    case "Guard": return "守卫";
+    default: return "村民";
+  }
+};
+
+const getStrategyLabel = (strategy: string) => {
+  switch (strategy) {
+    case "aggressive": return "激进";
+    case "safe": return "保守";
+    default: return "平衡";
+  }
+};
+
+const getLogicLabel = (logic: string | undefined) => {
+  switch (logic) {
+    case "intuition": return "直觉派";
+    case "logic": return "逻辑派";
+    case "chaos": return "混沌派";
+    default: return "平衡派";
+  }
+};
+
+export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer }: PlayerDetailModalProps) {
+  if (!player) return null;
+
+  const persona = player.agentProfile?.persona;
+  const isMe = player.isHuman;
+  const isWolfTeammate = humanPlayer?.role === "Werewolf" && player.role === "Werewolf" && !player.isHuman;
+  const canSeeRole = isMe || isWolfTeammate || !player.alive;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* 背景遮罩 */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50"
+            onClick={onClose}
+          />
+          
+          {/* 弹窗卡片 */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[360px] max-w-[90vw]"
+          >
+            <div 
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: 'rgba(255, 255, 255, 0.85)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255, 255, 255, 0.6)',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              }}
+            >
+              {/* 头部 - 大头像区 */}
+              <div className="relative pt-8 pb-6 px-6 text-center bg-gradient-to-b from-[var(--color-accent-bg)] to-transparent">
+                {/* 关闭按钮 */}
+                <button
+                  onClick={onClose}
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors"
+                >
+                  <X size={16} weight="bold" />
+                </button>
+
+                {/* 头像 */}
+                <div className="relative w-24 h-24 mx-auto mb-4">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-[var(--color-accent)]/30 to-transparent rounded-full blur-xl" />
+                  <img
+                    src={dicebearUrl(player.playerId)}
+                    alt={player.displayName}
+                    className={`w-full h-full rounded-full border-4 border-white shadow-lg relative z-10 ${!player.alive ? 'grayscale opacity-60' : ''}`}
+                  />
+                  {!player.alive && (
+                    <div className="absolute inset-0 flex items-center justify-center z-20">
+                      <span className="text-white font-bold text-sm bg-black/50 px-2 py-1 rounded">已出局</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 座位号 + 名字 */}
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <span className="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded">{player.seat + 1}号</span>
+                  {isMe && <span className="text-xs font-bold bg-[var(--color-accent)] text-white px-2 py-0.5 rounded">YOU</span>}
+                </div>
+                <h2 className="text-xl font-black text-[var(--text-primary)]">{player.displayName}</h2>
+                
+                {/* 身份标签 - 仅可见时显示 */}
+                {canSeeRole && (
+                  <div className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-sm font-bold ${
+                    player.role === "Werewolf" 
+                      ? "bg-[var(--color-wolf-bg)] text-[var(--color-wolf)]" 
+                      : "bg-[var(--color-accent-bg)] text-[var(--color-accent)]"
+                  }`}>
+                    {getRoleIcon(player.role, 16)}
+                    <span>{getRoleName(player.role)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 内容区 - 背景信息 */}
+              <div className="px-6 pb-6 space-y-4">
+                {persona && (
+                  <>
+                    {/* 性格标签 */}
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 font-medium">
+                        {persona.styleLabel}
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                        {getLogicLabel(persona.logicStyle)}
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 font-medium">
+                        {getStrategyLabel(persona.riskBias)}
+                      </span>
+                    </div>
+
+                    {/* 背景故事 */}
+                    <div>
+                      <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">背景</h4>
+                      <p className="text-sm text-[var(--text-primary)] leading-relaxed">
+                        {persona.backgroundStory}
+                      </p>
+                    </div>
+
+                    {/* 说话风格 */}
+                    {persona.voiceRules && persona.voiceRules.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">说话风格</h4>
+                        <ul className="text-sm text-[var(--text-secondary)] space-y-1">
+                          {persona.voiceRules.map((rule, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="text-[var(--color-accent)] mt-1">•</span>
+                              <span>{rule}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* 口头禅 */}
+                    {persona.catchphrases && persona.catchphrases.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">口头禅</h4>
+                        <div className="flex flex-wrap gap-1.5">
+                          {persona.catchphrases.map((phrase, i) => (
+                            <span key={i} className="text-xs px-2 py-1 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)] italic">
+                              "{phrase}"
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* 人类玩家没有 persona */}
+                {isMe && !persona && (
+                  <div className="text-center py-4 text-[var(--text-muted)] text-sm">
+                    这是你的角色
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
