@@ -104,7 +104,7 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     humanDescription: (hp) => hp?.role === "Guard" ? "选择要保护的玩家" : "守卫行动中",
     requiresHumanInput: (hp) => hp?.alive && hp?.role === "Guard" || false,
     canSelectPlayer: (hp, target, gs) => {
-      if (!hp || hp.role !== "Guard" || !target.alive || target.isHuman) return false;
+      if (!hp || hp.role !== "Guard" || !target.alive) return false;
       // 不能连续保护同一人
       if (gs.nightActions.lastGuardTarget === target.seat) return false;
       return true;

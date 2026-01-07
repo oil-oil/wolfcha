@@ -6,6 +6,7 @@ import { WerewolfIcon, SeerIcon, WitchIcon, HunterIcon } from "@/components/icon
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { TutorialModal } from "@/components/game/TutorialModal";
 
 interface WelcomeScreenProps {
   humanName: string;
@@ -21,6 +22,7 @@ export function WelcomeScreen({
   isLoading,
 }: WelcomeScreenProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
   // Background floating icons configuration
   const floatingIcons = [
@@ -65,6 +67,8 @@ export function WelcomeScreen({
           <Icon size={120} />
         </motion.div>
       ))}
+
+      <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -127,7 +131,7 @@ export function WelcomeScreen({
             transition={{ delay: 0.3 }}
             className="text-[var(--text-secondary)] font-medium"
           >
-            AI 驱动的狼人杀世界
+            和朋友们来一局狼人杀吧
           </motion.p>
         </div>
 
@@ -139,6 +143,15 @@ export function WelcomeScreen({
           className="w-full bg-[var(--bg-card)]/80 backdrop-blur-sm p-1 rounded-2xl border border-[var(--border-color)] shadow-xl"
         >
           <div className="bg-[var(--bg-main)]/50 rounded-xl p-6 flex flex-col gap-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsTutorialOpen(true)}
+              className="w-full h-10 text-sm font-semibold"
+            >
+              玩法教学 / 新手指南
+            </Button>
+
             <div className="space-y-3">
               <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1 flex items-center gap-2">
                 <User weight="bold" />
@@ -147,7 +160,7 @@ export function WelcomeScreen({
               <div className="relative group">
                 <Input
                   type="text"
-                  placeholder="输入你的名字..."
+                  placeholder="你叫什么名字？"
                   value={humanName}
                   onChange={(e) => setHumanName(e.target.value)}
                   onFocus={() => setIsFocused(true)}
@@ -177,7 +190,7 @@ export function WelcomeScreen({
               onClick={onStart}
               disabled={!humanName.trim() || isLoading}
               size="lg"
-              className="w-full h-12 text-base font-bold shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] relative overflow-hidden group"
+              className="w-full h-12 text-base font-bold shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] relative overflow-hidden group cursor-pointer"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
                 {isLoading ? (
@@ -188,7 +201,7 @@ export function WelcomeScreen({
                     >
                       <Sparkle weight="bold" />
                     </motion.div>
-                    正在生成角色...
+                    正在邀请玩家...
                   </>
                 ) : (
                   <>
@@ -215,7 +228,7 @@ export function WelcomeScreen({
           <span className="w-1 h-1 rounded-full bg-current" />
           <span>预女猎守</span>
           <span className="w-1 h-1 rounded-full bg-current" />
-          <span>AI 对战</span>
+          <span>3狼6民</span>
         </motion.div>
       </motion.div>
     </div>

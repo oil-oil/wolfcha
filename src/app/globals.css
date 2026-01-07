@@ -32,6 +32,8 @@
   
   /* 功能色 - 复古金色为主 */
   --color-accent: #b8860b;
+  --color-accent-light: #d4a017;
+  --color-accent-dark: #8b6508;
   --color-accent-bg: #faf3e0;
   --color-success: #2d5a27;
   --color-success-bg: #e8f0e6;

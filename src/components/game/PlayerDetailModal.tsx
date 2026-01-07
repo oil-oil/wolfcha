@@ -117,7 +117,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer }: Play
                 {/* 关闭按钮 */}
                 <button
                   onClick={onClose}
-                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors"
+                  className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 active:scale-[0.98] flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <X size={16} weight="bold" />
                 </button>

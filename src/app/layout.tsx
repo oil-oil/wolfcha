@@ -17,7 +17,7 @@ const notoSerifSC = Noto_Serif_SC({
 
 export const metadata: Metadata = {
   title: "Wolfcha - 猹人杀",
-  description: "单人 vs 多 AI 的复古童话狼人杀",
+  description: "单人沉浸式复古童话狼人杀",
 };
 
 export default function RootLayout({

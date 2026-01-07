@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useAtom } from "jotai";
 import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
 import {
@@ -8,7 +9,7 @@ import {
   setupPlayers,
   addSystemMessage,
   addPlayerMessage,
-  transitionPhase,
+  transitionPhase as rawTransitionPhase,
   checkWinCondition,
   killPlayer,
   tallyVotes,
@@ -25,8 +26,9 @@ import {
   type WitchAction,
 } from "@/lib/game-master";
 import { generateCharacters } from "@/lib/character-generator";
-import type { GameState, Player } from "@/types/game";
+import type { GameState, Player, Phase } from "@/types/game";
 import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/prompts";
+import { gameStateAtom, isValidTransition } from "@/store/game-machine";
 
 export interface DialogueState {
   speaker: string;
@@ -40,7 +42,7 @@ export function useGameLogic() {
     defaultValue: "",
   });
   const [apiKeyConfirmed, setApiKeyConfirmed] = useState(false);
-  const [gameState, setGameState] = useState<GameState>(createInitialGameState());
+  const [gameState, setGameState] = useAtom(gameStateAtom);
   const [isLoading, setIsLoading] = useState(false);
   const [isWaitingForAI, setIsWaitingForAI] = useState(false);
   const [currentDialogue, setCurrentDialogue] = useState<DialogueState | null>(null);
@@ -48,6 +50,8 @@ export function useGameLogic() {
   const [showTable, setShowTable] = useState(false);
   const [waitingForNextRound, setWaitingForNextRound] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const pendingStartStateRef = useRef<GameState | null>(null);
+  const hasContinuedAfterRevealRef = useRef(false);
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
   const isResolvingVotesRef = useRef(false);
@@ -68,6 +72,13 @@ export function useGameLogic() {
   const humanPlayer = gameState.players.find((p) => p.isHuman) || null;
   const isNight = gameState.phase.includes("NIGHT");
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const transitionPhase = useCallback((state: GameState, newPhase: Phase): GameState => {
+    if (!isValidTransition(state.phase, newPhase)) {
+      console.warn(`[wolfcha] Invalid phase transition: ${state.phase} -> ${newPhase}`);
+    }
+    return rawTransitionPhase(state, newPhase);
+  }, []);
 
   const maybeGenerateDailySummary = useCallback(async (state: GameState): Promise<GameState> => {
     if (!apiKey) return state;
@@ -128,6 +139,7 @@ export function useGameLogic() {
       toast.error("缺少 OpenRouter API Key", {
         description: "请在 .env.local 设置 NEXT_PUBLIC_OPENROUTER_API_KEY，并重启 dev server",
       });
+      setApiKeyConfirmed(false);
       return;
     }
     
@@ -148,8 +160,8 @@ export function useGameLogic() {
       setGameState(newState);
       setShowTable(true);
 
-      await delay(1500);
-      await runNightPhase(newState);
+      pendingStartStateRef.current = newState;
+      hasContinuedAfterRevealRef.current = false;
     } catch (error) {
       const msg = String(error);
       if (msg.includes("OpenRouter API error: 401")) {
@@ -545,6 +557,11 @@ export function useGameLogic() {
     player: Player,
     options?: { afterSpeech?: (s: GameState) => Promise<void> }
   ) => {
+    if (state.phase.includes("NIGHT")) {
+      console.warn("[wolfcha] runAISpeech called during NIGHT phase:", state.phase);
+      return;
+    }
+
     setIsWaitingForAI(true);
     setCurrentDialogue({ speaker: player.displayName, text: "（正在组织语言…）", isStreaming: false });
 
@@ -569,11 +586,20 @@ export function useGameLogic() {
   }, [apiKey]);
 
   // 推进到下一句话（用户按 Enter/Right/点击 时调用）
-  const advanceSpeech = useCallback(async () => {
+  const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean }> => {
+    if (gameStateRef.current.phase.includes("NIGHT")) {
+      // 防御性：任何情况下夜晚都不应该推进/落库白天发言
+      speechQueueRef.current = null;
+      clearDialogue();
+      setIsWaitingForAI(false);
+      setWaitingForNextRound(false);
+      return { finished: true, shouldAdvanceToNextSpeaker: false };
+    }
+
     const queue = speechQueueRef.current;
     if (!queue) {
       // 没有队列，可能是等待下一轮
-      return;
+      return { finished: false, shouldAdvanceToNextSpeaker: false };
     }
 
     const { segments, currentIndex, player, afterSpeech } = queue;
@@ -591,6 +617,7 @@ export function useGameLogic() {
       // 还有下一句，显示它
       speechQueueRef.current = { ...queue, currentIndex: nextIndex };
       setCurrentDialogue({ speaker: player.displayName, text: segments[nextIndex], isStreaming: true });
+      return { finished: false, shouldAdvanceToNextSpeaker: false };
     } else {
       // 发言结束
       speechQueueRef.current = null;
@@ -599,16 +626,22 @@ export function useGameLogic() {
 
       if (afterSpeech) {
         await afterSpeech(gameStateRef.current);
-        return;
+        return { finished: true, shouldAdvanceToNextSpeaker: false };
       }
 
       // 等待用户点击"下一轮"按钮
       setWaitingForNextRound(true);
+      return { finished: true, shouldAdvanceToNextSpeaker: true };
     }
   }, [clearDialogue]);
 
   // 下一个发言者
   const moveToNextSpeaker = useCallback(async (state: GameState) => {
+    if (state.phase !== "DAY_SPEECH" && state.phase !== "DAY_LAST_WORDS") {
+      console.warn("[wolfcha] moveToNextSpeaker called outside speech phase:", state.phase);
+      return;
+    }
+
     const nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
 
     const startSeat = state.daySpeechStartSeat;
@@ -639,7 +672,7 @@ export function useGameLogic() {
     let currentState = transitionPhase(state, "DAY_VOTE");
     currentState = { ...currentState, currentSpeakerSeat: null, votes: {} };
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.voteStart);
-    setDialogue("主持人", UI_TEXT.votePrompt, false);
+    setDialogue("主持人", humanPlayer?.alive ? UI_TEXT.votePrompt : UI_TEXT.aiVoting, false);
     setGameState(currentState);
     gameStateRef.current = currentState;
 
@@ -703,15 +736,26 @@ export function useGameLogic() {
     }
 
     const proceedToNight = async (s: GameState) => {
-      await delay(1600);
+      // 不阻塞 UI：先切到夜晚，再后台生成每日总结
+      void maybeGenerateDailySummary(s)
+        .then((summarized) => {
+          setGameState((prev) => {
+            if (prev.gameId !== summarized.gameId) return prev;
+            return { ...prev, dailySummaries: summarized.dailySummaries };
+          });
+        })
+        .catch(() => {
+          // ignore
+        });
 
-      const summarizedState = await maybeGenerateDailySummary(s);
-      let nextState = { ...summarizedState, day: summarizedState.day + 1, nightActions: {} };
+      await delay(350);
+
+      let nextState = { ...s, day: s.day + 1, nightActions: {} };
       nextState = transitionPhase(nextState, "NIGHT_START");
       nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
       setGameState(nextState);
 
-      await delay(1200);
+      await delay(250);
       await runNightPhase(nextState);
     };
 
@@ -775,12 +819,16 @@ export function useGameLogic() {
   const handleHumanSpeech = useCallback(async () => {
     if (!inputText.trim() || !humanPlayer) return;
 
+    const s = gameStateRef.current;
+    const isMyTurn = (s.phase === "DAY_SPEECH" || s.phase === "DAY_LAST_WORDS") && s.currentSpeakerSeat === humanPlayer.seat;
+    if (!isMyTurn) return;
+
     const speech = inputText.trim();
     setInputText("");
 
-    let currentState = addPlayerMessage(gameState, humanPlayer.playerId, speech);
+    let currentState = addPlayerMessage(gameStateRef.current, humanPlayer.playerId, speech);
     setGameState(currentState);
-  }, [inputText, humanPlayer, gameState]);
+  }, [inputText, humanPlayer]);
 
   // 人类结束发言 - 自动进入下一位
   const handleFinishSpeaking = useCallback(async () => {
@@ -798,15 +846,19 @@ export function useGameLogic() {
 
     // 直接进入下一位发言
     await delay(300);
-    await moveToNextSpeaker(gameState);
-  }, [humanPlayer, gameState, moveToNextSpeaker]);
+    await moveToNextSpeaker(gameStateRef.current);
+  }, [humanPlayer, moveToNextSpeaker]);
 
   // 下一轮按钮处理
   const handleNextRound = useCallback(async () => {
+    if (gameStateRef.current.phase !== "DAY_SPEECH" && gameStateRef.current.phase !== "DAY_LAST_WORDS") {
+      return;
+    }
+
     setWaitingForNextRound(false);
     await delay(300);
-    await moveToNextSpeaker(gameState);
-  }, [gameState, moveToNextSpeaker]);
+    await moveToNextSpeaker(gameStateRef.current);
+  }, [moveToNextSpeaker]);
 
   // 人类投票
   const handleHumanVote = useCallback(async (targetSeat: number) => {
@@ -835,6 +887,10 @@ export function useGameLogic() {
 
     // === 守卫保护 ===
     if (gameState.phase === "NIGHT_GUARD_ACTION" && humanPlayer.role === "Guard") {
+      if (currentState.nightActions.lastGuardTarget === targetSeat) {
+        toast.error("守卫不能连续两晚守护同一人");
+        return;
+      }
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
       currentState = {
         ...currentState,
@@ -1087,12 +1143,27 @@ export function useGameLogic() {
     await resolveNight(currentState);
   }, [apiKey, resolveNight]);
 
+  const continueAfterRoleReveal = useCallback(async () => {
+    const pending = pendingStartStateRef.current;
+    if (!pending) return;
+    if (hasContinuedAfterRevealRef.current) return;
+
+    hasContinuedAfterRevealRef.current = true;
+    pendingStartStateRef.current = null;
+
+    await runNightPhase(pending);
+  }, [runNightPhase]);
+
   // 重新开始
   const restartGame = useCallback(() => {
     setGameState(createInitialGameState());
     setCurrentDialogue(null);
     setInputText("");
     setShowTable(false);
+    setApiKeyConfirmed(false);
+
+    pendingStartStateRef.current = null;
+    hasContinuedAfterRevealRef.current = false;
   }, []);
 
   return {
@@ -1116,6 +1187,7 @@ export function useGameLogic() {
     
     // Actions
     startGame,
+    continueAfterRoleReveal,
     restartGame,
     handleHumanSpeech,
     handleFinishSpeaking,

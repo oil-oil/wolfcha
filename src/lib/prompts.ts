@@ -358,6 +358,23 @@ export const SPEECH_PROMPT = (state: GameState, player: Player) => {
   const todayTranscript = buildTodayTranscript(state, 9000);
   const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
 
+  // 计算当前是第几个发言
+  const todaySpeakers = new Set<string>();
+  const dayStartIndex = (() => {
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      if (state.messages[i].isSystem && state.messages[i].content === "天亮了") return i;
+    }
+    return 0;
+  })();
+  for (let i = dayStartIndex; i < state.messages.length; i++) {
+    const m = state.messages[i];
+    if (!m.isSystem && m.playerId && m.playerId !== player.playerId) {
+      todaySpeakers.add(m.playerId);
+    }
+  }
+  const speakOrder = todaySpeakers.size + 1; // 自己是第几个发言
+  const isFirstSpeaker = speakOrder === 1;
+
   const isLastWords = state.phase === "DAY_LAST_WORDS";
 
   const roleHints = player.role === "Werewolf"
@@ -382,7 +399,7 @@ ${isLastWords ? "你已经出局，现在发表遗言。" : "白天讨论环节�
 - 符合你的性格设定
 - 分成2-4条短消息输出，每条15-50字
 - 像发微信一样一条一条说
-- 如果需要指向玩家，直接说“X号”，不要带玩家名字
+- 如果需要指向玩家，直接说"X号"，不要带玩家名字
 ${roleHints ? `- ${roleHints}` : ""}
 
 【输出格式】
@@ -394,7 +411,7 @@ ${roleHints ? `- ${roleHints}` : ""}
 
   const user = `${context}
 
-${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : "【本日讨论记录】\n（无）"}
+${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : `【本日讨论记录】\n（暂无，你是第${speakOrder}个发言）`}
 
 ${selfSpeech ? `【你本日已说过的话】\n"${selfSpeech}"` : "【你本日已说过的话】\n（无）"}
 
@@ -598,26 +615,26 @@ ${teammateVotesStr ? `\n【队友意向】\n${teammateVotesStr}\n提示：建议
 // ============================================
 
 export const SYSTEM_MESSAGES = {
-  gameStart: "游戏开始",
-  nightFall: (day: number) => `第 ${day} 夜降临`,
-  dayBreak: "天亮了",
-  peacefulNight: "昨晚是平安夜，无人死亡",
-  playerKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚被杀害`,
-  playerPoisoned: (seat: number, name: string) => `${seat}号 ${name} 昨晚被毒死`,
-  dayDiscussion: "白天讨论开始",
-  voteStart: "进入投票环节",
+  gameStart: "好，人到齐了，开始吧！",
+  nightFall: (day: number) => `第 ${day} 晚，天黑请闭眼`,
+  dayBreak: "天亮了，睁眼",
+  peacefulNight: "昨晚风平浪静，没人出事",
+  playerKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚倒了`,
+  playerPoisoned: (seat: number, name: string) => `${seat}号 ${name} 昨晚中毒身亡`,
+  dayDiscussion: "开始自由讨论",
+  voteStart: "好，讨论结束，开始投票",
   playerExecuted: (seat: number, name: string, votes: number) => 
-    `${seat}号 ${name} 以 ${votes} 票被放逐`,
-  voteTie: "平票，无人被放逐",
-  villageWin: "好人阵营胜利",
-  wolfWin: "狼人阵营胜利",
+    `${seat}号 ${name} 以 ${votes} 票出局`,
+  voteTie: "票数相同，今天没人出局",
+  villageWin: "好人阵营胜利！",
+  wolfWin: "狼人阵营胜利！",
   seerResult: (seat: number, isWolf: boolean) => 
     `查验结果：${seat}号是${isWolf ? "狼人" : "好人"}`,
   wolfAttack: (seat: number, name: string) => 
-    `你选择袭击 ${seat}号 ${name}`,
-  witchSave: "女巫使用解药救人",
-  witchPoison: (seat: number, name: string) => `女巫对 ${seat}号 ${name} 使用毒药`,
-  guardProtect: (seat: number, name: string) => `守卫保护了 ${seat}号 ${name}`,
+    `你们决定击杀 ${seat}号 ${name}`,
+  witchSave: "你使用解药救了人",
+  witchPoison: (seat: number, name: string) => `你对 ${seat}号 ${name} 使用了毒药`,
+  guardProtect: (seat: number, name: string) => `你守护了 ${seat}号 ${name}`,
   hunterShoot: (hunterSeat: number, targetSeat: number, targetName: string) => 
     `${hunterSeat}号猎人开枪带走了 ${targetSeat}号 ${targetName}`,
 };
@@ -627,28 +644,28 @@ export const SYSTEM_MESSAGES = {
 // ============================================
 
 export const UI_TEXT = {
-  waitingSeer: "\u9884\u8a00\u5bb6\uff0c\u8bf7\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u9009\u62e9\u8981\u67e5\u9a8c\u7684\u76ee\u6807",
-  seerChecking: "\u9884\u8a00\u5bb6\u6b63\u5728\u67e5\u9a8c\u8eab\u4efd...",
-  waitingWolf: "\u72fc\u4eba\uff0c\u8bf7\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u9009\u62e9\u51fb\u6740\u76ee\u6807",
-  wolfActing: "\u72fc\u4eba\u6b63\u5728\u5546\u8bae\u51fb\u6740\u76ee\u6807...",
-  wolfCoordinating: "\u7b49\u5f85\u72fc\u961f\u53cb\u6295\u7968...",
-  waitingWitch: "\u5973\u5deb\uff0c\u9009\u62e9\u662f\u5426\u4f7f\u7528\u836f\u6c34",
-  witchActing: "\u5973\u5deb\u6b63\u5728\u51b3\u5b9a\u662f\u5426\u7528\u836f...",
-  waitingGuard: "\u5b88\u536b\uff0c\u8bf7\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u9009\u62e9\u4fdd\u62a4\u76ee\u6807",
-  guardActing: "\u5b88\u536b\u6b63\u5728\u9009\u62e9\u4fdd\u62a4\u76ee\u6807...",
-  hunterShoot: "\u730e\u4eba\uff0c\u8bf7\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u9009\u62e9\u5f00\u67aa\u76ee\u6807",
-  hunterAiming: "\u730e\u4eba\u6b63\u5728\u9009\u62e9\u76ee\u6807...",
-  yourTurn: "\u8f6e\u5230\u4f60\u53d1\u8a00\u4e86\uff0c\u8bf7\u8f93\u5165\u4f60\u7684\u53d1\u8a00",
-  votePrompt: "\u8bf7\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u6295\u7968\u653e\u9010",
-  clickToVote: "\u70b9\u51fb\u73a9\u5bb6\u5934\u50cf\u8fdb\u884c\u6295\u7968",
-  aiThinking: "AI \u6b63\u5728\u601d\u8003...",
-  aiVoting: "AI \u73a9\u5bb6\u6b63\u5728\u6295\u7968...",
-  aiSpeaking: "AI \u73a9\u5bb6\u6b63\u5728\u53d1\u8a00...",
-  waitingAction: "\u7b49\u5f85\u4f60\u7684\u64cd\u4f5c",
-  waitingOthers: "\u7b49\u5f85\u5176\u4ed6\u73a9\u5bb6...",
-  generatingRoles: "\u751f\u6210\u89d2\u8272\u4e2d...",
-  startGame: "\u5f00\u59cb\u6e38\u620f",
-  restart: "\u91cd\u65b0\u5f00\u59cb",
+  waitingSeer: "点击头像选择要查验的人",
+  seerChecking: "预言家正在查验...",
+  waitingWolf: "点击头像选择要击杀的目标",
+  wolfActing: "狼人正在商议...",
+  wolfCoordinating: "等队友选择...",
+  waitingWitch: "选择是否用药",
+  witchActing: "女巫正在思考...",
+  waitingGuard: "点击头像选择要守护的人",
+  guardActing: "守卫正在选择...",
+  hunterShoot: "点击头像选择开枪目标",
+  hunterAiming: "猎人正在瞄准...",
+  yourTurn: "轮到你了，说点什么吧",
+  votePrompt: "点击头像投票",
+  clickToVote: "点击头像投票",
+  aiThinking: "有人在想...",
+  aiVoting: "大家正在投票...",
+  aiSpeaking: "有人正在发言...",
+  waitingAction: "等你操作",
+  waitingOthers: "等其他人...",
+  generatingRoles: "正在邀请玩家入场...",
+  startGame: "开始游戏",
+  restart: "再来一局",
 };
 export const GUARD_ACTION_PROMPT = (state: GameState, player: Player) => {
   const context = buildGameContext(state, player);

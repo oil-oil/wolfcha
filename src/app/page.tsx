@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import {
-  Play,
   Users,
   NotePencil,
   X,
@@ -39,11 +38,9 @@ import { BottomActionPanel } from "@/components/game/BottomActionPanel";
 import { Notebook } from "@/components/game/Notebook";
 import { GameBackground } from "@/components/game/GameBackground";
 import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
+import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
 
 // ============ 工具函数 ============
-
-const dicebearUrl = (seed: string) =>
-  `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=f1f5f9`;
 
 // ============ 主组件 ============
 
@@ -64,6 +61,7 @@ export default function Home() {
     humanPlayer,
     isNight,
     startGame,
+    continueAfterRoleReveal,
     restartGame,
     handleHumanSpeech,
     handleFinishSpeaking,
@@ -79,6 +77,8 @@ export default function Home() {
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
+  const [isRoleRevealOpen, setIsRoleRevealOpen] = useState(false);
+  const [hasShownRoleReveal, setHasShownRoleReveal] = useState(false);
 
   // Typewriter effect
   const { displayedText, isTyping } = useTypewriter({
@@ -90,12 +90,18 @@ export default function Home() {
   // Enter/Right key to advance AI speech or move to next round
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isRoleRevealOpen) return;
+
       // Enter or Right arrow to advance
       if ((e.key === "Enter" && !e.shiftKey) || e.key === "ArrowRight") {
         // 当AI在发言时（有currentDialogue），按键推进下一句
         if (currentDialogue) {
           e.preventDefault();
-          advanceSpeech();
+          Promise.resolve(advanceSpeech()).then((r) => {
+            if (r?.shouldAdvanceToNextSpeaker) {
+              handleNextRound();
+            }
+          });
           return;
         }
         
@@ -109,7 +115,32 @@ export default function Home() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentDialogue, waitingForNextRound, advanceSpeech, handleNextRound]);
+  }, [currentDialogue, waitingForNextRound, advanceSpeech, handleNextRound, isRoleRevealOpen]);
+
+  const handleAdvanceDialogue = useCallback(async () => {
+    if (isRoleRevealOpen) return;
+
+    if (currentDialogue) {
+      const r = await advanceSpeech();
+      if (r?.shouldAdvanceToNextSpeaker) {
+        await handleNextRound();
+      }
+      return;
+    }
+
+    if (waitingForNextRound) {
+      await handleNextRound();
+    }
+  }, [advanceSpeech, currentDialogue, handleNextRound, isRoleRevealOpen, waitingForNextRound]);
+
+  useEffect(() => {
+    if (!showTable) return;
+    if (!humanPlayer) return;
+    if (hasShownRoleReveal) return;
+    if (gameState.phase !== "NIGHT_START") return;
+    setIsRoleRevealOpen(true);
+    setHasShownRoleReveal(true);
+  }, [showTable, humanPlayer, hasShownRoleReveal, gameState.phase]);
 
   // API Key 检查
   useEffect(() => {
@@ -126,21 +157,30 @@ export default function Home() {
     scrollToBottom();
   }, [gameState.messages, scrollToBottom]);
 
+  useEffect(() => {
+    if (showTable) return;
+    setIsRoleRevealOpen(false);
+    setHasShownRoleReveal(false);
+  }, [showTable]);
+
   // ============ 交互逻辑 ============
 
   // 判断是否可以点击座位（使用状态机配置）
   const canClickSeat = useCallback((player: Player): boolean => {
+    if (isRoleRevealOpen) return false;
     if (!humanPlayer) return false;
     const config = PHASE_CONFIGS[gameState.phase];
     return config.canSelectPlayer(humanPlayer, player, gameState);
-  }, [humanPlayer, gameState]);
+  }, [humanPlayer, gameState, isRoleRevealOpen]);
 
   const handleSeatClick = useCallback((player: Player) => {
+    if (isRoleRevealOpen) return;
     if (!canClickSeat(player)) return;
     setSelectedSeat(prev => prev === player.seat ? null : player.seat);
-  }, [canClickSeat]);
+  }, [canClickSeat, isRoleRevealOpen]);
 
   const confirmSelectedSeat = useCallback(async () => {
+    if (isRoleRevealOpen) return;
     if (selectedSeat === null) return;
     
     const phase = gameState.phase;
@@ -155,12 +195,13 @@ export default function Home() {
       await handleNightAction(selectedSeat);
     }
     setSelectedSeat(null);
-  }, [selectedSeat, gameState.phase, handleHumanVote, handleNightAction]);
+  }, [selectedSeat, gameState.phase, handleHumanVote, handleNightAction, isRoleRevealOpen]);
 
   const handleNightActionConfirm = useCallback(async (targetSeat: number, actionType?: "save" | "poison" | "pass") => {
+    if (isRoleRevealOpen) return;
     await handleNightAction(targetSeat, actionType);
     setSelectedSeat(null);
-  }, [handleNightAction]);
+  }, [handleNightAction, isRoleRevealOpen]);
 
   // 玩家列表（包含人类玩家）
   const allPlayers = useMemo(() => {
@@ -224,7 +265,21 @@ export default function Home() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-main)]">
+    <div className="h-screen flex flex-col overflow-hidden bg-transparent">
+      <GameBackground isNight={isNight} />
+
+      {humanPlayer && (
+        <RoleRevealOverlay
+          open={isRoleRevealOpen}
+          player={humanPlayer}
+          phase={gameState.phase}
+          onContinue={async () => {
+            setIsRoleRevealOpen(false);
+            await continueAfterRoleReveal();
+          }}
+        />
+      )}
+
       {/* 顶部状态栏 */}
       <div className={`flex items-center justify-between px-8 h-14 shrink-0 border-b transition-all duration-300 font-serif ${isNight ? "bg-[#1a1512] text-[#f0e6d2] border-[#3e2723]" : "bg-white text-[var(--text-primary)] border-[var(--border-color)]"}`}>
         <div className="flex items-center gap-3 text-xl font-bold tracking-tight">
@@ -282,9 +337,9 @@ export default function Home() {
 
       {/* 主内容区域 */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col bg-[var(--bg-main)]">
+        <div className="flex-1 flex flex-col bg-transparent">
           {!showTable ? (
-            /* 开始游戏界面 */
+            /* 准备/加载界面（开始入口统一在 WelcomeScreen） */
             <div className="flex flex-col items-center justify-center h-full gap-6">
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -293,25 +348,26 @@ export default function Home() {
               >
                 <WerewolfIcon size={40} className="text-[var(--color-wolf)]" />
               </motion.div>
-              <h2 className="text-2xl font-semibold">准备开始游戏</h2>
-              <p className="text-sm text-[var(--text-secondary)] max-w-xs text-center">10人局 · 3狼人 · 预言家 · 女巫 · 猎人 · 守卫 · 3村民</p>
-              <button
-                onClick={startGame}
-                disabled={isLoading}
-                className="inline-flex items-center justify-center gap-2 h-12 px-7 text-base font-medium rounded bg-[var(--color-accent)] text-white hover:bg-[#a07608] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {isLoading ? (
-                  <>
-                    <TimerIcon size={20} className="animate-spin" />
-                    生成角色中...
-                  </>
-                ) : (
-                  <>
-                    <Play size={20} weight="fill" />
-                    开始游戏
-                  </>
-                )}
-              </button>
+              <h2 className="text-2xl font-semibold">{isLoading ? "正在生成角色..." : "准备中"}</h2>
+              <p className="text-sm text-[var(--text-secondary)] max-w-xs text-center">
+                {isLoading
+                  ? "请稍候，正在为你生成角色与剧本..."
+                  : "如果刚才启动失败/想重新输入名字或检查 Key，可返回欢迎页重试。"}
+              </p>
+
+              {isLoading ? (
+                <div className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                  <TimerIcon size={18} className="animate-spin" />
+                  <span>生成中...</span>
+                </div>
+              ) : (
+                <button
+                  onClick={restartGame}
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded border border-[var(--border-color)] bg-white/70 hover:bg-white transition-all cursor-pointer"
+                >
+                  返回欢迎页
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -343,6 +399,7 @@ export default function Home() {
                           onClick={() => handleSeatClick(player)}
                           onDetailClick={() => setDetailPlayer(player)}
                           animationDelay={index * 0.05}
+                          isNight={isNight}
                           humanPlayer={humanPlayer}
                           seerCheckResult={seerResult}
                         />
@@ -356,9 +413,16 @@ export default function Home() {
                   {/* 头部：玩家身份标签 - Glass Panel 风格 */}
                   {humanPlayer && (
                     <div className="flex items-center justify-between px-4 py-2 mb-2">
-                      <div className="glass-panel px-3 py-1.5 rounded-full flex items-center gap-2 text-sm" style={{ background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
+                      <div
+                        className="glass-panel px-3 py-1.5 rounded-full flex items-center gap-2 text-sm"
+                        style={{
+                          background: isNight ? "rgba(20, 16, 14, 0.55)" : "rgba(255, 255, 255, 0.6)",
+                          backdropFilter: "blur(8px)",
+                          border: isNight ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.35)",
+                        }}
+                      >
                         <SpeechIcon size={14} className="opacity-60" />
-                        <span className="font-medium text-[var(--text-primary)]">{humanPlayer.displayName}</span>
+                        <span className={`font-medium ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>{humanPlayer.displayName}</span>
                         <span className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
                           humanPlayer.role === "Werewolf" 
                             ? "text-[var(--color-wolf)] bg-[var(--color-wolf-bg)]" 
@@ -382,13 +446,14 @@ export default function Home() {
 
                   {/* 对话内容 */}
                   <div className="flex-1 overflow-hidden relative min-h-0">
-                     <DialogArea
+                    <DialogArea
                       gameState={gameState}
                       humanPlayer={humanPlayer}
+                      isNight={isNight}
                       currentDialogue={currentDialogue}
                       displayedText={displayedText}
                       isTyping={isTyping}
-                      onAdvanceDialogue={currentDialogue ? advanceSpeech : handleNextRound}
+                      onAdvanceDialogue={handleAdvanceDialogue}
                       isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
                       waitingForNextRound={waitingForNextRound}
                       inputText={inputText}
@@ -399,16 +464,25 @@ export default function Home() {
                   </div>
 
                   {/* 底部操作面板 - 仅在需要时显示 */}
-                  {(selectedSeat !== null || 
+                  {(selectedSeat !== null ||
                     (gameState.phase === "NIGHT_WITCH_ACTION" && humanPlayer?.role === "Witch" && !isWaitingForAI) ||
                     gameState.phase === "GAME_END") && (
                     <div className="px-4 py-3">
-                      <div className="glass-panel rounded-2xl px-4 py-2" style={{ background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.5)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
+                      <div
+                        className="glass-panel rounded-2xl px-4 py-2"
+                        style={{
+                          background: isNight ? "rgba(20, 16, 14, 0.6)" : "rgba(255, 255, 255, 0.7)",
+                          backdropFilter: "blur(12px)",
+                          border: isNight ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255,255,255,0.5)",
+                          boxShadow: isNight ? "0 6px 28px rgba(0,0,0,0.35)" : "0 4px 20px rgba(0,0,0,0.1)",
+                        }}
+                      >
                         <BottomActionPanel
                           gameState={gameState}
                           humanPlayer={humanPlayer}
                           selectedSeat={selectedSeat}
                           isWaitingForAI={isWaitingForAI}
+                          isNight={isNight}
                           onConfirmAction={confirmSelectedSeat}
                           onCancelSelection={() => setSelectedSeat(null)}
                           onNightAction={handleNightActionConfirm}
@@ -417,6 +491,7 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+
                 </div>
 
                 {/* 右侧面板：玩家 */}
@@ -438,6 +513,7 @@ export default function Home() {
                           onClick={() => handleSeatClick(player)}
                           onDetailClick={() => setDetailPlayer(player)}
                           animationDelay={index * 0.05}
+                          isNight={isNight}
                           humanPlayer={humanPlayer}
                           seerCheckResult={seerResult}
                         />
