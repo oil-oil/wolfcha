@@ -1,65 +1,474 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
+import {
+  Play,
+  Users,
+  NotePencil,
+  X,
+  Eye,
+  Skull,
+  Shield,
+  Drop,
+  Crosshair,
+} from "@phosphor-icons/react";
+import {
+  WerewolfIcon,
+  NightIcon,
+  DayIcon,
+  SpeechIcon,
+  TimerIcon,
+  SeerIcon,
+  WitchIcon,
+  HunterIcon,
+  GuardIcon,
+  VillagerIcon,
+} from "@/components/icons/FlatIcons";
+import { useTypewriter } from "@/hooks/useTypewriter";
+import { useGameLogic } from "@/hooks/useGameLogic";
+import type { Player } from "@/types/game";
+import { PHASE_CONFIGS } from "@/store/game-machine";
+
+// Components
+import { WelcomeScreen } from "@/components/game/WelcomeScreen";
+import { PlayerCardCompact } from "@/components/game/PlayerCardCompact";
+import { DialogArea } from "@/components/game/DialogArea";
+import { BottomActionPanel } from "@/components/game/BottomActionPanel";
+import { Notebook } from "@/components/game/Notebook";
+
+// ============ 工具函数 ============
+
+const dicebearUrl = (seed: string) =>
+  `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=f1f5f9`;
+
+// ============ 主组件 ============
 
 export default function Home() {
+  const {
+    apiKey,
+    humanName,
+    setHumanName,
+    apiKeyConfirmed,
+    setApiKeyConfirmed,
+    gameState,
+    isLoading,
+    isWaitingForAI,
+    currentDialogue,
+    inputText,
+    setInputText,
+    showTable,
+    humanPlayer,
+    isNight,
+    startGame,
+    restartGame,
+    handleHumanSpeech,
+    handleFinishSpeaking,
+    handleHumanVote,
+    handleNightAction,
+    handleNextRound,
+    waitingForNextRound,
+    scrollToBottom,
+  } = useGameLogic();
+
+  // UI 状态
+  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
+  const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+
+  // Typewriter effect
+  const { displayedText, isTyping } = useTypewriter({
+    text: currentDialogue?.text || "",
+    speed: 25,
+    enabled: !!currentDialogue?.isStreaming,
+  });
+
+  // Enter key to skip to next speaker during AI speech
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        // 当AI在发言时，按Enter跳过到下一位
+        const isAISpeaking = gameState.phase === "DAY_SPEECH" && 
+          gameState.currentSpeakerSeat !== humanPlayer?.seat &&
+          !isWaitingForAI;
+        
+        if (isAISpeaking || waitingForNextRound) {
+          e.preventDefault();
+          handleNextRound();
+        }
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [gameState.phase, gameState.currentSpeakerSeat, humanPlayer?.seat, isWaitingForAI, waitingForNextRound, handleNextRound]);
+
+  // API Key 检查
+  useEffect(() => {
+    if (!apiKeyConfirmed) return;
+    if (!apiKey) {
+      toast.error("缺少 OpenRouter API Key", {
+        description: "请在 .env.local 设置 NEXT_PUBLIC_OPENROUTER_API_KEY，并重启 dev server",
+      });
+    }
+  }, [apiKeyConfirmed, apiKey]);
+
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [gameState.messages, scrollToBottom]);
+
+  // ============ 交互逻辑 ============
+
+  // 判断是否可以点击座位（使用状态机配置）
+  const canClickSeat = useCallback((player: Player): boolean => {
+    if (!humanPlayer) return false;
+    const config = PHASE_CONFIGS[gameState.phase];
+    return config.canSelectPlayer(humanPlayer, player, gameState);
+  }, [humanPlayer, gameState]);
+
+  const handleSeatClick = useCallback((player: Player) => {
+    if (!canClickSeat(player)) return;
+    setSelectedSeat(prev => prev === player.seat ? null : player.seat);
+  }, [canClickSeat]);
+
+  const confirmSelectedSeat = useCallback(async () => {
+    if (selectedSeat === null) return;
+    
+    const phase = gameState.phase;
+    if (phase === "DAY_VOTE") {
+      await handleHumanVote(selectedSeat);
+    } else if (
+      phase === "NIGHT_SEER_ACTION" ||
+      phase === "NIGHT_WOLF_ACTION" ||
+      phase === "NIGHT_GUARD_ACTION" ||
+      phase === "HUNTER_SHOOT"
+    ) {
+      await handleNightAction(selectedSeat);
+    }
+    setSelectedSeat(null);
+  }, [selectedSeat, gameState.phase, handleHumanVote, handleNightAction]);
+
+  const handleNightActionConfirm = useCallback(async (targetSeat: number, actionType?: "save" | "poison" | "pass") => {
+    await handleNightAction(targetSeat, actionType);
+    setSelectedSeat(null);
+  }, [handleNightAction]);
+
+  // 玩家列表（包含人类玩家）
+  const allPlayers = useMemo(() => {
+    return gameState.players;
+  }, [gameState.players]);
+
+  const leftPlayers = useMemo(() => allPlayers.slice(0, Math.ceil(allPlayers.length / 2)), [allPlayers]);
+  const rightPlayers = useMemo(() => allPlayers.slice(Math.ceil(allPlayers.length / 2)), [allPlayers]);
+
+  // 获取阶段描述
+  const getPhaseDescription = useCallback(() => {
+    const config = PHASE_CONFIGS[gameState.phase];
+    if (config.humanDescription) {
+      return config.humanDescription(humanPlayer, gameState);
+    }
+    return config.description;
+  }, [gameState, humanPlayer]);
+
+  const needsHumanAction = useMemo(() => {
+    return PHASE_CONFIGS[gameState.phase].requiresHumanInput(humanPlayer, gameState);
+  }, [gameState.phase, humanPlayer, gameState]);
+
+  const showWaitingIndicator = isWaitingForAI && !needsHumanAction;
+
+  const renderPhaseIcon = () => {
+    switch (gameState.phase) {
+      case "NIGHT_SEER_ACTION":
+        return <Eye size={14} />;
+      case "NIGHT_WOLF_ACTION":
+        return <Skull size={14} />;
+      case "NIGHT_GUARD_ACTION":
+        return <Shield size={14} />;
+      case "NIGHT_WITCH_ACTION":
+        return <Drop size={14} />;
+      case "HUNTER_SHOOT":
+        return <Crosshair size={14} />;
+      case "DAY_SPEECH":
+        return <SpeechIcon size={14} />;
+      case "DAY_VOTE":
+        return <Users size={14} />;
+      default:
+        return isNight ? <NightIcon size={14} /> : <DayIcon size={14} />;
+    }
+  };
+
+  // ============ 渲染 ============
+
+  // API Key 输入界面
+  if (!apiKeyConfirmed) {
+    return (
+      <WelcomeScreen 
+        humanName={humanName}
+        setHumanName={setHumanName}
+        onStart={async () => {
+          setApiKeyConfirmed(true);
+          await startGame();
+        }}
+        isLoading={isLoading}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="h-screen flex flex-col overflow-hidden bg-[var(--bg-main)]">
+      {/* 顶部状态栏 */}
+      <div className={`flex items-center justify-between px-8 h-14 shrink-0 border-b transition-all duration-300 font-serif ${isNight ? "bg-[#1a1512] text-[#f0e6d2] border-[#3e2723]" : "bg-white text-[var(--text-primary)] border-[var(--border-color)]"}`}>
+        <div className="flex items-center gap-3 text-xl font-bold tracking-tight">
+          <WerewolfIcon size={24} className={isNight ? "text-indigo-300" : "text-[var(--color-wolf)]"} />
+          <span>Wolfcha</span>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex items-center gap-6 text-sm font-medium">
+          <div className="flex items-center gap-1.5">
+            {isNight ? (
+              <NightIcon size={16} className="text-indigo-300" />
+            ) : (
+              <DayIcon size={16} className="text-amber-500" />
+            )}
+            <span>第 {gameState.day} 天</span>
+          </div>
+          <div className="h-4 w-px bg-current opacity-20" />
+          <div className="flex items-center gap-1.5">
+            <Users size={16} />
+            <span>{gameState.players.filter((p) => p.alive).length}/{gameState.players.length}</span>
+          </div>
+          <div className="h-4 w-px bg-current opacity-20" />
+          <div className={`text-sm font-semibold px-3 py-1 rounded flex items-center gap-2 ${isNight ? "bg-white/15 text-white border border-white/10" : "bg-[var(--bg-hover)]"}`}>
+            <span className="opacity-90">{renderPhaseIcon()}</span>
+            <span>{getPhaseDescription()}</span>
+
+            {showWaitingIndicator && (
+              <span className="flex items-center gap-1 ml-1 opacity-80">
+                <motion.span
+                  animate={{ scale: [1, 1.25, 1] }}
+                  transition={{ repeat: Infinity, duration: 0.7, delay: 0 }}
+                  className={`w-1.5 h-1.5 rounded-full ${isNight ? "bg-indigo-300" : "bg-[var(--color-accent)]"}`}
+                />
+                <motion.span
+                  animate={{ scale: [1, 1.25, 1] }}
+                  transition={{ repeat: Infinity, duration: 0.7, delay: 0.15 }}
+                  className={`w-1.5 h-1.5 rounded-full ${isNight ? "bg-indigo-300" : "bg-[var(--color-accent)]"}`}
+                />
+                <motion.span
+                  animate={{ scale: [1, 1.25, 1] }}
+                  transition={{ repeat: Infinity, duration: 0.7, delay: 0.3 }}
+                  className={`w-1.5 h-1.5 rounded-full ${isNight ? "bg-indigo-300" : "bg-[var(--color-accent)]"}`}
+                />
+              </span>
+            )}
+
+            {needsHumanAction && (
+              <span className={`flex items-center gap-1.5 font-semibold text-xs px-2 py-0.5 rounded-full ml-1 ${isNight ? "text-yellow-400 bg-yellow-400/15" : "text-[var(--color-accent)] bg-[var(--color-accent)]/10"}`}>
+                <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
+                等待你
+              </span>
+            )}
+          </div>
         </div>
-      </main>
+      </div>
+
+      {/* 主内容区域 */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[var(--bg-main)]">
+          {!showTable ? (
+            /* 开始游戏界面 */
+            <div className="flex flex-col items-center justify-center h-full gap-6">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="w-20 h-20 rounded-3xl bg-[var(--color-wolf-bg)] flex items-center justify-center"
+              >
+                <WerewolfIcon size={40} className="text-[var(--color-wolf)]" />
+              </motion.div>
+              <h2 className="text-2xl font-semibold">准备开始游戏</h2>
+              <p className="text-sm text-[var(--text-secondary)] max-w-xs text-center">10人局 · 3狼人 · 预言家 · 女巫 · 猎人 · 守卫 · 3村民</p>
+              <button
+                onClick={startGame}
+                disabled={isLoading}
+                className="inline-flex items-center justify-center gap-2 h-12 px-7 text-base font-medium rounded bg-[var(--color-accent)] text-white hover:bg-[#a07608] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {isLoading ? (
+                  <>
+                    <TimerIcon size={20} className="animate-spin" />
+                    生成角色中...
+                  </>
+                ) : (
+                  <>
+                    <Play size={20} weight="fill" />
+                    开始游戏
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* 新布局：左侧玩家 | 中间对话 | 右侧玩家 */}
+              <div className="flex-1 flex gap-4 px-6 py-5 overflow-hidden w-full justify-center">
+                {/* 左侧玩家卡片 */}
+                <div className="w-[220px] flex flex-col gap-2.5 overflow-y-auto shrink-0 pr-2">
+                  <AnimatePresence>
+                    {leftPlayers.map((player, index) => {
+                      const checkResult =
+                        humanPlayer?.role === "Seer"
+                          ? gameState.nightActions.seerHistory?.find(
+                              (h) => h.targetSeat === player.seat
+                            )
+                          : undefined;
+                      const seerResult = checkResult
+                        ? checkResult.isWolf
+                          ? "wolf"
+                          : "good"
+                        : null;
+
+                      return (
+                        <PlayerCardCompact
+                          key={player.playerId}
+                          player={player}
+                          isSpeaking={gameState.currentSpeakerSeat === player.seat}
+                          canClick={canClickSeat(player)}
+                          isSelected={selectedSeat === player.seat}
+                          onClick={() => handleSeatClick(player)}
+                          animationDelay={index * 0.05}
+                          humanPlayer={humanPlayer}
+                          seerCheckResult={seerResult}
+                        />
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+
+                {/* 中间对话区域 */}
+                <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 h-full max-w-[1000px] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg overflow-hidden">
+                  {/* 头部：人类玩家信息 */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
+                    <div className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                      <SpeechIcon size={16} />
+                      <span>对话记录</span>
+                    </div>
+                    {humanPlayer && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-[var(--text-primary)]">{humanPlayer.displayName}</span>
+                        <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded ${
+                          humanPlayer.role === "Werewolf" 
+                            ? "text-[var(--color-wolf)] bg-[var(--color-wolf-bg)]" 
+                            : "text-[var(--color-accent)] bg-[var(--color-accent-bg)]"
+                        }`}>
+                          {humanPlayer.role === "Werewolf" && <WerewolfIcon size={14} />}
+                          {humanPlayer.role === "Seer" && <SeerIcon size={14} />}
+                          {humanPlayer.role === "Witch" && <WitchIcon size={14} />}
+                          {humanPlayer.role === "Hunter" && <HunterIcon size={14} />}
+                          {humanPlayer.role === "Guard" && <GuardIcon size={14} />}
+                          {humanPlayer.role === "Villager" && <VillagerIcon size={14} />}
+                          {humanPlayer.role === "Werewolf" ? "狼人" :
+                           humanPlayer.role === "Seer" ? "预言家" :
+                           humanPlayer.role === "Witch" ? "女巫" :
+                           humanPlayer.role === "Hunter" ? "猎人" :
+                           humanPlayer.role === "Guard" ? "守卫" : "村民"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 对话内容 */}
+                  <div className="flex-1 overflow-hidden relative min-h-0">
+                     <DialogArea
+                      gameState={gameState}
+                      humanPlayer={humanPlayer}
+                      currentDialogue={currentDialogue}
+                      displayedText={displayedText}
+                      isTyping={isTyping}
+                      showFullHistory={true}
+                    />
+                  </div>
+
+                  {/* 底部操作面板 - 集成在对话框内 */}
+                  <div className="px-4 py-3 border-t border-[var(--border-color)] bg-[var(--bg-card)]">
+                    <BottomActionPanel
+                      gameState={gameState}
+                      humanPlayer={humanPlayer}
+                      selectedSeat={selectedSeat}
+                      inputText={inputText}
+                      isWaitingForAI={isWaitingForAI}
+                      waitingForNextRound={waitingForNextRound}
+                      onInputChange={setInputText}
+                      onSendMessage={handleHumanSpeech}
+                      onFinishSpeaking={handleFinishSpeaking}
+                      onConfirmAction={confirmSelectedSeat}
+                      onCancelSelection={() => setSelectedSeat(null)}
+                      onNightAction={handleNightActionConfirm}
+                      onNextRound={handleNextRound}
+                      onRestart={restartGame}
+                    />
+                  </div>
+                </div>
+
+                {/* 右侧面板：玩家 + 笔记本 */}
+                <div className="w-[220px] flex flex-col gap-3 shrink-0 pl-2 h-full min-h-0">
+                  <div className="flex flex-col gap-2.5 shrink-0 overflow-y-auto max-h-[50%] pr-1">
+                    <AnimatePresence>
+                      {rightPlayers.map((player, index) => {
+                         const checkResult = humanPlayer?.role === "Seer" 
+                          ? gameState.nightActions.seerHistory?.find(h => h.targetSeat === player.seat)
+                          : undefined;
+                         const seerResult = checkResult ? (checkResult.isWolf ? "wolf" : "good") : null;
+
+                         return (
+                        <PlayerCardCompact
+                          key={player.playerId}
+                          player={player}
+                          isSpeaking={gameState.currentSpeakerSeat === player.seat}
+                          canClick={canClickSeat(player)}
+                          isSelected={selectedSeat === player.seat}
+                          onClick={() => handleSeatClick(player)}
+                          animationDelay={index * 0.05}
+                          humanPlayer={humanPlayer}
+                          seerCheckResult={seerResult}
+                        />
+                      );
+                      })}
+                    </AnimatePresence>
+                  </div>
+                  
+                  {/* 笔记本 */}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 笔记本 Dock */}
+      <div className="fixed bottom-5 right-5 z-50">
+        <button
+          onClick={() => setIsNotebookOpen((v) => !v)}
+          className={`inline-flex items-center justify-center w-12 h-12 rounded-full shadow-lg border cursor-pointer transition-all ${isNight ? "bg-[#1a1512] text-[#f0e6d2] border-[#3e2723]" : "bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border-color)]"}`}
+          title={isNotebookOpen ? "关闭笔记" : "打开笔记"}
+        >
+          {isNotebookOpen ? <X size={18} /> : <NotePencil size={18} />}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {isNotebookOpen && (
+          <motion.div
+            key="notebook-panel"
+            initial={{ opacity: 0, x: 24, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 24, y: 12, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="fixed bottom-20 right-5 z-50 w-[360px] h-[480px] max-h-[70vh]"
+          >
+            <div className={`h-full rounded-lg overflow-hidden border shadow-2xl ${isNight ? "bg-[#1a1512] border-[#3e2723]" : "bg-[var(--bg-card)] border-[var(--border-color)]"}`}>
+              <Notebook />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
