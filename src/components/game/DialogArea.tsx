@@ -56,18 +56,20 @@ function renderPlayerMentions(text: string, players: Player[], isNight: boolean 
       parts.push(
         <span
           key={`${match.index}-${seatNum}`}
-          className={`inline-flex items-center gap-1 px-1.5 py-px mx-0.5 rounded text-[0.85em] font-medium ${
+          className={`inline-flex items-center gap-1 mx-0.5 align-baseline text-[0.8em] font-semibold ${
             isNight
-              ? "bg-white/5 border border-white/10"
-              : "bg-[var(--bg-secondary)] border border-[var(--border-color)]/50"
+              ? "text-[var(--color-accent-light)]"
+              : "text-[var(--color-accent)]"
           }`}
         >
           <img
             src={dicebearUrl(player.playerId)}
             alt={player.displayName}
-            className="w-3.5 h-3.5 rounded-full"
+            className="w-3 h-3 rounded-full"
           />
-          <span className={isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}>{seatNum}号 {player.displayName}</span>
+          <span className={isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"}>
+            {seatNum}号 {player.displayName}
+          </span>
         </span>
       );
     } else {
@@ -75,10 +77,10 @@ function renderPlayerMentions(text: string, players: Player[], isNight: boolean 
       parts.push(
         <span
           key={`${match.index}-${seatNum}`}
-          className={`inline-flex items-center px-1.5 py-px mx-0.5 rounded text-[0.85em] font-medium ${
+          className={`inline-flex items-center mx-0.5 align-baseline text-[0.8em] font-semibold ${
             isNight
-              ? "bg-white/5 border border-white/10 text-[#f0e6d2]"
-              : "bg-[var(--bg-secondary)] border border-[var(--border-color)]/50 text-[var(--text-primary)]"
+              ? "text-[var(--color-accent-light)]"
+              : "text-[var(--color-accent)]"
           }`}
         >
           {seatNum}号
@@ -281,9 +283,9 @@ export function DialogArea({
   }
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden pb-16">
+    <div className="h-full w-full flex flex-col overflow-hidden min-h-0">
       {/* 上方区域：左侧发言者 + 右侧历史记录 */}
-      <div className="flex-1 flex gap-4 p-4 min-h-0">
+      <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
         {/* 左侧：当前发言者 - Visual Novel 风格大立绘 */}
         <div className="w-[260px] shrink-0 flex flex-col items-center justify-center">
           <AnimatePresence mode="wait">
@@ -310,13 +312,13 @@ export function DialogArea({
                   </div>
                   
                   {/* 座位号标签 */}
-                  <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 text-sm font-bold px-3 py-1 rounded shadow-lg ${isNight ? "bg-[#1a1512] text-[#f0e6d2] border border-[#3e2723]" : "bg-slate-800 text-white"}`}>
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-sm font-bold px-3 py-1 rounded shadow-lg glass-panel glass-panel--weak">
                     {currentSpeaker.player.seat + 1}号
                   </div>
                 </div>
                 
                 {/* 名字 */}
-                <h3 className="text-2xl font-black tracking-tight text-[var(--text-primary)] mb-1">
+                <h3 className="text-xl font-black tracking-tight text-[var(--text-primary)] mb-1">
                   {currentSpeaker.player.displayName}
                 </h3>
                 
@@ -337,16 +339,16 @@ export function DialogArea({
               >
                 <div className={`w-36 h-36 rounded-full flex items-center justify-center border-4 ${
                   isNight
-                    ? "bg-[#14100e] border-white/10"
+                    ? "bg-[var(--surface-card-dead)] border-[var(--surface-border)]"
                     : "bg-[var(--bg-secondary)] border-[var(--border-color)]"
                 }`}>
                   {isNight ? (
-                    <MoonStars size={48} className="opacity-35 text-[#f0e6d2]" />
+                    <MoonStars size={48} className="opacity-35 text-[var(--text-primary)]" />
                   ) : (
                     <ChatCircleDots size={48} className="opacity-30" />
                   )}
                 </div>
-                <p className={`mt-4 text-sm opacity-60 ${isNight ? "text-white/60" : ""}`}>等下一位...</p>
+                <p className="mt-4 text-sm opacity-60 text-[var(--text-secondary)]">等下一位...</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -355,7 +357,7 @@ export function DialogArea({
         {/* 右侧：聊天历史记录 */}
         <div 
           ref={historyRef}
-          className="flex-1 overflow-y-auto min-w-0"
+          className="flex-1 overflow-y-auto min-w-0 min-h-0"
         >
           {visibleMessages.map((msg, index) => {
             const prevMsg = visibleMessages[index - 1];
@@ -396,12 +398,7 @@ export function DialogArea({
 
         {/* Glass Panel - 统一的对话容器 */}
         <div 
-          className="glass-panel rounded-2xl p-5 relative overflow-hidden"
-          style={{
-            background: isNight ? "rgba(20, 16, 14, 0.65)" : "rgba(255, 255, 255, 0.65)",
-            backdropFilter: 'blur(12px)',
-            border: isNight ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(255, 255, 255, 0.5)",
-          }}
+          className="glass-panel glass-panel--strong rounded-2xl p-5 relative overflow-hidden"
         >
           {/* 装饰性引号 */}
           <div className="absolute top-3 left-4 text-6xl opacity-5 pointer-events-none select-none">"""</div>
@@ -416,7 +413,7 @@ export function DialogArea({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                 >
-                  <div className={`text-xl leading-relaxed ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>
+                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                     {gameState.winner === "village" ? (
                       <>GG！<span className="text-[var(--color-success)] font-semibold">好人阵营</span>胜利！</>
                     ) : (
@@ -427,9 +424,10 @@ export function DialogArea({
                     <span className="text-xs text-[var(--text-muted)]">下次还来玩啊</span>
                     <button
                       onClick={onRestart}
-                      className={`text-sm font-semibold transition-colors cursor-pointer hover:underline underline-offset-2 ${
-                        isNight ? "text-[var(--color-accent-light)] hover:text-[var(--color-accent)]" : "text-[var(--color-accent)] hover:text-[var(--color-accent-dark)]"
+                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
+                        isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"
                       }`}
+                      type="button"
                     >
                       再来一局 →
                     </button>
@@ -477,21 +475,23 @@ export function DialogArea({
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                     >
-                      <div className={`text-xl leading-relaxed ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>
+                      <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                         你选择{actionText} <span className={`font-semibold ${actionColor}`}>{targetName}</span>，确定吗？
                       </div>
                       <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                         <button
                           onClick={onCancelSelection}
-                          className={`text-sm font-medium transition-colors cursor-pointer hover:underline underline-offset-2 ${
-                            isNight ? "text-white/60 hover:text-white/80" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                          className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
+                            isNight ? "text-white/75" : "text-[var(--text-secondary)]"
                           }`}
+                          type="button"
                         >
                           取消
                         </button>
                         <button
                           onClick={onConfirmAction}
-                          className={`text-sm font-semibold transition-colors cursor-pointer hover:underline underline-offset-2 ${actionColor}`}
+                          className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${actionColor}`}
+                          type="button"
                         >
                           确认{actionText} →
                         </button>
@@ -512,26 +512,47 @@ export function DialogArea({
                     exit={{ opacity: 0, y: -10 }}
                   >
                     {(() => {
+                      if (gameState.roleAbilities.witchPoisonUsed) {
+                        return (
+                          <>
+                            <div className="text-lg leading-relaxed text-[var(--text-primary)]">
+                              毒药已用尽。
+                            </div>
+                            <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                              <button
+                                onClick={onCancelSelection}
+                                className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
+                                  isNight ? "text-white/75" : "text-[var(--text-secondary)]"
+                                }`}
+                                type="button"
+                              >
+                                返回
+                              </button>
+                            </div>
+                          </>
+                        );
+                      }
                       const targetPlayer = gameState.players.find(p => p.seat === selectedSeat);
                       const targetName = targetPlayer ? `${selectedSeat + 1}号 ${targetPlayer.displayName}` : `${selectedSeat + 1}号`;
                       return (
                         <>
-                          <div className={`text-xl leading-relaxed ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>
+                          <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                             你选择对 <span className="text-[var(--color-danger)] font-semibold">{targetName}</span> 使用毒药，确定吗？
                           </div>
                           <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
                               onClick={onCancelSelection}
-                              className={`text-sm font-medium transition-colors cursor-pointer hover:underline underline-offset-2 ${
-                                isNight ? "text-white/60 hover:text-white/80" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                              className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
+                                isNight ? "text-white/75" : "text-[var(--text-secondary)]"
                               }`}
+                              type="button"
                             >
                               取消
                             </button>
                             <button
                               onClick={() => onNightAction?.(selectedSeat, "poison")}
-                              disabled={gameState.roleAbilities.witchPoisonUsed}
-                              className="text-sm font-semibold text-[var(--color-danger)] transition-colors cursor-pointer hover:underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold text-[var(--color-danger)] cursor-pointer transition-all hover:brightness-105 active:scale-[0.98]"
+                              type="button"
                             >
                               确认毒杀 →
                             </button>
@@ -556,14 +577,24 @@ export function DialogArea({
 
                       return (
                         <>
-                          <div className={`text-xl leading-relaxed ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>
+                          <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                             {targetName ? (
                               <>
                                 今晚 <span className="text-[var(--color-danger)] font-semibold">{targetName}</span> 被狼人袭击。
                                 {healUsed ? (
                                   <span className="text-[var(--text-muted)]">（解药已用尽）</span>
                                 ) : (
-                                  <>你可以选择 <button onClick={() => onNightAction?.(wolfTarget!, "save")} className="text-[var(--color-success)] font-semibold cursor-pointer hover:underline underline-offset-2 transition-colors">救他</button>。</>
+                                  <>
+                                    <span className="mr-2">你可以</span>
+                                    <button
+                                      onClick={() => onNightAction?.(wolfTarget!, "save")}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-bg-weak)] text-[var(--color-success)] font-semibold cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all"
+                                      type="button"
+                                    >
+                                      救他
+                                    </button>
+                                    <span className="ml-2">。</span>
+                                  </>
                                 )}
                               </>
                             ) : (
@@ -575,9 +606,10 @@ export function DialogArea({
                           <div className={`flex items-center justify-end mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
                               onClick={() => onNightAction?.(0, "pass")}
-                              className={`text-sm font-semibold transition-colors cursor-pointer hover:underline underline-offset-2 ${
-                                isNight ? "text-white/70 hover:text-white/90" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                              className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
+                                isNight ? "text-white/80" : "text-[var(--text-secondary)]"
                               }`}
+                              type="button"
                             >
                               什么都不做 →
                             </button>
@@ -665,9 +697,9 @@ export function DialogArea({
                   onClick={onAdvanceDialogue}
                 >
                   {/* 对话内容 - 带玩家标签，增大字体 */}
-                  <div className={`text-xl leading-relaxed ${isNight ? "text-[#f0e6d2]" : "text-[var(--text-primary)]"}`}>
+                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                     {renderPlayerMentions(
-                      displayedText || currentSpeaker?.text || (waitingForNextRound ? "点击继续下一位发言" : "..."),
+                      displayedText || currentSpeaker?.text || (waitingForNextRound ? "轻触继续，轮到下一位" : "..."),
                       gameState.players,
                       isNight
                     )}
@@ -679,7 +711,7 @@ export function DialogArea({
                       {isTyping ? (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                          <span>正在发言...</span>
+                          <span>正在陈述…</span>
                         </>
                       ) : (
                         <span>{visibleMessages.length} 条消息</span>
@@ -687,7 +719,7 @@ export function DialogArea({
                     </div>
                     {isSpeechPhase && (
                       <button
-                        className="text-xs font-bold text-[var(--text-muted)] hover:text-[var(--color-accent)] uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-xs font-bold text-[var(--text-secondary)] cursor-pointer transition-all hover:brightness-105 active:scale-[0.98]"
                         onClick={onAdvanceDialogue}
                         type="button"
                       >
@@ -738,11 +770,7 @@ function ChatMessageItem({
   if (isSystem) {
     return (
       <div className="flex justify-center my-3">
-        <div className={`text-xs text-center py-2 px-4 rounded-lg border ${
-          isNight
-            ? "text-white/70 bg-white/5 border-white/10"
-            : "text-[var(--text-muted)] bg-[var(--bg-secondary)] border-[var(--border-color)]/30"
-        }`}>
+        <div className="text-xs text-center py-2 px-4 rounded-lg border text-[var(--text-secondary)] bg-[var(--glass-bg-weak)] border-[var(--glass-border)]">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
         </div>
       </div>
@@ -760,19 +788,15 @@ function ChatMessageItem({
           <div className={`flex items-center gap-1.5 mb-1 text-xs ${isHuman ? 'justify-end' : ''}`}>
             {player && (
               <span
-                className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${
-                  isNight
-                    ? "bg-white/5 border-white/10 text-white/60"
-                    : "bg-[var(--bg-secondary)] border-[var(--border-color)]/50 text-[var(--text-muted)]"
-                }`}
+                className="text-[10px] px-1.5 py-0.5 rounded border font-bold bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-[var(--text-secondary)]"
               >
                 {player.seat + 1}号
               </span>
             )}
-            <span className={`font-medium ${isNight ? "text-white/80" : "text-[var(--text-primary)]"}`}>{msg.playerName}</span>
-            {isHuman && <span className="text-[9px] font-bold bg-emerald-500 text-white px-1.5 py-0.5 rounded">YOU</span>}
+            <span className="font-medium text-[var(--text-primary)]">{msg.playerName}</span>
+            {isHuman && <span className="text-[9px] font-bold bg-[var(--badge-bg)] text-[var(--badge-text)] px-1.5 py-0.5 rounded">YOU</span>}
           </div>
-          <div className={`inline-block max-w-full px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${isHuman ? 'bg-[var(--color-accent)] text-white rounded-tr-none' : isNight ? 'bg-[#1a1512] text-[#f0e6d2] border border-[#3e2723] rounded-tl-none' : 'bg-white text-[var(--text-primary)] border border-[var(--border-color)]/30 rounded-tl-none'}`}>
+          <div className={`inline-block max-w-full px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${isHuman ? 'bg-[var(--color-accent)] text-white rounded-tr-none' : 'bg-[var(--chat-bubble-bg)] text-[var(--chat-bubble-text)] border border-[var(--chat-bubble-border)] rounded-tl-none'}`}>
             {renderPlayerMentions(msg.content, players, isNight)}
           </div>
         </div>

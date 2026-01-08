@@ -9,6 +9,14 @@
   --bg-dark-secondary: #3e3428;
   --bg-hover: #f0ebe0;
   --bg-selected: #faf3e0;
+
+  --bg-day-from: #fbf6ee;
+  --bg-day-via: #efe7d7;
+  --bg-day-to: #e8edf3;
+
+  --bg-night-from: #0d1117;
+  --bg-night-via: #121019;
+  --bg-night-to: #1a1f2a;
   
   /* 文字颜色 - 墨水色调 */
   --text-primary: #2c1810;
@@ -50,6 +58,33 @@
   /* 阴影 */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-weak: rgba(255, 255, 255, 0.52);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(44, 24, 16, 0.10);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --glass-shadow-strong: 0 16px 50px rgba(0, 0, 0, 0.18);
+  --glass-blur: 12px;
+  --glass-blur-weak: 8px;
+  --glass-blur-strong: 14px;
+
+  --topbar-bg: rgba(255, 255, 255, 0.65);
+  --topbar-border: rgba(212, 196, 168, 0.70);
+  --topbar-text: var(--text-primary);
+
+  --surface-card: rgba(255, 255, 255, 0.80);
+  --surface-card-dead: rgba(247, 244, 237, 0.80);
+  --surface-border: rgba(44, 24, 16, 0.08);
+  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.10);
+  --shadow-card-hover: 0 10px 26px rgba(0, 0, 0, 0.14);
+
+  --chat-bubble-bg: rgba(255, 255, 255, 0.92);
+  --chat-bubble-text: var(--text-primary);
+  --chat-bubble-border: rgba(212, 196, 168, 0.60);
+
+  --badge-bg: rgba(184, 134, 11, 0.16);
+  --badge-text: var(--color-accent);
 }
 
 /* 夜晚主题 - 复古暗色 */
@@ -63,6 +98,30 @@
   --text-secondary: #c9bba0;
   --text-muted: #8b7355;
   --border-color: #3e2723;
+
+  --glass-bg: rgba(20, 16, 14, 0.65);
+  --glass-bg-weak: rgba(20, 16, 14, 0.52);
+  --glass-bg-strong: rgba(20, 16, 14, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  --glass-shadow-strong: 0 18px 60px rgba(0, 0, 0, 0.55);
+
+  --topbar-bg: rgba(26, 21, 18, 0.72);
+  --topbar-border: rgba(62, 39, 35, 0.90);
+  --topbar-text: #f0e6d2;
+
+  --surface-card: rgba(26, 21, 18, 0.70);
+  --surface-card-dead: rgba(20, 16, 14, 0.72);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 10px 26px rgba(0, 0, 0, 0.45);
+
+  --chat-bubble-bg: rgba(26, 21, 18, 0.78);
+  --chat-bubble-text: var(--text-primary);
+  --chat-bubble-border: rgba(255, 255, 255, 0.10);
+
+  --badge-bg: rgba(184, 134, 11, 0.18);
+  --badge-text: var(--color-accent-light);
 }
 
 * {
@@ -78,6 +137,34 @@ body {
   height: 100vh;
   overflow: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel--weak {
+  background: var(--glass-bg-weak);
+  backdrop-filter: blur(var(--glass-blur-weak));
+  -webkit-backdrop-filter: blur(var(--glass-blur-weak));
+}
+
+.glass-panel--strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur-strong));
+  -webkit-backdrop-filter: blur(var(--glass-blur-strong));
+  box-shadow: var(--glass-shadow-strong);
+}
+
+.glass-topbar {
+  background: var(--topbar-bg);
+  border: 0;
+  border-bottom: 1px solid var(--topbar-border);
+  box-shadow: none;
 }
 
 /* Scrollbar - 现代简洁风格 */

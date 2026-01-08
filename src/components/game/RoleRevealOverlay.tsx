@@ -167,14 +167,9 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 420, damping: 34 }}
-              className="glass-panel rounded-3xl p-1 shadow-2xl"
-              style={{
-                background: "rgba(20, 16, 14, 0.62)",
-                backdropFilter: "blur(14px)",
-                border: "1px solid rgba(255,255,255,0.10)",
-              }}
+              className="glass-panel glass-panel--strong rounded-2xl p-1"
             >
-              <div className="rounded-[22px] overflow-hidden" style={{ perspective: 1200 }}>
+              <div className="rounded-2xl overflow-hidden" style={{ perspective: 1200 }}>
                 <motion.div
                   initial={false}
                   animate={{ rotateY: revealed ? 0 : 180 }}
@@ -214,11 +209,11 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                           >
                             <meta.Icon size={28} className="text-white/90" />
                           </div>
-                          <div className="text-sm font-bold text-white/85">命运正在揭晓…</div>
-                          <div className="text-xs text-white/55">请保持安静</div>
+                          <div className="text-sm font-bold text-white/85">正在发放身份牌…</div>
+                          <div className="text-xs text-white/55">请稍等</div>
                         </motion.div>
                       </div>
-                      <div className="mt-6 text-center text-sm text-white/70">稍候片刻，舞台将为你点亮。</div>
+                      <div className="mt-6 text-center text-sm text-white/70">稍等片刻，马上开始。</div>
                     </div>
                   </div>
 
@@ -227,7 +222,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                       className="px-6 pt-7 pb-5"
                       style={{
                         background: isNight
-                          ? `linear-gradient(135deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.16) 55%, rgba(0,0,0,0.26) 100%), linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0.02) 55%, rgba(0,0,0,0.12) 100%)`
+                          ? `linear-gradient(135deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 55%, rgba(0,0,0,0.26) 100%), linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0.02) 55%, rgba(0,0,0,0.12) 100%)`
                           : `linear-gradient(135deg, ${meta.bg} 0%, rgba(255,255,255,0.02) 55%, rgba(0,0,0,0.12) 100%)`,
                       }}
                     >
@@ -246,7 +241,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                               <meta.Icon size={24} className="text-white" />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-3xl font-black tracking-tight text-white font-serif">
+                              <div className="text-2xl font-black tracking-tight text-white font-serif">
                                 {meta.title}
                               </div>
                               <div className="mt-1 text-sm text-white/70 leading-relaxed">{meta.subtitle}</div>

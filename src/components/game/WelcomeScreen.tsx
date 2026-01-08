@@ -33,7 +33,7 @@ export function WelcomeScreen({
   ];
 
   return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-[var(--bg-main)] overflow-hidden relative selection:bg-[var(--color-accent)] selection:text-white">
+    <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent overflow-hidden relative selection:bg-[var(--color-accent)] selection:text-white">
       {/* Decorative Background Pattern */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
         <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,var(--color-accent)_0%,transparent_50%)]" />
@@ -131,7 +131,7 @@ export function WelcomeScreen({
             transition={{ delay: 0.3 }}
             className="text-[var(--text-secondary)] font-medium"
           >
-            和朋友们来一局狼人杀吧
+            准备好了就开始吧。
           </motion.p>
         </div>
 
@@ -140,9 +140,9 @@ export function WelcomeScreen({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="w-full bg-[var(--bg-card)]/80 backdrop-blur-sm p-1 rounded-2xl border border-[var(--border-color)] shadow-xl"
+          className="w-full glass-panel glass-panel--strong p-1 rounded-2xl"
         >
-          <div className="bg-[var(--bg-main)]/50 rounded-xl p-6 flex flex-col gap-6">
+          <div className="glass-panel glass-panel--weak shadow-none rounded-xl p-6 flex flex-col gap-6">
             <Button
               type="button"
               variant="outline"
@@ -155,7 +155,7 @@ export function WelcomeScreen({
             <div className="space-y-3">
               <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1 flex items-center gap-2">
                 <User weight="bold" />
-                Your Identity
+                你的称呼
               </label>
               <div className="relative group">
                 <Input
@@ -201,12 +201,12 @@ export function WelcomeScreen({
                     >
                       <Sparkle weight="bold" />
                     </motion.div>
-                    正在邀请玩家...
+                    正在邀请其他玩家…
                   </>
                 ) : (
                   <>
                     <Play weight="fill" />
-                    开始游戏
+                    进入牌局
                   </>
                 )}
               </span>

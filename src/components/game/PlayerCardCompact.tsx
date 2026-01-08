@@ -102,26 +102,26 @@ export function PlayerCardCompact({
 
   const baseCardClass = isNight
     ? isDead
-      ? "bg-[#14100e]/72 border border-white/6 shadow-[0_6px_18px_rgba(0,0,0,0.45)]"
-      : "bg-[#1a1512]/70 border border-white/5 shadow-[0_6px_18px_rgba(0,0,0,0.35)] hover:shadow-[0_10px_26px_rgba(0,0,0,0.45)]"
-    : "bg-[var(--bg-card)] border border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.1)]";
+      ? "bg-[var(--surface-card-dead)] border border-[var(--surface-border)] shadow-[var(--shadow-card)]"
+      : "bg-[var(--surface-card)] border border-[var(--surface-border)] shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)]"
+    : "bg-[var(--surface-card)] border border-[var(--surface-border)] shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)]";
 
   const wolfTeammateClass = isWolfTeammate
     ? isNight
-      ? "bg-[#231312]/75 border-[#8a1c1c]/55 shadow-[0_6px_18px_rgba(0,0,0,0.35),0_0_0_1px_rgba(138,28,28,0.18)]"
+      ? "border-[#8a1c1c]/55"
       : "border-[var(--color-wolf)] bg-[var(--color-wolf-bg)]"
     : "";
 
   const canClickClass = canClick
     ? isNight
-      ? "border-[var(--color-accent)] hover:bg-white/5"
-      : "border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]"
+      ? "border-[var(--color-accent)]"
+      : "border-[var(--color-accent)]"
     : "";
 
   const selectedClass = isSelected
     ? isNight
-      ? "bg-white/5 border-[var(--color-accent)] shadow-[0_0_0_2px_rgba(184,134,11,0.18)]"
-      : "bg-[var(--color-accent-bg)] border-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-accent-bg)]"
+      ? "border-[var(--color-accent)] shadow-[0_0_0_2px_rgba(184,134,11,0.18)]"
+      : "border-[var(--color-accent)] shadow-[0_0_0_2px_var(--color-accent-bg)]"
     : "";
 
   const handleClick = (e: React.MouseEvent) => {

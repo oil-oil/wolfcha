@@ -53,6 +53,7 @@ export function useGameLogic() {
   const pendingStartStateRef = useRef<GameState | null>(null);
   const hasContinuedAfterRevealRef = useRef(false);
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
+  const nightContinueRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
   const isResolvingVotesRef = useRef(false);
   const resolveVotesRef = useRef<(state: GameState) => Promise<void>>(async () => {});
@@ -245,7 +246,7 @@ export function useGameLogic() {
 
     if (wolves.length > 0 && !humanWolf) {
       setIsWaitingForAI(true);
-      setDialogue("系统", "狼人正在私聊...", false);
+      setDialogue("系统", UI_TEXT.wolfActing, false);
 
       const wolfChatLog: string[] = [...(currentState.nightActions.wolfChatLog || [])];
       for (const wolf of wolves) {
@@ -273,7 +274,7 @@ export function useGameLogic() {
       return;
     } else if (wolves.length > 0) {
       setIsWaitingForAI(true);
-      setDialogue("系统", "狼人正在商量今晚的目标...", false);
+      setDialogue("系统", UI_TEXT.wolfActing, false);
 
       const wolfVotes: Record<string, number> = {};
       for (const wolf of wolves) {
@@ -569,7 +570,7 @@ export function useGameLogic() {
     try {
       segments = await generateAISpeechSegments(apiKey!, state, player);
     } catch (error) {
-      segments = ["（发言出错）"];
+      segments = ["（话音被打断了）"];
     }
 
     // 初始化队列，显示第一条
@@ -588,12 +589,19 @@ export function useGameLogic() {
   // 推进到下一句话（用户按 Enter/Right/点击 时调用）
   const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean }> => {
     if (gameStateRef.current.phase.includes("NIGHT")) {
-      // 防御性：任何情况下夜晚都不应该推进/落库白天发言
-      speechQueueRef.current = null;
-      clearDialogue();
-      setIsWaitingForAI(false);
-      setWaitingForNextRound(false);
-      return { finished: true, shouldAdvanceToNextSpeaker: false };
+      // 夜晚：用于"查验结果"等需要玩家确认后再继续的流程
+      const cont = nightContinueRef.current;
+      if (cont) {
+        nightContinueRef.current = null;
+        clearDialogue();
+        setIsWaitingForAI(false);
+        setWaitingForNextRound(false);
+        await cont(gameStateRef.current);
+        return { finished: true, shouldAdvanceToNextSpeaker: false };
+      }
+
+      // 夜晚没有待确认的推进逻辑时，不做任何事，避免误触把提示清空
+      return { finished: false, shouldAdvanceToNextSpeaker: false };
     }
 
     const queue = speechQueueRef.current;
@@ -998,8 +1006,11 @@ export function useGameLogic() {
       setDialogue("查验结果", `${targetSeat + 1}号 ${targetPlayer?.displayName} 是${isWolf ? "狼人" : "好人"}`, false);
       setGameState(currentState);
 
-      await delay(1500);
-      await resolveNight(currentState);
+      // 关键：查验结果需要给玩家时间确认，避免被后续主持人消息覆盖
+      nightContinueRef.current = async (s) => {
+        await resolveNight(s);
+      };
+      return;
     }
     // === 猎人开枪 ===
     else if (gameState.phase === "HUNTER_SHOOT" && humanPlayer.role === "Hunter") {

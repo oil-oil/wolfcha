@@ -14,13 +14,19 @@ export function GameBackground({ isNight }: GameBackgroundProps) {
     setMounted(true);
   }, []);
 
-  if (!mounted) return <div className="fixed inset-0 bg-slate-100 -z-10" />;
+  if (!mounted) {
+    return (
+      <div
+        className="fixed inset-0 -z-10 bg-gradient-to-br from-[var(--bg-day-from)] via-[var(--bg-day-via)] to-[var(--bg-day-to)]"
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden transition-colors duration-1000">
       {/* Day Background */}
       <motion.div
-        className="absolute inset-0 bg-gradient-to-br from-[#fdfbf7] via-[#f3e7e9] to-[#e3eeff]"
+        className="absolute inset-0 bg-gradient-to-br from-[var(--bg-day-from)] via-[var(--bg-day-via)] to-[var(--bg-day-to)]"
         initial={false}
         animate={{ opacity: isNight ? 0 : 1 }}
         transition={{ duration: 1.5 }}
@@ -28,7 +34,7 @@ export function GameBackground({ isNight }: GameBackgroundProps) {
 
       {/* Night Background */}
       <motion.div
-        className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#312e81]"
+        className="absolute inset-0 bg-gradient-to-br from-[var(--bg-night-from)] via-[var(--bg-night-via)] to-[var(--bg-night-to)]"
         initial={false}
         animate={{ opacity: isNight ? 1 : 0 }}
         transition={{ duration: 1.5 }}
