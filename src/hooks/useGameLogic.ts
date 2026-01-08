@@ -188,10 +188,17 @@ export function useGameLogic() {
       }
 
       afterLastWordsRef.current = afterLastWords;
-      let currentState = transitionPhase(state, "DAY_LAST_WORDS");
+      // 清理残留状态，避免遗言阶段被"下一轮"按钮干扰
+      setWaitingForNextRound(false);
+      speechQueueRef.current = null;
+
+      // 确保遗言发言者在状态里已标记为死亡
+      let currentState = speaker.alive ? killPlayer(state, seat) : state;
+      currentState = transitionPhase(currentState, "DAY_LAST_WORDS");
       currentState = { ...currentState, currentSpeakerSeat: seat };
       currentState = addSystemMessage(currentState, `请 ${seat + 1}号 ${speaker.displayName} 发表遗言`);
       setGameState(currentState);
+      gameStateRef.current = currentState;
 
       if (speaker.isHuman) {
         setDialogue("主持人", `请你发表遗言（${seat + 1}号 ${speaker.displayName}）`, false);
@@ -394,15 +401,37 @@ export function useGameLogic() {
       const isProtected = guardTarget === wolfTarget;
       const isSaved = witchSave === true;
 
-      if (!isProtected && !isSaved) {
+      if (isProtected && isSaved) {
+        // 毒奶规则：守卫守护刀口且女巫救人，刀口仍死亡
+        shouldAnnouncePeacefulNight = false;
+        currentState = killPlayer(currentState, wolfTarget);
+        const victim = currentState.players.find((p) => p.seat === wolfTarget);
+        if (victim) {
+          // 毒奶死亡的猎人不能开枪
+          if (victim.role === "Hunter") {
+            currentState = {
+              ...currentState,
+              roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: false },
+            };
+          }
+          currentState = addSystemMessage(
+            currentState,
+            SYSTEM_MESSAGES.playerMilkKilled(victim.seat + 1, victim.displayName)
+          );
+          setDialogue(
+            "主持人",
+            SYSTEM_MESSAGES.playerMilkKilled(victim.seat + 1, victim.displayName),
+            false
+          );
+        }
+      } else if (!isProtected && !isSaved) {
         // 被杀成功
         wolfKillSuccessful = true;
         shouldAnnouncePeacefulNight = false;
         currentState = killPlayer(currentState, wolfTarget);
         wolfVictim = currentState.players.find((p) => p.seat === wolfTarget);
         
-        // 被狼杀的猎人不能开枪（正常死亡可以）
-        // 但如果是被毒死的猎人则不能开枪
+        // 被狼杀的猎人可以开枪
         if (wolfVictim) {
           currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName));
           setDialogue("主持人", SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName), false);
@@ -645,7 +674,8 @@ export function useGameLogic() {
 
   // 下一个发言者
   const moveToNextSpeaker = useCallback(async (state: GameState) => {
-    if (state.phase !== "DAY_SPEECH" && state.phase !== "DAY_LAST_WORDS") {
+    // 遗言阶段不应该推进到下一个发言者
+    if (state.phase !== "DAY_SPEECH") {
       console.warn("[wolfcha] moveToNextSpeaker called outside speech phase:", state.phase);
       return;
     }
@@ -859,7 +889,8 @@ export function useGameLogic() {
 
   // 下一轮按钮处理
   const handleNextRound = useCallback(async () => {
-    if (gameStateRef.current.phase !== "DAY_SPEECH" && gameStateRef.current.phase !== "DAY_LAST_WORDS") {
+    // 遗言阶段不应该触发下一轮
+    if (gameStateRef.current.phase !== "DAY_SPEECH") {
       return;
     }
 

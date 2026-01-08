@@ -620,6 +620,7 @@ export const SYSTEM_MESSAGES = {
   dayBreak: "天亮了，请睁眼",
   peacefulNight: "昨晚平安无事",
   playerKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚出局`,
+  playerMilkKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚被毒奶带走`,
   playerPoisoned: (seat: number, name: string) => `${seat}号 ${name} 昨晚中毒出局`,
   dayDiscussion: "开始自由发言",
   voteStart: "发言结束，开始投票。",
@@ -680,6 +681,7 @@ ${persona}
 【任务】
 夜晚守护阶段，选择一名玩家保护，使其今晚不被狼人杀害。
 注意：不能连续两晚保护同一人！
+注意：若你守护了刀口且女巫同时使用解药救人，会触发“毒奶/奶穿”，刀口仍会死亡。
 
 可选: ${alivePlayers
     .filter((p) => p.seat !== lastTarget)
@@ -743,6 +745,7 @@ ${canSave ? `- 输入 "save" 使用解药救 ${wolfTarget! + 1}号` : isWitchThe
 ${canPoison ? `- 输入 "poison X" 毒杀X号玩家（如 "poison 3"）` : "- 毒药已用完"}
 - 输入 "pass" 不使用药水
 注意：同一晚只能使用一瓶药水！
+注意：若守卫守护了刀口且你同时使用解药救人，会触发"毒奶/奶穿"，刀口仍会死亡。
 
 可毒目标: ${alivePlayers.map((p) => `${p.seat + 1}号`).join(", ")}
 
