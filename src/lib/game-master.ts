@@ -41,6 +41,7 @@ export function createInitialGameState(): GameState {
     events: [],
     messages: [],
     currentSpeakerSeat: null,
+    nextSpeakerSeatOverride: null,
     daySpeechStartSeat: null,
     votes: {},
     voteHistory: {},
@@ -58,7 +59,8 @@ export function createInitialGameState(): GameState {
 export function setupPlayers(
   characters: GeneratedCharacter[],
   humanSeat: number = 0,
-  humanName: string = "你"
+  humanName: string = "你",
+  fixedRoles?: Role[]
 ): Player[] {
   const totalPlayers = 10;
   // 10人局配置: 3狼人 + 1预言家 + 1女巫 + 1猎人 + 1守卫 + 3村民
@@ -70,13 +72,14 @@ export function setupPlayers(
     "Guard",                              // 1守卫
     "Villager", "Villager", "Villager",  // 3村民
   ];
-  const shuffledRoles = shuffleArray(roles);
+
+  const assignedRoles = fixedRoles && fixedRoles.length === totalPlayers ? fixedRoles : shuffleArray(roles);
   const shuffledModels = shuffleArray([...AVAILABLE_MODELS]);
 
   const players: Player[] = [];
 
   for (let seat = 0; seat < totalPlayers; seat++) {
-    const role = shuffledRoles[seat];
+    const role = assignedRoles[seat];
     const alignment: Alignment = role === "Werewolf" ? "wolf" : "village";
 
     if (seat === humanSeat) {
@@ -123,6 +126,8 @@ export function addSystemMessage(
     playerName: "主持人",
     content,
     timestamp: Date.now(),
+    day: state.day,
+    phase: state.phase,
     isSystem: true,
   };
 
@@ -146,6 +151,8 @@ export function addPlayerMessage(
     playerName: player.displayName,
     content,
     timestamp: Date.now(),
+    day: state.day,
+    phase: state.phase,
   };
 
   return {
@@ -439,22 +446,39 @@ export async function generateAIVote(
     { role: "user", content: user },
   ];
 
-  const result = await generateCompletion(apiKey, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: 0.5,
-    max_tokens: 10,
-  });
-
-  aiLogger.log({
-    type: "vote",
-    request: { 
+  let result: { content: string };
+  try {
+    result = await generateCompletion(apiKey, {
       model: player.agentProfile!.modelRef.model,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: { content: result.content, duration: Date.now() - startTime },
-  });
+      messages,
+      temperature: 0.5,
+      max_tokens: 10,
+    });
+
+    aiLogger.log({
+      type: "vote",
+      request: { 
+        model: player.agentProfile!.modelRef.model,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: { content: result.content, duration: Date.now() - startTime },
+    });
+  } catch (error) {
+    aiLogger.log({
+      type: "vote",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: { content: "", duration: Date.now() - startTime },
+      error: String(error),
+    });
+
+    if (alivePlayers.length === 0) return player.seat;
+    return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
 
   const match = result.content.match(/\d+/);
   if (match) {
@@ -465,6 +489,7 @@ export async function generateAIVote(
     }
   }
 
+  if (alivePlayers.length === 0) return player.seat;
   return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
 }
 

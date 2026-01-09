@@ -1,5 +1,7 @@
 export type Role = "Villager" | "Werewolf" | "Seer" | "Witch" | "Hunter" | "Guard";
 
+export type DevPreset = "MILK_POISON_TEST" | "LAST_WORDS_TEST";
+
 export type Phase =
   | "LOBBY"
   | "SETUP"
@@ -79,6 +81,8 @@ export interface ChatMessage {
   playerName: string;
   content: string;
   timestamp: number;
+  day?: number;
+  phase?: Phase;
   isSystem?: boolean;
   isStreaming?: boolean;
 }
@@ -87,13 +91,37 @@ export interface GameState {
   gameId: string;
   phase: Phase;
   day: number;
+  devMutationId?: number;
+  devPhaseJump?: { to: Phase; ts: number };
   players: Player[];
   events: GameEvent[];
   messages: ChatMessage[];
   currentSpeakerSeat: number | null;
+  nextSpeakerSeatOverride?: number | null;
   daySpeechStartSeat: number | null;
   votes: Record<string, number>;
   voteHistory: Record<number, Record<string, number>>; // day -> { voterId -> targetSeat }
+  nightHistory?: Record<
+    number,
+    {
+      guardTarget?: number;
+      wolfTarget?: number;
+      witchSave?: boolean;
+      witchPoison?: number;
+      seerTarget?: number;
+      seerResult?: { targetSeat: number; isWolf: boolean };
+      deaths?: Array<{ seat: number; reason: "wolf" | "poison" | "milk" }>;
+      hunterShot?: { hunterSeat: number; targetSeat: number };
+    }
+  >;
+  dayHistory?: Record<
+    number,
+    {
+      executed?: { seat: number; votes: number };
+      voteTie?: boolean;
+      hunterShot?: { hunterSeat: number; targetSeat: number };
+    }
+  >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list
   nightActions: {
     guardTarget?: number;        // 守卫保护的目标

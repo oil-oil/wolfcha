@@ -29,24 +29,71 @@ export interface GenerateOptions {
   reasoning?: { enabled: boolean };
 }
 
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  maxAttempts: number
+): Promise<Response> {
+  let lastResponse: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(input, init);
+      lastResponse = response;
+
+      if (response.ok) return response;
+
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === maxAttempts) {
+        return response;
+      }
+
+      const base = 400;
+      const jitter = Math.floor(Math.random() * 200);
+      const backoffMs = base * 2 ** (attempt - 1) + jitter;
+      await sleep(backoffMs);
+    } catch (err) {
+      lastError = err;
+      if (attempt === maxAttempts) break;
+      const base = 400;
+      const jitter = Math.floor(Math.random() * 200);
+      const backoffMs = base * 2 ** (attempt - 1) + jitter;
+      await sleep(backoffMs);
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 export async function generateCompletion(
   apiKey: string,
   options: GenerateOptions
 ): Promise<{ content: string; reasoning_details?: unknown; raw: OpenRouterResponse }> {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const response = await fetchWithRetry(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.max_tokens ?? 2048,
+        ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+      }),
     },
-    body: JSON.stringify({
-      model: options.model,
-      messages: options.messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 2048,
-      ...(options.reasoning ? { reasoning: options.reasoning } : {}),
-    }),
-  });
+    2
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -71,21 +118,25 @@ export async function* generateCompletionStream(
   apiKey: string,
   options: GenerateOptions
 ): AsyncGenerator<string, void, unknown> {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const response = await fetchWithRetry(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.max_tokens ?? 2048,
+        stream: true,
+        ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+      }),
     },
-    body: JSON.stringify({
-      model: options.model,
-      messages: options.messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.max_tokens ?? 2048,
-      stream: true,
-      ...(options.reasoning ? { reasoning: options.reasoning } : {}),
-    }),
-  });
+    2
+  );
 
   if (!response.ok) {
     const errorText = await response.text();

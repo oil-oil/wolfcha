@@ -26,7 +26,7 @@ import {
   type WitchAction,
 } from "@/lib/game-master";
 import { generateCharacters } from "@/lib/character-generator";
-import type { GameState, Player, Phase } from "@/types/game";
+import type { DevPreset, GameState, Player, Phase, Role } from "@/types/game";
 import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/prompts";
 import { gameStateAtom, isValidTransition } from "@/store/game-machine";
 
@@ -55,8 +55,16 @@ export function useGameLogic() {
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const nightContinueRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
+  const prevPhaseRef = useRef<Phase>(gameState.phase);
+  const prevDayRef = useRef<number>(gameState.day);
+  const prevDevMutationIdRef = useRef<number | undefined>(gameState.devMutationId);
+  const flowTokenRef = useRef(0);
   const isResolvingVotesRef = useRef(false);
   const resolveVotesRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  const maybeResolveVotesRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  const continueNightAfterGuardRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  const continueNightAfterWolfRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  const continueNightAfterWitchRef = useRef<(state: GameState) => Promise<void>>(async () => {});
   
   // AI speech queue for press-to-advance
   const speechQueueRef = useRef<{
@@ -67,8 +75,86 @@ export function useGameLogic() {
   } | null>(null);
 
   useEffect(() => {
+    // 保持 ref 同步
     gameStateRef.current = gameState;
-  }, [gameState]);
+
+    // ====== Dev Mode 容错：仅当开发者修改标记变化时，清理内部临时状态 ======
+    // 说明：正常游戏流程中 players.alive / nightActions / phase 都会频繁变化；
+    // 若用“签名对比”会误伤正常推进。
+    const prevDevMutationId = prevDevMutationIdRef.current;
+    const devMutationId = gameState.devMutationId;
+    const devMutated =
+      typeof devMutationId === "number" &&
+      (typeof prevDevMutationId !== "number" || devMutationId !== prevDevMutationId);
+
+    const phaseChanged = prevPhaseRef.current !== gameState.phase;
+    const dayChanged = prevDayRef.current !== gameState.day;
+    const hardReset = phaseChanged || dayChanged || !!gameState.devPhaseJump;
+
+    if (devMutated) {
+      // Dev 跳转/修改：中断所有在途的异步推进流程，避免后台继续 setGameState 覆盖用户跳转。
+      flowTokenRef.current += 1;
+      pendingStartStateRef.current = null;
+      hasContinuedAfterRevealRef.current = false;
+      isResolvingVotesRef.current = false;
+
+      // 无论是否硬重置，只要 Dev 修改触发了 flow 取消，都应清理等待状态，避免 UI 卡在“等待 AI/下一轮”。
+      if (waitingForNextRound) setWaitingForNextRound(false);
+      if (isWaitingForAI) setIsWaitingForAI(false);
+
+      // 仅当发生“换天/换阶段/显式 devPhaseJump”时，才清理会影响用户继续操作的 refs/对话。
+      // 否则（例如在动作面板修改当轮的 wolfTarget）保留这些状态，避免把游戏卡死。
+      if (hardReset) {
+        afterLastWordsRef.current = null;
+        nightContinueRef.current = null;
+        speechQueueRef.current = null;
+        if (currentDialogue) setCurrentDialogue(null);
+        if (inputText) setInputText("");
+      }
+
+      // Dev 动作编辑：可能中断了 runNightPhase 的后台推进。若关键数据已被用户补齐，则自动继续夜晚流程。
+      // 注意：只在“软编辑”时尝试恢复，避免和显式跳转冲突。
+      if (!hardReset) {
+        const s = gameState;
+        (async () => {
+          // Night phases: if the required action is already set (possibly via Dev actions tab), continue.
+          if (s.phase === "NIGHT_GUARD_ACTION") {
+            const guard = s.players.find((p) => p.role === "Guard" && p.alive);
+            if (!guard || s.nightActions.guardTarget !== undefined) {
+              await continueNightAfterGuardRef.current(s);
+            }
+            return;
+          }
+
+          if (s.phase === "NIGHT_WOLF_ACTION") {
+            if (s.nightActions.wolfTarget !== undefined) {
+              await continueNightAfterWolfRef.current(s);
+            }
+            return;
+          }
+
+          if (s.phase === "NIGHT_WITCH_ACTION") {
+            const witch = s.players.find((p) => p.role === "Witch" && p.alive);
+            const usedAll = s.roleAbilities.witchHealUsed && s.roleAbilities.witchPoisonUsed;
+            const decided = s.nightActions.witchSave !== undefined || s.nightActions.witchPoison !== undefined;
+            if (!witch || usedAll || decided) {
+              await continueNightAfterWitchRef.current(s);
+            }
+            return;
+          }
+
+          if (s.phase === "DAY_VOTE") {
+            await maybeResolveVotesRef.current(s);
+          }
+        })();
+      }
+    }
+
+    // 若阶段发生了非合法跳转，通常也是 Dev 面板造成；这里仅更新 ref，具体清理由 devMutationId 控制。
+    prevPhaseRef.current = gameState.phase;
+    prevDayRef.current = gameState.day;
+    prevDevMutationIdRef.current = devMutationId;
+  }, [gameState, currentDialogue, inputText, isWaitingForAI, waitingForNextRound]);
 
   const humanPlayer = gameState.players.find((p) => p.isHuman) || null;
   const isNight = gameState.phase.includes("NIGHT");
@@ -133,8 +219,12 @@ export function useGameLogic() {
     }
   }, []);
 
+  useEffect(() => {
+    maybeResolveVotesRef.current = maybeResolveVotes;
+  }, [maybeResolveVotes]);
+
   // 开始游戏
-  const startGame = useCallback(async () => {
+  const startGame = useCallback(async (fixedRoles?: Role[], devPreset?: DevPreset) => {
     if (!apiKey) {
       setDialogue("系统", "缺少 OpenRouter API Key，请在环境变量 NEXT_PUBLIC_OPENROUTER_API_KEY 中配置", false);
       toast.error("缺少 OpenRouter API Key", {
@@ -147,7 +237,7 @@ export function useGameLogic() {
     setIsLoading(true);
     try {
       const characters = await generateCharacters(apiKey, 9);
-      const players = setupPlayers(characters, 0, humanName || "你");
+      const players = setupPlayers(characters, 0, humanName || "你", fixedRoles);
       
       let newState: GameState = {
         ...createInitialGameState(),
@@ -158,10 +248,55 @@ export function useGameLogic() {
 
       newState = addSystemMessage(newState, SYSTEM_MESSAGES.gameStart);
       newState = addSystemMessage(newState, SYSTEM_MESSAGES.nightFall(1));
+      // 首页开发者模式：应用预设场景（仅用于测试）
+      if (devPreset === "MILK_POISON_TEST") {
+        const newPlayers = newState.players.map((p, i) => {
+          if (i === 0) return { ...p, role: "Guard" as Role, alignment: "village" as const, alive: true };
+          if (i === 1) return { ...p, role: "Witch" as Role, alignment: "village" as const, alive: true };
+          if (i === 2) return { ...p, role: "Werewolf" as Role, alignment: "wolf" as const, alive: true };
+          if (i === 3) return { ...p, role: "Villager" as Role, alignment: "village" as const, alive: true };
+          return { ...p, alive: true };
+        });
+        newState = {
+          ...newState,
+          players: newPlayers,
+          phase: "NIGHT_WITCH_ACTION",
+          day: 1,
+          devMutationId: (newState.devMutationId ?? 0) + 1,
+          devPhaseJump: { to: "NIGHT_WITCH_ACTION", ts: Date.now() },
+          nightActions: {
+            ...newState.nightActions,
+            guardTarget: 3,
+            wolfTarget: 3,
+          },
+          roleAbilities: {
+            ...newState.roleAbilities,
+            witchHealUsed: false,
+            witchPoisonUsed: false,
+            hunterCanShoot: true,
+          },
+        };
+      } else if (devPreset === "LAST_WORDS_TEST") {
+        const alivePlayers = newState.players.filter((p) => p.alive);
+        const votes: Record<string, number> = {};
+        alivePlayers.forEach((p) => {
+          votes[p.playerId] = 0;
+        });
+        newState = {
+          ...newState,
+          phase: "DAY_VOTE",
+          day: 1,
+          devMutationId: (newState.devMutationId ?? 0) + 1,
+          devPhaseJump: { to: "DAY_VOTE", ts: Date.now() },
+          votes,
+        };
+      }
+
       setGameState(newState);
       setShowTable(true);
 
-      pendingStartStateRef.current = newState;
+      // 若应用了预设，则 devPhaseJump 会自动推进，无需 role reveal 的 continue
+      pendingStartStateRef.current = devPreset ? null : newState;
       hasContinuedAfterRevealRef.current = false;
     } catch (error) {
       const msg = String(error);
@@ -181,6 +316,7 @@ export function useGameLogic() {
 
   const startLastWordsPhase = useCallback(
     async (state: GameState, seat: number, afterLastWords: (s: GameState) => Promise<void>) => {
+      const token = flowTokenRef.current;
       const speaker = state.players.find((p) => p.seat === seat);
       if (!speaker) {
         await afterLastWords(state);
@@ -205,8 +341,11 @@ export function useGameLogic() {
         return;
       }
 
+      if (flowTokenRef.current !== token) return;
+
       await runAISpeech(currentState, speaker, {
         afterSpeech: async (s) => {
+          if (flowTokenRef.current !== token) return;
           const next = afterLastWordsRef.current;
           afterLastWordsRef.current = null;
           if (next) await next(s);
@@ -218,7 +357,10 @@ export function useGameLogic() {
 
   // 夜晚阶段 - 新流程: 守卫 -> 狼人 -> 女巫 -> 预言家
   const runNightPhase = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = state;
+
+    if (flowTokenRef.current !== token) return;
 
     // === 守卫行动 ===
     currentState = transitionPhase(currentState, "NIGHT_GUARD_ACTION");
@@ -233,6 +375,7 @@ export function useGameLogic() {
         setIsWaitingForAI(true);
         setDialogue("系统", UI_TEXT.guardActing, false);
         const guardTarget = await generateGuardAction(apiKey!, currentState, guard);
+        if (flowTokenRef.current !== token) return;
         currentState = {
           ...currentState,
           nightActions: { ...currentState.nightActions, guardTarget },
@@ -243,6 +386,8 @@ export function useGameLogic() {
     }
 
     await delay(800);
+
+    if (flowTokenRef.current !== token) return;
 
     const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
     const humanWolf = wolves.find((w) => w.isHuman);
@@ -258,6 +403,7 @@ export function useGameLogic() {
       const wolfChatLog: string[] = [...(currentState.nightActions.wolfChatLog || [])];
       for (const wolf of wolves) {
         const msg = await generateWolfChatMessage(apiKey!, currentState, wolf, wolfChatLog);
+        if (flowTokenRef.current !== token) return;
         const line = `${wolf.seat + 1}号${wolf.displayName}: ${msg}`;
         wolfChatLog.push(line);
       }
@@ -271,6 +417,8 @@ export function useGameLogic() {
 
       await delay(600);
     }
+
+    if (flowTokenRef.current !== token) return;
 
     // === 狼人行动（出刀）===
     currentState = transitionPhase(currentState, "NIGHT_WOLF_ACTION");
@@ -286,6 +434,7 @@ export function useGameLogic() {
       const wolfVotes: Record<string, number> = {};
       for (const wolf of wolves) {
         const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
+        if (flowTokenRef.current !== token) return;
         wolfVotes[wolf.playerId] = targetSeat;
       }
 
@@ -313,6 +462,8 @@ export function useGameLogic() {
 
     await delay(800);
 
+    if (flowTokenRef.current !== token) return;
+
     // === 女巫行动 ===
     currentState = transitionPhase(currentState, "NIGHT_WITCH_ACTION");
     setGameState(currentState);
@@ -328,6 +479,7 @@ export function useGameLogic() {
         setIsWaitingForAI(true);
         setDialogue("系统", UI_TEXT.witchActing, false);
         const witchAction = await generateWitchAction(apiKey!, currentState, witch, currentState.nightActions.wolfTarget);
+        if (flowTokenRef.current !== token) return;
         
         if (witchAction.type === "save") {
           currentState = {
@@ -363,6 +515,7 @@ export function useGameLogic() {
         setDialogue("系统", UI_TEXT.seerChecking, false);
 
         const targetSeat = await generateSeerAction(apiKey!, currentState, seer);
+        if (flowTokenRef.current !== token) return;
         const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
         const isWolf = targetPlayer?.role === "Werewolf";
 
@@ -382,17 +535,32 @@ export function useGameLogic() {
     }
 
     await delay(1000);
+    if (flowTokenRef.current !== token) return;
     await resolveNight(currentState);
   }, [apiKey]);
 
   // 结算夜晚 - 考虑守卫保护和女巫药水
   const resolveNight = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "NIGHT_RESOLVE");
     setGameState(currentState);
 
     const { wolfTarget, guardTarget, witchSave, witchPoison } = currentState.nightActions;
     let wolfKillSuccessful = false;
     let wolfVictim: Player | undefined;
+
+    const deaths: Array<{ seat: number; reason: "wolf" | "poison" | "milk" }> = [];
+
+    const prevNightRecord = (currentState.nightHistory || {})[currentState.day] || {};
+    const existingPoisonDeath = prevNightRecord.deaths?.find((d) => d.reason === "poison");
+    const poisonUsedDay = (() => {
+      if (!currentState.roleAbilities.witchPoisonUsed) return null;
+      for (const [dayStr, record] of Object.entries(currentState.nightHistory || {})) {
+        if (record.witchPoison !== undefined) return Number(dayStr);
+      }
+      return null;
+    })();
+    const poisonUsedOnOtherDay = poisonUsedDay !== null && poisonUsedDay !== currentState.day;
 
     let shouldAnnouncePeacefulNight = true;
 
@@ -405,6 +573,7 @@ export function useGameLogic() {
         // 毒奶规则：守卫守护刀口且女巫救人，刀口仍死亡
         shouldAnnouncePeacefulNight = false;
         currentState = killPlayer(currentState, wolfTarget);
+        deaths.push({ seat: wolfTarget, reason: "milk" });
         const victim = currentState.players.find((p) => p.seat === wolfTarget);
         if (victim) {
           // 毒奶死亡的猎人不能开枪
@@ -429,6 +598,7 @@ export function useGameLogic() {
         wolfKillSuccessful = true;
         shouldAnnouncePeacefulNight = false;
         currentState = killPlayer(currentState, wolfTarget);
+        deaths.push({ seat: wolfTarget, reason: "wolf" });
         wolfVictim = currentState.players.find((p) => p.seat === wolfTarget);
         
         // 被狼杀的猎人可以开枪
@@ -441,25 +611,32 @@ export function useGameLogic() {
 
     // 女巫毒杀判定
     let poisonVictim: Player | undefined;
-    if (witchPoison !== undefined) {
+    if (witchPoison !== undefined && !poisonUsedOnOtherDay) {
       shouldAnnouncePeacefulNight = false;
-      currentState = killPlayer(currentState, witchPoison);
-      poisonVictim = currentState.players.find((p) => p.seat === witchPoison);
-      
-      if (poisonVictim) {
-        // 被毒死的猎人不能开枪
-        currentState = {
-          ...currentState,
-          roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: poisonVictim.role !== "Hunter" || currentState.roleAbilities.hunterCanShoot },
-        };
-        if (poisonVictim.role === "Hunter") {
+
+      // 同一晚结算被重复触发时，避免重复播报毒杀信息
+      if (existingPoisonDeath) {
+        deaths.push(existingPoisonDeath);
+      } else {
+        currentState = killPlayer(currentState, witchPoison);
+        deaths.push({ seat: witchPoison, reason: "poison" });
+        poisonVictim = currentState.players.find((p) => p.seat === witchPoison);
+
+        if (poisonVictim) {
+          // 被毒死的猎人不能开枪
           currentState = {
             ...currentState,
-            roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: false },
+            roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: poisonVictim.role !== "Hunter" || currentState.roleAbilities.hunterCanShoot },
           };
+          if (poisonVictim.role === "Hunter") {
+            currentState = {
+              ...currentState,
+              roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: false },
+            };
+          }
+          currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName));
+          setDialogue("主持人", SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName), false);
         }
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName));
-        setDialogue("主持人", SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName), false);
       }
     }
 
@@ -474,6 +651,24 @@ export function useGameLogic() {
       nightActions: {
         ...currentState.nightActions,
         lastGuardTarget: guardTarget,
+      },
+    };
+
+    // 记录当晚全场动作（供 DevTools 展示）
+    currentState = {
+      ...currentState,
+      nightHistory: {
+        ...(currentState.nightHistory || {}),
+        [currentState.day]: {
+          ...prevNightRecord,
+          guardTarget: currentState.nightActions.guardTarget,
+          wolfTarget: currentState.nightActions.wolfTarget,
+          witchSave: currentState.nightActions.witchSave,
+          witchPoison: poisonUsedOnOtherDay ? undefined : currentState.nightActions.witchPoison,
+          seerTarget: currentState.nightActions.seerTarget,
+          seerResult: currentState.nightActions.seerResult,
+          deaths,
+        },
       },
     };
 
@@ -492,17 +687,20 @@ export function useGameLogic() {
     }
 
     await delay(1200);
+    if (flowTokenRef.current !== token) return;
     currentState = transitionPhase(currentState, "DAY_START");
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
     setGameState(currentState);
 
     await delay(800);
+    if (flowTokenRef.current !== token) return;
     await startDayPhase(currentState);
   }, []);
 
   // 处理猎人死亡开枪
   // diedAtNight: true = 夜晚被杀，开枪后进入白天; false = 白天被处决，开枪后进入夜晚
   const handleHunterDeath = useCallback(async (state: GameState, hunter: Player, diedAtNight: boolean = true) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "HUNTER_SHOOT");
     setGameState(currentState);
 
@@ -518,12 +716,35 @@ export function useGameLogic() {
     const targetSeat = await generateHunterShoot(apiKey!, currentState, hunter);
     setIsWaitingForAI(false);
 
+    if (flowTokenRef.current !== token) return;
+
     if (targetSeat !== null) {
       currentState = killPlayer(currentState, targetSeat);
       const target = currentState.players.find((p) => p.seat === targetSeat);
       if (target) {
         currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName));
         setDialogue("主持人", SYSTEM_MESSAGES.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName), false);
+      }
+
+      const shot = { hunterSeat: hunter.seat, targetSeat };
+      if (diedAtNight) {
+        const prevNightRecord = (currentState.nightHistory || {})[currentState.day] || {};
+        currentState = {
+          ...currentState,
+          nightHistory: {
+            ...(currentState.nightHistory || {}),
+            [currentState.day]: { ...prevNightRecord, hunterShot: shot },
+          },
+        };
+      } else {
+        const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
+        currentState = {
+          ...currentState,
+          dayHistory: {
+            ...(currentState.dayHistory || {}),
+            [currentState.day]: { ...prevDayRecord, hunterShot: shot },
+          },
+        };
       }
       setGameState(currentState);
     }
@@ -535,6 +756,7 @@ export function useGameLogic() {
     }
 
     await delay(1200);
+    if (flowTokenRef.current !== token) return;
     
     if (diedAtNight) {
       // 夜晚被杀 -> 进入白天
@@ -542,21 +764,25 @@ export function useGameLogic() {
       currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
       setGameState(currentState);
       await delay(800);
+      if (flowTokenRef.current !== token) return;
       await startDayPhase(currentState);
     } else {
       // 白天被处决 -> 进入夜晚
       currentState = await maybeGenerateDailySummary(currentState);
+      if (flowTokenRef.current !== token) return;
       let nextState = { ...currentState, day: currentState.day + 1, nightActions: {} };
       nextState = transitionPhase(nextState, "NIGHT_START");
       nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
       setGameState(nextState);
       await delay(1200);
+      if (flowTokenRef.current !== token) return;
       await runNightPhase(nextState);
     }
   }, [apiKey, runNightPhase, maybeGenerateDailySummary]);
 
   // 白天阶段
   const startDayPhase = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "DAY_SPEECH");
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayDiscussion);
     
@@ -574,6 +800,8 @@ export function useGameLogic() {
 
     await delay(1500);
 
+    if (flowTokenRef.current !== token) return;
+
     if (firstSpeaker && !firstSpeaker.isHuman) {
       await runAISpeech(currentState, firstSpeaker);
     } else if (firstSpeaker?.isHuman) {
@@ -587,10 +815,13 @@ export function useGameLogic() {
     player: Player,
     options?: { afterSpeech?: (s: GameState) => Promise<void> }
   ) => {
+    const token = flowTokenRef.current;
     if (state.phase.includes("NIGHT")) {
       console.warn("[wolfcha] runAISpeech called during NIGHT phase:", state.phase);
       return;
     }
+
+    if (flowTokenRef.current !== token) return;
 
     setIsWaitingForAI(true);
     setCurrentDialogue({ speaker: player.displayName, text: "（正在组织语言…）", isStreaming: false });
@@ -600,6 +831,11 @@ export function useGameLogic() {
       segments = await generateAISpeechSegments(apiKey!, state, player);
     } catch (error) {
       segments = ["（话音被打断了）"];
+    }
+
+    if (flowTokenRef.current !== token) {
+      setIsWaitingForAI(false);
+      return;
     }
 
     // 初始化队列，显示第一条
@@ -680,7 +916,13 @@ export function useGameLogic() {
       return;
     }
 
-    const nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
+    const overrideSeat = state.nextSpeakerSeatOverride;
+    const usedOverride = typeof overrideSeat === "number";
+
+    const nextSeat =
+      typeof overrideSeat === "number" && state.players.some((p) => p.seat === overrideSeat && p.alive)
+        ? overrideSeat
+        : getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
 
     const startSeat = state.daySpeechStartSeat;
     if (nextSeat === null) {
@@ -689,12 +931,12 @@ export function useGameLogic() {
     }
 
     // 绕一圈回到起点则结束发言，进入投票
-    if (startSeat !== null && nextSeat === startSeat) {
+    if (!usedOverride && startSeat !== null && nextSeat === startSeat) {
       await startVotePhase(state);
       return;
     }
 
-    let currentState = { ...state, currentSpeakerSeat: nextSeat };
+    let currentState = { ...state, currentSpeakerSeat: nextSeat, nextSpeakerSeatOverride: null };
     setGameState(currentState);
 
     const nextPlayer = currentState.players.find((p) => p.seat === nextSeat);
@@ -707,8 +949,9 @@ export function useGameLogic() {
 
   // 投票阶段
   const startVotePhase = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "DAY_VOTE");
-    currentState = { ...currentState, currentSpeakerSeat: null, votes: {} };
+    currentState = { ...currentState, currentSpeakerSeat: null, nextSpeakerSeatOverride: null, votes: {} };
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.voteStart);
     setDialogue("主持人", humanPlayer?.alive ? UI_TEXT.votePrompt : UI_TEXT.aiVoting, false);
     setGameState(currentState);
@@ -721,9 +964,12 @@ export function useGameLogic() {
     const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
     for (const aiPlayer of aiPlayers) {
       if (gameStateRef.current.phase !== "DAY_VOTE") break;
+      if (flowTokenRef.current !== token) return;
       setIsWaitingForAI(true);
       const latestState = gameStateRef.current;
       const targetSeat = await generateAIVote(apiKey!, latestState, aiPlayer);
+
+      if (flowTokenRef.current !== token) return;
 
       if (gameStateRef.current.phase !== "DAY_VOTE") break;
 
@@ -744,6 +990,7 @@ export function useGameLogic() {
 
   // 结算投票
   const resolveVotes = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "DAY_RESOLVE");
     
     // 记录投票历史
@@ -754,6 +1001,27 @@ export function useGameLogic() {
     setGameState(currentState);
 
     const result = tallyVotes(currentState);
+
+    const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
+    if (result) {
+      currentState = {
+        ...currentState,
+        dayHistory: {
+          ...(currentState.dayHistory || {}),
+          [currentState.day]: { ...prevDayRecord, executed: { seat: result.seat, votes: result.count }, voteTie: false },
+        },
+      };
+    } else {
+      currentState = {
+        ...currentState,
+        dayHistory: {
+          ...(currentState.dayHistory || {}),
+          [currentState.day]: { ...prevDayRecord, executed: undefined, voteTie: true },
+        },
+      };
+    }
+
+    setGameState(currentState);
 
     if (result) {
       currentState = killPlayer(currentState, result.seat);
@@ -774,6 +1042,7 @@ export function useGameLogic() {
     }
 
     const proceedToNight = async (s: GameState) => {
+      if (flowTokenRef.current !== token) return;
       // 不阻塞 UI：先切到夜晚，再后台生成每日总结
       void maybeGenerateDailySummary(s)
         .then((summarized) => {
@@ -788,12 +1057,16 @@ export function useGameLogic() {
 
       await delay(350);
 
+      if (flowTokenRef.current !== token) return;
+
       let nextState = { ...s, day: s.day + 1, nightActions: {} };
       nextState = transitionPhase(nextState, "NIGHT_START");
       nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
       setGameState(nextState);
 
       await delay(250);
+
+      if (flowTokenRef.current !== token) return;
       await runNightPhase(nextState);
     };
 
@@ -801,6 +1074,7 @@ export function useGameLogic() {
       const executedPlayer = currentState.players.find((p) => p.seat === result.seat);
       
       await delay(800);
+      if (flowTokenRef.current !== token) return;
       await startLastWordsPhase(currentState, result.seat, async (s) => {
         // 检查被处决的是否是猎人（可以开枪）
         if (executedPlayer?.role === "Hunter" && s.roleAbilities.hunterCanShoot) {
@@ -872,12 +1146,12 @@ export function useGameLogic() {
   const handleFinishSpeaking = useCallback(async () => {
     if (!humanPlayer) return;
 
-    if (gameState.phase === "DAY_LAST_WORDS") {
+    if (gameStateRef.current.phase === "DAY_LAST_WORDS") {
       const next = afterLastWordsRef.current;
       afterLastWordsRef.current = null;
       if (next) {
         await delay(500);
-        await next(gameState);
+        await next(gameStateRef.current);
       }
       return;
     }
@@ -1045,12 +1319,34 @@ export function useGameLogic() {
     }
     // === 猎人开枪 ===
     else if (gameState.phase === "HUNTER_SHOOT" && humanPlayer.role === "Hunter") {
+      const diedAtNight = (currentState as any)._hunterDiedAtNight ?? true;
       if (targetSeat >= 0) {
         currentState = killPlayer(currentState, targetSeat);
         const target = currentState.players.find((p) => p.seat === targetSeat);
         if (target) {
           currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName));
           setDialogue("主持人", SYSTEM_MESSAGES.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName), false);
+        }
+
+        const shot = { hunterSeat: humanPlayer.seat, targetSeat };
+        if (diedAtNight) {
+          const prevNightRecord = (currentState.nightHistory || {})[currentState.day] || {};
+          currentState = {
+            ...currentState,
+            nightHistory: {
+              ...(currentState.nightHistory || {}),
+              [currentState.day]: { ...prevNightRecord, hunterShot: shot },
+            },
+          };
+        } else {
+          const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
+          currentState = {
+            ...currentState,
+            dayHistory: {
+              ...(currentState.dayHistory || {}),
+              [currentState.day]: { ...prevDayRecord, hunterShot: shot },
+            },
+          };
         }
         setGameState(currentState);
       }
@@ -1062,17 +1358,28 @@ export function useGameLogic() {
       }
 
       await delay(1200);
-      currentState = transitionPhase(currentState, "DAY_START");
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
-      setGameState(currentState);
+      if (diedAtNight) {
+        currentState = transitionPhase(currentState, "DAY_START");
+        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
+        setGameState(currentState);
 
-      await delay(800);
-      await startDayPhase(currentState);
+        await delay(800);
+        await startDayPhase(currentState);
+      } else {
+        currentState = await maybeGenerateDailySummary(currentState);
+        let nextState = { ...currentState, day: currentState.day + 1, nightActions: {} };
+        nextState = transitionPhase(nextState, "NIGHT_START");
+        nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
+        setGameState(nextState);
+        await delay(1200);
+        await runNightPhase(nextState);
+      }
     }
   }, [apiKey, gameState, humanPlayer, resolveNight]);
 
   // 守卫行动后继续夜晚流程
   const continueNightAfterGuard = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "NIGHT_WOLF_ACTION");
     setGameState(currentState);
 
@@ -1090,6 +1397,7 @@ export function useGameLogic() {
       const wolfVotes: Record<string, number> = {};
       for (const wolf of wolves) {
         const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
+        if (flowTokenRef.current !== token) return;
         wolfVotes[wolf.playerId] = targetSeat;
       }
       const counts: Record<number, number> = {};
@@ -1107,11 +1415,13 @@ export function useGameLogic() {
     }
 
     await delay(800);
+    if (flowTokenRef.current !== token) return;
     await continueNightAfterWolf(currentState);
   }, [apiKey]);
 
   // 狼人行动后继续夜晚流程
   const continueNightAfterWolf = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "NIGHT_WITCH_ACTION");
     setGameState(currentState);
 
@@ -1138,6 +1448,7 @@ export function useGameLogic() {
       setIsWaitingForAI(true);
       setDialogue("系统", UI_TEXT.witchActing, false);
       const witchAction = await generateWitchAction(apiKey!, currentState, witch, currentState.nightActions.wolfTarget);
+      if (flowTokenRef.current !== token) return;
       if (witchAction.type === "save") {
         currentState = { ...currentState, nightActions: { ...currentState.nightActions, witchSave: true }, roleAbilities: { ...currentState.roleAbilities, witchHealUsed: true } };
       } else if (witchAction.type === "poison" && witchAction.target !== undefined) {
@@ -1148,11 +1459,13 @@ export function useGameLogic() {
     }
 
     await delay(800);
+    if (flowTokenRef.current !== token) return;
     await continueNightAfterWitch(currentState);
   }, [apiKey]);
 
   // 女巫行动后继续夜晚流程
   const continueNightAfterWitch = useCallback(async (state: GameState) => {
+    const token = flowTokenRef.current;
     let currentState = transitionPhase(state, "NIGHT_SEER_ACTION");
     setGameState(currentState);
 
@@ -1165,6 +1478,7 @@ export function useGameLogic() {
       setIsWaitingForAI(true);
       setDialogue("系统", UI_TEXT.seerChecking, false);
       const targetSeat = await generateSeerAction(apiKey!, currentState, seer);
+      if (flowTokenRef.current !== token) return;
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
       const isWolf = targetPlayer?.role === "Werewolf";
       const seerHistory = currentState.nightActions.seerHistory || [];
@@ -1182,10 +1496,129 @@ export function useGameLogic() {
     }
 
     await delay(1000);
+    if (flowTokenRef.current !== token) return;
     await resolveNight(currentState);
   }, [apiKey, resolveNight]);
 
+  useEffect(() => {
+    continueNightAfterGuardRef.current = continueNightAfterGuard;
+    continueNightAfterWolfRef.current = continueNightAfterWolf;
+    continueNightAfterWitchRef.current = continueNightAfterWitch;
+  }, [continueNightAfterGuard, continueNightAfterWolf, continueNightAfterWitch]);
+
+  const prevDevPhaseJumpTsRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    const payload = gameState.devPhaseJump;
+    if (!payload) return;
+    if (prevDevPhaseJumpTsRef.current === payload.ts) return;
+    prevDevPhaseJumpTsRef.current = payload.ts;
+
+    // 每次 devPhaseJump 都中断旧流程，避免并发推进串写状态
+    flowTokenRef.current += 1;
+
+    const to = payload.to;
+    const s = gameStateRef.current;
+
+    const clearMark = () => {
+      setGameState((prev) => {
+        if (!prev.devPhaseJump || prev.devPhaseJump.ts !== payload.ts) return prev;
+        return { ...prev, devPhaseJump: undefined };
+      });
+    };
+
+    (async () => {
+      try {
+        if (to === "NIGHT_START" || to === "NIGHT_GUARD_ACTION" || to === "NIGHT_WOLF_CHAT") {
+          await runNightPhase(s);
+          return;
+        }
+
+        if (to === "NIGHT_WOLF_ACTION") {
+          await continueNightAfterGuard(s);
+          return;
+        }
+
+        if (to === "NIGHT_WITCH_ACTION") {
+          await continueNightAfterWolf(s);
+          return;
+        }
+
+        if (to === "NIGHT_SEER_ACTION") {
+          await continueNightAfterWitch(s);
+          return;
+        }
+
+        if (to === "NIGHT_RESOLVE") {
+          await resolveNight(s);
+          return;
+        }
+
+        if (to === "DAY_START" || to === "DAY_SPEECH") {
+          await startDayPhase(s);
+          return;
+        }
+
+        if (to === "DAY_VOTE") {
+          const aliveIds = s.players.filter((p) => p.alive).map((p) => p.playerId);
+          const allVoted = aliveIds.every((id) => typeof s.votes[id] === "number");
+          if (allVoted) {
+            await resolveVotesRef.current(s);
+            return;
+          }
+
+          // dev 跳转到投票阶段：初始化 votes，避免残留状态卡住 UI/结算逻辑
+          await startVotePhase({ ...s, votes: {} });
+          return;
+        }
+
+        if (to === "DAY_LAST_WORDS") {
+          const token = flowTokenRef.current;
+          const seat = s.currentSpeakerSeat ?? s.players.find((p) => !p.alive)?.seat ?? 0;
+          await startLastWordsPhase(s, seat, async (after) => {
+            const summarized = await maybeGenerateDailySummary(after);
+            if (flowTokenRef.current !== token) return;
+            let nextState = { ...summarized, day: summarized.day + 1, nightActions: {} };
+            nextState = transitionPhase(nextState, "NIGHT_START");
+            nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
+            setGameState(nextState);
+            await delay(250);
+            if (flowTokenRef.current !== token) return;
+            await runNightPhase(nextState);
+          });
+          return;
+        }
+
+        if (to === "DAY_RESOLVE") {
+          const aliveIds = s.players.filter((p) => p.alive).map((p) => p.playerId);
+          const allVoted = aliveIds.every((id) => typeof s.votes[id] === "number");
+          if (allVoted) {
+            await resolveVotesRef.current(s);
+            return;
+          }
+          await startVotePhase(s);
+        }
+      } finally {
+        clearMark();
+      }
+    })();
+  }, [
+    gameState.devPhaseJump,
+    maybeGenerateDailySummary,
+    runNightPhase,
+    resolveNight,
+    setGameState,
+    startDayPhase,
+    startLastWordsPhase,
+    startVotePhase,
+    transitionPhase,
+    continueNightAfterGuard,
+    continueNightAfterWolf,
+    continueNightAfterWitch,
+  ]);
+
   const continueAfterRoleReveal = useCallback(async () => {
+    const token = flowTokenRef.current;
     const pending = pendingStartStateRef.current;
     if (!pending) return;
     if (hasContinuedAfterRevealRef.current) return;
@@ -1193,6 +1626,7 @@ export function useGameLogic() {
     hasContinuedAfterRevealRef.current = true;
     pendingStartStateRef.current = null;
 
+    if (flowTokenRef.current !== token) return;
     await runNightPhase(pending);
   }, [runNightPhase]);
 

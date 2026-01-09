@@ -27,7 +27,7 @@ import {
 } from "@/components/icons/FlatIcons";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import { useGameLogic } from "@/hooks/useGameLogic";
-import type { Player } from "@/types/game";
+import type { DevPreset, Player, Role } from "@/types/game";
 import { PHASE_CONFIGS } from "@/store/game-machine";
 
 // Components
@@ -39,6 +39,7 @@ import { Notebook } from "@/components/game/Notebook";
 import { GameBackground } from "@/components/game/GameBackground";
 import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
 import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
+import { DevConsole, DevModeButton } from "@/components/DevTools";
 
 function getRitualCueFromSystemMessage(content: string): { title: string; subtitle?: string } | null {
   const text = content.trim();
@@ -90,6 +91,7 @@ export default function Home() {
   // UI 状态
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
   const [isRoleRevealOpen, setIsRoleRevealOpen] = useState(false);
   const [hasShownRoleReveal, setHasShownRoleReveal] = useState(false);
@@ -318,13 +320,13 @@ export default function Home() {
             <WelcomeScreen
               humanName={humanName}
               setHumanName={setHumanName}
-              onStart={async () => {
+              onStart={async (fixedRoles?: Role[], devPreset?: DevPreset) => {
                 if (!apiKey) {
-                  await startGame();
+                  await startGame(fixedRoles, devPreset);
                   return;
                 }
                 setApiKeyConfirmed(true);
-                await startGame();
+                await startGame(fixedRoles, devPreset);
               }}
               isLoading={isLoading}
             />
@@ -724,6 +726,10 @@ export default function Home() {
         onClose={() => setDetailPlayer(null)}
         humanPlayer={humanPlayer}
       />
+
+      {/* 开发者模式 */}
+      <DevModeButton onClick={() => setIsDevConsoleOpen(true)} />
+      <DevConsole isOpen={isDevConsoleOpen} onClose={() => setIsDevConsoleOpen(false)} />
 
           </motion.div>
         )}

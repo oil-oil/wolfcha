@@ -364,7 +364,7 @@ export function DialogArea({
             const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
             return (
               <ChatMessageItem 
-                key={msg.id} 
+                key={msg.id || `${msg.playerId}:${msg.timestamp}:${index}`} 
                 msg={msg} 
                 players={gameState.players}
                 humanPlayerId={humanPlayer?.playerId}

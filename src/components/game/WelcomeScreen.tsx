@@ -1,17 +1,19 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, User, Sparkle } from "@phosphor-icons/react";
+import { Play, User, Sparkle, Wrench } from "@phosphor-icons/react";
 import { WerewolfIcon, SeerIcon, WitchIcon, HunterIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { TutorialModal } from "@/components/game/TutorialModal";
+import type { DevPreset, Role } from "@/types/game";
+import { DevModeButton } from "@/components/DevTools";
 
 interface WelcomeScreenProps {
   humanName: string;
   setHumanName: (name: string) => void;
-  onStart: () => void;
+  onStart: (fixedRoles?: Role[], devPreset?: DevPreset) => void | Promise<void>;
   isLoading: boolean;
 }
 
@@ -23,6 +25,66 @@ export function WelcomeScreen({
 }: WelcomeScreenProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isDevModeEnabled, setIsDevModeEnabled] = useState(false);
+  const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
+  const [devTab, setDevTab] = useState<"preset" | "roles">("preset");
+  const [devPreset, setDevPreset] = useState<DevPreset | "">("");
+
+  const roleOptions: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
+  const roleLabels: Record<Role, string> = {
+    Villager: "村民",
+    Werewolf: "狼人",
+    Seer: "预言家",
+    Witch: "女巫",
+    Hunter: "猎人",
+    Guard: "守卫",
+  };
+
+  const [fixedRoles, setFixedRoles] = useState<(Role | "")[]>(() => [
+    "Villager",
+    "Villager",
+    "Villager",
+    "Werewolf",
+    "Werewolf",
+    "Werewolf",
+    "Seer",
+    "Witch",
+    "Hunter",
+    "Guard",
+  ]);
+
+  const roleConfigValid = useMemo(() => {
+    if (fixedRoles.length !== 10) return false;
+    if (fixedRoles.some((r) => !r)) return false;
+
+    const counts: Record<Role, number> = {
+      Villager: 0,
+      Werewolf: 0,
+      Seer: 0,
+      Witch: 0,
+      Hunter: 0,
+      Guard: 0,
+    };
+    for (const r of fixedRoles) {
+      counts[r as Role] += 1;
+    }
+
+    return (
+      counts.Werewolf === 3 &&
+      counts.Seer === 1 &&
+      counts.Witch === 1 &&
+      counts.Hunter === 1 &&
+      counts.Guard === 1 &&
+      counts.Villager === 3
+    );
+  }, [fixedRoles]);
+
+  const handleStart = async () => {
+    if (isLoading) return;
+    const roles = isDevModeEnabled && roleConfigValid ? (fixedRoles as Role[]) : undefined;
+    const preset = isDevModeEnabled ? (devPreset || undefined) : undefined;
+    await onStart(roles, preset);
+  };
 
   // Background floating icons configuration
   const floatingIcons = [
@@ -33,49 +95,50 @@ export function WelcomeScreen({
   ];
 
   return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent overflow-hidden relative selection:bg-[var(--color-accent)] selection:text-white">
-      {/* Decorative Background Pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,var(--color-accent)_0%,transparent_50%)]" />
-      </div>
+    <>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent overflow-hidden relative selection:bg-[var(--color-accent)] selection:text-white">
+        {/* Decorative Background Pattern */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,var(--color-accent)_0%,transparent_50%)]" />
+        </div>
 
-      {/* Floating Icons Animation */}
-      {floatingIcons.map(({ Icon, delay, x, y, scale }, index) => (
+        {/* Floating Icons Animation */}
+        {floatingIcons.map(({ Icon, delay, x, y, scale }, index) => (
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, x: 0, y: 0 }}
+            animate={{ 
+              opacity: [0, 0.15, 0],
+              x: [0, x],
+              y: [0, y],
+              rotate: [0, 10, -10, 0]
+            }}
+            transition={{
+              duration: 8,
+              delay: delay,
+              repeat: Infinity,
+              repeatType: "reverse",
+              ease: "easeInOut"
+            }}
+            className="absolute text-[var(--color-accent)]"
+            style={{ 
+              left: '50%', 
+              top: '50%',
+              scale
+            }}
+          >
+            <Icon size={120} />
+          </motion.div>
+        ))}
+
+        <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
+
         <motion.div
-          key={index}
-          initial={{ opacity: 0, x: 0, y: 0 }}
-          animate={{ 
-            opacity: [0, 0.15, 0],
-            x: [0, x],
-            y: [0, y],
-            rotate: [0, 10, -10, 0]
-          }}
-          transition={{
-            duration: 8,
-            delay: delay,
-            repeat: Infinity,
-            repeatType: "reverse",
-            ease: "easeInOut"
-          }}
-          className="absolute text-[var(--color-accent)]"
-          style={{ 
-            left: '50%', 
-            top: '50%',
-            scale
-          }}
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
+          className="z-10 w-full max-w-md px-8 flex flex-col items-center"
         >
-          <Icon size={120} />
-        </motion.div>
-      ))}
-
-      <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
-        className="z-10 w-full max-w-md px-8 flex flex-col items-center"
-      >
         {/* Logo / Icon Section */}
         <motion.div
           className="relative mb-10"
@@ -187,7 +250,7 @@ export function WelcomeScreen({
             </div>
 
             <Button
-              onClick={onStart}
+              onClick={handleStart}
               disabled={!humanName.trim() || isLoading}
               size="lg"
               className="w-full h-12 text-base font-bold shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] relative overflow-hidden group cursor-pointer"
@@ -232,5 +295,124 @@ export function WelcomeScreen({
         </motion.div>
       </motion.div>
     </div>
+
+    <DevModeButton
+      onClick={() => {
+        setIsDevModeEnabled(true);
+        setIsDevConsoleOpen(true);
+      }}
+    />
+
+    <AnimatePresence>
+      {isDevConsoleOpen && (
+        <motion.div
+          initial={{ opacity: 0, x: 300 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 300 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="fixed right-0 top-0 bottom-0 w-[400px] z-[120] bg-gray-900/95 backdrop-blur-md border-l border-gray-700 shadow-2xl flex flex-col"
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50">
+            <div className="flex items-center gap-2">
+              <Wrench size={20} className="text-yellow-400" />
+              <span className="font-bold text-white">开发者模式</span>
+            </div>
+            <button
+              onClick={() => setIsDevConsoleOpen(false)}
+              className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              type="button"
+            >
+              <span className="text-xl leading-none">×</span>
+            </button>
+          </div>
+
+          <div className="flex border-b border-gray-700">
+            <button
+              type="button"
+              onClick={() => setDevTab("preset")}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors ${
+                devTab === "preset"
+                  ? "text-yellow-400 border-b-2 border-yellow-400 bg-gray-800/50"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800/30"
+              }`}
+            >
+              预设
+            </button>
+            <button
+              type="button"
+              onClick={() => setDevTab("roles")}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors ${
+                devTab === "roles"
+                  ? "text-yellow-400 border-b-2 border-yellow-400 bg-gray-800/50"
+                  : "text-gray-400 hover:text-white hover:bg-gray-800/30"
+              }`}
+            >
+              配置
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {devTab === "preset" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-gray-300">预设场景测试</div>
+                  <button
+                    type="button"
+                    onClick={() => setDevPreset("")}
+                    className="text-xs text-gray-400 hover:text-white"
+                  >
+                    清除
+                  </button>
+                </div>
+                <select
+                  value={devPreset}
+                  onChange={(e) => setDevPreset(e.target.value as DevPreset | "")}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400"
+                >
+                  <option value="">无</option>
+                  <option value="MILK_POISON_TEST">毒奶测试</option>
+                  <option value="LAST_WORDS_TEST">遗言测试</option>
+                </select>
+              </div>
+            )}
+
+            {devTab === "roles" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-gray-300">身份配置（10人局）</div>
+                  <div className={`text-xs ${roleConfigValid ? "text-green-400" : "text-gray-400"}`}>
+                    {roleConfigValid ? "配置完成" : "需满足：3狼 预女猎守 3民"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {fixedRoles.map((role, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="w-10 text-xs text-gray-400">{idx + 1}号</span>
+                      <select
+                        value={role}
+                        onChange={(e) => {
+                          const next = [...fixedRoles];
+                          next[idx] = e.target.value as Role;
+                          setFixedRoles(next);
+                        }}
+                        className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-400"
+                      >
+                        {roleOptions.map((r) => (
+                          <option key={r} value={r}>
+                            {roleLabels[r]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
