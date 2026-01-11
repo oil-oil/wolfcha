@@ -117,7 +117,7 @@ export function WelcomeScreen({
 
     window.setTimeout(() => {
       void onStart();
-    }, 1300);
+    }, 800);
   };
 
   return (
@@ -189,7 +189,7 @@ export function WelcomeScreen({
 
           <div className="mt-8 flex flex-col items-center gap-3">
             <div className="wc-seal-hint">
-              {isLoading ? "正在邀请其他玩家入场…" : canConfirm ? "按下印章以生效" : "签署名字后才可生效"}
+              {canConfirm ? "按下印章以生效" : "签署名字后才可生效"}
             </div>
             <button
               ref={sealButtonRef}

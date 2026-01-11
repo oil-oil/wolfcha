@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,7 @@ import {
   Shield,
   Drop,
   Crosshair,
+  PawPrint,
 } from "@phosphor-icons/react";
 import {
   WerewolfIcon,
@@ -40,13 +41,28 @@ import { GameBackground } from "@/components/game/GameBackground";
 import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
 import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
 
+const RITUAL_CUE_DURATION_SECONDS = 2.2;
+
 function getRitualCueFromSystemMessage(content: string): { title: string; subtitle?: string } | null {
   const text = content.trim();
   if (text === "人到齐了，开始吧。") return { title: "开局" };
   if (/^第\s*\d+\s*夜，天黑请闭眼$/.test(text)) return { title: text };
+  if (text === "守卫请睁眼") return { title: text };
+  if (text === "狼人请睁眼") return { title: text };
+  if (text === "女巫请睁眼") return { title: text };
+  if (text === "预言家请睁眼") return { title: text };
   if (text === "昨晚平安无事") return { title: "昨晚平安无事" };
+  if (/^\d+号\s+.+\s+昨晚出局$/.test(text)) return { title: text };
+  if (/^\d+号\s+.+\s+昨晚中毒出局$/.test(text)) return { title: text };
   if (text === "天亮了，请睁眼") return { title: "天亮了，请睁眼" };
+  if (text === "警徽竞选开始，请各位玩家依次发言") return { title: "警徽竞选开始", subtitle: "请各位玩家依次发言" };
+  if (text === "开始警徽评选") return { title: text };
+  if (text === "警徽平票，重新投票") return { title: text };
+  if (/^\s*警徽授予\s*\d+号\s+.+（\d+票）\s*$/.test(text)) return { title: text };
   if (text === "开始自由发言") return { title: "开始自由发言" };
+  if (text === "发言结束，开始投票。") return { title: text };
+  if (/^\d+号\s+.+\s+以\s+\d+\s+票出局$/.test(text)) return { title: text };
+  if (text === "票数相同，今天无人出局") return { title: text };
   return null;
 }
 
@@ -93,9 +109,41 @@ export default function Home() {
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
   const [isRoleRevealOpen, setIsRoleRevealOpen] = useState(false);
   const [hasShownRoleReveal, setHasShownRoleReveal] = useState(false);
+  
+  // 流式显示玩家入场
+  const [revealedPlayerCount, setRevealedPlayerCount] = useState(0);
+
+  // 当进入召唤页面时，逐个显示玩家
+  useEffect(() => {
+    if (!showTable && gameState.players.length > 0 && revealedPlayerCount < gameState.players.length) {
+      const timer = setTimeout(() => {
+        setRevealedPlayerCount(prev => prev + 1);
+      }, 400 + Math.random() * 300); // 每个玩家间隔400-700ms
+      return () => clearTimeout(timer);
+    }
+  }, [showTable, gameState.players.length, revealedPlayerCount]);
+
+  // 重置时清空显示数量
+  useEffect(() => {
+    if (gameState.players.length === 0) {
+      const t = window.setTimeout(() => {
+        setRevealedPlayerCount(0);
+      }, 0);
+      return () => window.clearTimeout(t);
+    }
+  }, [gameState.players.length]);
+
+  // 阶段切换时清理选择状态
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setSelectedSeat(null);
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [gameState.phase]);
 
   const [ritualCue, setRitualCue] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
   const [lastRitualMessageId, setLastRitualMessageId] = useState<string | null>(null);
+  const ritualCueQueueRef = useRef<Array<{ id: string; title: string; subtitle?: string }>>([]);
 
   useEffect(() => {
     const lastSystem = [...gameState.messages].reverse().find((m) => m.isSystem);
@@ -106,9 +154,14 @@ export default function Home() {
 
     queueMicrotask(() => {
       setLastRitualMessageId(lastSystem.id || null);
-      setRitualCue({ id: lastSystem.id || String(Date.now()), title: cue.title, subtitle: cue.subtitle });
+      const next = { id: lastSystem.id || String(Date.now()), title: cue.title, subtitle: cue.subtitle };
+      if (ritualCue) {
+        ritualCueQueueRef.current.push(next);
+        return;
+      }
+      setRitualCue(next);
     });
-  }, [gameState.messages, lastRitualMessageId]);
+  }, [gameState.messages, lastRitualMessageId, ritualCue]);
 
   // Typewriter effect
   const { displayedText, isTyping } = useTypewriter({
@@ -362,12 +415,19 @@ export default function Home() {
                       scale: [0.995, 1, 1, 0.995],
                       filter: ["blur(10px)", "blur(0px)", "blur(0px)", "blur(12px)"],
                     }}
-                    transition={{ duration: 1.15, times: [0, 0.18, 0.62, 1], ease: "easeInOut" }}
+                    transition={{ duration: RITUAL_CUE_DURATION_SECONDS, times: [0, 0.15, 0.82, 1], ease: "easeInOut" }}
                     onAnimationComplete={() => {
-                      setRitualCue((current) => {
-                        if (!current) return null;
-                        return current.id === ritualCue.id ? null : current;
-                      });
+                      const finishedId = ritualCue.id;
+                      setRitualCue(null);
+                      window.setTimeout(() => {
+                        const queued = ritualCueQueueRef.current;
+                        const next = queued.shift();
+                        if (next) {
+                          setRitualCue((current) => (current ? current : next));
+                          return;
+                        }
+                        setLastRitualMessageId((current) => (current === finishedId ? null : current));
+                      }, 0);
                     }}
                     className="relative px-10 py-6 text-center"
                   >
@@ -431,64 +491,54 @@ export default function Home() {
               />
             )}
 
-            <div className="flex items-center justify-between px-8 h-14 shrink-0 transition-all duration-300 font-serif glass-panel glass-panel--weak glass-topbar rounded-none text-[var(--topbar-text)]">
-              <div className="flex items-center gap-3 text-xl font-bold tracking-tight">
-                <WerewolfIcon size={24} className="text-[var(--color-wolf)]" />
-                <span>Wolfcha</span>
+            {/* 顶部栏 - 参考 style-unification-preview.html */}
+            <div className="wc-topbar shrink-0 transition-all duration-300">
+              {/* 左侧: Logo + 标题 */}
+              <div className="wc-topbar__title">
+                <WerewolfIcon size={22} className="text-[var(--color-blood)]" />
+                <span>WOLFCHA</span>
               </div>
-              <div className="flex items-center gap-6 text-sm font-medium">
-                <div className="flex items-center gap-1.5">
-                  {isNight ? <NightIcon size={16} className="text-[var(--color-accent)]" /> : <DayIcon size={16} className="text-[var(--color-accent)]" />}
-                  <span>第 {gameState.day} 天</span>
+
+              {/* 中间: 游戏信息 */}
+              <div className="wc-topbar__info">
+                <div className="wc-topbar__item">
+                  <span className="text-xs uppercase tracking-wider opacity-60">Day</span>
+                  <span className="font-serif text-lg font-bold">{String(gameState.day).padStart(2, '0')}</span>
                 </div>
-                <div className="h-4 w-px bg-current opacity-20" />
-                <div className="flex items-center gap-1.5">
-                  <Users size={16} />
-                  <span>{gameState.players.filter((p) => p.alive).length}/{gameState.players.length}</span>
+                <div className="wc-topbar__item">
+                  <span className="text-xs uppercase tracking-wider opacity-60">Alive</span>
+                  <span className="font-serif text-lg font-bold">{gameState.players.filter((p) => p.alive).length}/{gameState.players.length}</span>
                 </div>
                 {gameState.badge.holderSeat !== null && (
-                  <>
-                    <div className="h-4 w-px bg-current opacity-20" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black px-2 py-0.5 rounded-full bg-[var(--color-accent)]/12 text-[var(--color-accent)]">警徽</span>
-                      <span>
-                        {gameState.badge.holderSeat + 1}号
-                      </span>
-                    </div>
-                  </>
+                  <div className="wc-topbar__item">
+                    <span className="text-xs uppercase tracking-wider opacity-60">警徽</span>
+                    <span className="font-serif text-lg font-bold text-[var(--color-gold)]">{gameState.badge.holderSeat + 1}号</span>
+                  </div>
                 )}
-                <div className="h-4 w-px bg-current opacity-20" />
-                <div className="text-sm font-semibold px-3 py-1 rounded flex items-center gap-2 glass-panel glass-panel--weak shadow-none">
+                {/* 阶段徽章 */}
+                <div className="wc-phase-badge">
                   <span className="opacity-90">{renderPhaseIcon()}</span>
                   <span>{getPhaseDescription()}</span>
-
                   {showWaitingIndicator && (
-                    <span className="flex items-center gap-1 ml-1 opacity-80">
-                      <motion.span
-                        animate={{ scale: [1, 1.25, 1] }}
-                        transition={{ repeat: Infinity, duration: 0.7, delay: 0 }}
-                        className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                      />
-                      <motion.span
-                        animate={{ scale: [1, 1.25, 1] }}
-                        transition={{ repeat: Infinity, duration: 0.7, delay: 0.15 }}
-                        className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                      />
-                      <motion.span
-                        animate={{ scale: [1, 1.25, 1] }}
-                        transition={{ repeat: Infinity, duration: 0.7, delay: 0.3 }}
-                        className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                      />
+                    <span className="flex items-center gap-1 ml-1">
+                      <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0 }} className="w-1.5 h-1.5 rounded-full bg-current" />
+                      <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.15 }} className="w-1.5 h-1.5 rounded-full bg-current" />
+                      <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.3 }} className="w-1.5 h-1.5 rounded-full bg-current" />
                     </span>
                   )}
-
                   {needsHumanAction && (
-                    <span className="flex items-center gap-1.5 font-semibold text-xs px-2 py-0.5 rounded-full ml-1 text-[var(--color-accent)] bg-[var(--color-accent)]/12">
+                    <span className="flex items-center gap-1.5 font-semibold text-xs px-2 py-0.5 rounded-full ml-1 bg-[var(--color-gold)]/20 text-[var(--color-gold)]">
                       <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
                       轮到你
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* 右侧: 玩家角色 */}
+              <div className="wc-topbar__item">
+                <span className="text-xs uppercase tracking-wider opacity-60">Role</span>
+                <span className="font-bold text-[var(--color-gold)]">{humanPlayer?.role || "?"}</span>
               </div>
             </div>
 
@@ -497,91 +547,90 @@ export default function Home() {
                 <AnimatePresence mode="wait" initial={false}>
                   {!showTable ? (
                     <motion.div
-                      key="invite-screen"
+                      key="summoning-screen"
                       initial={{ opacity: 0, y: 12, filter: "blur(10px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       exit={{ opacity: 0, y: -10, filter: "blur(10px)" }}
                       transition={{ duration: 0.45, ease: "easeOut" }}
-                      className="flex flex-col items-center justify-center h-full gap-6"
+                      className="flex flex-col items-center justify-center h-full"
                     >
-                      <div className="glass-panel glass-panel--strong rounded-3xl p-1 w-full max-w-md">
-                        <div className="glass-panel glass-panel--weak shadow-none rounded-[22px] p-6">
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs font-bold tracking-wider uppercase text-[var(--text-muted)]">入场准备</div>
-                            <div className="text-xs text-[var(--text-secondary)]">请稍候</div>
-                          </div>
-
-                          <div className="mt-6 flex items-center justify-center">
-                            <div className="relative w-44 h-44">
-                              <motion.div
-                                className="absolute inset-0 rounded-full"
-                                style={{
-                                  background:
-                                    "radial-gradient(circle at 50% 50%, rgba(184,134,11,0.22) 0%, rgba(184,134,11,0.10) 35%, rgba(0,0,0,0) 70%)",
-                                }}
-                                animate={{ scale: [0.98, 1.04, 0.98], opacity: [0.75, 1, 0.75] }}
-                                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                              />
-
-                              <motion.div
-                                className="absolute inset-3 rounded-full"
-                                style={{
-                                  background:
-                                    "conic-gradient(from 90deg, rgba(184,134,11,0.0), rgba(184,134,11,0.55), rgba(184,134,11,0.0))",
-                                  filter: "blur(0.2px)",
-                                }}
-                                animate={{ rotate: 360 }}
-                                transition={{ duration: 6.5, repeat: Infinity, ease: "linear" }}
-                              />
-
-                              <motion.div
-                                className="absolute inset-7 rounded-full border"
-                                style={{ borderColor: "rgba(44, 24, 16, 0.10)", background: "rgba(0,0,0,0.08)" }}
-                                animate={{ rotate: -360 }}
-                                transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                              />
-
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="glass-panel glass-panel--weak shadow-none rounded-3xl w-20 h-20 flex items-center justify-center">
-                                  <WerewolfIcon size={38} className="text-[var(--color-wolf)]" />
-                                </div>
-                              </div>
+                      {/* 召唤等待 - 参考 waiting-preview.html */}
+                      <div className="wc-contract-paper wc-contract-paper--summoning">
+                        <div className="wc-contract-borders" aria-hidden="true" />
+                        
+                        <div className="h-full flex flex-col items-center pt-6">
+                          {/* 顶部状态 */}
+                          <div className="text-center z-10">
+                            <div className="wc-summoning-status">Summoning Players</div>
+                            <div className="text-[var(--color-wolf)] font-bold font-serif text-lg mt-2 flex items-center gap-2 justify-center">
+                              <span>{revealedPlayerCount}</span> / {gameState.players.length}
                             </div>
                           </div>
 
-                          <div className="mt-6 text-center">
-                            <div className="text-lg font-bold text-[var(--text-primary)]">正在邀请其他玩家入场…</div>
-                            <div className="mt-2 text-sm text-[var(--text-secondary)]">正在准备玩家信息与身份，请稍等。</div>
-                            <div className="mt-4 inline-flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                              <motion.span
-                                className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                                animate={{ scale: [1, 1.35, 1], opacity: [0.45, 1, 0.45] }}
-                                transition={{ duration: 0.9, repeat: Infinity, ease: "easeInOut" }}
-                              />
-                              <motion.span
-                                className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                                animate={{ scale: [1, 1.35, 1], opacity: [0.45, 1, 0.45] }}
-                                transition={{ duration: 0.9, repeat: Infinity, delay: 0.18, ease: "easeInOut" }}
-                              />
-                              <motion.span
-                                className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)]"
-                                animate={{ scale: [1, 1.35, 1], opacity: [0.45, 1, 0.45] }}
-                                transition={{ duration: 0.9, repeat: Infinity, delay: 0.36, ease: "easeInOut" }}
-                              />
-                              <span>准备中</span>
+                          {/* 中间魔法阵 */}
+                          <div className="wc-summoning-circle">
+                            <div className="wc-circle-ring wc-circle-ring--1" />
+                            <div className="wc-circle-ring wc-circle-ring--2" />
+                            <div className="wc-circle-ring wc-circle-ring--3" />
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <PawPrint weight="fill" size={36} className="text-[var(--color-wolf)] opacity-20 animate-pulse" />
+                            </div>
+                          </div>
+
+                          {/* 玩家列表 - 流式显示 */}
+                          <div className="wc-player-slots">
+                            {Array.from({ length: gameState.players.length }).map((_, index) => {
+                              const player = gameState.players[index];
+                              const isRevealed = index < revealedPlayerCount;
+                              const isMe = player?.playerId === humanPlayer?.playerId;
+                              
+                              return (
+                                <div
+                                  key={index}
+                                  className={`wc-player-slot ${isRevealed ? "wc-player-slot--revealed" : ""}`}
+                                >
+                                  {isRevealed && player ? (
+                                    <>
+                                      <motion.div
+                                        className="wc-slot-avatar"
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        transition={{ type: "spring", stiffness: 300 }}
+                                        style={{ backgroundColor: `hsl(${(index * 40) % 360}, 30%, 35%)` }}
+                                      />
+                                      <motion.span
+                                        className="wc-slot-name"
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 0.15 }}
+                                      >
+                                        {isMe ? `${player.displayName} (You)` : player.displayName}
+                                      </motion.span>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs opacity-30">Waiting...</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* 底部提示 */}
+                          <div className="mt-auto pb-6 text-center">
+                            <div className="text-xs opacity-50 italic">
+                              {revealedPlayerCount < gameState.players.length 
+                                ? "正在召唤玩家入场..." 
+                                : isLoading 
+                                  ? "正在准备玩家身份，请稍等..." 
+                                  : "所有玩家已就位，即将开始..."}
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                {!isLoading && (
-                  <button
-                    onClick={restartGame}
-                    className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-medium rounded border border-[var(--border-color)] bg-white/70 hover:bg-white transition-all cursor-pointer"
-                  >
-                    返回入场页
-                  </button>
-                )}
+                        <div className="wc-corner-mark" aria-hidden="true">
+                          <WerewolfIcon size={30} className="text-[var(--color-wolf)] opacity-30" />
+                        </div>
+                      </div>
               </motion.div>
             ) : (
               <motion.div
@@ -592,10 +641,10 @@ export default function Home() {
                 transition={{ duration: 0.45, ease: "easeOut" }}
                 className="flex-1 flex flex-col min-h-0 overflow-hidden"
               >
-                {/* 新布局：左侧玩家 | 中间对话 | 右侧玩家 */}
-                <div className="flex-1 flex gap-4 px-6 py-5 overflow-hidden w-full justify-center min-h-0">
-                  {/* 左侧玩家卡片 */}
-                  <div className="w-[220px] flex flex-col gap-2.5 shrink-0 pr-2 min-h-0 overflow-hidden">
+                {/* 主布局 - 严格对齐 style-unification-preview.html */}
+                <div className="flex-1 flex gap-5 px-5 py-5 overflow-hidden w-full justify-center min-h-0">
+                  {/* 左侧玩家卡片 - 240px宽度 */}
+                  <div className="w-[240px] flex flex-col gap-3 shrink-0 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide py-1 px-1 -mx-1">
                     <AnimatePresence>
                       {leftPlayers.map((player, index) => {
                         const checkResult =
@@ -634,7 +683,7 @@ export default function Home() {
                         displayedText={displayedText}
                         isTyping={isTyping}
                         onAdvanceDialogue={currentDialogue ? advanceSpeech : handleNextRound}
-                        isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
+                        isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS" || gameState.phase === "DAY_BADGE_SPEECH") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
                         waitingForNextRound={waitingForNextRound}
                         inputText={inputText}
                         onInputChange={setInputText}
@@ -650,8 +699,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* 右侧玩家卡片 */}
-                  <div className="w-[220px] flex flex-col gap-2.5 shrink-0 pl-2 min-h-0 overflow-hidden">
+                  {/* 右侧玩家卡片 - 240px宽度 */}
+                  <div className="w-[240px] flex flex-col gap-3 shrink-0 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide py-1 px-1 -mx-1">
                     <AnimatePresence>
                       {rightPlayers.map((player, index) => {
                         const checkResult =
@@ -685,17 +734,15 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 笔记本 Dock */}
-      <div className="fixed bottom-5 right-5 z-50">
-        <button
-          onClick={() => setIsNotebookOpen((v) => !v)}
-          className="inline-flex items-center justify-center w-12 h-12 rounded-full border cursor-pointer transition-all glass-panel glass-panel--weak"
-          title={isNotebookOpen ? "关闭笔记" : "打开笔记"}
-          type="button"
-        >
-          {isNotebookOpen ? <X size={18} /> : <NotePencil size={18} />}
-        </button>
-      </div>
+      {/* 笔记本悬浮按钮 - 参考 style-unification-preview.html */}
+      <button
+        onClick={() => setIsNotebookOpen((v) => !v)}
+        className="wc-notebook-fab"
+        title={isNotebookOpen ? "关闭笔记" : "打开笔记"}
+        type="button"
+      >
+        {isNotebookOpen ? <X size={24} /> : <NotePencil size={24} />}
+      </button>
 
       <AnimatePresence>
         {isNotebookOpen && (

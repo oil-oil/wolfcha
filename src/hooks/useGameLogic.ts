@@ -57,6 +57,8 @@ export function useGameLogic() {
   const gameStateRef = useRef<GameState>(gameState);
   const isResolvingVotesRef = useRef(false);
   const resolveVotesRef = useRef<(state: GameState) => Promise<void>>(async () => {});
+  const badgeSpeechEndRef = useRef<((state: GameState) => Promise<void>) | null>(null);
+  const showTableTimeoutRef = useRef<number | null>(null);
   
   // AI speech queue for press-to-advance
   const speechQueueRef = useRef<{
@@ -80,6 +82,10 @@ export function useGameLogic() {
     }
     return rawTransitionPhase(state, newPhase);
   }, []);
+
+  const isSpeechLikePhase = (phase: Phase) => {
+    return phase === "DAY_SPEECH" || phase === "DAY_LAST_WORDS" || phase === "DAY_BADGE_SPEECH";
+  };
 
   const maybeResolveBadgeElection = useCallback(async (state: GameState) => {
     if (isResolvingVotesRef.current) return;
@@ -252,6 +258,19 @@ export function useGameLogic() {
       return;
     }
     
+    // 确保每次开局都是干净状态（避免热更新/残留状态导致等待界面直接显示完整名单）
+    setGameState(createInitialGameState());
+    setCurrentDialogue(null);
+    setInputText("");
+    setShowTable(false);
+    pendingStartStateRef.current = null;
+    hasContinuedAfterRevealRef.current = false;
+    badgeSpeechEndRef.current = null;
+    if (showTableTimeoutRef.current !== null) {
+      window.clearTimeout(showTableTimeoutRef.current);
+      showTableTimeoutRef.current = null;
+    }
+
     setIsLoading(true);
     try {
       const characters = await generateCharacters(apiKey, 9);
@@ -267,7 +286,12 @@ export function useGameLogic() {
       newState = addSystemMessage(newState, SYSTEM_MESSAGES.gameStart);
       newState = addSystemMessage(newState, SYSTEM_MESSAGES.nightFall(1));
       setGameState(newState);
-      setShowTable(true);
+      // 先显示“召唤/等待”界面，再自动切到桌面
+      setShowTable(false);
+      showTableTimeoutRef.current = window.setTimeout(() => {
+        setShowTable(true);
+        showTableTimeoutRef.current = null;
+      }, 6400);
 
       pendingStartStateRef.current = newState;
       hasContinuedAfterRevealRef.current = false;
@@ -323,6 +347,7 @@ export function useGameLogic() {
 
     // === 守卫行动 ===
     currentState = transitionPhase(currentState, "NIGHT_GUARD_ACTION");
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.guardActionStart);
     setGameState(currentState);
 
     const guard = currentState.players.find((p) => p.role === "Guard" && p.alive);
@@ -350,6 +375,7 @@ export function useGameLogic() {
 
     // === 狼人行动（出刀）===
     currentState = transitionPhase(currentState, "NIGHT_WOLF_ACTION");
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.wolfActionStart);
     setGameState(currentState);
 
     if (humanWolf) {
@@ -404,6 +430,7 @@ export function useGameLogic() {
 
     // === 女巫行动 ===
     currentState = transitionPhase(currentState, "NIGHT_WITCH_ACTION");
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.witchActionStart);
     setGameState(currentState);
 
     const witch = currentState.players.find((p) => p.role === "Witch" && p.alive);
@@ -440,6 +467,7 @@ export function useGameLogic() {
 
     // === 预言家行动 ===
     currentState = transitionPhase(currentState, "NIGHT_SEER_ACTION");
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.seerActionStart);
     setGameState(currentState);
 
     const seer = currentState.players.find((p) => p.role === "Seer" && p.alive);
@@ -660,7 +688,7 @@ export function useGameLogic() {
   const startDayPhase = useCallback(async (state: GameState) => {
     // 第一天：先进行警徽评选
     if (state.day === 1 && state.badge.holderSeat === null) {
-      await startBadgeElectionPhase(state);
+      await startBadgeSpeechPhase(state);
       return;
     }
 
@@ -684,6 +712,43 @@ export function useGameLogic() {
     setGameState(currentState);
 
     await delay(1500);
+
+    if (firstSpeaker && !firstSpeaker.isHuman) {
+      await runAISpeech(currentState, firstSpeaker);
+    } else if (firstSpeaker?.isHuman) {
+      setDialogue("提示", UI_TEXT.yourTurn, false);
+    }
+  }, [runAISpeech]);
+
+  const startBadgeSpeechPhase = useCallback(async (state: GameState) => {
+    let currentState = transitionPhase(state, "DAY_BADGE_SPEECH");
+    currentState = { ...currentState, currentSpeakerSeat: null, daySpeechStartSeat: null };
+
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeSpeechStart);
+    setDialogue("主持人", SYSTEM_MESSAGES.badgeSpeechStart, false);
+
+    const alivePlayers = currentState.players.filter((p) => p.alive);
+    const startSeat = alivePlayers.length > 0
+      ? alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat
+      : null;
+    const firstSpeaker = startSeat !== null
+      ? alivePlayers.find((p) => p.seat === startSeat) || null
+      : null;
+
+    currentState = {
+      ...currentState,
+      daySpeechStartSeat: startSeat,
+      currentSpeakerSeat: firstSpeaker?.seat ?? null,
+    };
+
+    setGameState(currentState);
+    gameStateRef.current = currentState;
+
+    badgeSpeechEndRef.current = async (s: GameState) => {
+      await startBadgeElectionPhase(s);
+    };
+
+    await delay(900);
 
     if (firstSpeaker && !firstSpeaker.isHuman) {
       await runAISpeech(currentState, firstSpeaker);
@@ -800,7 +865,7 @@ export function useGameLogic() {
 
   // 下一个发言者
   const moveToNextSpeaker = useCallback(async (state: GameState) => {
-    if (state.phase !== "DAY_SPEECH" && state.phase !== "DAY_LAST_WORDS") {
+    if (!isSpeechLikePhase(state.phase)) {
       console.warn("[wolfcha] moveToNextSpeaker called outside speech phase:", state.phase);
       return;
     }
@@ -809,12 +874,24 @@ export function useGameLogic() {
 
     const startSeat = state.daySpeechStartSeat;
     if (nextSeat === null) {
+      if (state.phase === "DAY_BADGE_SPEECH") {
+        const next = badgeSpeechEndRef.current;
+        badgeSpeechEndRef.current = null;
+        if (next) await next(state);
+        return;
+      }
       await startVotePhase(state);
       return;
     }
 
     // 绕一圈回到起点则结束发言，进入投票
     if (startSeat !== null && nextSeat === startSeat) {
+      if (state.phase === "DAY_BADGE_SPEECH") {
+        const next = badgeSpeechEndRef.current;
+        badgeSpeechEndRef.current = null;
+        if (next) await next(state);
+        return;
+      }
       await startVotePhase(state);
       return;
     }
@@ -983,7 +1060,7 @@ export function useGameLogic() {
     if (!inputText.trim() || !humanPlayer) return;
 
     const s = gameStateRef.current;
-    const isMyTurn = (s.phase === "DAY_SPEECH" || s.phase === "DAY_LAST_WORDS") && s.currentSpeakerSeat === humanPlayer.seat;
+    const isMyTurn = (s.phase === "DAY_SPEECH" || s.phase === "DAY_LAST_WORDS" || s.phase === "DAY_BADGE_SPEECH") && s.currentSpeakerSeat === humanPlayer.seat;
     if (!isMyTurn) return;
 
     const speech = inputText.trim();
@@ -1014,7 +1091,7 @@ export function useGameLogic() {
 
   // 下一轮按钮处理
   const handleNextRound = useCallback(async () => {
-    if (gameStateRef.current.phase !== "DAY_SPEECH" && gameStateRef.current.phase !== "DAY_LAST_WORDS") {
+    if (!isSpeechLikePhase(gameStateRef.current.phase)) {
       return;
     }
 
@@ -1356,6 +1433,11 @@ export function useGameLogic() {
 
     pendingStartStateRef.current = null;
     hasContinuedAfterRevealRef.current = false;
+    badgeSpeechEndRef.current = null;
+    if (showTableTimeoutRef.current !== null) {
+      window.clearTimeout(showTableTimeoutRef.current);
+      showTableTimeoutRef.current = null;
+    }
   }, []);
 
   return {

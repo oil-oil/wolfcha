@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
@@ -71,7 +71,7 @@ function renderSuggestionList(onOpenChange?: (open: boolean) => void) {
     onStart: (props: SuggestionProps) => {
       el = document.createElement("div");
       el.className =
-        "z-[80] rounded-lg border border-[var(--border-color)] bg-white/95 backdrop-blur px-1 py-1 shadow-xl max-h-[160px] overflow-y-auto";
+        "z-[80] rounded-lg border border-[var(--glass-border)] bg-[var(--glass-panel)] backdrop-blur-xl px-1 py-1 shadow-xl max-h-[160px] overflow-y-auto";
       onOpenChange?.(true);
       el.style.minWidth = "180px";
       el.style.width = "auto";
@@ -90,8 +90,10 @@ function renderSuggestionList(onOpenChange?: (open: boolean) => void) {
         if (!rect) return;
 
         el.style.position = "absolute";
-        el.style.left = `${rect.left}px`;
-        el.style.top = `${rect.bottom + 6}px`;
+        el.style.left = `${rect.left + window.scrollX}px`;
+        // Expand upwards: anchor to caret top and translate menu height
+        el.style.top = `${rect.top + window.scrollY - 6}px`;
+        el.style.transform = "translateY(-100%)";
 
         el.innerHTML = "";
 
@@ -110,8 +112,8 @@ function renderSuggestionList(onOpenChange?: (open: boolean) => void) {
           const row = document.createElement("button");
           row.type = "button";
           row.className =
-            "w-full text-left px-3 py-2 rounded-md text-sm hover:bg-[var(--color-accent)]/10 transition-colors flex items-center gap-2 whitespace-nowrap " +
-            (idx === selectedIndex ? "bg-[var(--color-accent)]/10" : "");
+            "w-full text-left px-3 py-2 rounded-md text-sm text-[var(--text-primary)] hover:bg-[var(--color-gold)]/15 transition-colors flex items-center gap-2 whitespace-nowrap " +
+            (idx === selectedIndex ? "bg-[var(--color-gold)]/20" : "");
           
           // Avatar
           const avatarBgColors = ['e8d5c4', 'd4e5d7', 'd5dce8', 'e8d4d9', 'ddd4e8', 'd4e8e5', 'e8e4d4', 'd4d8e8', 'e5d4d4', 'dae8d4'];
@@ -190,11 +192,11 @@ function renderSuggestionList(onOpenChange?: (open: boolean) => void) {
 
 export function MentionInput({ value, onChange, onSend, placeholder, isNight, players }: MentionInputProps) {
   const items = useMemo(() => createSuggestionItems(players), [players]);
-  const isSuggestionOpenRef = useRef(false);
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   
   const suggestionRenderer = useMemo(() => {
     return () => renderSuggestionList((open) => {
-      isSuggestionOpenRef.current = open;
+      setIsSuggestionOpen(open);
     });
   }, []);
 
@@ -224,10 +226,7 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
     editorProps: {
       attributes: {
         class:
-          "w-full min-h-[72px] max-h-[160px] px-4 py-3 pr-14 pb-10 text-base border rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all " +
-          (isNight
-            ? "bg-white/5 text-[#f0e6d2] border-white/10 placeholder:text-white/35"
-            : "bg-white/50 text-[var(--text-primary)] border-[var(--border-color)]/30"),
+          "wc-input-field w-full min-h-[44px] max-h-[120px] text-base focus:outline-none transition-all",
       },
     },
     onUpdate: ({ editor }) => {
@@ -262,7 +261,7 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             // Don't send if suggestion popup is open
-            if (isSuggestionOpenRef.current) return;
+            if (isSuggestionOpen) return;
             e.preventDefault();
             onSend();
           }

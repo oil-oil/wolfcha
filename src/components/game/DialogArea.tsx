@@ -430,12 +430,12 @@ export function DialogArea({
           </div>
         )}
 
-        {/* Glass Panel - 统一的对话容器 */}
+        {/* 对话气泡 - 参考 style-unification-preview.html */}
         <div 
-          className="glass-panel glass-panel--strong rounded-2xl p-5 relative overflow-hidden"
+          className="wc-panel wc-panel--strong wc-panel--decorated rounded-2xl p-5 relative overflow-hidden"
         >
           {/* 装饰性引号 */}
-          <div className="absolute top-3 left-4 text-6xl opacity-5 pointer-events-none select-none">{`'''`}</div>
+          <div className="absolute top-3 left-4 text-6xl opacity-[0.03] pointer-events-none select-none font-serif text-[var(--color-gold)]">&ldquo;</div>
           
           <div className="relative z-10">
             <AnimatePresence mode="wait">
@@ -458,12 +458,11 @@ export function DialogArea({
                     <span className="text-xs text-[var(--text-muted)]">下次还来玩啊</span>
                     <button
                       onClick={onRestart}
-                      className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
-                        isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"
-                      }`}
+                      className="wc-action-btn wc-action-btn--primary text-sm h-9 px-4"
                       type="button"
                     >
-                      再来一局 →
+                      <ArrowClockwise size={14} weight="bold" />
+                      再来一局
                     </button>
                   </div>
                 </motion.div>
@@ -515,22 +514,22 @@ export function DialogArea({
                       <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                         你选择{actionText} <span className={`font-semibold ${actionColor}`}>{targetName}</span>，确定吗？
                       </div>
-                      <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                      <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                         <button
                           onClick={onCancelSelection}
-                          className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
-                            isNight ? "text-white/75" : "text-[var(--text-secondary)]"
-                          }`}
+                          className="wc-action-btn text-sm h-9 px-4"
                           type="button"
                         >
+                          <X size={14} weight="bold" />
                           取消
                         </button>
                         <button
                           onClick={onConfirmAction}
-                          className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${actionColor}`}
+                          className={`wc-action-btn text-sm h-9 px-4 ${phase.includes("WOLF") || phase === "HUNTER_SHOOT" ? "wc-action-btn--danger" : "wc-action-btn--primary"}`}
                           type="button"
                         >
-                          确认{actionText} →
+                          确认{actionText}
+                          <CaretRight size={14} weight="bold" />
                         </button>
                       </div>
                     </motion.div>
@@ -555,12 +554,10 @@ export function DialogArea({
                             <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                               毒药已用尽。
                             </div>
-                            <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                            <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                               <button
                                 onClick={onCancelSelection}
-                                className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
-                                  isNight ? "text-white/75" : "text-[var(--text-secondary)]"
-                                }`}
+                                className="wc-action-btn text-sm h-9 px-4"
                                 type="button"
                               >
                                 返回
@@ -576,22 +573,22 @@ export function DialogArea({
                           <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                             你选择对 <span className="text-[var(--color-danger)] font-semibold">{targetName}</span> 使用毒药，确定吗？
                           </div>
-                          <div className={`flex items-center justify-end gap-4 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                          <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
                               onClick={onCancelSelection}
-                              className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-medium cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
-                                isNight ? "text-white/75" : "text-[var(--text-secondary)]"
-                              }`}
+                              className="wc-action-btn text-sm h-9 px-4"
                               type="button"
                             >
+                              <X size={14} weight="bold" />
                               取消
                             </button>
                             <button
                               onClick={() => onNightAction?.(selectedSeat, "poison")}
-                              className="inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold text-[var(--color-danger)] cursor-pointer transition-all hover:brightness-105 active:scale-[0.98]"
+                              className="wc-action-btn wc-action-btn--danger text-sm h-9 px-4"
                               type="button"
                             >
-                              确认毒杀 →
+                              确认毒杀
+                              <CaretRight size={14} weight="bold" />
                             </button>
                           </div>
                         </>
@@ -625,7 +622,7 @@ export function DialogArea({
                                     <span className="mr-2">你可以</span>
                                     <button
                                       onClick={() => onNightAction?.(wolfTarget!, "save")}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[var(--glass-border)] bg-[var(--glass-bg-weak)] text-[var(--color-success)] font-semibold cursor-pointer hover:brightness-105 active:scale-[0.98] transition-all"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-[var(--color-success)] bg-[var(--color-success)]/10 text-[var(--color-success)] font-semibold cursor-pointer hover:bg-[var(--color-success)]/20 active:scale-[0.98] transition-all text-sm"
                                       type="button"
                                     >
                                       救他
@@ -643,12 +640,11 @@ export function DialogArea({
                           <div className={`flex items-center justify-end mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
                               onClick={() => onNightAction?.(0, "pass")}
-                              className={`inline-flex items-center justify-center px-3 py-1.5 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-sm font-semibold cursor-pointer transition-all hover:brightness-105 active:scale-[0.98] ${
-                                isNight ? "text-white/80" : "text-[var(--text-secondary)]"
-                              }`}
+                              className="wc-action-btn text-sm h-9 px-4"
                               type="button"
                             >
-                              什么都不做 →
+                              什么都不做
+                              <CaretRight size={14} weight="bold" />
                             </button>
                           </div>
                         </>
@@ -672,8 +668,8 @@ export function DialogArea({
                     <span>说点什么吧</span>
                   </div>
                   
-                  <div className="flex items-stretch gap-3">
-                    <div className="relative flex-1">
+                  <div className="wc-action-bar">
+                    <div className="wc-input-box flex-1">
                       <MentionInput
                         value={inputText}
                         onChange={(t) => onInputChange?.(t)}
@@ -682,28 +678,25 @@ export function DialogArea({
                         isNight={isNight}
                         players={gameState.players.filter((p) => p.alive)}
                       />
-
-                      <button
-                        onClick={onSendMessage}
-                        disabled={!inputText?.trim()}
-                        className="absolute right-3 bottom-3 w-10 h-10 rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center cursor-pointer hover:bg-[#a07608] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-[var(--color-accent)]/20"
-                        title="发送"
-                      >
-                        <PaperPlaneTilt size={18} weight="fill" />
-                      </button>
                     </div>
 
                     <button
+                      onClick={onSendMessage}
+                      disabled={!inputText?.trim()}
+                      className="wc-action-btn disabled:opacity-40 disabled:cursor-not-allowed"
+                      title="发送"
+                    >
+                      <PaperPlaneTilt size={16} weight="fill" />
+                      Send
+                    </button>
+
+                    <button
                       onClick={onFinishSpeaking}
-                      className={`min-w-[108px] min-h-[72px] rounded-xl px-4 flex items-center justify-center gap-2 font-semibold transition-all cursor-pointer ${
-                        isNight
-                          ? "bg-white/10 text-white/80 hover:bg-white/15"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      }`}
+                      className="wc-action-btn wc-action-btn--primary"
                       title="结束发言"
                     >
-                      <CheckCircle size={18} weight="fill" />
-                      <span className="text-sm">结束</span>
+                      <CheckCircle size={16} weight="fill" />
+                      Done
                     </button>
                   </div>
                   
@@ -747,11 +740,12 @@ export function DialogArea({
                     </div>
                     {isSpeechPhase && (
                       <button
-                        className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-full border bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-xs font-bold text-[var(--text-secondary)] cursor-pointer transition-all hover:brightness-105 active:scale-[0.98]"
+                        className="wc-action-btn text-xs h-7 px-3"
                         onClick={onAdvanceDialogue}
                         type="button"
                       >
-                        {waitingForNextRound ? "下一位" : currentDialogue ? "继续" : "OK"} →
+                        {waitingForNextRound ? "下一位" : currentDialogue ? "继续" : "OK"}
+                        <CaretRight size={12} weight="bold" />
                       </button>
                     )}
                   </div>

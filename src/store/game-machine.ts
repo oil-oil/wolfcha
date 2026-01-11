@@ -164,6 +164,14 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     canSelectPlayer: () => false,
     actionType: "none",
   },
+  DAY_BADGE_SPEECH: {
+    phase: "DAY_BADGE_SPEECH",
+    description: "警徽竞选发言",
+    humanDescription: (hp, gs) => gs.currentSpeakerSeat === hp?.seat ? "轮到你发言" : "警徽竞选发言",
+    requiresHumanInput: (hp, gs) => hp?.alive && gs.currentSpeakerSeat === hp?.seat || false,
+    canSelectPlayer: () => false,
+    actionType: "speech",
+  },
   DAY_BADGE_ELECTION: {
     phase: "DAY_BADGE_ELECTION",
     description: "警徽评选",
@@ -350,7 +358,8 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   NIGHT_RESOLVE: ["DAY_START", "HUNTER_SHOOT", "GAME_END"],
   
   // 白天流程: 开始 -> 发言 -> 投票 -> 结算
-  DAY_START: ["DAY_BADGE_ELECTION", "DAY_SPEECH"],
+  DAY_START: ["DAY_BADGE_SPEECH", "DAY_SPEECH"],
+  DAY_BADGE_SPEECH: ["DAY_BADGE_ELECTION"],
   DAY_BADGE_ELECTION: ["DAY_SPEECH"],
   DAY_SPEECH: ["DAY_VOTE"],
   DAY_VOTE: ["DAY_RESOLVE"],
