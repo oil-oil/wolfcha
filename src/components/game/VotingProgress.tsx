@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, HourglassSimple, User } from "@phosphor-icons/react";
+import { CheckCircle, HourglassSimple } from "@phosphor-icons/react";
 import type { GameState, Player } from "@/types/game";
 
 interface VotingProgressProps {
@@ -11,7 +11,7 @@ interface VotingProgressProps {
 
 export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) {
   const alivePlayers = gameState.players.filter(p => p.alive);
-  const votes = gameState.votes;
+  const votes = gameState.phase === "DAY_BADGE_ELECTION" ? gameState.badge.votes : gameState.votes;
   const totalVoters = alivePlayers.length;
   const votedCount = Object.keys(votes).length;
 
@@ -123,7 +123,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
           <span>等待中:</span>
           <div className="flex gap-1 flex-wrap">
             {alivePlayers
-              .filter(p => !votes[p.playerId])
+              .filter(p => votes[p.playerId] === undefined)
               .map(p => (
                 <span 
                   key={p.playerId} 

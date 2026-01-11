@@ -25,6 +25,7 @@ interface PlayerCardCompactProps {
   showWolfBadge?: boolean; // 显示狼人标记（狼人队友可见）
   seerCheckResult?: "wolf" | "good" | null; // 预言家查验结果
   humanPlayer?: Player | null;
+  isBadgeHolder?: boolean; // 是否持有警徽
 }
 
 // 柔和但可区分的背景色
@@ -75,6 +76,7 @@ export function PlayerCardCompact({
   showWolfBadge = false,
   seerCheckResult = null,
   humanPlayer,
+  isBadgeHolder = false,
 }: PlayerCardCompactProps) {
   const isDead = !player.alive;
   const isMe = player.isHuman;
@@ -85,7 +87,7 @@ export function PlayerCardCompact({
   useEffect(() => {
     const prevAlive = prevAliveRef.current;
     if (prevAlive && !player.alive) {
-      setDeathPulse(true);
+      queueMicrotask(() => setDeathPulse(true));
       const t = window.setTimeout(() => setDeathPulse(false), 900);
       return () => window.clearTimeout(t);
     }
@@ -108,7 +110,7 @@ export function PlayerCardCompact({
 
   const wolfTeammateClass = isWolfTeammate
     ? isNight
-      ? "border-[#8a1c1c]/55"
+      ? "border-[#8a1c1c]/70 bg-[#3a1515]/60"
       : "border-[var(--color-wolf)] bg-[var(--color-wolf-bg)]"
     : "";
 
@@ -187,6 +189,13 @@ export function PlayerCardCompact({
           ) : (
             <div className="w-2 h-2 bg-white rounded-full" />
           )}
+        </div>
+      )}
+
+      {/* 警徽标记 */}
+      {isBadgeHolder && !isDead && (
+        <div className={`absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center z-10 ${isNight ? "border border-black/30 bg-[var(--color-accent)]/70" : "border border-white bg-[var(--color-accent)]"}`}>
+          <span className="text-[10px] font-black text-white">徽</span>
         </div>
       )}
       {/* 自己的身份图标 */}

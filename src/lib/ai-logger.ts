@@ -6,7 +6,7 @@
 export interface AILogEntry {
   id: string;
   timestamp: number;
-  type: "speech" | "vote" | "seer_action" | "wolf_action" | "guard_action" | "witch_action" | "hunter_shoot" | "character_generation" | "daily_summary" | "wolf_chat";
+  type: "speech" | "vote" | "badge_vote" | "seer_action" | "wolf_action" | "guard_action" | "witch_action" | "hunter_shoot" | "character_generation" | "daily_summary" | "wolf_chat";
   request: {
     model: string;
     messages: Array<{ role: string; content: string }>;
@@ -54,6 +54,7 @@ class AILogger {
     const typeColors: Record<string, string> = {
       speech: "#4CAF50",
       vote: "#2196F3",
+      badge_vote: "#B8860B",
       seer_action: "#9C27B0",
       wolf_action: "#f44336",
       wolf_chat: "#8D6E63",

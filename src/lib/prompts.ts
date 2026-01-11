@@ -319,11 +319,6 @@ ${playerList}`;
       context += `\n\n【狼队友】
 ${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}`;
     }
-
-    const wolfChat = state.nightActions.wolfChatLog || [];
-    if (wolfChat.length > 0) {
-      context += `\n\n【狼队私聊】\n${wolfChat.slice(-12).join("\n")}`;
-    }
   }
 
   // 最近发言
@@ -420,43 +415,41 @@ ${selfSpeech ? `【你本日已说过的话】\n"${selfSpeech}"` : "【你本日
   return { system, user };
 };
 
-export const WOLF_CHAT_PROMPT = (
-  state: GameState,
-  player: Player,
-  existingChatLog: string[] = []
-) => {
+export const BADGE_ELECTION_PROMPT = (state: GameState, player: Player) => {
   const context = buildGameContext(state, player);
   const persona = buildPersonaSection(player);
-  const teammates = state.players.filter(
-    (p) => p.role === "Werewolf" && p.alive && p.playerId !== player.playerId
+  const alivePlayers = state.players.filter(
+    (p) => p.alive && p.playerId !== player.playerId
   );
 
-  const chatStr = existingChatLog.slice(-10).join("\n");
+  const todayTranscript = buildTodayTranscript(state, 8000);
+  const selfSpeech = buildPlayerTodaySpeech(state, player, 900);
 
   const system = `【身份】
 你是 ${player.seat + 1}号「${player.displayName}」
-身份: 狼人（坏人阵营）
-${teammates.length > 0 ? `狼队友: ${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}` : "你是唯一存活的狼人"}
+身份: ${getRoleText(player.role)}
 
-${getWinCondition("Werewolf")}
+${getWinCondition(player.role)}
 
 ${persona}
 
 【任务】
-夜晚狼队私聊：用 1 条短消息给队友建议（谁可能是神/谁该刀/明天怎么发言）。
+现在进行警徽评选。选择一名玩家获得警徽。
+请优先选择你认为更可信、更有领导力的玩家。
 
-【要求】
-- 只发 1 条，不要太长（10-35字）
-- 像群聊一样自然
+可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
 
 【格式】
-直接输出一句话，不要加引号，不要编号`; 
+只回复座位数字，如: 3
+不要解释，不要输出多余文字，不要代码块`;
 
   const user = `${context}
 
-${chatStr ? `【已有私聊】\n${chatStr}` : "【已有私聊】\n（暂无）"}
+${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : "【本日讨论记录】\n（无）"}
 
-你说一句：`;
+${selfSpeech ? `【你本日发言汇总】\n\"${selfSpeech}\"` : "【你本日发言汇总】\n（你今天没有发言）"}
+
+你把警徽投给几号？`;
 
   return { system, user };
 };
@@ -621,6 +614,9 @@ export const SYSTEM_MESSAGES = {
   peacefulNight: "昨晚平安无事",
   playerKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚出局`,
   playerPoisoned: (seat: number, name: string) => `${seat}号 ${name} 昨晚中毒出局`,
+  badgeElectionStart: "开始警徽评选",
+  badgeRevote: "警徽平票，重新投票",
+  badgeElected: (seat: number, name: string, votes: number) => `警徽授予 ${seat}号 ${name}（${votes}票）`,
   dayDiscussion: "开始自由发言",
   voteStart: "发言结束，开始投票。",
   playerExecuted: (seat: number, name: string, votes: number) => `${seat}号 ${name} 以 ${votes} 票出局`,
@@ -649,6 +645,7 @@ export const UI_TEXT = {
   witchActing: "女巫正在思考…",
   waitingGuard: "选择一名玩家进行守护",
   guardActing: "守卫正在选择…",
+  badgeVotePrompt: "点击头像投票选警徽",
   hunterShoot: "点选目标，扣下最后一枪",
   hunterAiming: "猎人正在瞄准…",
   yourTurn: "轮到你了，开始发言吧",

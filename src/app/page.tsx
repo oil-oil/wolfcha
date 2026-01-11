@@ -104,8 +104,10 @@ export default function Home() {
     const cue = getRitualCueFromSystemMessage(lastSystem.content);
     if (!cue) return;
 
-    setLastRitualMessageId(lastSystem.id || null);
-    setRitualCue({ id: lastSystem.id || String(Date.now()), title: cue.title, subtitle: cue.subtitle });
+    queueMicrotask(() => {
+      setLastRitualMessageId(lastSystem.id || null);
+      setRitualCue({ id: lastSystem.id || String(Date.now()), title: cue.title, subtitle: cue.subtitle });
+    });
   }, [gameState.messages, lastRitualMessageId]);
 
   // Typewriter effect
@@ -190,8 +192,10 @@ export default function Home() {
 
   useEffect(() => {
     if (showTable) return;
-    setIsRoleRevealOpen(false);
-    setHasShownRoleReveal(false);
+    queueMicrotask(() => {
+      setIsRoleRevealOpen(false);
+      setHasShownRoleReveal(false);
+    });
   }, [showTable]);
 
   // ============ 交互逻辑 ============
@@ -226,14 +230,14 @@ export default function Home() {
     }
     if (!canClickSeat(player)) return;
     setSelectedSeat(prev => prev === player.seat ? null : player.seat);
-  }, [canClickSeat, isRoleRevealOpen]);
+  }, [canClickSeat, isRoleRevealOpen, humanPlayer, gameState.phase, gameState.roleAbilities.witchPoisonUsed]);
 
   const confirmSelectedSeat = useCallback(async () => {
     if (isRoleRevealOpen) return;
     if (selectedSeat === null) return;
     
     const phase = gameState.phase;
-    if (phase === "DAY_VOTE") {
+    if (phase === "DAY_VOTE" || phase === "DAY_BADGE_ELECTION") {
       await handleHumanVote(selectedSeat);
     } else if (
       phase === "NIGHT_SEER_ACTION" ||
@@ -289,6 +293,8 @@ export default function Home() {
         return <Crosshair size={14} />;
       case "DAY_SPEECH":
         return <SpeechIcon size={14} />;
+      case "DAY_BADGE_ELECTION":
+        return <Users size={14} />;
       case "DAY_VOTE":
         return <Users size={14} />;
       default:
@@ -339,7 +345,7 @@ export default function Home() {
             className="h-full w-full flex flex-col overflow-hidden"
           >
             <AnimatePresence>
-              {ritualCue && !isRoleRevealOpen && (
+              {ritualCue && !isRoleRevealOpen && showTable && (
                 <motion.div
                   key={`ritual-${ritualCue.id}`}
                   className="fixed inset-0 z-[55] pointer-events-none flex items-center justify-center"
@@ -440,6 +446,17 @@ export default function Home() {
                   <Users size={16} />
                   <span>{gameState.players.filter((p) => p.alive).length}/{gameState.players.length}</span>
                 </div>
+                {gameState.badge.holderSeat !== null && (
+                  <>
+                    <div className="h-4 w-px bg-current opacity-20" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black px-2 py-0.5 rounded-full bg-[var(--color-accent)]/12 text-[var(--color-accent)]">警徽</span>
+                      <span>
+                        {gameState.badge.holderSeat + 1}号
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="h-4 w-px bg-current opacity-20" />
                 <div className="text-sm font-semibold px-3 py-1 rounded flex items-center gap-2 glass-panel glass-panel--weak shadow-none">
                   <span className="opacity-90">{renderPhaseIcon()}</span>
@@ -600,6 +617,7 @@ export default function Home() {
                             isNight={isNight}
                             humanPlayer={humanPlayer}
                             seerCheckResult={seerResult}
+                            isBadgeHolder={gameState.badge.holderSeat === player.seat}
                           />
                         );
                       })}
@@ -608,28 +626,6 @@ export default function Home() {
 
                   {/* 中间区域：对话 */}
                   <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full max-w-[1000px] overflow-hidden">
-                    {humanPlayer && (
-                      <div className="flex items-center justify-between px-4 py-2 mb-2">
-                        <div className="glass-panel glass-panel--weak shadow-none px-3 py-1.5 rounded-full flex items-center gap-2 text-sm">
-                          <SpeechIcon size={14} className="opacity-60" />
-                          <span className="font-semibold">你是</span>
-                          <span className="font-bold text-[var(--color-accent)]">
-                            {humanPlayer.role === "Werewolf"
-                              ? "狼人"
-                              : humanPlayer.role === "Seer"
-                                ? "预言家"
-                                : humanPlayer.role === "Witch"
-                                  ? "女巫"
-                                  : humanPlayer.role === "Hunter"
-                                    ? "猎人"
-                                    : humanPlayer.role === "Guard"
-                                      ? "守卫"
-                                      : "村民"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
                     <div className="flex-1 overflow-hidden relative min-h-0">
                       <DialogArea
                         gameState={gameState}
@@ -676,6 +672,7 @@ export default function Home() {
                             animationDelay={index * 0.05}
                             humanPlayer={humanPlayer}
                             seerCheckResult={seerResult}
+                            isBadgeHolder={gameState.badge.holderSeat === player.seat}
                           />
                         );
                       })}

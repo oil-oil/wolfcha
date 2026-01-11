@@ -132,7 +132,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
 
   useEffect(() => {
     if (!open) return;
-    setRevealed(false);
+    queueMicrotask(() => setRevealed(false));
     const t = window.setTimeout(() => setRevealed(true), 650);
     return () => window.clearTimeout(t);
   }, [open]);

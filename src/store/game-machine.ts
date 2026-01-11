@@ -111,14 +111,6 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     },
     actionType: "night_action",
   },
-  NIGHT_WOLF_CHAT: {
-    phase: "NIGHT_WOLF_CHAT",
-    description: "狼人私聊中",
-    humanDescription: (hp) => hp?.role === "Werewolf" ? "狼人私聊中" : "狼人私聊中",
-    requiresHumanInput: () => false,
-    canSelectPlayer: () => false,
-    actionType: "none",
-  },
   NIGHT_WOLF_ACTION: {
     phase: "NIGHT_WOLF_ACTION",
     description: "狼人行动中",
@@ -172,6 +164,19 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     canSelectPlayer: () => false,
     actionType: "none",
   },
+  DAY_BADGE_ELECTION: {
+    phase: "DAY_BADGE_ELECTION",
+    description: "警徽评选",
+    humanDescription: (hp, gs) => hp?.alive && typeof gs.badge.votes[hp.playerId] !== "number" ? "投票选警徽" : "警徽评选",
+    requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.badge.votes[hp.playerId] !== "number" || false,
+    canSelectPlayer: (hp, target, gs) => {
+      if (!hp?.alive || !target.alive) return false;
+      if (target.isHuman) return false;
+      if (typeof gs.badge.votes[hp.playerId] === "number") return false;
+      return true;
+    },
+    actionType: "vote",
+  },
   DAY_SPEECH: {
     phase: "DAY_SPEECH",
     description: "发言阶段",
@@ -190,10 +195,10 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   DAY_VOTE: {
     phase: "DAY_VOTE",
     description: "投票阶段",
-    requiresHumanInput: (hp, gs) => hp?.alive && !gs.votes[hp?.playerId || ""] || false,
+    requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.votes[hp?.playerId || ""] !== "number" || false,
     canSelectPlayer: (hp, target, gs) => {
       if (!hp?.alive || target.isHuman || !target.alive) return false;
-      if (gs.votes[hp.playerId]) return false;
+      if (typeof gs.votes[hp.playerId] === "number") return false;
       return true;
     },
     actionType: "vote",
@@ -338,15 +343,15 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   
   // 夜晚流程: 守卫 -> 狼人 -> 女巫 -> 预言家 -> 结算
   NIGHT_START: ["NIGHT_GUARD_ACTION"],
-  NIGHT_GUARD_ACTION: ["NIGHT_WOLF_CHAT"],
-  NIGHT_WOLF_CHAT: ["NIGHT_WOLF_ACTION"],
+  NIGHT_GUARD_ACTION: ["NIGHT_WOLF_ACTION"],
   NIGHT_WOLF_ACTION: ["NIGHT_WITCH_ACTION"],
   NIGHT_WITCH_ACTION: ["NIGHT_SEER_ACTION"],
   NIGHT_SEER_ACTION: ["NIGHT_RESOLVE"],
   NIGHT_RESOLVE: ["DAY_START", "HUNTER_SHOOT", "GAME_END"],
   
   // 白天流程: 开始 -> 发言 -> 投票 -> 结算
-  DAY_START: ["DAY_SPEECH"],
+  DAY_START: ["DAY_BADGE_ELECTION", "DAY_SPEECH"],
+  DAY_BADGE_ELECTION: ["DAY_SPEECH"],
   DAY_SPEECH: ["DAY_VOTE"],
   DAY_VOTE: ["DAY_RESOLVE"],
   DAY_RESOLVE: ["DAY_LAST_WORDS", "NIGHT_START", "GAME_END"],
@@ -427,7 +432,6 @@ export function getNextNightPhase(currentPhase: Phase, gameState: GameState): Ph
   const phaseOrder: Phase[] = [
     "NIGHT_START",
     "NIGHT_GUARD_ACTION", 
-    "NIGHT_WOLF_CHAT",
     "NIGHT_WOLF_ACTION",
     "NIGHT_WITCH_ACTION",
     "NIGHT_SEER_ACTION",
@@ -445,7 +449,6 @@ export function getNextNightPhase(currentPhase: Phase, gameState: GameState): Ph
   // 如果该阶段的角色不存在或已死亡，跳过
   const roleForPhase: Record<string, Role> = {
     NIGHT_GUARD_ACTION: "Guard",
-    NIGHT_WOLF_CHAT: "Werewolf",
     NIGHT_WOLF_ACTION: "Werewolf",
     NIGHT_WITCH_ACTION: "Witch",
     NIGHT_SEER_ACTION: "Seer",

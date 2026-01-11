@@ -7,7 +7,9 @@ export function Notebook() {
   // Load from local storage on mount
   useEffect(() => {
     const saved = localStorage.getItem("wolfcha-notebook");
-    if (saved) setContent(saved);
+    if (saved) {
+      queueMicrotask(() => setContent(saved));
+    }
   }, []);
 
   // Save to local storage on change

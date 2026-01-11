@@ -16,10 +16,10 @@ import {
   getNextAliveSeat,
   generateAISpeechSegments,
   generateAIVote,
+  generateAIBadgeVote,
   generateDailySummary,
   generateSeerAction,
   generateWolfAction,
-  generateWolfChatMessage,
   generateGuardAction,
   generateWitchAction,
   generateHunterShoot,
@@ -81,6 +81,96 @@ export function useGameLogic() {
     return rawTransitionPhase(state, newPhase);
   }, []);
 
+  const maybeResolveBadgeElection = useCallback(async (state: GameState) => {
+    if (isResolvingVotesRef.current) return;
+    if (state.phase !== "DAY_BADGE_ELECTION") return;
+
+    const aliveIds = state.players.filter((p) => p.alive).map((p) => p.playerId);
+    const allVoted = aliveIds.every((id) => typeof state.badge.votes[id] === "number");
+    if (!allVoted) return;
+
+    isResolvingVotesRef.current = true;
+    try {
+      const counts: Record<number, number> = {};
+      for (const seat of Object.values(state.badge.votes)) {
+        counts[seat] = (counts[seat] || 0) + 1;
+      }
+      const entries = Object.entries(counts);
+      let max = -1;
+      for (const [, c] of entries) max = Math.max(max, c);
+      const topSeats = entries.filter(([, c]) => c === max).map(([s]) => Number(s));
+
+      if (topSeats.length !== 1) {
+        // 平票：清票重投
+        const revoteCount = (state.badge.revoteCount || 0) + 1;
+
+        // 避免无限重投：超过一定次数则随机在最高票中选一个
+        if (revoteCount >= 4) {
+          const winnerSeat = topSeats[Math.floor(Math.random() * topSeats.length)];
+          const winner = state.players.find((p) => p.seat === winnerSeat);
+          const votedCount = counts[winnerSeat] || 0;
+
+          let nextState: GameState = {
+            ...state,
+            badge: {
+              ...state.badge,
+              holderSeat: winnerSeat,
+              revoteCount,
+              history: { ...state.badge.history, [state.day]: { ...state.badge.votes } },
+            },
+          };
+          nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
+          setGameState(nextState);
+          gameStateRef.current = nextState;
+          setDialogue("主持人", SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
+
+          await delay(900);
+          await startDaySpeechAfterBadge(nextState);
+          return;
+        }
+
+        const nextState: GameState = {
+          ...state,
+          badge: {
+            ...state.badge,
+            votes: {},
+            revoteCount,
+          },
+        };
+        const withMsg = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeRevote);
+        setGameState(withMsg);
+        gameStateRef.current = withMsg;
+        setDialogue("主持人", SYSTEM_MESSAGES.badgeRevote, false);
+
+        // 重新触发 AI 投票
+        void startBadgeElectionPhase(withMsg);
+        return;
+      }
+
+      const winnerSeat = topSeats[0];
+      const winner = state.players.find((p) => p.seat === winnerSeat);
+      const votedCount = counts[winnerSeat] || 0;
+
+      let nextState: GameState = {
+        ...state,
+        badge: {
+          ...state.badge,
+          holderSeat: winnerSeat,
+          history: { ...state.badge.history, [state.day]: { ...state.badge.votes } },
+        },
+      };
+      nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+      setDialogue("主持人", SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
+
+      await delay(900);
+      await startDaySpeechAfterBadge(nextState);
+    } finally {
+      isResolvingVotesRef.current = false;
+    }
+  }, []);
+
   const maybeGenerateDailySummary = useCallback(async (state: GameState): Promise<GameState> => {
     if (!apiKey) return state;
     if (state.day <= 0) return state;
@@ -116,6 +206,24 @@ export function useGameLogic() {
     const ms = Math.floor(minMs + Math.random() * (maxMs - minMs));
     return delay(ms);
   };
+
+  const computeUniqueTopSeat = useCallback((votes: Record<string, number>): number | null => {
+    const counts: Record<number, number> = {};
+    for (const seat of Object.values(votes)) {
+      counts[seat] = (counts[seat] || 0) + 1;
+    }
+    const entries = Object.entries(counts);
+    if (entries.length === 0) return null;
+
+    let max = -1;
+    for (const [, c] of entries) max = Math.max(max, c);
+
+    const topSeats = entries
+      .filter(([, c]) => c === max)
+      .map(([s]) => Number(s));
+
+    return topSeats.length === 1 ? topSeats[0] : null;
+  }, []);
 
   const maybeResolveVotes = useCallback(async (state: GameState) => {
     if (isResolvingVotesRef.current) return;
@@ -240,31 +348,6 @@ export function useGameLogic() {
     const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
     const humanWolf = wolves.find((w) => w.isHuman);
 
-    // === 狼人私聊（仅 AI 狼）===
-    currentState = transitionPhase(currentState, "NIGHT_WOLF_CHAT");
-    setGameState(currentState);
-
-    if (wolves.length > 0 && !humanWolf) {
-      setIsWaitingForAI(true);
-      setDialogue("系统", UI_TEXT.wolfActing, false);
-
-      const wolfChatLog: string[] = [...(currentState.nightActions.wolfChatLog || [])];
-      for (const wolf of wolves) {
-        const msg = await generateWolfChatMessage(apiKey!, currentState, wolf, wolfChatLog);
-        const line = `${wolf.seat + 1}号${wolf.displayName}: ${msg}`;
-        wolfChatLog.push(line);
-      }
-
-      currentState = {
-        ...currentState,
-        nightActions: { ...currentState.nightActions, wolfChatLog },
-      };
-      setGameState(currentState);
-      setIsWaitingForAI(false);
-
-      await delay(600);
-    }
-
     // === 狼人行动（出刀）===
     currentState = transitionPhase(currentState, "NIGHT_WOLF_ACTION");
     setGameState(currentState);
@@ -276,31 +359,44 @@ export function useGameLogic() {
       setIsWaitingForAI(true);
       setDialogue("系统", UI_TEXT.wolfActing, false);
 
-      const wolfVotes: Record<string, number> = {};
-      for (const wolf of wolves) {
-        const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
-        wolfVotes[wolf.playerId] = targetSeat;
-      }
-
-      const counts: Record<number, number> = {};
-      for (const seat of Object.values(wolfVotes)) {
-        counts[seat] = (counts[seat] || 0) + 1;
-      }
-      let chosenSeat = Object.values(wolfVotes)[0];
-      let max = -1;
-      for (const [seatStr, c] of Object.entries(counts)) {
-        const seat = Number(seatStr);
-        if (c > max) {
-          max = c;
-          chosenSeat = seat;
+      let wolfVotes: Record<string, number> = {};
+      const maxRevotes = 3;
+      for (let round = 1; round <= maxRevotes; round++) {
+        wolfVotes = {};
+        for (const wolf of wolves) {
+          const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
+          wolfVotes[wolf.playerId] = targetSeat;
         }
+
+        const chosenSeat = computeUniqueTopSeat(wolfVotes);
+        currentState = {
+          ...currentState,
+          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat ?? undefined },
+        };
+        setGameState(currentState);
+
+        if (chosenSeat !== null) break;
+        await delay(600);
       }
 
-      currentState = {
-        ...currentState,
-        nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat },
-      };
-      setGameState(currentState);
+      // 如果多轮仍平票，兜底随机选一个最高票目标
+      if (currentState.nightActions.wolfTarget === undefined) {
+        const counts: Record<number, number> = {};
+        for (const seat of Object.values(wolfVotes)) {
+          counts[seat] = (counts[seat] || 0) + 1;
+        }
+        const entries = Object.entries(counts);
+        let max = -1;
+        for (const [, c] of entries) max = Math.max(max, c);
+        const topSeats = entries.filter(([, c]) => c === max).map(([s]) => Number(s));
+        const fallbackSeat = topSeats[Math.floor(Math.random() * topSeats.length)];
+        currentState = {
+          ...currentState,
+          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: fallbackSeat },
+        };
+        setGameState(currentState);
+      }
+
       setIsWaitingForAI(false);
     }
 
@@ -526,32 +622,6 @@ export function useGameLogic() {
     }
   }, [apiKey, runNightPhase, maybeGenerateDailySummary]);
 
-  // 白天阶段
-  const startDayPhase = useCallback(async (state: GameState) => {
-    let currentState = transitionPhase(state, "DAY_SPEECH");
-    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayDiscussion);
-    
-    const alivePlayers = currentState.players.filter((p) => p.alive);
-    const startSeat = alivePlayers.length > 0
-      ? alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat
-      : null;
-    const firstSpeaker = startSeat !== null
-      ? alivePlayers.find((p) => p.seat === startSeat) || null
-      : null;
-    currentState = { ...currentState, daySpeechStartSeat: startSeat, currentSpeakerSeat: firstSpeaker?.seat ?? null };
-    
-    setDialogue("主持人", "请各位玩家依次发言", false);
-    setGameState(currentState);
-
-    await delay(1500);
-
-    if (firstSpeaker && !firstSpeaker.isHuman) {
-      await runAISpeech(currentState, firstSpeaker);
-    } else if (firstSpeaker?.isHuman) {
-      setDialogue("提示", UI_TEXT.yourTurn, false);
-    }
-  }, []);
-
   // AI 发言（分段输出，需要用户按键推进）
   const runAISpeech = useCallback(async (
     state: GameState,
@@ -585,6 +655,91 @@ export function useGameLogic() {
       setCurrentDialogue({ speaker: player.displayName, text: segments[0], isStreaming: true });
     }
   }, [apiKey]);
+
+  // 白天阶段
+  const startDayPhase = useCallback(async (state: GameState) => {
+    // 第一天：先进行警徽评选
+    if (state.day === 1 && state.badge.holderSeat === null) {
+      await startBadgeElectionPhase(state);
+      return;
+    }
+
+    await startDaySpeechAfterBadge(state);
+  }, []);
+
+  const startDaySpeechAfterBadge = useCallback(async (state: GameState) => {
+    let currentState = transitionPhase(state, "DAY_SPEECH");
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayDiscussion);
+
+    const alivePlayers = currentState.players.filter((p) => p.alive);
+    const startSeat = alivePlayers.length > 0
+      ? alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat
+      : null;
+    const firstSpeaker = startSeat !== null
+      ? alivePlayers.find((p) => p.seat === startSeat) || null
+      : null;
+    currentState = { ...currentState, daySpeechStartSeat: startSeat, currentSpeakerSeat: firstSpeaker?.seat ?? null };
+
+    setDialogue("主持人", "请各位玩家依次发言", false);
+    setGameState(currentState);
+
+    await delay(1500);
+
+    if (firstSpeaker && !firstSpeaker.isHuman) {
+      await runAISpeech(currentState, firstSpeaker);
+    } else if (firstSpeaker?.isHuman) {
+      setDialogue("提示", UI_TEXT.yourTurn, false);
+    }
+  }, [runAISpeech]);
+
+  const startBadgeElectionPhase = useCallback(async (state: GameState) => {
+    const isRevote = state.phase === "DAY_BADGE_ELECTION";
+    let currentState = isRevote ? state : transitionPhase(state, "DAY_BADGE_ELECTION");
+
+    currentState = {
+      ...currentState,
+      currentSpeakerSeat: null,
+      badge: {
+        ...currentState.badge,
+        votes: isRevote ? currentState.badge.votes : {},
+        revoteCount: isRevote ? currentState.badge.revoteCount : 0,
+      },
+    };
+
+    if (!isRevote) {
+      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeElectionStart);
+    }
+
+    setDialogue("主持人", UI_TEXT.badgeVotePrompt, false);
+    setGameState(currentState);
+    gameStateRef.current = currentState;
+
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
+    for (const aiPlayer of aiPlayers) {
+      if (gameStateRef.current.phase !== "DAY_BADGE_ELECTION") break;
+      setIsWaitingForAI(true);
+      const latestState = gameStateRef.current;
+      const targetSeat = await generateAIBadgeVote(apiKey!, latestState, aiPlayer);
+
+      if (gameStateRef.current.phase !== "DAY_BADGE_ELECTION") break;
+      const nextState: GameState = {
+        ...gameStateRef.current,
+        badge: {
+          ...gameStateRef.current.badge,
+          votes: { ...gameStateRef.current.badge.votes, [aiPlayer.playerId]: targetSeat },
+        },
+      };
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+      await maybeResolveBadgeElection(nextState);
+    }
+    setIsWaitingForAI(false);
+
+    const human = currentState.players.find((p) => p.isHuman);
+    if (!human?.alive) {
+      await maybeResolveBadgeElection(gameStateRef.current);
+    }
+  }, [apiKey, maybeResolveBadgeElection]);
 
   // 推进到下一句话（用户按 Enter/Right/点击 时调用）
   const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean }> => {
@@ -664,7 +819,7 @@ export function useGameLogic() {
       return;
     }
 
-    let currentState = { ...state, currentSpeakerSeat: nextSeat };
+    const currentState = { ...state, currentSpeakerSeat: nextSeat };
     setGameState(currentState);
 
     const nextPlayer = currentState.players.find((p) => p.seat === nextSeat);
@@ -834,7 +989,7 @@ export function useGameLogic() {
     const speech = inputText.trim();
     setInputText("");
 
-    let currentState = addPlayerMessage(gameStateRef.current, humanPlayer.playerId, speech);
+    const currentState = addPlayerMessage(gameStateRef.current, humanPlayer.playerId, speech);
     setGameState(currentState);
   }, [inputText, humanPlayer]);
 
@@ -873,7 +1028,23 @@ export function useGameLogic() {
     if (!humanPlayer) return;
 
     const baseState = gameStateRef.current;
-    if (baseState.phase !== "DAY_VOTE") return;
+    if (baseState.phase !== "DAY_VOTE" && baseState.phase !== "DAY_BADGE_ELECTION") return;
+
+    if (baseState.phase === "DAY_BADGE_ELECTION") {
+      const nextState: GameState = {
+        ...baseState,
+        badge: {
+          ...baseState.badge,
+          votes: { ...baseState.badge.votes, [humanPlayer.playerId]: targetSeat },
+        },
+      };
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+
+      await delay(200);
+      await maybeResolveBadgeElection(nextState);
+      return;
+    }
 
     const nextState: GameState = {
       ...baseState,
@@ -884,7 +1055,7 @@ export function useGameLogic() {
 
     await delay(200);
     await maybeResolveVotes(nextState);
-  }, [humanPlayer, maybeResolveVotes]);
+  }, [humanPlayer, maybeResolveVotes, maybeResolveBadgeElection]);
 
   // 夜晚行动 - 支持所有角色
   const handleNightAction = useCallback(async (targetSeat: number, witchAction?: "save" | "poison" | "pass") => {
@@ -915,48 +1086,47 @@ export function useGameLogic() {
     else if (gameState.phase === "NIGHT_WOLF_ACTION" && humanPlayer.role === "Werewolf") {
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
       const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
-      const wolfVotes: Record<string, number> = { ...(currentState.nightActions.wolfVotes || {}) };
-      wolfVotes[humanPlayer.playerId] = targetSeat;
+      const existingVotes: Record<string, number> = { ...(currentState.nightActions.wolfVotes || {}) };
+      existingVotes[humanPlayer.playerId] = targetSeat;
 
       currentState = {
         ...currentState,
-        nightActions: { ...currentState.nightActions, wolfVotes },
+        nightActions: { ...currentState.nightActions, wolfVotes: existingVotes, wolfTarget: undefined },
       };
-      setDialogue("系统", `你投票选择袭击 ${targetSeat + 1}号 ${targetPlayer?.displayName}，等待队友...`, false);
+      setDialogue("系统", `你投票选择袭击 ${targetSeat + 1}号 ${targetPlayer?.displayName}，等待队友投票...`, false);
       setGameState(currentState);
 
-      // AI狼人投票
       const aiWolves = wolves.filter((w) => !w.isHuman);
       if (aiWolves.length > 0) {
         setIsWaitingForAI(true);
         for (const w of aiWolves) {
           await randomDelay(500, 1200);
-          const voteSeat = await generateWolfAction(apiKey!, currentState, w, wolfVotes);
-          wolfVotes[w.playerId] = voteSeat;
+          const voteSeat = await generateWolfAction(apiKey!, currentState, w, existingVotes);
+          existingVotes[w.playerId] = voteSeat;
           currentState = {
             ...currentState,
-            nightActions: { ...currentState.nightActions, wolfVotes },
+            nightActions: { ...currentState.nightActions, wolfVotes: existingVotes },
           };
           setGameState(currentState);
         }
         setIsWaitingForAI(false);
       }
 
-      // 统计票数
-      const counts: Record<number, number> = {};
-      for (const seat of Object.values(wolfVotes)) {
-        counts[seat] = (counts[seat] || 0) + 1;
-      }
-      let chosenSeat = Object.values(wolfVotes)[0];
-      let max = -1;
-      for (const [seatStr, c] of Object.entries(counts)) {
-        const seat = Number(seatStr);
-        if (c > max) { max = c; chosenSeat = seat; }
+      const chosenSeat = computeUniqueTopSeat(existingVotes);
+      if (chosenSeat === null) {
+        // 平票：清空投票，要求人狼重新投
+        currentState = {
+          ...currentState,
+          nightActions: { ...currentState.nightActions, wolfVotes: {} },
+        };
+        setGameState(currentState);
+        setDialogue("系统", "狼队投票出现平票，请重新投票。", false);
+        return;
       }
 
       currentState = {
         ...currentState,
-        nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat },
+        nightActions: { ...currentState.nightActions, wolfVotes: existingVotes, wolfTarget: chosenSeat },
       };
       setGameState(currentState);
 
@@ -1056,22 +1226,33 @@ export function useGameLogic() {
     if (wolves.length > 0) {
       setIsWaitingForAI(true);
       setDialogue("系统", UI_TEXT.wolfActing, false);
-      const wolfVotes: Record<string, number> = {};
-      for (const wolf of wolves) {
-        const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
-        wolfVotes[wolf.playerId] = targetSeat;
+      let wolfVotes: Record<string, number> = {};
+      const maxRevotes = 3;
+      for (let round = 1; round <= maxRevotes; round++) {
+        wolfVotes = {};
+        for (const wolf of wolves) {
+          const targetSeat = await generateWolfAction(apiKey!, currentState, wolf, wolfVotes);
+          wolfVotes[wolf.playerId] = targetSeat;
+        }
+        const chosenSeat = computeUniqueTopSeat(wolfVotes);
+        currentState = { ...currentState, nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat ?? undefined } };
+        setGameState(currentState);
+        if (chosenSeat !== null) break;
+        await delay(600);
       }
-      const counts: Record<number, number> = {};
-      for (const seat of Object.values(wolfVotes)) {
-        counts[seat] = (counts[seat] || 0) + 1;
+      if (currentState.nightActions.wolfTarget === undefined) {
+        const counts: Record<number, number> = {};
+        for (const seat of Object.values(wolfVotes)) {
+          counts[seat] = (counts[seat] || 0) + 1;
+        }
+        const entries = Object.entries(counts);
+        let max = -1;
+        for (const [, c] of entries) max = Math.max(max, c);
+        const topSeats = entries.filter(([, c]) => c === max).map(([s]) => Number(s));
+        const fallbackSeat = topSeats[Math.floor(Math.random() * topSeats.length)];
+        currentState = { ...currentState, nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: fallbackSeat } };
+        setGameState(currentState);
       }
-      let chosenSeat = Object.values(wolfVotes)[0];
-      let max = -1;
-      for (const [seatStr, c] of Object.entries(counts)) {
-        if (c > max) { max = c; chosenSeat = Number(seatStr); }
-      }
-      currentState = { ...currentState, nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat } };
-      setGameState(currentState);
       setIsWaitingForAI(false);
     }
 

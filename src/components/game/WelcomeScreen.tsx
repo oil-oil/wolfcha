@@ -1,11 +1,10 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, User, Sparkle } from "@phosphor-icons/react";
-import { WerewolfIcon, SeerIcon, WitchIcon, HunterIcon } from "@/components/icons/FlatIcons";
+import { FingerprintSimple, PawPrint, Sparkle } from "@phosphor-icons/react";
+import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TutorialModal } from "@/components/game/TutorialModal";
 
 interface WelcomeScreenProps {
@@ -21,216 +20,215 @@ export function WelcomeScreen({
   onStart,
   isLoading,
 }: WelcomeScreenProps) {
-  const [isFocused, setIsFocused] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const paperRef = useRef<HTMLDivElement | null>(null);
+  const sealButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  // Background floating icons configuration
-  const floatingIcons = [
-    { Icon: WerewolfIcon, delay: 0, x: -100, y: -50, scale: 1.2 },
-    { Icon: SeerIcon, delay: 1.5, x: 120, y: -80, scale: 0.8 },
-    { Icon: WitchIcon, delay: 0.8, x: -90, y: 100, scale: 0.9 },
-    { Icon: HunterIcon, delay: 2.2, x: 100, y: 80, scale: 1.1 },
-  ];
+  const canConfirm = useMemo(() => {
+    return !!humanName.trim() && !isLoading && !isTransitioning;
+  }, [humanName, isLoading, isTransitioning]);
+
+  useEffect(() => {
+    const paper = paperRef.current;
+    if (!paper) return;
+
+    if (typeof window === "undefined") return;
+    if ("ontouchstart" in window) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    let rafId: number | null = null;
+    let lastX = 0;
+    let lastY = 0;
+
+    const update = () => {
+      rafId = null;
+      const xAxis = (window.innerWidth / 2 - lastX) / 60;
+      const yAxis = (window.innerHeight / 2 - lastY) / 60;
+      paper.style.setProperty("--wc-tilt-x", `${xAxis}`);
+      paper.style.setProperty("--wc-tilt-y", `${yAxis}`);
+    };
+
+    const onMove = (e: MouseEvent) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(update);
+    };
+
+    const onLeave = () => {
+      paper.style.setProperty("--wc-tilt-x", "0");
+      paper.style.setProperty("--wc-tilt-y", "0");
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseleave", onLeave);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseleave", onLeave);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  const createParticles = (element: HTMLElement) => {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    for (let i = 0; i < 18; i += 1) {
+      const particle = document.createElement("div");
+      particle.className = "wc-particle";
+      document.body.appendChild(particle);
+
+      const size = Math.random() * 7 + 2;
+      particle.style.width = `${size}px`;
+      particle.style.height = `${size}px`;
+      particle.style.left = `${centerX}px`;
+      particle.style.top = `${centerY}px`;
+
+      const angle = Math.random() * Math.PI * 2;
+      const velocity = Math.random() * 90 + 40;
+      const tx = Math.cos(angle) * velocity;
+      const ty = Math.sin(angle) * velocity - 90;
+
+      particle.animate(
+        [
+          { transform: "translate(0, 0) scale(1)", opacity: 1 },
+          { transform: `translate(${tx}px, ${ty}px) scale(0)`, opacity: 0 },
+        ],
+        {
+          duration: 900 + Math.random() * 450,
+          easing: "cubic-bezier(0, .9, .57, 1)",
+          fill: "forwards",
+        }
+      );
+
+      window.setTimeout(() => particle.remove(), 1600);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!canConfirm) return;
+
+    const seal = sealButtonRef.current;
+    if (seal) createParticles(seal);
+
+    setIsTransitioning(true);
+
+    window.setTimeout(() => {
+      void onStart();
+    }, 1300);
+  };
 
   return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-transparent overflow-hidden relative selection:bg-[var(--color-accent)] selection:text-white">
-      {/* Decorative Background Pattern */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03]">
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,var(--color-accent)_0%,transparent_50%)]" />
-      </div>
-
-      {/* Floating Icons Animation */}
-      {floatingIcons.map(({ Icon, delay, x, y, scale }, index) => (
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, x: 0, y: 0 }}
-          animate={{ 
-            opacity: [0, 0.15, 0],
-            x: [0, x],
-            y: [0, y],
-            rotate: [0, 10, -10, 0]
-          }}
-          transition={{
-            duration: 8,
-            delay: delay,
-            repeat: Infinity,
-            repeatType: "reverse",
-            ease: "easeInOut"
-          }}
-          className="absolute text-[var(--color-accent)]"
-          style={{ 
-            left: '50%', 
-            top: '50%',
-            scale
-          }}
-        >
-          <Icon size={120} />
-        </motion.div>
-      ))}
+    <div className="wc-contract-screen selection:bg-[var(--color-accent)] selection:text-white">
+      <div className="wc-contract-fog" aria-hidden="true" />
+      <div className="wc-contract-vignette" aria-hidden="true" />
 
       <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
 
+      <div className="absolute top-6 right-6 z-20">
+        <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
+          玩法教学
+        </Button>
+      </div>
+
       <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
-        className="z-10 w-full max-w-md px-8 flex flex-col items-center"
+        initial={{ opacity: 0, y: 14, scale: 0.99, filter: "blur(10px)" }}
+        animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+        transition={{ duration: 0.65, ease: "easeOut" }}
+        className="relative z-10 w-full max-w-[460px] px-6"
       >
-        {/* Logo / Icon Section */}
-        <motion.div
-          className="relative mb-10"
-          whileHover={{ scale: 1.05 }}
-          transition={{ type: "spring", stiffness: 300 }}
-        >
-          <div className="relative w-32 h-32 flex items-center justify-center">
-            {/* Pulsing Glow */}
-            <motion.div
-              animate={{ 
-                boxShadow: ["0 0 0 0px rgba(184, 134, 11, 0.1)", "0 0 0 20px rgba(184, 134, 11, 0)"]
-              }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-[var(--color-accent)] to-[#8a6a1c] opacity-20 blur-xl"
-            />
-            {/* Main Icon Container */}
-            <div className="relative w-28 h-28 bg-[var(--bg-card)] rounded-[2rem] shadow-2xl border-4 border-[var(--bg-secondary)] flex items-center justify-center overflow-hidden group">
-              <motion.div
-                animate={{ rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <WerewolfIcon size={64} className="text-[var(--color-wolf)] drop-shadow-md" />
-              </motion.div>
-              
-              {/* Shine effect on hover */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent translate-x-[-150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out" />
+        <div ref={paperRef} className="wc-contract-paper">
+          <div className="wc-contract-borders" aria-hidden="true" />
+
+          <div className="mt-2 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center text-[var(--color-wolf)] opacity-90">
+              <PawPrint weight="fill" size={42} />
             </div>
-            
-            <motion.div 
-              className="absolute -bottom-2 -right-2 bg-[var(--bg-main)] rounded-full p-2 shadow-lg border border-[var(--border-color)]"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.5, type: "spring" }}
-            >
-              <Sparkle size={20} weight="fill" className="text-[var(--color-accent)]" />
-            </motion.div>
+            <div className="wc-contract-title">WOLFCHA</div>
+            <div className="wc-contract-subtitle">The Shadow Game</div>
           </div>
-        </motion.div>
 
-        {/* Title */}
-        <div className="text-center mb-8 space-y-2">
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-4xl font-black tracking-tight text-[var(--text-primary)] font-serif"
-          >
-            Wolfcha
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="text-[var(--text-secondary)] font-medium"
-          >
-            准备好了就开始吧。
-          </motion.p>
-        </div>
+          <div className="mt-7 text-center wc-contract-body">
+            <div className="wc-contract-oath">
+              我自愿加入这场关于谎言与真相的游戏。
+              <br />
+              当夜幕降临，我将隐藏我的身份；
+              <br />
+              当黎明升起，我将审判罪恶。
+            </div>
 
-        {/* Interaction Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="w-full glass-panel glass-panel--strong p-1 rounded-2xl"
-        >
-          <div className="glass-panel glass-panel--weak shadow-none rounded-xl p-6 flex flex-col gap-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsTutorialOpen(true)}
-              className="w-full h-10 text-sm font-semibold"
-            >
-              玩法教学 / 新手指南
-            </Button>
-
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1 flex items-center gap-2">
-                <User weight="bold" />
-                你的称呼
-              </label>
-              <div className="relative group">
-                <Input
+            <div className="mt-8">
+              <div className="wc-contract-label">签署你的名字</div>
+              <div className="relative mt-2">
+                <input
                   type="text"
-                  placeholder="你叫什么名字？"
                   value={humanName}
                   onChange={(e) => setHumanName(e.target.value)}
-                  onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
-                  className="h-14 bg-[var(--bg-card)] border-2 text-center text-lg transition-all duration-300 focus:scale-[1.02] placeholder:text-gray-400"
-                  style={{
-                    borderColor: isFocused ? 'var(--color-accent)' : 'var(--border-color)',
-                    boxShadow: isFocused ? '0 4px 20px -5px rgba(184, 134, 11, 0.15)' : 'none'
-                  }}
+                  placeholder="Signature Here..."
+                  className="wc-signature-input"
+                  autoComplete="off"
+                  disabled={isLoading || isTransitioning}
                 />
                 <AnimatePresence>
-                  {humanName && (
+                  {!!humanName.trim() && (
                     <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
+                      initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--color-success)] pointer-events-none"
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      className="wc-signature-ok"
                     >
-                      <Sparkle weight="fill" />
+                      <Sparkle weight="fill" size={18} />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
             </div>
-
-            <Button
-              onClick={onStart}
-              disabled={!humanName.trim() || isLoading}
-              size="lg"
-              className="w-full h-12 text-base font-bold shadow-lg transition-all duration-300 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] relative overflow-hidden group cursor-pointer"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {isLoading ? (
-                  <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      <Sparkle weight="bold" />
-                    </motion.div>
-                    正在邀请其他玩家…
-                  </>
-                ) : (
-                  <>
-                    <Play weight="fill" />
-                    进入牌局
-                  </>
-                )}
-              </span>
-              
-              {/* Button shine sweep animation */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-150%] group-hover:translate-x-[150%] transition-transform duration-1000 ease-in-out z-0" />
-            </Button>
           </div>
-        </motion.div>
 
-        {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="mt-8 flex items-center gap-4 text-xs text-[var(--text-muted)] opacity-60"
-        >
-          <span>10人局</span>
-          <span className="w-1 h-1 rounded-full bg-current" />
-          <span>预女猎守</span>
-          <span className="w-1 h-1 rounded-full bg-current" />
-          <span>3狼6民</span>
-        </motion.div>
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <div className="wc-seal-hint">
+              {isLoading ? "正在邀请其他玩家入场…" : canConfirm ? "按下印章以生效" : "签署名字后才可生效"}
+            </div>
+            <button
+              ref={sealButtonRef}
+              type="button"
+              className="wc-wax-seal"
+              onClick={handleConfirm}
+              disabled={!canConfirm}
+            >
+              <FingerprintSimple weight="fill" size={44} className="wc-wax-seal-icon" />
+            </button>
+          </div>
+
+          <div className="wc-corner-mark" aria-hidden="true">
+            <WerewolfIcon size={30} className="text-[var(--color-wolf)] opacity-30" />
+          </div>
+        </div>
       </motion.div>
+
+      <AnimatePresence>
+        {isTransitioning && (
+          <motion.div
+            className="wc-transition-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <motion.div
+              className="wc-transition-text"
+              initial={{ opacity: 0, y: 10, scale: 1.05, filter: "blur(10px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              transition={{ delay: 0.18, duration: 0.55, ease: "easeOut" }}
+            >
+              <div className="wc-transition-title">游戏开始</div>
+              <div className="wc-transition-subtitle">The Game Begins</div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

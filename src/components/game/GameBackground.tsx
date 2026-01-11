@@ -1,27 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
 
 interface GameBackgroundProps {
   isNight: boolean;
 }
 
 export function GameBackground({ isNight }: GameBackgroundProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div
-        className="fixed inset-0 -z-10 bg-gradient-to-br from-[var(--bg-day-from)] via-[var(--bg-day-via)] to-[var(--bg-day-to)]"
-      />
-    );
-  }
-
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden transition-colors duration-1000">
       {/* Day Background */}

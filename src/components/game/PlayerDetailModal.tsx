@@ -204,7 +204,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer }: Play
                         <div className="flex flex-wrap gap-1.5">
                           {persona.catchphrases.map((phrase, i) => (
                             <span key={i} className="text-xs px-2 py-1 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)] italic">
-                              "{phrase}"
+                              {`"${phrase}"`}
                             </span>
                           ))}
                         </div>

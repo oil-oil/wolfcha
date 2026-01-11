@@ -4,10 +4,11 @@ import React, { useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Shield, Crosshair, Skull, X, ArrowClockwise, CaretRight } from "@phosphor-icons/react";
+import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Shield, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle } from "@phosphor-icons/react";
 import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIcons";
 import { VotingProgress } from "./VotingProgress";
 import { WolfPlanningPanel } from "./WolfPlanningPanel";
+import { MentionInput } from "./MentionInput";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
 
 type WitchActionType = "save" | "poison" | "pass";
@@ -34,16 +35,17 @@ function isTurnPromptSystemMessage(content: string) {
   return content.includes("轮到你发言") || content.includes("轮到你发表遗言");
 }
 
-// 将消息中的"X号"渲染为小标签
+// 将消息中的"@X号 玩家名"或"X号"渲染为小标签
 function renderPlayerMentions(text: string, players: Player[], isNight: boolean = false): React.ReactNode {
-  // 匹配 1-10号 的模式
-  const regex = /(\d{1,2})号/g;
+  // 匹配 @X号 玩家名 或单独的 X号 模式
+  const regex = /@?(\d{1,2})号(?:\s*([^\s@，。！？,\.!?]+))?/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
   while ((match = regex.exec(text)) !== null) {
     const seatNum = parseInt(match[1], 10);
+    const mentionedName = match[2]; // 可能有玩家名跟在后面
     const player = players.find(p => p.seat + 1 === seatNum);
     
     // 添加匹配前的文本
@@ -56,7 +58,7 @@ function renderPlayerMentions(text: string, players: Player[], isNight: boolean 
       parts.push(
         <span
           key={`${match.index}-${seatNum}`}
-          className={`inline-flex items-center gap-1 mx-0.5 align-baseline text-[0.8em] font-semibold ${
+          className={`inline-flex items-center gap-1 mx-0.5 align-baseline text-[0.85em] font-semibold ${
             isNight
               ? "text-[var(--color-accent-light)]"
               : "text-[var(--color-accent)]"
@@ -65,25 +67,23 @@ function renderPlayerMentions(text: string, players: Player[], isNight: boolean 
           <img
             src={dicebearUrl(player.playerId)}
             alt={player.displayName}
-            className="w-3 h-3 rounded-full"
+            className="w-4 h-4 rounded-full"
           />
-          <span className={isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"}>
-            {seatNum}号 {player.displayName}
-          </span>
+          <span className={isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"}>@{seatNum}号</span>
         </span>
       );
     } else {
-      // 没找到对应玩家，保持原样
+      // 没找到对应玩家，保持原样但格式化
       parts.push(
         <span
           key={`${match.index}-${seatNum}`}
-          className={`inline-flex items-center mx-0.5 align-baseline text-[0.8em] font-semibold ${
+          className={`inline-flex items-center mx-0.5 align-baseline text-[0.85em] font-semibold ${
             isNight
               ? "text-[var(--color-accent-light)]"
               : "text-[var(--color-accent)]"
           }`}
         >
-          {seatNum}号
+          @{seatNum}号
         </span>
       );
     }
@@ -141,19 +141,27 @@ function WaitingDots() {
 }
 
 // 夜晚行动状态组件 - 带有神秘氛围
-function NightActionStatus({ phase, humanRole }: { phase: string; humanRole?: string }) {
+function NightActionStatus({ phase, humanRole, isHumanTurn }: { phase: string; humanRole?: string; isHumanTurn?: boolean }) {
   const getStatusInfo = () => {
+    // 如果是人类玩家的回合，显示"请睁眼"；否则显示"正在行动"
+    const isMyPhase = 
+      (phase === "NIGHT_GUARD_ACTION" && humanRole === "Guard") ||
+      (phase === "NIGHT_WOLF_ACTION" && humanRole === "Werewolf") ||
+      (phase === "NIGHT_WITCH_ACTION" && humanRole === "Witch") ||
+      (phase === "NIGHT_SEER_ACTION" && humanRole === "Seer") ||
+      (phase === "HUNTER_SHOOT" && humanRole === "Hunter");
+    
     switch (phase) {
       case "NIGHT_GUARD_ACTION":
-        return { icon: Shield, text: "守卫请睁眼", color: "text-emerald-500" };
+        return { icon: Shield, text: isMyPhase ? "守卫请睁眼" : "守卫正在守护", color: "text-emerald-500" };
       case "NIGHT_WOLF_ACTION":
-        return { icon: WerewolfIcon, text: "狼人请睁眼", color: "text-red-500" };
+        return { icon: WerewolfIcon, text: isMyPhase ? "狼人请睁眼" : "狼人正在选择目标", color: "text-red-500" };
       case "NIGHT_WITCH_ACTION":
-        return { icon: Drop, text: "女巫请睁眼", color: "text-purple-500" };
+        return { icon: Drop, text: isMyPhase ? "女巫请睁眼" : "女巫正在行动", color: "text-purple-500" };
       case "NIGHT_SEER_ACTION":
-        return { icon: Eye, text: "预言家请睁眼", color: "text-blue-500" };
+        return { icon: Eye, text: isMyPhase ? "预言家请睁眼" : "预言家正在查验", color: "text-blue-500" };
       case "HUNTER_SHOOT":
-        return { icon: Crosshair, text: "猎人发动技能", color: "text-orange-500" };
+        return { icon: Crosshair, text: isMyPhase ? "猎人发动技能" : "猎人正在开枪", color: "text-orange-500" };
       default:
         return { icon: MoonStars, text: "夜深了...", color: "text-indigo-400" };
     }
@@ -282,12 +290,37 @@ export function DialogArea({
     );
   }
 
+  // 获取角色中文名
+  const getRoleName = (role?: string) => {
+    switch (role) {
+      case "Werewolf": return "狼人";
+      case "Seer": return "预言家";
+      case "Witch": return "女巫";
+      case "Hunter": return "猎人";
+      case "Guard": return "守卫";
+      default: return "村民";
+    }
+  };
+
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden min-h-0">
+    <div className="h-full w-full flex flex-col overflow-hidden min-h-0 justify-center">
       {/* 上方区域：左侧发言者 + 右侧历史记录 */}
-      <div className="flex-1 flex gap-4 p-4 min-h-0 overflow-hidden">
-        {/* 左侧：当前发言者 - Visual Novel 风格大立绘 */}
-        <div className="w-[260px] shrink-0 flex flex-col items-center justify-center">
+      <div className="flex-1 flex gap-4 p-4 pb-2 min-h-0 overflow-hidden">
+        {/* 左侧：身份 + 当前发言者 */}
+        <div className="w-[260px] shrink-0 flex flex-col items-center">
+          {/* 身份标识 */}
+          {humanPlayer && (
+            <div className="glass-panel glass-panel--weak shadow-none px-3 py-1.5 rounded-full flex items-center gap-2 text-sm mb-4">
+              <UserCircle size={14} className="opacity-60" />
+              <span className="font-semibold">你是</span>
+              <span className="font-bold text-[var(--color-accent)]">
+                {getRoleName(humanPlayer.role)}
+              </span>
+            </div>
+          )}
+          
+          {/* 当前发言者 - Visual Novel 风格大立绘 */}
+          <div className="flex-1 flex flex-col items-center justify-center">
           <AnimatePresence mode="wait">
             {currentSpeaker?.player ? (
               <motion.div
@@ -352,6 +385,7 @@ export function DialogArea({
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </div>
 
         {/* 右侧：聊天历史记录 */}
@@ -379,11 +413,11 @@ export function DialogArea({
       {/* 下方：Glass Panel 对话框 */}
       <div className="shrink-0 p-4 pt-0 pb-6">
         {/* 投票进度 */}
-        {gameState.phase === "DAY_VOTE" && (
+        {(gameState.phase === "DAY_VOTE" || gameState.phase === "DAY_BADGE_ELECTION") && (
           <div className="mb-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3">
             <div className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <span className="w-2 h-2 bg-[var(--color-accent)] rounded-full animate-pulse" />
-              投票进行中
+              {gameState.phase === "DAY_BADGE_ELECTION" ? "警徽评选进行中" : "投票进行中"}
             </div>
             <VotingProgress gameState={gameState} humanPlayer={humanPlayer} />
           </div>
@@ -401,7 +435,7 @@ export function DialogArea({
           className="glass-panel glass-panel--strong rounded-2xl p-5 relative overflow-hidden"
         >
           {/* 装饰性引号 */}
-          <div className="absolute top-3 left-4 text-6xl opacity-5 pointer-events-none select-none">"""</div>
+          <div className="absolute top-3 left-4 text-6xl opacity-5 pointer-events-none select-none">{`'''`}</div>
           
           <div className="relative z-10">
             <AnimatePresence mode="wait">
@@ -439,6 +473,7 @@ export function DialogArea({
               {(() => {
                 const isCorrectRoleForPhase = 
                   (phase === "DAY_VOTE" && humanPlayer?.alive) ||
+                  (phase === "DAY_BADGE_ELECTION" && humanPlayer?.alive) ||
                   (phase === "NIGHT_SEER_ACTION" && humanPlayer?.role === "Seer" && humanPlayer?.alive) ||
                   (phase === "NIGHT_WOLF_ACTION" && humanPlayer?.role === "Werewolf" && humanPlayer?.alive) ||
                   (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
@@ -447,13 +482,14 @@ export function DialogArea({
                 if (
                   isCorrectRoleForPhase &&
                   selectedSeat !== null &&
-                  (phase === "DAY_VOTE" || !isWaitingForAI)
+                  (phase === "DAY_VOTE" || phase === "DAY_BADGE_ELECTION" || !isWaitingForAI)
                 ) {
                   const targetPlayer = gameState.players.find(p => p.seat === selectedSeat);
                   const targetName = targetPlayer ? `${selectedSeat + 1}号 ${targetPlayer.displayName}` : `${selectedSeat + 1}号`;
                   
                   const actionText = {
                     DAY_VOTE: "投票给",
+                    DAY_BADGE_ELECTION: "把警徽投给",
                     NIGHT_SEER_ACTION: "查验",
                     NIGHT_WOLF_ACTION: "击杀",
                     NIGHT_GUARD_ACTION: "守护",
@@ -462,6 +498,7 @@ export function DialogArea({
 
                   const actionColor = {
                     DAY_VOTE: isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]",
+                    DAY_BADGE_ELECTION: isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]",
                     NIGHT_SEER_ACTION: "text-[var(--color-seer)]",
                     NIGHT_WOLF_ACTION: "text-[var(--color-danger)]",
                     NIGHT_GUARD_ACTION: "text-[var(--color-success)]",
@@ -637,22 +674,13 @@ export function DialogArea({
                   
                   <div className="flex items-stretch gap-3">
                     <div className="relative flex-1">
-                      <textarea
+                      <MentionInput
                         value={inputText}
-                        onChange={(e) => onInputChange?.(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            onSendMessage?.();
-                          }
-                        }}
+                        onChange={(t) => onInputChange?.(t)}
+                        onSend={() => onSendMessage?.()}
                         placeholder={gameState.phase === "DAY_LAST_WORDS" ? "有什么想说的？" : "你怎么看？"}
-                        className={`w-full min-h-[72px] max-h-[160px] px-4 py-3 pr-14 pb-10 text-base border rounded-xl focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 transition-all resize-none ${
-                          isNight
-                            ? "bg-white/5 text-[#f0e6d2] border-white/10 placeholder:text-white/35"
-                            : "bg-white/50 text-[var(--text-primary)] border-[var(--border-color)]/30"
-                        }`}
-                        autoFocus
+                        isNight={isNight}
+                        players={gameState.players.filter((p) => p.alive)}
                       />
 
                       <button
@@ -738,7 +766,7 @@ export function DialogArea({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
-                  <NightActionStatus phase={gameState.phase} humanRole={humanPlayer?.role} />
+                  <NightActionStatus phase={gameState.phase} humanRole={humanPlayer?.role} isHumanTurn={false} />
                 </motion.div>
               )}
             </AnimatePresence>
