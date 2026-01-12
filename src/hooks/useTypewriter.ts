@@ -31,14 +31,23 @@ export function useTypewriter({
 
   useEffect(() => {
     if (!enabled || !text) {
-      setDisplayedText(text || "");
-      setIsTyping(false);
+      const next = text || "";
+      queueMicrotask(() => {
+        setDisplayedText(next);
+        setIsTyping(false);
+      });
       return;
     }
 
     // If text changed, reset and start typing
-    reset();
-    setIsTyping(true);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    indexRef.current = 0;
+    queueMicrotask(() => {
+      setDisplayedText("");
+      setIsTyping(true);
+    });
 
     const typeNextChar = () => {
       if (indexRef.current < text.length) {

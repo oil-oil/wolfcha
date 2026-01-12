@@ -7,12 +7,14 @@ export type Phase =
   | "SETUP"
   | "NIGHT_START"
   | "NIGHT_GUARD_ACTION"   // 守卫保护
-  | "NIGHT_WOLF_CHAT"      // 狼人私聊
   | "NIGHT_WOLF_ACTION"    // 狼人出刀
   | "NIGHT_WITCH_ACTION"   // 女巫用药
   | "NIGHT_SEER_ACTION"    // 预言家查验
   | "NIGHT_RESOLVE"
   | "DAY_START"
+  | "DAY_BADGE_SIGNUP"     // 警徽竞选报名
+  | "DAY_BADGE_SPEECH"     // 警徽竞选发言
+  | "DAY_BADGE_ELECTION"   // 警徽评选
   | "DAY_SPEECH"
   | "DAY_LAST_WORDS"
   | "DAY_VOTE"
@@ -99,6 +101,14 @@ export interface GameState {
   currentSpeakerSeat: number | null;
   nextSpeakerSeatOverride?: number | null;
   daySpeechStartSeat: number | null;
+  badge: {
+    holderSeat: number | null;
+    candidates: number[];
+    signup: Record<string, boolean>;
+    votes: Record<string, number>;
+    history: Record<number, Record<string, number>>;
+    revoteCount: number;
+  };
   votes: Record<string, number>;
   voteHistory: Record<number, Record<string, number>>; // day -> { voterId -> targetSeat }
   nightHistory?: Record<
@@ -126,7 +136,6 @@ export interface GameState {
   nightActions: {
     guardTarget?: number;        // 守卫保护的目标
     lastGuardTarget?: number;    // 上一晚守卫保护的目标（不能连续保护同一人）
-    wolfChatLog?: string[];      // 狼人私聊记录（仅狼人可见）
     wolfVotes?: Record<string, number>;
     wolfTarget?: number;         // 狼人出刀目标
     witchSave?: boolean;         // 女巫是否救人
@@ -134,6 +143,8 @@ export interface GameState {
     seerTarget?: number;
     seerResult?: { targetSeat: number; isWolf: boolean };
     seerHistory?: Array<{ targetSeat: number; isWolf: boolean; day: number }>; // 查验历史
+    pendingWolfVictim?: number;  // 待公布的狼人击杀目标（警长竞选后公布）
+    pendingPoisonVictim?: number; // 待公布的女巫毒杀目标（警长竞选后公布）
   };
   // 角色能力使用记录
   roleAbilities: {
@@ -145,12 +156,12 @@ export interface GameState {
 }
 
 export const AVAILABLE_MODELS: ModelRef[] = [
-  // { provider: "openrouter", model: "google/gemini-3-flash-preview" },
-  // { provider: "openrouter", model: "deepseek/deepseek-v3.2" },
+  { provider: "openrouter", model: "google/gemini-3-flash-preview" },
+  { provider: "openrouter", model: "deepseek/deepseek-v3.2" },
   // { provider: "openrouter", model: "anthropic/claude-haiku-4.5" },
   // { provider: "openrouter", model: "qwen/qwen3-next-80b-a3b-instruct" },
   { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
-  // { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
+  { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
 ];
 
 export const GENERATOR_MODEL = "google/gemini-3-flash-preview";

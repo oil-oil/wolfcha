@@ -13,9 +13,9 @@ import {
 import { type GeneratedCharacter } from "./character-generator";
 import { 
   SPEECH_PROMPT, 
+  BADGE_ELECTION_PROMPT,
   VOTE_PROMPT, 
   SEER_ACTION_PROMPT, 
-  WOLF_CHAT_PROMPT,
   WOLF_ACTION_PROMPT,
   GUARD_ACTION_PROMPT,
   WITCH_ACTION_PROMPT,
@@ -43,6 +43,14 @@ export function createInitialGameState(): GameState {
     currentSpeakerSeat: null,
     nextSpeakerSeatOverride: null,
     daySpeechStartSeat: null,
+    badge: {
+      holderSeat: null,
+      candidates: [],
+      signup: {},
+      votes: {},
+      history: {},
+      revoteCount: 0,
+    },
     votes: {},
     voteHistory: {},
     dailySummaries: {},
@@ -493,13 +501,13 @@ export async function generateAIVote(
   return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
 }
 
-export async function generateWolfChatMessage(
+export async function generateAIBadgeVote(
   apiKey: string,
   state: GameState,
-  player: Player,
-  existingChatLog: string[] = []
-): Promise<string> {
-  const { system, user } = WOLF_CHAT_PROMPT(state, player, existingChatLog);
+  player: Player
+): Promise<number> {
+  const { system, user } = BADGE_ELECTION_PROMPT(state, player);
+  const alivePlayers = state.players.filter((p) => p.alive && p.playerId !== player.playerId);
   const startTime = Date.now();
 
   const messages: OpenRouterMessage[] = [
@@ -510,12 +518,12 @@ export async function generateWolfChatMessage(
   const result = await generateCompletion(apiKey, {
     model: player.agentProfile!.modelRef.model,
     messages,
-    temperature: 0.6,
-    max_tokens: 80,
+    temperature: 0.5,
+    max_tokens: 10,
   });
 
   aiLogger.log({
-    type: "wolf_chat",
+    type: "badge_vote",
     request: {
       model: player.agentProfile!.modelRef.model,
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
@@ -524,7 +532,16 @@ export async function generateWolfChatMessage(
     response: { content: result.content, duration: Date.now() - startTime },
   });
 
-  return result.content.trim();
+  const match = result.content.match(/\d+/);
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      return seat;
+    }
+  }
+
+  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
 }
 
 export async function generateSeerAction(
