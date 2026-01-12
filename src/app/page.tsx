@@ -55,7 +55,8 @@ function getRitualCueFromSystemMessage(content: string): { title: string; subtit
   if (/^\d+号\s+.+\s+昨晚出局$/.test(text)) return { title: text };
   if (/^\d+号\s+.+\s+昨晚中毒出局$/.test(text)) return { title: text };
   if (text === "天亮了，请睁眼") return { title: "天亮了，请睁眼" };
-  if (text === "警徽竞选开始，请各位玩家依次发言") return { title: "警徽竞选开始", subtitle: "请各位玩家依次发言" };
+  if (text === "进入警徽竞选报名环节") return { title: "警徽竞选报名" };
+  if (text === "警徽竞选开始，请候选人依次发言") return { title: "警徽竞选开始", subtitle: "请候选人依次发言" };
   if (text === "开始警徽评选") return { title: text };
   if (text === "警徽平票，重新投票") return { title: text };
   if (/^\s*警徽授予\s*\d+号\s+.+（\d+票）\s*$/.test(text)) return { title: text };
@@ -91,6 +92,7 @@ export default function Home() {
     restartGame,
     handleHumanSpeech,
     handleFinishSpeaking,
+    handleBadgeSignup,
     handleHumanVote,
     handleNightAction,
     handleNextRound,
@@ -346,6 +348,8 @@ export default function Home() {
         return <Crosshair size={14} />;
       case "DAY_SPEECH":
         return <SpeechIcon size={14} />;
+      case "DAY_BADGE_SIGNUP":
+        return <Users size={14} />;
       case "DAY_BADGE_ELECTION":
         return <Users size={14} />;
       case "DAY_VOTE":
@@ -593,16 +597,16 @@ export default function Home() {
                                     <>
                                       <motion.div
                                         className="wc-slot-avatar"
-                                        initial={{ scale: 0, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        transition={{ type: "spring", stiffness: 300 }}
+                                        initial={{ scale: 0.92, opacity: 0, filter: "blur(10px)" }}
+                                        animate={{ scale: 1, opacity: 1, filter: "blur(0px)" }}
+                                        transition={{ duration: 0.55, ease: "easeOut" }}
                                         style={{ backgroundColor: `hsl(${(index * 40) % 360}, 30%, 35%)` }}
                                       />
                                       <motion.span
                                         className="wc-slot-name"
-                                        initial={{ opacity: 0, y: 5 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.15 }}
+                                        initial={{ opacity: 0, y: 6, filter: "blur(10px)" }}
+                                        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                                        transition={{ duration: 0.5, ease: "easeOut", delay: 0.08 }}
                                       >
                                         {isMe ? `${player.displayName} (You)` : player.displayName}
                                       </motion.span>
@@ -631,8 +635,8 @@ export default function Home() {
                           <WerewolfIcon size={30} className="text-[var(--color-wolf)] opacity-30" />
                         </div>
                       </div>
-              </motion.div>
-            ) : (
+                    </motion.div>
+                  ) : (
               <motion.div
                 key="table-screen"
                 initial={{ opacity: 0, y: 10, filter: "blur(10px)" }}
@@ -642,9 +646,9 @@ export default function Home() {
                 className="flex-1 flex flex-col min-h-0 overflow-hidden"
               >
                 {/* 主布局 - 严格对齐 style-unification-preview.html */}
-                <div className="flex-1 flex gap-5 px-5 py-5 overflow-hidden w-full justify-center min-h-0">
-                  {/* 左侧玩家卡片 - 240px宽度 */}
-                  <div className="w-[240px] flex flex-col gap-3 shrink-0 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide py-1 px-1 -mx-1">
+                <div className="flex-1 flex gap-4 lg:gap-6 px-4 lg:px-6 py-4 lg:py-6 overflow-hidden w-full justify-center min-h-0">
+                  {/* 左侧玩家卡片 */}
+                  <div className="w-[220px] lg:w-[240px] xl:w-[260px] 2xl:w-[300px] flex flex-col gap-3 shrink-0 overflow-y-auto overflow-x-visible scrollbar-hide pt-2 pb-2 px-1 -mx-1">
                     <AnimatePresence>
                       {leftPlayers.map((player, index) => {
                         const checkResult =
@@ -673,34 +677,33 @@ export default function Home() {
                     </AnimatePresence>
                   </div>
 
-                  {/* 中间区域：对话 */}
-                  <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full max-w-[1000px] overflow-hidden">
-                    <div className="flex-1 overflow-hidden relative min-h-0">
-                      <DialogArea
-                        gameState={gameState}
-                        humanPlayer={humanPlayer}
-                        currentDialogue={currentDialogue}
-                        displayedText={displayedText}
-                        isTyping={isTyping}
-                        onAdvanceDialogue={currentDialogue ? advanceSpeech : handleNextRound}
-                        isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS" || gameState.phase === "DAY_BADGE_SPEECH") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
-                        waitingForNextRound={waitingForNextRound}
-                        inputText={inputText}
-                        onInputChange={setInputText}
-                        onSendMessage={handleHumanSpeech}
-                        onFinishSpeaking={handleFinishSpeaking}
-                        selectedSeat={selectedSeat}
-                        isWaitingForAI={isWaitingForAI}
-                        onConfirmAction={confirmSelectedSeat}
-                        onCancelSelection={() => setSelectedSeat(null)}
-                        onNightAction={handleNightActionConfirm}
-                        onRestart={restartGame}
-                      />
-                    </div>
+                  {/* 中间区域：对话区 */}
+                  <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full max-w-[980px] lg:max-w-[1100px] xl:max-w-[1200px] 2xl:max-w-[1280px] overflow-hidden">
+                    <DialogArea
+                      gameState={gameState}
+                      humanPlayer={humanPlayer}
+                      currentDialogue={currentDialogue}
+                      displayedText={displayedText}
+                      isTyping={isTyping}
+                      onAdvanceDialogue={currentDialogue ? advanceSpeech : handleNextRound}
+                      isHumanTurn={(gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS" || gameState.phase === "DAY_BADGE_SPEECH") && gameState.currentSpeakerSeat === humanPlayer?.seat && !waitingForNextRound}
+                      waitingForNextRound={waitingForNextRound}
+                      inputText={inputText}
+                      onInputChange={setInputText}
+                      onSendMessage={handleHumanSpeech}
+                      onFinishSpeaking={handleFinishSpeaking}
+                      selectedSeat={selectedSeat}
+                      isWaitingForAI={isWaitingForAI}
+                      onConfirmAction={confirmSelectedSeat}
+                      onCancelSelection={() => setSelectedSeat(null)}
+                      onNightAction={handleNightActionConfirm}
+                      onBadgeSignup={handleBadgeSignup}
+                      onRestart={restartGame}
+                    />
                   </div>
 
-                  {/* 右侧玩家卡片 - 240px宽度 */}
-                  <div className="w-[240px] flex flex-col gap-3 shrink-0 min-h-0 overflow-y-auto overflow-x-visible scrollbar-hide py-1 px-1 -mx-1">
+                  {/* 右侧玩家卡片 */}
+                  <div className="w-[220px] lg:w-[240px] xl:w-[260px] 2xl:w-[300px] flex flex-col gap-3 shrink-0 overflow-y-auto overflow-x-visible scrollbar-hide pt-2 pb-2 px-1 -mx-1">
                     <AnimatePresence>
                       {rightPlayers.map((player, index) => {
                         const checkResult =
@@ -719,6 +722,7 @@ export default function Home() {
                             onClick={() => handleSeatClick(player)}
                             onDetailClick={() => setDetailPlayer(player)}
                             animationDelay={index * 0.05}
+                            isNight={isNight}
                             humanPlayer={humanPlayer}
                             seerCheckResult={seerResult}
                             isBadgeHolder={gameState.badge.holderSeat === player.seat}
@@ -768,7 +772,6 @@ export default function Home() {
         onClose={() => setDetailPlayer(null)}
         humanPlayer={humanPlayer}
       />
-
           </motion.div>
         )}
       </AnimatePresence>

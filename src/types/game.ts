@@ -10,6 +10,7 @@ export type Phase =
   | "NIGHT_SEER_ACTION"    // 预言家查验
   | "NIGHT_RESOLVE"
   | "DAY_START"
+  | "DAY_BADGE_SIGNUP"     // 警徽竞选报名
   | "DAY_BADGE_SPEECH"     // 警徽竞选发言
   | "DAY_BADGE_ELECTION"   // 警徽评选
   | "DAY_SPEECH"
@@ -95,6 +96,8 @@ export interface GameState {
   daySpeechStartSeat: number | null;
   badge: {
     holderSeat: number | null;
+    candidates: number[];
+    signup: Record<string, boolean>;
     votes: Record<string, number>;
     history: Record<number, Record<string, number>>;
     revoteCount: number;
@@ -112,6 +115,8 @@ export interface GameState {
     seerTarget?: number;
     seerResult?: { targetSeat: number; isWolf: boolean };
     seerHistory?: Array<{ targetSeat: number; isWolf: boolean; day: number }>; // 查验历史
+    pendingWolfVictim?: number;  // 待公布的狼人击杀目标（警长竞选后公布）
+    pendingPoisonVictim?: number; // 待公布的女巫毒杀目标（警长竞选后公布）
   };
   // 角色能力使用记录
   roleAbilities: {
@@ -123,12 +128,12 @@ export interface GameState {
 }
 
 export const AVAILABLE_MODELS: ModelRef[] = [
-  // { provider: "openrouter", model: "google/gemini-3-flash-preview" },
+  { provider: "openrouter", model: "google/gemini-3-flash-preview" },
   { provider: "openrouter", model: "deepseek/deepseek-v3.2" },
   // { provider: "openrouter", model: "anthropic/claude-haiku-4.5" },
   // { provider: "openrouter", model: "qwen/qwen3-next-80b-a3b-instruct" },
-  // { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
-  // { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
+  { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
+  { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
 ];
 
 export const GENERATOR_MODEL = "google/gemini-3-flash-preview";

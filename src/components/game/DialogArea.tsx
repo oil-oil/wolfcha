@@ -9,7 +9,9 @@ import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIco
 import { VotingProgress } from "./VotingProgress";
 import { WolfPlanningPanel } from "./WolfPlanningPanel";
 import { MentionInput } from "./MentionInput";
+import { TalkingAvatar } from "./TalkingAvatar";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
+import { cn } from "@/lib/utils";
 
 type WitchActionType = "save" | "poison" | "pass";
 import type { DialogueState } from "@/store/game-machine";
@@ -37,15 +39,15 @@ function isTurnPromptSystemMessage(content: string) {
 
 // 将消息中的"@X号 玩家名"或"X号"渲染为小标签
 function renderPlayerMentions(text: string, players: Player[], isNight: boolean = false): React.ReactNode {
-  // 匹配 @X号 玩家名 或单独的 X号 模式
-  const regex = /@?(\d{1,2})号(?:\s*([^\s@，。！？,\.!?]+))?/g;
+  // Only match @X号 or X号 pattern, don't consume any text after it
+  // This prevents truncating content that follows the mention
+  const regex = /@?(\d{1,2})号/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
 
   while ((match = regex.exec(text)) !== null) {
     const seatNum = parseInt(match[1], 10);
-    const mentionedName = match[2]; // 可能有玩家名跟在后面
     const player = players.find(p => p.seat + 1 === seatNum);
     
     // 添加匹配前的文本
@@ -121,6 +123,7 @@ interface DialogAreaProps {
   onConfirmAction?: () => void;
   onCancelSelection?: () => void;
   onNightAction?: (seat: number, actionType?: WitchActionType) => void;
+  onBadgeSignup?: (wants: boolean) => void;
   onRestart?: () => void;
 }
 
@@ -228,12 +231,14 @@ export function DialogArea({
   onConfirmAction,
   onCancelSelection,
   onNightAction,
+  onBadgeSignup,
   onRestart,
 }: DialogAreaProps) {
   const phase = gameState.phase;
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+  const lastPortraitPlayerRef = useRef<Player | null>(null);
 
   const isSpeechPhase = gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS";
 
@@ -271,7 +276,21 @@ export function DialogArea({
       };
     }
     return null;
-  }, [currentDialogue, displayedText, visibleMessages, gameState.players]);
+  }, [isHumanTurn, humanPlayer, currentDialogue, displayedText, visibleMessages, gameState.players]);
+
+  const portraitPlayer = useMemo(() => {
+    if (isHumanTurn && humanPlayer) return humanPlayer;
+    if (typeof gameState.currentSpeakerSeat === "number") {
+      return gameState.players.find((p) => p.seat === gameState.currentSpeakerSeat) || null;
+    }
+    return currentSpeaker?.player || null;
+  }, [isHumanTurn, humanPlayer, gameState.currentSpeakerSeat, gameState.players, currentSpeaker?.player?.playerId]);
+
+  useEffect(() => {
+    if (portraitPlayer) lastPortraitPlayerRef.current = portraitPlayer;
+  }, [portraitPlayer?.playerId]);
+
+  const stablePortraitPlayer = portraitPlayer || lastPortraitPlayerRef.current;
 
   // 自动滚动到底部
   useEffect(() => {
@@ -303,96 +322,56 @@ export function DialogArea({
   };
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden min-h-0 justify-center">
-      {/* 上方区域：左侧发言者 + 右侧历史记录 */}
-      <div className="flex-1 flex gap-4 p-4 pb-2 min-h-0 overflow-hidden">
-        {/* 左侧：身份 + 当前发言者 */}
-        <div className="w-[260px] shrink-0 flex flex-col items-center">
-          {/* 身份标识 */}
-          {humanPlayer && (
-            <div className="glass-panel glass-panel--weak shadow-none px-3 py-1.5 rounded-full flex items-center gap-2 text-sm mb-4">
-              <UserCircle size={14} className="opacity-60" />
-              <span className="font-semibold">你是</span>
-              <span className="font-bold text-[var(--color-accent)]">
-                {getRoleName(humanPlayer.role)}
-              </span>
-            </div>
-          )}
-          
-          {/* 当前发言者 - Visual Novel 风格大立绘 */}
-          <div className="flex-1 flex flex-col items-center justify-center">
-          <AnimatePresence mode="wait">
-            {currentSpeaker?.player ? (
+    <div className="h-full w-full flex flex-col min-h-0 justify-start">
+      {/* 上方区域：左侧立绘 + 右侧历史记录 */}
+      <div className="flex-1 min-h-0 w-full -mb-1">
+        <div className="flex gap-4 lg:gap-6 px-4 lg:px-6 pt-2 lg:pt-3 pb-0 min-h-0 h-full items-stretch">
+          {/* 左侧立绘区域 */}
+          <div className="w-[220px] lg:w-[260px] xl:w-[300px] shrink-0 flex flex-col items-center justify-end">
+          <AnimatePresence mode="sync">
+            {stablePortraitPlayer ? (
               <motion.div
-                key={currentSpeaker.player.playerId}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ duration: 0.4, type: "spring" }}
-                className="flex flex-col items-center text-center"
+                key={stablePortraitPlayer.playerId}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="relative flex flex-col items-center"
               >
-                {/* 大头像 + 光晕效果 */}
-                <div className="relative mb-5">
-                  {/* 光晕背景 */}
-                  <div className="absolute inset-0 bg-gradient-to-tr from-[var(--color-accent)]/20 to-transparent rounded-full blur-2xl scale-150 animate-pulse" />
-                  
-                  <div className={`relative w-36 h-36 rounded-full overflow-hidden border-4 shadow-xl ${isNight ? "border-white/20" : "border-white/50"}`}>
-                    <img
-                      src={dicebearUrl(currentSpeaker.player.playerId)}
-                      alt={currentSpeaker.player.displayName}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                    />
-                  </div>
-                  
-                  {/* 座位号标签 */}
-                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-sm font-bold px-3 py-1 rounded shadow-lg glass-panel glass-panel--weak">
-                    {currentSpeaker.player.seat + 1}号
-                  </div>
-                </div>
+                {/* 光晕效果 */}
+                <div className="absolute bottom-[20%] left-1/2 -translate-x-1/2 w-40 h-40 bg-gradient-radial from-[var(--color-accent)]/20 via-transparent to-transparent rounded-full blur-2xl" />
                 
-                {/* 名字 */}
-                <h3 className="text-xl font-black tracking-tight text-[var(--text-primary)] mb-1">
-                  {currentSpeaker.player.displayName}
-                </h3>
-                
-                {/* 发言状态 - 只有当 currentDialogue 为 null 时才显示"发言完毕" */}
-                <p className="text-sm font-medium text-[var(--text-muted)]">
-                  {isHumanTurn
-                    ? "你的回合"
-                    : currentDialogue
-                      ? "发言中..."
-                      : "说完了"}
-                </p>
+                {/* 立绘图片 - 只在字幕播放中时有嘴型动画 */}
+                <TalkingAvatar
+                  seed={stablePortraitPlayer.playerId}
+                  isTalking={isTyping}
+                  alt={stablePortraitPlayer.displayName}
+                  className="relative z-10 w-[220px] lg:w-[260px] xl:w-[300px] h-auto object-contain"
+                  scale={120}
+                  translateY={-5}
+                />
               </motion.div>
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center text-center text-[var(--text-muted)]"
+                animate={{ opacity: 0.3 }}
+                className="flex items-center justify-center h-32"
               >
-                <div className={`w-36 h-36 rounded-full flex items-center justify-center border-4 ${
-                  isNight
-                    ? "bg-[var(--surface-card-dead)] border-[var(--surface-border)]"
-                    : "bg-[var(--bg-secondary)] border-[var(--border-color)]"
-                }`}>
-                  {isNight ? (
-                    <MoonStars size={48} className="opacity-35 text-[var(--text-primary)]" />
-                  ) : (
-                    <ChatCircleDots size={48} className="opacity-30" />
-                  )}
-                </div>
-                <p className="mt-4 text-sm opacity-60 text-[var(--text-secondary)]">等下一位...</p>
+                {isNight ? (
+                  <MoonStars size={64} className="opacity-20 text-[var(--text-primary)]" />
+                ) : (
+                  <ChatCircleDots size={64} className="opacity-15" />
+                )}
               </motion.div>
             )}
           </AnimatePresence>
           </div>
-        </div>
 
-        {/* 右侧：聊天历史记录 */}
-        <div 
-          ref={historyRef}
-          className="flex-1 overflow-y-auto min-w-0 min-h-0"
-        >
+          {/* 右侧：聊天历史记录 */}
+          <div 
+            ref={historyRef}
+            className="flex-1 overflow-y-auto min-w-0 min-h-0 pb-4"
+          >
           {visibleMessages.map((msg, index) => {
             const prevMsg = visibleMessages[index - 1];
             const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
@@ -407,11 +386,12 @@ export function DialogArea({
               />
             );
           })}
+          </div>
         </div>
       </div>
 
-      {/* 下方：Glass Panel 对话框 */}
-      <div className="shrink-0 p-4 pt-0 pb-6">
+      {/* 下方：对话框 - 向上移动 */}
+      <div className="mt-auto shrink-0 px-4 lg:px-6 pb-0 pt-0 mb-[150px]">
         {/* 投票进度 */}
         {(gameState.phase === "DAY_VOTE" || gameState.phase === "DAY_BADGE_ELECTION") && (
           <div className="mb-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3">
@@ -430,15 +410,9 @@ export function DialogArea({
           </div>
         )}
 
-        {/* 对话气泡 - 参考 style-unification-preview.html */}
-        <div 
-          className="wc-panel wc-panel--strong wc-panel--decorated rounded-2xl p-5 relative overflow-hidden"
-        >
-          {/* 装饰性引号 */}
-          <div className="absolute top-3 left-4 text-6xl opacity-[0.03] pointer-events-none select-none font-serif text-[var(--color-gold)]">&ldquo;</div>
-          
-          <div className="relative z-10">
-            <AnimatePresence mode="wait">
+        {/* 对话气泡 - 简化结构，移除嵌套 */}
+        <div className="wc-panel wc-panel--strong rounded-xl p-5 relative">
+          <AnimatePresence mode="wait">
               {/* 游戏结束 - 文字形式 */}
               {phase === "GAME_END" && (
                 <motion.div
@@ -447,7 +421,7 @@ export function DialogArea({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                 >
-                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
+                  <div className="text-xl leading-relaxed text-[var(--text-primary)]">
                     {gameState.winner === "village" ? (
                       <>GG！<span className="text-[var(--color-success)] font-semibold">好人阵营</span>胜利！</>
                     ) : (
@@ -463,6 +437,37 @@ export function DialogArea({
                     >
                       <ArrowClockwise size={14} weight="bold" />
                       再来一局
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* 警徽竞选报名 */}
+              {phase === "DAY_BADGE_SIGNUP" && humanPlayer?.alive && typeof gameState.badge.signup?.[humanPlayer.playerId] !== "boolean" && (
+                <motion.div
+                  key="badge-signup"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
+                    你要竞选警长吗？
+                  </div>
+                  <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                    <button
+                      onClick={() => onBadgeSignup?.(false)}
+                      className="wc-action-btn text-sm h-9 px-4"
+                      type="button"
+                    >
+                      不竞选
+                    </button>
+                    <button
+                      onClick={() => onBadgeSignup?.(true)}
+                      className="wc-action-btn wc-action-btn--primary text-sm h-9 px-4"
+                      type="button"
+                    >
+                      我要竞选
+                      <CaretRight size={14} weight="bold" />
                     </button>
                   </div>
                 </motion.div>
@@ -655,54 +660,47 @@ export function DialogArea({
               )}
 
               {/* 模式1: 人类发言输入 */}
-              {isHumanTurn && phase !== "GAME_END" && (
+              {isHumanTurn && phase !== "GAME_END" && phase !== "DAY_BADGE_SIGNUP" && (
                 <motion.div
                   key="human-input"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="space-y-4"
+                  className="space-y-3"
                 >
-                  <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-                    <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
-                    <span>说点什么吧</span>
-                  </div>
-                  
-                  <div className="wc-action-bar">
-                    <div className="wc-input-box flex-1">
-                      <MentionInput
-                        value={inputText}
-                        onChange={(t) => onInputChange?.(t)}
-                        onSend={() => onSendMessage?.()}
-                        placeholder={gameState.phase === "DAY_LAST_WORDS" ? "有什么想说的？" : "你怎么看？"}
-                        isNight={isNight}
-                        players={gameState.players.filter((p) => p.alive)}
-                      />
+                  <div className="wc-input-box relative" style={{ minHeight: '112px', alignItems: 'flex-start', padding: '14px 16px' }}>
+                    <MentionInput
+                      key={`mention-input-${gameState.phase}-${gameState.currentSpeakerSeat}`}
+                      value={inputText}
+                      onChange={(t) => onInputChange?.(t)}
+                      onSend={() => onSendMessage?.()}
+                      onFinishSpeaking={onFinishSpeaking}
+                      placeholder={gameState.phase === "DAY_LAST_WORDS" ? "有什么想说的？" : "你怎么看？"}
+                      isNight={isNight}
+                      players={gameState.players.filter((p) => p.alive)}
+                    />
+                    
+                    {/* 底部按钮栏 - 在输入框内部右下角 */}
+                    <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                      <button
+                        onClick={onSendMessage}
+                        disabled={!inputText?.trim()}
+                        className="h-8 px-3 rounded text-xs font-medium border border-[var(--color-gold)]/50 text-[var(--color-gold)] bg-transparent hover:bg-[var(--color-gold)]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5"
+                        title="发送"
+                      >
+                        <PaperPlaneTilt size={14} weight="fill" />
+                        Send
+                      </button>
+
+                      <button
+                        onClick={onFinishSpeaking}
+                        className="h-8 px-3 rounded text-xs font-medium bg-[var(--color-gold)] text-[#1a1614] hover:bg-[#d4b06a] transition-all flex items-center gap-1.5"
+                        title="结束发言"
+                      >
+                        <CheckCircle size={14} weight="fill" />
+                        Done
+                      </button>
                     </div>
-
-                    <button
-                      onClick={onSendMessage}
-                      disabled={!inputText?.trim()}
-                      className="wc-action-btn disabled:opacity-40 disabled:cursor-not-allowed"
-                      title="发送"
-                    >
-                      <PaperPlaneTilt size={16} weight="fill" />
-                      Send
-                    </button>
-
-                    <button
-                      onClick={onFinishSpeaking}
-                      className="wc-action-btn wc-action-btn--primary"
-                      title="结束发言"
-                    >
-                      <CheckCircle size={16} weight="fill" />
-                      Done
-                    </button>
-                  </div>
-                  
-                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
-                    <span>Enter 发送</span>
-                    <span>说完了点 ✓</span>
                   </div>
                 </motion.div>
               )}
@@ -717,14 +715,21 @@ export function DialogArea({
                   className="cursor-pointer"
                   onClick={onAdvanceDialogue}
                 >
-                  {/* 对话内容 - 带玩家标签，增大字体 */}
-                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                    {renderPlayerMentions(
-                      displayedText || currentSpeaker?.text || (waitingForNextRound ? "轻触继续，轮到下一位" : "..."),
-                      gameState.players,
-                      isNight
+                    {currentSpeaker?.player && (
+                      <div className="text-base font-bold text-[var(--color-gold)] mb-2 font-serif tracking-wide">
+                        {currentSpeaker.player.displayName}
+                      </div>
                     )}
-                  </div>
+                    
+                    {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}
+                    <div className="text-xl leading-relaxed text-[var(--text-primary)]">
+                      {renderPlayerMentions(
+                        displayedText || currentSpeaker?.text || (waitingForNextRound ? "轻触继续，轮到下一位" : "..."),
+                        gameState.players,
+                        isNight
+                      )}
+                      {isTyping && <span className="wc-typing-cursor"></span>}
+                    </div>
                   
                   {/* 底部信息栏 */}
                   <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
@@ -764,7 +769,6 @@ export function DialogArea({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
         </div>
       </div>
     </div>
@@ -801,24 +805,36 @@ function ChatMessageItem({
 
   return (
     <>
-      {showDivider && <div className="w-full h-px bg-[var(--border-color)]/50 my-3" />}
-      <div className={`flex items-start gap-2.5 py-2 ${isHuman ? 'flex-row-reverse' : ''}`}>
-        <div className={`w-9 h-9 rounded-full overflow-hidden shrink-0 border shadow-sm ${isNight ? "border-white/20" : "border-white/50"}`}>
-          <img src={dicebearUrl(msg.playerId)} alt={msg.playerName} className="w-full h-full" />
+      {/* 不同用户之间的分割线 */}
+      {showDivider && (
+        <div className={cn(
+          "my-4 border-t",
+          isNight ? "border-white/10" : "border-black/8"
+        )} />
+      )}
+      <div className={cn(
+        "wc-history-item flex items-start gap-3",
+        isHuman && "wc-history-item--highlight flex-row-reverse",
+        showDivider ? "mt-3" : "mt-2"
+      )}>
+        <div className={cn(
+          "w-8 h-8 rounded-full overflow-hidden shrink-0 border shadow-sm",
+          isNight ? "border-white/20" : "border-[var(--border-color)]"
+        )}>
+          <img src={dicebearUrl(msg.playerId)} alt={msg.playerName} className="w-full h-full object-cover" />
         </div>
-        <div className={`flex-1 min-w-0 ${isHuman ? 'text-right' : ''}`}>
-          <div className={`flex items-center gap-1.5 mb-1 text-xs ${isHuman ? 'justify-end' : ''}`}>
+        
+        <div className={cn("flex-1 min-w-0", isHuman && "text-right")}>
+          <div className={cn("flex items-center gap-2 mb-1 text-xs opacity-70", isHuman && "justify-end")}>
             {player && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded border font-bold bg-[var(--glass-bg-weak)] border-[var(--glass-border)] text-[var(--text-secondary)]"
-              >
+              <span className="wc-seat-badge">
                 {player.seat + 1}号
               </span>
             )}
-            <span className="font-medium text-[var(--text-primary)]">{msg.playerName}</span>
-            {isHuman && <span className="text-[9px] font-bold bg-[var(--badge-bg)] text-[var(--badge-text)] px-1.5 py-0.5 rounded">YOU</span>}
+            <span className="font-serif font-bold text-[var(--text-primary)]">{msg.playerName}</span>
           </div>
-          <div className={`inline-block max-w-full px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${isHuman ? 'bg-[var(--color-accent)] text-white rounded-tr-none' : 'bg-[var(--chat-bubble-bg)] text-[var(--chat-bubble-text)] border border-[var(--chat-bubble-border)] rounded-tl-none'}`}>
+          
+          <div className="text-base leading-relaxed text-[var(--text-primary)] break-words">
             {renderPlayerMentions(msg.content, players, isNight)}
           </div>
         </div>

@@ -164,6 +164,14 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     canSelectPlayer: () => false,
     actionType: "none",
   },
+  DAY_BADGE_SIGNUP: {
+    phase: "DAY_BADGE_SIGNUP",
+    description: "警徽竞选报名",
+    humanDescription: (hp, gs) => hp?.alive && typeof gs.badge.signup?.[hp.playerId] !== "boolean" ? "是否竞选警长" : "警徽竞选报名",
+    requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.badge.signup?.[hp.playerId] !== "boolean" || false,
+    canSelectPlayer: () => false,
+    actionType: "special",
+  },
   DAY_BADGE_SPEECH: {
     phase: "DAY_BADGE_SPEECH",
     description: "警徽竞选发言",
@@ -181,6 +189,8 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
       if (!hp?.alive || !target.alive) return false;
       if (target.isHuman) return false;
       if (typeof gs.badge.votes[hp.playerId] === "number") return false;
+      const candidates = gs.badge.candidates || [];
+      if (candidates.length > 0 && !candidates.includes(target.seat)) return false;
       return true;
     },
     actionType: "vote",
@@ -358,7 +368,8 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   NIGHT_RESOLVE: ["DAY_START", "HUNTER_SHOOT", "GAME_END"],
   
   // 白天流程: 开始 -> 发言 -> 投票 -> 结算
-  DAY_START: ["DAY_BADGE_SPEECH", "DAY_SPEECH"],
+  DAY_START: ["DAY_BADGE_SIGNUP", "DAY_SPEECH"],
+  DAY_BADGE_SIGNUP: ["DAY_BADGE_SPEECH", "DAY_SPEECH"],
   DAY_BADGE_SPEECH: ["DAY_BADGE_ELECTION"],
   DAY_BADGE_ELECTION: ["DAY_SPEECH"],
   DAY_SPEECH: ["DAY_VOTE"],

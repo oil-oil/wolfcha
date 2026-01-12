@@ -418,9 +418,10 @@ ${selfSpeech ? `【你本日已说过的话】\n"${selfSpeech}"` : "【你本日
 export const BADGE_ELECTION_PROMPT = (state: GameState, player: Player) => {
   const context = buildGameContext(state, player);
   const persona = buildPersonaSection(player);
-  const alivePlayers = state.players.filter(
-    (p) => p.alive && p.playerId !== player.playerId
-  );
+  const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
+  const alivePlayers = state.players
+    .filter((p) => p.alive && p.playerId !== player.playerId)
+    .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
 
   const todayTranscript = buildTodayTranscript(state, 8000);
   const selfSpeech = buildPlayerTodaySpeech(state, player, 900);
@@ -618,7 +619,7 @@ export const SYSTEM_MESSAGES = {
   peacefulNight: "昨晚平安无事",
   playerKilled: (seat: number, name: string) => `${seat}号 ${name} 昨晚出局`,
   playerPoisoned: (seat: number, name: string) => `${seat}号 ${name} 昨晚中毒出局`,
-  badgeSpeechStart: "警徽竞选开始，请各位玩家依次发言",
+  badgeSpeechStart: "警徽竞选开始，请候选人依次发言",
   badgeElectionStart: "开始警徽评选",
   badgeRevote: "警徽平票，重新投票",
   badgeElected: (seat: number, name: string, votes: number) => `警徽授予 ${seat}号 ${name}（${votes}票）`,
@@ -642,17 +643,17 @@ export const SYSTEM_MESSAGES = {
 
 export const UI_TEXT = {
   waitingSeer: "选择一名玩家进行查验",
-  seerChecking: "预言家正在查验…",
+  seerChecking: "预言家正在选择要查验的对象…",
   waitingWolf: "选择要击杀的目标",
-  wolfActing: "狼人正在商量…",
-  wolfCoordinating: "等待队友选择…",
+  wolfActing: "狼人正在商量要击杀的目标…",
+  wolfCoordinating: "等待狼队友选择击杀目标…",
   waitingWitch: "选择是否用药",
-  witchActing: "女巫正在思考…",
+  witchActing: "女巫正在决定是否使用药水…",
   waitingGuard: "选择一名玩家进行守护",
-  guardActing: "守卫正在选择…",
+  guardActing: "守卫正在选择要守护的对象…",
   badgeVotePrompt: "点击头像投票选警徽",
   hunterShoot: "点选目标，扣下最后一枪",
-  hunterAiming: "猎人正在瞄准…",
+  hunterAiming: "猎人正在选择要带走的目标…",
   yourTurn: "轮到你了，开始发言吧",
   votePrompt: "点击头像投票",
   clickToVote: "点击头像投票",

@@ -6,42 +6,45 @@
   --color-blood-light: #b93636;
   --color-gold: #c5a059;
   --color-gold-dim: #8c7335;
+  --color-gold-dark: #6e5626;
   --paper: #f0e6d2;
   --paper-dim: #e6dac0;
 
-  /* 背景色 */
-  --bg-main: #fdfcf9;
-  --bg-secondary: #f7f4ed;
+  /* 背景色 - 白天更精致的纸张/羊皮纸质感 */
+  --bg-main: #f5f0e6;
+  --bg-day-main: #f5f0e6;
+  --bg-secondary: #ede6d6;
   --bg-card: #ffffff;
   --bg-dark: #1a1614;
   --bg-dark-secondary: #2c241b;
-  --bg-hover: #f0ebe0;
-  --bg-selected: #faf3e0;
+  --bg-hover: #e8dfcc;
+  --bg-selected: #fcfbf9;
 
-  /* 渐变背景 */
-  --bg-day-from: #fbf6ee;
-  --bg-day-via: #efe7d7;
-  --bg-day-to: #e8edf3;
+  /* 渐变背景 - 白天 (暖色调) */
+  --bg-day-from: #fdfbf7;
+  --bg-day-via: #f2ebe0;
+  --bg-day-to: #e6ded1;
+  
   --bg-night-from: #1a1614;
   --bg-night-via: #14100e;
   --bg-night-to: #0d0a08;
   
-  /* 文字颜色 - 白天高对比度 */
-  --text-primary: #2c1810;
-  --text-secondary: #5c4a3d;
-  --text-muted: #8b7355;
+  /* 文字颜色 - 白天高对比度，使用深棕色代替纯黑 */
+  --text-primary: #3d2e24;
+  --text-secondary: #6e5948;
+  --text-muted: #9c8570;
   --text-inverse: #f0e6d2;
   
   /* 角色主题色 */
   --color-wolf: #8a1c1c;
   --color-wolf-bg: #f5e6e6;
-  --color-seer: #4a90e2;
+  --color-seer: #2c5282; /* 白天用深蓝 */
   --color-seer-bg: #e6f0f8;
-  --color-witch: #9b59b6;
+  --color-witch: #6b46c1; /* 白天用深紫 */
   --color-witch-bg: #f3e6f8;
-  --color-hunter: #d35400;
+  --color-hunter: #c05621; /* 白天用深橙 */
   --color-hunter-bg: #fdf2e6;
-  --color-guard: #27ae60;
+  --color-guard: #276749; /* 白天用深绿 */
   --color-guard-bg: #e6f5ed;
   --color-villager: #5c4a3d;
   --color-villager-bg: #ebe4d4;
@@ -50,58 +53,58 @@
   --color-accent: #c5a059;
   --color-accent-light: #d4b06a;
   --color-accent-dark: #8c7335;
-  --color-accent-bg: rgba(197, 160, 89, 0.15);
-  --color-success: #27ae60;
-  --color-success-bg: #e6f5ed;
-  --color-warning: #d35400;
-  --color-warning-bg: #fdf2e6;
-  --color-danger: #8a1c1c;
-  --color-danger-bg: #f5e6e6;
+  --color-accent-bg: rgba(197, 160, 89, 0.12);
+  --color-success: #2f855a;
+  --color-success-bg: #f0fff4;
+  --color-warning: #c05621;
+  --color-warning-bg: #fffaf0;
+  --color-danger: #9b2c2c;
+  --color-danger-bg: #fff5f5;
   
   /* 边框 */
-  --border-color: #d4c4a8;
+  --border-color: rgba(140, 115, 53, 0.25);
   --border-focus: #c5a059;
   --border-dark: #8b7355;
   
-  /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  /* 阴影 - 白天更柔和 */
+  --shadow-sm: 0 1px 2px rgba(61, 46, 36, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(61, 46, 36, 0.1);
 
-  /* 玻璃面板 - 白天 */
-  --glass-bg: rgba(255, 255, 255, 0.70);
-  --glass-bg-weak: rgba(255, 255, 255, 0.55);
-  --glass-bg-strong: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(44, 24, 16, 0.10);
-  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  --glass-shadow-strong: 0 16px 50px rgba(0, 0, 0, 0.18);
-  --glass-blur: 12px;
-  --glass-blur-weak: 8px;
-  --glass-blur-strong: 16px;
+  /* 玻璃面板 - 白天 (更通透，带一点暖色) */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-bg-weak: rgba(255, 255, 255, 0.60);
+  --glass-bg-strong: rgba(255, 255, 255, 0.90);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 8px 32px rgba(61, 46, 36, 0.08);
+  --glass-shadow-strong: 0 12px 48px rgba(61, 46, 36, 0.12);
+  --glass-blur: 16px;
+  --glass-blur-weak: 10px;
+  --glass-blur-strong: 24px;
 
   /* 顶部栏 */
-  --topbar-bg: rgba(255, 255, 255, 0.70);
-  --topbar-border: rgba(197, 160, 89, 0.25);
+  --topbar-bg: rgba(255, 255, 255, 0.85);
+  --topbar-border: rgba(197, 160, 89, 0.3);
   --topbar-text: var(--text-primary);
 
   /* 卡片表面 */
   --surface-card: rgba(255, 255, 255, 0.85);
-  --surface-card-dead: rgba(247, 244, 237, 0.80);
-  --surface-border: rgba(44, 24, 16, 0.08);
-  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.10);
-  --shadow-card-hover: 0 10px 26px rgba(0, 0, 0, 0.14);
+  --surface-card-dead: rgba(240, 240, 240, 0.80);
+  --surface-border: rgba(197, 160, 89, 0.25);
+  --shadow-card: 0 4px 12px rgba(61, 46, 36, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(197, 160, 89, 0.15);
 
   /* 聊天气泡 */
-  --chat-bubble-bg: rgba(255, 255, 255, 0.92);
+  --chat-bubble-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(252, 250, 245, 0.98));
   --chat-bubble-text: var(--text-primary);
-  --chat-bubble-border: rgba(197, 160, 89, 0.30);
+  --chat-bubble-border: rgba(197, 160, 89, 0.3);
 
   /* 徽章 */
   --badge-bg: rgba(197, 160, 89, 0.15);
-  --badge-text: var(--color-accent-dark);
+  --badge-text: var(--color-gold-dark);
 
   /* 玩家卡片渐变 - 白天 */
-  --card-gradient-from: rgba(255, 255, 255, 0.9);
-  --card-gradient-to: rgba(250, 247, 240, 0.95);
+  --card-gradient-from: rgba(255, 255, 255, 0.95);
+  --card-gradient-to: rgba(248, 245, 238, 0.98);
 }
 
 /* ========== 夜晚主题 (参考 style-unification-preview.html) ========== */
@@ -622,8 +625,9 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  border-bottom: 1px solid var(--glass-border);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.65));
+  border-bottom: 1px solid var(--topbar-border);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  backdrop-filter: blur(10px);
 }
 
 [data-theme="dark"] .wc-topbar {
@@ -658,11 +662,11 @@ body {
 
 /* 阶段徽章 - 严格对齐HTML */
 .wc-phase-badge {
-  background: rgba(197, 160, 89, 0.15);
+  background: var(--badge-bg);
   border: 1px solid rgba(197, 160, 89, 0.3);
   padding: 4px 12px;
   border-radius: 4px;
-  color: var(--color-gold);
+  color: var(--color-gold-dark);
   font-weight: bold;
   display: flex;
   align-items: center;
@@ -671,44 +675,60 @@ body {
   letter-spacing: 0.05em;
 }
 
+[data-theme="dark"] .wc-phase-badge {
+  color: var(--color-gold);
+}
+
 /* ========== 玩家卡片样式 (严格对齐 style-unification-preview.html) ========== */
 .wc-player-card {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(250, 247, 240, 0.95));
-  border: 1px solid rgba(44, 24, 16, 0.08);
+  background: linear-gradient(145deg, var(--card-gradient-from), var(--card-gradient-to));
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
-  padding: 10px;
+  padding: 12px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   gap: 12px;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 [data-theme="dark"] .wc-player-card {
   background: linear-gradient(145deg, rgba(40, 35, 33, 0.8), rgba(30, 25, 23, 0.9));
   border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
 }
 
 .wc-player-card:hover {
   transform: translateX(4px);
-  border-color: rgba(197, 160, 89, 0.3);
+  border-color: var(--color-gold);
+  background: linear-gradient(145deg, #fff, #f8f5ed);
+  box-shadow: var(--shadow-card-hover);
 }
 
 [data-theme="dark"] .wc-player-card:hover {
   background: linear-gradient(145deg, rgba(50, 45, 43, 0.9), rgba(40, 35, 33, 0.95));
+  border-color: rgba(197, 160, 89, 0.3);
 }
 
 .wc-player-card--me {
   border-left: 3px solid var(--color-gold);
-  background: linear-gradient(90deg, rgba(197, 160, 89, 0.1), transparent);
+  background: linear-gradient(90deg, rgba(197, 160, 89, 0.08), transparent);
 }
 
 .wc-player-card--speaking {
   border-color: var(--color-gold);
-  box-shadow: 0 0 15px rgba(197, 160, 89, 0.15);
+  box-shadow: 0 0 15px rgba(197, 160, 89, 0.25);
   animation: wc-pulse-border 2s infinite;
+  background: linear-gradient(145deg, #fff, #fdfbf5);
+}
+
+[data-theme="dark"] .wc-player-card--speaking {
+  box-shadow: 0 0 15px rgba(197, 160, 89, 0.15);
+  background: transparent;
 }
 
 .wc-player-card--speaking .wc-player-card__avatar {
@@ -716,19 +736,28 @@ body {
 }
 
 .wc-player-card--speaking .wc-player-card__name {
+  color: var(--color-gold-dark);
+}
+
+[data-theme="dark"] .wc-player-card--speaking .wc-player-card__name {
   color: var(--color-gold);
 }
 
 .wc-player-card--dead {
+  filter: grayscale(1) brightness(0.9);
+  opacity: 0.6;
+}
+
+[data-theme="dark"] .wc-player-card--dead {
   filter: grayscale(1) brightness(0.5);
   opacity: 0.7;
 }
 
 .wc-player-card__avatar {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(197, 160, 89, 0.3);
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
@@ -758,12 +787,16 @@ body {
 }
 
 .wc-player-card--speaking .wc-player-card__meta {
+  color: var(--color-gold-dark);
+}
+
+[data-theme="dark"] .wc-player-card--speaking .wc-player-card__meta {
   color: var(--color-gold);
 }
 
 /* 座位徽章 - 严格对齐HTML */
 .wc-seat-badge {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.08);
   padding: 1px 5px;
   border-radius: 2px;
   font-family: 'Cinzel', serif;
@@ -779,6 +812,10 @@ body {
 
 .wc-player-card--speaking .wc-seat-badge {
   background: var(--color-gold);
+  color: #fff;
+}
+
+[data-theme="dark"] .wc-player-card--speaking .wc-seat-badge {
   color: #1a1614;
 }
 
@@ -802,13 +839,13 @@ body {
 
 /* 对话气泡 - 严格对齐HTML */
 .wc-speaker-bubble {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(197, 160, 89, 0.2);
+  background: var(--chat-bubble-bg);
+  border: 1px solid var(--chat-bubble-border);
   border-radius: 0 12px 12px 12px;
   padding: 20px 24px;
   max-width: 600px;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(197, 160, 89, 0.08);
 }
 
 [data-theme="dark"] .wc-speaker-bubble {
@@ -841,23 +878,24 @@ body {
   margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.03);
   border-left: 2px solid transparent;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 
 [data-theme="dark"] .wc-history-item {
-  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .wc-history-item--highlight {
-  background: rgba(197, 160, 89, 0.05);
+  background: rgba(197, 160, 89, 0.1);
   border-left-color: var(--color-gold);
   color: var(--text-primary);
 }
 
 [data-theme="dark"] .wc-history-item--highlight {
+  background: rgba(197, 160, 89, 0.05);
   color: rgba(255, 255, 255, 0.85);
 }
 
@@ -876,8 +914,8 @@ body {
 .wc-input-box {
   flex: 1;
   height: 50px;
-  background: rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(197, 160, 89, 0.3);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -885,6 +923,7 @@ body {
   color: var(--text-primary);
   font-family: 'Noto Serif SC', serif;
   transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
 }
 
 [data-theme="dark"] .wc-input-box {
@@ -894,7 +933,8 @@ body {
 
 .wc-input-box:focus-within {
   border-color: var(--color-gold);
-  box-shadow: 0 0 10px rgba(197, 160, 89, 0.1);
+  box-shadow: 0 0 15px rgba(197, 160, 89, 0.2);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 [data-theme="dark"] .wc-input-box:focus-within {
@@ -908,7 +948,7 @@ body {
   color: inherit;
   font-family: inherit;
   outline: none;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .wc-input-field::placeholder {

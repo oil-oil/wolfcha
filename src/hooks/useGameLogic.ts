@@ -52,6 +52,7 @@ export function useGameLogic() {
   const logRef = useRef<HTMLDivElement>(null);
   const pendingStartStateRef = useRef<GameState | null>(null);
   const hasContinuedAfterRevealRef = useRef(false);
+  const isAwaitingRoleRevealRef = useRef(false);
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const nightContinueRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const gameStateRef = useRef<GameState>(gameState);
@@ -91,8 +92,11 @@ export function useGameLogic() {
     if (isResolvingVotesRef.current) return;
     if (state.phase !== "DAY_BADGE_ELECTION") return;
 
-    const aliveIds = state.players.filter((p) => p.alive).map((p) => p.playerId);
-    const allVoted = aliveIds.every((id) => typeof state.badge.votes[id] === "number");
+    // Candidates don't vote - only non-candidates need to vote
+    const candidates = state.badge.candidates || [];
+    const voters = state.players.filter((p) => p.alive && !candidates.includes(p.seat));
+    const voterIds = voters.map((p) => p.playerId);
+    const allVoted = voterIds.every((id) => typeof state.badge.votes[id] === "number");
     if (!allVoted) return;
 
     isResolvingVotesRef.current = true;
@@ -265,6 +269,7 @@ export function useGameLogic() {
     setShowTable(false);
     pendingStartStateRef.current = null;
     hasContinuedAfterRevealRef.current = false;
+    isAwaitingRoleRevealRef.current = false;
     badgeSpeechEndRef.current = null;
     if (showTableTimeoutRef.current !== null) {
       window.clearTimeout(showTableTimeoutRef.current);
@@ -295,6 +300,7 @@ export function useGameLogic() {
 
       pendingStartStateRef.current = newState;
       hasContinuedAfterRevealRef.current = false;
+      isAwaitingRoleRevealRef.current = true;
     } catch (error) {
       const msg = String(error);
       if (msg.includes("OpenRouter API error: 401")) {
@@ -343,6 +349,7 @@ export function useGameLogic() {
 
   // 夜晚阶段 - 新流程: 守卫 -> 狼人 -> 女巫 -> 预言家
   const runNightPhase = useCallback(async (state: GameState) => {
+    if (isAwaitingRoleRevealRef.current) return;
     let currentState = state;
 
     // === 守卫行动 ===
@@ -503,97 +510,54 @@ export function useGameLogic() {
   }, [apiKey]);
 
   // 结算夜晚 - 考虑守卫保护和女巫药水
+  // 标准流程：第一天先进行警长竞选，竞选结束后再公布死讯
   const resolveNight = useCallback(async (state: GameState) => {
     let currentState = transitionPhase(state, "NIGHT_RESOLVE");
     setGameState(currentState);
 
     const { wolfTarget, guardTarget, witchSave, witchPoison } = currentState.nightActions;
     let wolfKillSuccessful = false;
-    let wolfVictim: Player | undefined;
+    let wolfVictimSeat: number | undefined;
+    let poisonVictimSeat: number | undefined;
 
-    let shouldAnnouncePeacefulNight = true;
-
-    // 狼人击杀判定
+    // 狼人击杀判定（先不公布，只记录）
     if (wolfTarget !== undefined) {
       const isProtected = guardTarget === wolfTarget;
       const isSaved = witchSave === true;
 
       if (!isProtected && !isSaved) {
-        // 被杀成功
         wolfKillSuccessful = true;
-        shouldAnnouncePeacefulNight = false;
-        currentState = killPlayer(currentState, wolfTarget);
-        wolfVictim = currentState.players.find((p) => p.seat === wolfTarget);
-        
-        // 被狼杀的猎人不能开枪（正常死亡可以）
-        // 但如果是被毒死的猎人则不能开枪
-        if (wolfVictim) {
-          currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName));
-          setDialogue("主持人", SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName), false);
-        }
+        wolfVictimSeat = wolfTarget;
       }
     }
 
-    // 女巫毒杀判定
-    let poisonVictim: Player | undefined;
+    // 女巫毒杀判定（先不公布，只记录）
     if (witchPoison !== undefined) {
-      shouldAnnouncePeacefulNight = false;
-      currentState = killPlayer(currentState, witchPoison);
-      poisonVictim = currentState.players.find((p) => p.seat === witchPoison);
-      
-      if (poisonVictim) {
-        // 被毒死的猎人不能开枪
-        currentState = {
-          ...currentState,
-          roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: poisonVictim.role !== "Hunter" || currentState.roleAbilities.hunterCanShoot },
-        };
-        if (poisonVictim.role === "Hunter") {
-          currentState = {
-            ...currentState,
-            roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: false },
-          };
-        }
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName));
-        setDialogue("主持人", SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName), false);
-      }
+      poisonVictimSeat = witchPoison;
     }
 
-    if (shouldAnnouncePeacefulNight) {
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.peacefulNight);
-      setDialogue("主持人", SYSTEM_MESSAGES.peacefulNight, false);
-    }
-
-    // 更新守卫的上一晚保护记录
+    // 更新守卫的上一晚保护记录，并存储待公布的死亡信息
     currentState = {
       ...currentState,
       nightActions: {
         ...currentState.nightActions,
         lastGuardTarget: guardTarget,
+        pendingWolfVictim: wolfKillSuccessful ? wolfVictimSeat : undefined,
+        pendingPoisonVictim: poisonVictimSeat,
       },
     };
 
     setGameState(currentState);
 
-    // 检查猎人开枪（被狼杀死的猎人可以开枪，被毒死的不行）
-    if (wolfKillSuccessful && wolfVictim?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
-      await handleHunterDeath(currentState, wolfVictim);
-      return;
-    }
-
-    const winner = checkWinCondition(currentState);
-    if (winner) {
-      await endGame(currentState, winner);
-      return;
-    }
-
     await delay(1200);
     currentState = transitionPhase(currentState, "DAY_START");
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
     setGameState(currentState);
+    setDialogue("主持人", SYSTEM_MESSAGES.dayBreak, false);
 
     await delay(800);
     await startDayPhase(currentState);
-  }, []);
+  }, [])
 
   // 处理猎人死亡开枪
   // diedAtNight: true = 夜晚被杀，开枪后进入白天; false = 白天被处决，开枪后进入夜晚
@@ -684,19 +648,168 @@ export function useGameLogic() {
     }
   }, [apiKey]);
 
-  // 白天阶段
-  const startDayPhase = useCallback(async (state: GameState) => {
-    // 第一天：先进行警徽评选
-    if (state.day === 1 && state.badge.holderSeat === null) {
-      await startBadgeSpeechPhase(state);
+  const maybeStartBadgeSpeechAfterSignup = async (state: GameState) => {
+    const alivePlayers = state.players.filter((p) => p.alive);
+    const signup = state.badge.signup || {};
+    const allDecided = alivePlayers.every((p) => typeof signup[p.playerId] === "boolean");
+    if (!allDecided) return;
+
+    const candidates = alivePlayers
+      .filter((p) => signup[p.playerId] === true)
+      .map((p) => p.seat);
+
+    if (candidates.length === 0) {
+      let nextState = addSystemMessage(state, "无人报名竞选警长，跳过警徽竞选");
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+      setDialogue("主持人", "无人报名竞选警长，跳过警徽竞选", false);
+      await delay(900);
+      await startDaySpeechAfterBadge(nextState);
       return;
     }
 
+    await startBadgeSpeechPhase({
+      ...state,
+      badge: { ...state.badge, candidates },
+    });
+  };
+
+  const startBadgeSignupPhase = useCallback(async (state: GameState) => {
+    let currentState = transitionPhase(state, "DAY_BADGE_SIGNUP");
+    currentState = {
+      ...currentState,
+      currentSpeakerSeat: null,
+      daySpeechStartSeat: null,
+      badge: {
+        ...currentState.badge,
+        signup: {},
+        candidates: [],
+      },
+    };
+
+    currentState = addSystemMessage(currentState, "进入警徽竞选报名环节");
+    setGameState(currentState);
+    // 不设置 dialogue，因为 DialogArea 中有专门的警长竞选报名面板
+    clearDialogue();
+    gameStateRef.current = currentState;
+
+    const alivePlayers = currentState.players.filter((p) => p.alive);
+    const aiPlayers = alivePlayers.filter((p) => !p.isHuman);
+    for (const ai of aiPlayers) {
+      if (gameStateRef.current.phase !== "DAY_BADGE_SIGNUP") break;
+      const bias = ai.agentProfile?.persona?.riskBias;
+      const roll = Math.random();
+      const wants = bias === "aggressive" ? roll < 0.55 : bias === "safe" ? roll < 0.18 : roll < 0.35;
+
+      const nextState: GameState = {
+        ...gameStateRef.current,
+        badge: {
+          ...gameStateRef.current.badge,
+          signup: { ...gameStateRef.current.badge.signup, [ai.playerId]: wants },
+        },
+      };
+      setGameState(nextState);
+      gameStateRef.current = nextState;
+    }
+
+    const human = alivePlayers.find((p) => p.isHuman);
+    if (!human) {
+      await maybeStartBadgeSpeechAfterSignup(gameStateRef.current);
+      return;
+    }
+
+    await maybeStartBadgeSpeechAfterSignup(gameStateRef.current);
+  }, [transitionPhase]);
+
+  // 白天阶段
+  // 标准流程：第一天先进行警长竞选，竞选结束后再公布死讯
+  const startDayPhase = useCallback(async (state: GameState) => {
+    // 第一天：先进行警徽评选（死讯在竞选结束后公布）
+    if (state.day === 1 && state.badge.holderSeat === null) {
+      await startBadgeSignupPhase(state);
+      return;
+    }
+
+    // 非第一天：直接进入讨论（会先公布死讯）
     await startDaySpeechAfterBadge(state);
   }, []);
 
   const startDaySpeechAfterBadge = useCallback(async (state: GameState) => {
-    let currentState = transitionPhase(state, "DAY_SPEECH");
+    let currentState = state;
+
+    // 警长竞选结束后，公布昨晚死讯
+    const { pendingWolfVictim, pendingPoisonVictim } = currentState.nightActions;
+    let hasDeaths = false;
+    let wolfVictim: Player | undefined;
+    let poisonVictim: Player | undefined;
+
+    // 处理狼人击杀
+    if (pendingWolfVictim !== undefined) {
+      hasDeaths = true;
+      currentState = killPlayer(currentState, pendingWolfVictim);
+      wolfVictim = currentState.players.find((p) => p.seat === pendingWolfVictim);
+      if (wolfVictim) {
+        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName));
+        setDialogue("主持人", SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName), false);
+        setGameState(currentState);
+        await delay(1200);
+      }
+    }
+
+    // 处理女巫毒杀
+    if (pendingPoisonVictim !== undefined) {
+      hasDeaths = true;
+      currentState = killPlayer(currentState, pendingPoisonVictim);
+      poisonVictim = currentState.players.find((p) => p.seat === pendingPoisonVictim);
+      if (poisonVictim) {
+        // 被毒死的猎人不能开枪
+        if (poisonVictim.role === "Hunter") {
+          currentState = {
+            ...currentState,
+            roleAbilities: { ...currentState.roleAbilities, hunterCanShoot: false },
+          };
+        }
+        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName));
+        setDialogue("主持人", SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName), false);
+        setGameState(currentState);
+        await delay(1200);
+      }
+    }
+
+    // 如果没有死亡，宣布平安夜
+    if (!hasDeaths) {
+      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.peacefulNight);
+      setDialogue("主持人", SYSTEM_MESSAGES.peacefulNight, false);
+      setGameState(currentState);
+      await delay(1000);
+    }
+
+    // 清除待公布的死亡信息
+    currentState = {
+      ...currentState,
+      nightActions: {
+        ...currentState.nightActions,
+        pendingWolfVictim: undefined,
+        pendingPoisonVictim: undefined,
+      },
+    };
+    setGameState(currentState);
+
+    // 检查猎人开枪（被狼杀死的猎人可以开枪，被毒死的不行）
+    if (wolfVictim?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+      await handleHunterDeath(currentState, wolfVictim, true);
+      return;
+    }
+
+    // 检查胜负
+    const winner = checkWinCondition(currentState);
+    if (winner) {
+      await endGame(currentState, winner);
+      return;
+    }
+
+    // 进入讨论阶段
+    currentState = transitionPhase(currentState, "DAY_SPEECH");
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayDiscussion);
 
     const alivePlayers = currentState.players.filter((p) => p.alive);
@@ -720,6 +833,25 @@ export function useGameLogic() {
     }
   }, [runAISpeech]);
 
+  const handleBadgeSignup = useCallback(async (wants: boolean) => {
+    const state = gameStateRef.current;
+    if (state.phase !== "DAY_BADGE_SIGNUP") return;
+    const human = state.players.find((p) => p.isHuman);
+    if (!human?.alive) return;
+    if (typeof state.badge.signup?.[human.playerId] === "boolean") return;
+
+    const nextState: GameState = {
+      ...state,
+      badge: {
+        ...state.badge,
+        signup: { ...state.badge.signup, [human.playerId]: wants },
+      },
+    };
+    setGameState(nextState);
+    gameStateRef.current = nextState;
+    await maybeStartBadgeSpeechAfterSignup(nextState);
+  }, []);
+
   const startBadgeSpeechPhase = useCallback(async (state: GameState) => {
     let currentState = transitionPhase(state, "DAY_BADGE_SPEECH");
     currentState = { ...currentState, currentSpeakerSeat: null, daySpeechStartSeat: null };
@@ -727,12 +859,13 @@ export function useGameLogic() {
     currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeSpeechStart);
     setDialogue("主持人", SYSTEM_MESSAGES.badgeSpeechStart, false);
 
-    const alivePlayers = currentState.players.filter((p) => p.alive);
-    const startSeat = alivePlayers.length > 0
-      ? alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat
+    const candidates = currentState.badge.candidates || [];
+    const candidatePlayers = currentState.players.filter((p) => p.alive && candidates.includes(p.seat));
+    const startSeat = candidatePlayers.length > 0
+      ? candidatePlayers[Math.floor(Math.random() * candidatePlayers.length)].seat
       : null;
     const firstSpeaker = startSeat !== null
-      ? alivePlayers.find((p) => p.seat === startSeat) || null
+      ? candidatePlayers.find((p) => p.seat === startSeat) || null
       : null;
 
     currentState = {
@@ -779,12 +912,19 @@ export function useGameLogic() {
     setGameState(currentState);
     gameStateRef.current = currentState;
 
-    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
+    // Candidates don't vote - only non-candidates vote
+    const candidates = currentState.badge.candidates || [];
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !candidates.includes(p.seat));
     for (const aiPlayer of aiPlayers) {
       if (gameStateRef.current.phase !== "DAY_BADGE_ELECTION") break;
       setIsWaitingForAI(true);
       const latestState = gameStateRef.current;
-      const targetSeat = await generateAIBadgeVote(apiKey!, latestState, aiPlayer);
+      let targetSeat = await generateAIBadgeVote(apiKey!, latestState, aiPlayer);
+
+      const candidates = latestState.badge.candidates || [];
+      if (candidates.length > 0 && !candidates.includes(targetSeat)) {
+        targetSeat = candidates[Math.floor(Math.random() * candidates.length)];
+      }
 
       if (gameStateRef.current.phase !== "DAY_BADGE_ELECTION") break;
       const nextState: GameState = {
@@ -800,8 +940,10 @@ export function useGameLogic() {
     }
     setIsWaitingForAI(false);
 
+    // If human is not alive or is a candidate (candidates don't vote), resolve immediately
     const human = currentState.players.find((p) => p.isHuman);
-    if (!human?.alive) {
+    const humanIsCandidate = human && candidates.includes(human.seat);
+    if (!human?.alive || humanIsCandidate) {
       await maybeResolveBadgeElection(gameStateRef.current);
     }
   }, [apiKey, maybeResolveBadgeElection]);
@@ -870,7 +1012,23 @@ export function useGameLogic() {
       return;
     }
 
-    const nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
+    const getNextCandidateSeat = (): number | null => {
+      const candidates = state.badge.candidates || [];
+      const aliveCandidateSeats = candidates.filter((seat) => state.players.some((p) => p.seat === seat && p.alive));
+      if (aliveCandidateSeats.length === 0) return null;
+
+      const total = state.players.length;
+      let cursor = (state.currentSpeakerSeat ?? -1) + 1;
+      for (let step = 0; step < total; step++) {
+        const seat = ((cursor + step) % total + total) % total;
+        if (aliveCandidateSeats.includes(seat)) return seat;
+      }
+      return null;
+    };
+
+    const nextSeat = state.phase === "DAY_BADGE_SPEECH"
+      ? getNextCandidateSeat()
+      : getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
 
     const startSeat = state.daySpeechStartSeat;
     if (nextSeat === null) {
@@ -1419,6 +1577,7 @@ export function useGameLogic() {
 
     hasContinuedAfterRevealRef.current = true;
     pendingStartStateRef.current = null;
+    isAwaitingRoleRevealRef.current = false;
 
     await runNightPhase(pending);
   }, [runNightPhase]);
@@ -1433,6 +1592,7 @@ export function useGameLogic() {
 
     pendingStartStateRef.current = null;
     hasContinuedAfterRevealRef.current = false;
+    isAwaitingRoleRevealRef.current = false;
     badgeSpeechEndRef.current = null;
     if (showTableTimeoutRef.current !== null) {
       window.clearTimeout(showTableTimeoutRef.current);
@@ -1465,6 +1625,7 @@ export function useGameLogic() {
     restartGame,
     handleHumanSpeech,
     handleFinishSpeaking,
+    handleBadgeSignup,
     handleHumanVote,
     handleNightAction,
     handleNextRound,

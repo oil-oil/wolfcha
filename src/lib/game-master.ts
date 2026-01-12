@@ -44,6 +44,8 @@ export function createInitialGameState(): GameState {
     daySpeechStartSeat: null,
     badge: {
       holderSeat: null,
+      candidates: [],
+      signup: {},
       votes: {},
       history: {},
       revoteCount: 0,

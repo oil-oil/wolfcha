@@ -26,6 +26,7 @@ interface MentionInputProps {
   value: string;
   onChange: (next: string) => void;
   onSend: () => void;
+  onFinishSpeaking?: () => void;
   placeholder?: string;
   isNight?: boolean;
   players: Player[];
@@ -190,7 +191,7 @@ function renderSuggestionList(onOpenChange?: (open: boolean) => void) {
   };
 }
 
-export function MentionInput({ value, onChange, onSend, placeholder, isNight, players }: MentionInputProps) {
+export function MentionInput({ value, onChange, onSend, onFinishSpeaking, placeholder, isNight, players }: MentionInputProps) {
   const items = useMemo(() => createSuggestionItems(players), [players]);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   
@@ -202,6 +203,7 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
 
   const editor = useEditor({
     immediatelyRender: false,
+    autofocus: "end",
     extensions: [
       StarterKit,
       Mention.configure({
@@ -226,7 +228,7 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
     editorProps: {
       attributes: {
         class:
-          "wc-input-field w-full min-h-[44px] max-h-[120px] text-base focus:outline-none transition-all",
+          "wc-input-field w-full min-h-[44px] max-h-[120px] text-base focus:outline-none transition-all cursor-text",
       },
     },
     onUpdate: ({ editor }) => {
@@ -244,11 +246,11 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
   if (!editor) return null;
 
   return (
-    <div className="relative">
+    <div className="w-full flex-1 relative">
       {(!value || value.trim().length === 0) && placeholder ? (
         <div
           className={
-            "pointer-events-none absolute left-4 top-3 text-base " +
+            "pointer-events-none absolute left-0 top-0 text-base " +
             (isNight ? "text-white/35" : "text-[var(--text-secondary)]")
           }
         >
@@ -258,12 +260,17 @@ export function MentionInput({ value, onChange, onSend, placeholder, isNight, pl
 
       <EditorContent
         editor={editor}
+        className="w-full"
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             // Don't send if suggestion popup is open
             if (isSuggestionOpen) return;
             e.preventDefault();
             onSend();
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            onFinishSpeaking?.();
           }
         }}
       />
