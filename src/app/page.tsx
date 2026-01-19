@@ -44,8 +44,6 @@ import { NightActionOverlay, type NightActionOverlayType } from "@/components/ga
 import { TutorialOverlay, type TutorialPayload } from "@/components/game/TutorialOverlay";
 import { DevConsole, DevModeButton } from "@/components/DevTools";
 import { SettingsModal } from "@/components/game/SettingsModal";
-import dayBgm from "@/bgm/day.mp3";
-import nightBgm from "@/bgm/night.mp3";
 
 import { buildSimpleAvatarUrl } from "@/lib/avatar-config";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
@@ -60,6 +58,8 @@ const DAY_NIGHT_BLINK = {
   holdMs: 120,
   openMs: 620,
 };
+const dayBgm = "/bgm/day.mp3";
+const nightBgm = "/bgm/night.mp3";
 
 const dicebearUrl = (seed: string) => buildSimpleAvatarUrl(seed);
 

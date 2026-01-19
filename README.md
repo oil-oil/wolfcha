@@ -1,10 +1,8 @@
 # Wolfcha (猹人杀)
 
 <div align="center">
-  <img width="1496" height="861" alt="image" src="https://github.com/user-attachments/assets/60d58878-1373-4fe7-b88f-d927a4901db1" />
-  <br />
+  <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
   <h3>在狼人杀里，和 AI 赛博斗蛐蛐</h3>
-  <img src="public/brand/wolfcha-favicon.svg" alt="Wolfcha Favicon" width="48" />
   <p>
     <a href="https://wolf-cha.com">在线体验 (wolf-cha.com)</a>
   </p>
