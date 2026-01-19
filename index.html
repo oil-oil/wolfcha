@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wolfcha - Welcome Screen Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        /* 复刻项目中的颜色变量 */
+        :root {
+            --bg-main: #fdfcf9;
+            --bg-secondary: #f7f4ed;
+            --bg-card: #ffffff;
+            --text-primary: #2c1810;
+            --text-secondary: #5c4a3d;
+            --text-muted: #8b7355;
+            --color-wolf: #8a1c1c;
+            --color-wolf-bg: #f5e6e6;
+            --color-accent: #b8860b;
+            --color-accent-bg: #faf3e0;
+            --border-color: #d4c4a8;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        /* 动画定义 */
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(10px, -15px) rotate(5deg); }
+            50% { transform: translate(-5px, -25px) rotate(-5deg); }
+            75% { transform: translate(-15px, -10px) rotate(3deg); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(184, 134, 11, 0.1); }
+            50% { box-shadow: 0 0 0 20px rgba(184, 134, 11, 0); }
+        }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes scale-in {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes shine-sweep {
+            0% { transform: translateX(-150%); }
+            100% { transform: translateX(150%); }
+        }
+
+        /* 应用动画类 */
+        .animate-float-1 { animation: float 12s ease-in-out infinite; }
+        .animate-float-2 { animation: float 15s ease-in-out infinite reverse; }
+        .animate-float-3 { animation: float 18s ease-in-out infinite 2s; }
+        .animate-float-4 { animation: float 20s ease-in-out infinite 1s reverse; }
+        
+        .animate-fade-up { animation: fade-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-scale-in { animation: scale-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        .animate-pulse-glow { animation: pulse-glow 3s infinite; }
+        
+        .shine-hover:hover .shine-effect {
+            animation: shine-sweep 1s ease-in-out;
+        }
+
+        .icon-floating {
+            position: absolute;
+            color: var(--color-accent);
+            opacity: 0.05;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .input-focus-ring:focus {
+            border-color: var(--color-accent);
+            box-shadow: 0 4px 20px -5px rgba(184, 134, 11, 0.15);
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex items-center justify-center relative">
+
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute top-0 left-0 w-full h-full" style="background: radial-gradient(circle at 50% 50%, rgba(184, 134, 11, 0.03) 0%, transparent 60%);"></div>
+        
+        <!-- 浮动图标 -->
+        <div class="icon-floating animate-float-1" style="top: 20%; left: 20%;">
+            <i class="ph-fill ph-paw-print text-9xl"></i>
+        </div>
+        <div class="icon-floating animate-float-2" style="top: 15%; right: 25%;">
+            <i class="ph-fill ph-eye text-8xl"></i>
+        </div>
+        <div class="icon-floating animate-float-3" style="bottom: 25%; left: 30%;">
+            <i class="ph-fill ph-drop text-9xl"></i>
+        </div>
+        <div class="icon-floating animate-float-4" style="bottom: 20%; right: 20%;">
+            <i class="ph-fill ph-shield text-8xl"></i>
+        </div>
+    </div>
+
+    <!-- 主内容卡片 -->
+    <div class="z-10 w-full max-w-md px-8 flex flex-col items-center">
+        
+        <!-- Logo 区域 -->
+        <div class="relative mb-10 group cursor-default animate-scale-in" style="animation-delay: 0.1s; opacity: 0;">
+            <div class="relative w-32 h-32 flex items-center justify-center">
+                <!-- 光晕 -->
+                <div class="absolute inset-0 rounded-[2rem] bg-[#b8860b] opacity-20 blur-xl animate-pulse-glow"></div>
+                
+                <!-- 图标盒子 -->
+                <div class="relative w-28 h-28 bg-[var(--bg-card)] rounded-[2rem] shadow-2xl border-4 border-[var(--bg-secondary)] flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105">
+                    <svg viewBox="0 0 24 24" class="w-16 h-16 text-[var(--color-wolf)]" fill="currentColor">
+                        <path d="M12 2L8 7L4 5V11L2 14L4 16L6 22H18L20 16L22 14L20 11V5L16 7L12 2Z" />
+                        <circle cx="8" cy="13" r="1.5" fill="white"/>
+                        <circle cx="16" cy="13" r="1.5" fill="white"/>
+                    </svg>
+                    <div class="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                </div>
+
+                <!-- 小装饰星 -->
+                <div class="absolute -bottom-2 -right-2 bg-[var(--bg-main)] rounded-full p-2 shadow-lg border border-[var(--border-color)] transition-transform duration-500 hover:rotate-180">
+                    <i class="ph-fill ph-sparkle text-[var(--color-accent)] text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标题 -->
+        <div class="text-center mb-10 space-y-2 animate-fade-up" style="animation-delay: 0.3s; opacity: 0;">
+            <h1 class="text-4xl font-black tracking-tight font-serif text-[#2c1810]">Wolfcha</h1>
+            <p class="text-[#8b7355] font-medium text-sm tracking-wide">AI 驱动的狼人杀世界</p>
+        </div>
+
+        <!-- 输入卡片 -->
+        <div class="w-full bg-[rgba(255,255,255,0.8)] backdrop-blur-sm p-1 rounded-2xl border border-[var(--border-color)] shadow-xl animate-fade-up" style="animation-delay: 0.5s; opacity: 0;">
+            <div class="bg-[var(--bg-main)]/50 rounded-xl p-6 flex flex-col gap-6">
+                <div class="space-y-3">
+                    <label class="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider ml-1 flex items-center gap-2">
+                        <i class="ph-bold ph-user"></i>
+                        你的名字
+                    </label>
+                    <div class="relative group">
+                        <input 
+                            type="text" 
+                            id="username"
+                            placeholder="请输入你的昵称..." 
+                            class="w-full h-14 bg-[var(--bg-card)] border-2 border-[var(--border-color)] rounded-lg text-center text-lg transition-all duration-300 outline-none input-focus-ring placeholder:text-gray-400/70"
+                            oninput="checkInput(this)"
+                        >
+                        <div id="input-sparkle" class="absolute right-4 top-1/2 -translate-y-1/2 text-green-600 transition-all duration-300 opacity-0 scale-50">
+                            <i class="ph-fill ph-sparkle text-xl"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <button 
+                    id="start-btn"
+                    class="shine-hover w-full h-12 rounded-lg bg-[var(--color-accent)] text-white text-base font-bold shadow-lg transition-all duration-300 hover:bg-[#a07608] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 relative overflow-hidden group"
+                    disabled
+                >
+                    <span class="relative z-10 flex items-center justify-center gap-2">
+                        <i class="ph-fill ph-play"></i>
+                        开始旅程
+                    </span>
+                    <div class="shine-effect absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"></div>
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部信息 -->
+        <div class="mt-8 flex items-center gap-4 text-xs text-[var(--text-muted)] opacity-60 animate-fade-up" style="animation-delay: 0.8s; opacity: 0;">
+            <span>10人局</span>
+            <span class="w-1 h-1 rounded-full bg-current"></span>
+            <span>预女猎守</span>
+            <span class="w-1 h-1 rounded-full bg-current"></span>
+            <span>AI 对战</span>
+        </div>
+    </div>
+
+    <script>
+        function checkInput(input) {
+            const btn = document.getElementById('start-btn');
+            const sparkle = document.getElementById('input-sparkle');
+            
+            if (input.value.trim().length > 0) {
+                btn.disabled = false;
+                sparkle.classList.remove('opacity-0', 'scale-50');
+                sparkle.classList.add('opacity-100', 'scale-100');
+            } else {
+                btn.disabled = true;
+                sparkle.classList.add('opacity-0', 'scale-50');
+                sparkle.classList.remove('opacity-100', 'scale-100');
+            }
+        }
+    </script>
+</body>
+</html>
