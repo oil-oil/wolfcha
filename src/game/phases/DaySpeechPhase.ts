@@ -52,6 +52,7 @@ export class DaySpeechPhase extends GamePhase {
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
     const difficultyHint = buildDifficultySpeechHint(state.difficulty);
+    const totalSeats = state.players.length;
 
     const todayTranscript = buildTodayTranscript(state, 9000);
     const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
@@ -131,6 +132,7 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
       ? `【说话要求】
 1. 只基于当前局势与规则做判断，不要编造人设背景或口头禅。
 2. 发言简洁清晰，说明你这一轮的判断与行动意图。
+3. 仅允许提及有效座位号：1号-${totalSeats}号（严禁出现@12、12号等超出范围的编号）。
 
 【输出格式】
 返回 JSON 字符串数组，每个元素是一条消息气泡。
@@ -145,6 +147,7 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
 【说话指南】
 - 允许口语化表达（如：呃、那个、我说...），但不要过度堆砌。
 - 提到其他玩家时，建议使用"X号"（如"3号"），但在语境清晰时也可以用自然代词（"你"、"前面那个"）。
+- 仅允许提及有效座位号：1号-${totalSeats}号（严禁出现@12、12号等超出范围的编号）。
 - 严禁出现剧本括号动作（如：*推眼镜*），只输出语音/文字内容。
 - 分成 2-5 条自然的消息气泡，长短不一，模拟打字节奏。
 ${roleHints ? `- ${roleHints}` : ""}

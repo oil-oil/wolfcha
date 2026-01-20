@@ -1374,7 +1374,7 @@ export function useGameLogic() {
 
     // 将当前句子添加到消息列表
     const currentSegment = segments[currentIndex];
-    if (currentSegment) {
+    if (currentSegment && currentSegment.trim().length > 0) {
       const newState = addPlayerMessage(gameStateRef.current, player.playerId, currentSegment);
       setGameState(newState);
     }

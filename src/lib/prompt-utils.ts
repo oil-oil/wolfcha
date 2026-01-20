@@ -238,8 +238,11 @@ export const buildGameContext = (
     .map((p) => `${p.seat + 1}号 ${p.displayName}${p.playerId === player.playerId ? " (你)" : ""}`)
     .join("\n");
 
+  const totalSeats = state.players.length;
+
   let context = `【当前局势】
 第${state.day}天 ${state.phase.includes("NIGHT") ? "夜晚" : "白天"}
+有效座位号范围: 1号-${totalSeats}号（共${totalSeats}人），严禁提及范围外座位号
 存活玩家:
 ${playerList}`;
 

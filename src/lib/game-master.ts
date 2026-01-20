@@ -38,6 +38,24 @@ function getRandomModelRef(): ModelRef {
 
 const phaseManager = new PhaseManager();
 
+function sanitizeSeatMentions(text: string, totalSeats: number): string {
+  if (!text) return text;
+  if (!Number.isFinite(totalSeats) || totalSeats <= 0) return text;
+
+  const replaceIfInvalid = (raw: string, numStr: string) => {
+    const n = Number.parseInt(numStr, 10);
+    if (!Number.isFinite(n)) return raw;
+    if (n < 1 || n > totalSeats) return "（无效座位）";
+    return raw;
+  };
+
+  // Handle @12 / @12号
+  let out = text.replace(/@(\d+)\s*号?/g, (m, numStr) => replaceIfInvalid(m, numStr));
+  // Handle 12号
+  out = out.replace(/(\d+)\s*号/g, (m, numStr) => replaceIfInvalid(m, numStr));
+  return out;
+}
+
 function resolvePhasePrompt(
   phase: Phase,
   state: GameState,
@@ -240,6 +258,8 @@ export function addPlayerMessage(
 ): GameState {
   const player = state.players.find((p) => p.playerId === playerId);
   if (!player) return state;
+
+  if (content.trim().length === 0) return state;
 
   const message: ChatMessage = {
     id: uuidv4(),
@@ -459,6 +479,7 @@ export async function* generateAISpeechStream(
       yield chunk;
     }
 
+    const sanitizedSpeech = sanitizeSeatMentions(fullResponse, state.players.length);
     await aiLogger.log({
       type: "speech",
       request: { 
@@ -466,9 +487,10 @@ export async function* generateAISpeechStream(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: fullResponse, duration: Date.now() - startTime },
+      response: { content: sanitizedSpeech, duration: Date.now() - startTime },
     });
   } catch (error) {
+    const sanitizedSpeech = sanitizeSeatMentions(fullResponse, state.players.length);
     await aiLogger.log({
       type: "speech",
       request: { 
@@ -476,7 +498,7 @@ export async function* generateAISpeechStream(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: fullResponse, duration: Date.now() - startTime },
+      response: { content: sanitizedSpeech, duration: Date.now() - startTime },
       error: String(error),
     });
     throw error;
@@ -524,6 +546,7 @@ export async function generateAISpeechSegments(
     });
 
     const cleanedSpeech = stripMarkdownCodeFences(result.content);
+    const sanitizedSpeech = sanitizeSeatMentions(cleanedSpeech, state.players.length);
 
     await aiLogger.log({
       type: "speech",
@@ -532,18 +555,23 @@ export async function generateAISpeechSegments(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: cleanedSpeech, duration: Date.now() - startTime },
+      response: { content: sanitizedSpeech, duration: Date.now() - startTime },
     });
 
     // 尝试解析JSON数组
     try {
-      const jsonMatch = cleanedSpeech.match(/\[[\s\S]*\]/);
+      const jsonMatch = sanitizedSpeech.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const segments = JSON.parse(jsonMatch[0]) as string[];
         if (Array.isArray(segments) && segments.length > 0) {
-          return segments
-            .filter(s => typeof s === "string" && s.trim())
-            .map(s => s.trim().replace(/^["']+|["']+$/g, "")); // 移除首尾多余的引号
+          const normalized = segments
+            .filter((s) => typeof s === "string")
+            .map((s) => s.trim().replace(/^["']+|["']+$/g, ""))
+            .filter((s) => s.trim().length > 0);
+
+          if (normalized.length > 0) {
+            return normalized;
+          }
         }
       }
     } catch {
@@ -551,13 +579,21 @@ export async function generateAISpeechSegments(
     }
 
     // 降级处理：按换行或句号分割
-    const fallbackSegments = cleanedSpeech
+    const fallbackSegments = sanitizedSpeech
       .replace(/[\[\]]/g, "")  // 只移除方括号，保留引号
       .split(/[。！？]+(?=\s|$)|\n+/)  // 按句号、感叹号、问号（后面跟空格或结尾）或换行分割
       .map(s => s.trim().replace(/^["']+|["']+$/g, ""))  // 移除首尾引号
       .filter(s => s.length > 2);  // 过滤掉长度小于等于2的片段
     
-    return fallbackSegments.length > 0 ? fallbackSegments : [cleanedSpeech];
+    if (fallbackSegments.length > 0) return fallbackSegments;
+
+    const cleanedSingle = sanitizedSpeech
+      .replace(/[\[\]]/g, "")
+      .trim()
+      .replace(/^["']+|["']+$/g, "")
+      .trim();
+
+    return cleanedSingle.length > 0 ? [cleanedSingle] : ["（……）"];
   } catch (error) {
     await aiLogger.log({
       type: "speech",

@@ -42,17 +42,18 @@ export function useDialogueManager() {
     player: Player,
     afterSpeech?: (s: unknown) => Promise<void>
   ) => {
+    const normalizedSegments = segments.map((s) => s.trim()).filter((s) => s.length > 0);
     speechQueueRef.current = {
-      segments,
+      segments: normalizedSegments,
       currentIndex: 0,
       player,
       afterSpeech,
     };
 
-    if (segments.length > 0) {
+    if (normalizedSegments.length > 0) {
       setCurrentDialogue({
         speaker: player.displayName,
-        text: segments[0],
+        text: normalizedSegments[0],
         isStreaming: true,
       });
     }
