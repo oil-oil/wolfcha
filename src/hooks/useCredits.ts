@@ -13,6 +13,7 @@ export function useCredits() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalReferrals, setTotalReferrals] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   const fetchCredits = useCallback(async () => {
     if (!user) return;
@@ -54,6 +55,10 @@ export function useCredits() {
     await supabase.auth.signOut();
   }, []);
 
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -64,6 +69,11 @@ export function useCredits() {
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+
+        // Handle password recovery flow
+        if (event === "PASSWORD_RECOVERY") {
+          setIsPasswordRecovery(true);
+        }
 
         if (event === "SIGNED_IN" && session) {
           const referralCode = localStorage.getItem(REFERRAL_STORAGE_KEY);
@@ -105,5 +115,7 @@ export function useCredits() {
     fetchCredits,
     consumeCredit,
     signOut,
+    isPasswordRecovery,
+    clearPasswordRecovery,
   };
 }

@@ -13,6 +13,7 @@ import { GameSetupModal } from "@/components/game/GameSetupModal";
 import { AuthModal } from "@/components/game/AuthModal";
 import { SharePanel } from "@/components/game/SharePanel";
 import { AccountModal } from "@/components/game/AccountModal";
+import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { useCredits } from "@/hooks/useCredits";
 
 function buildDefaultRoles(playerCount: number): Role[] {
@@ -122,6 +123,8 @@ export function WelcomeScreen({
     loading: creditsLoading,
     consumeCredit,
     signOut,
+    isPasswordRecovery,
+    clearPasswordRecovery,
   } = useCredits();
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
@@ -353,6 +356,11 @@ export function WelcomeScreen({
       />
       <AuthModal open={isAuthOpen} onOpenChange={setIsAuthOpen} />
       <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />
+      <ResetPasswordModal 
+        open={isPasswordRecovery} 
+        onOpenChange={(open) => !open && clearPasswordRecovery()}
+        onSuccess={clearPasswordRecovery}
+      />
       <SharePanel
         open={isShareOpen}
         onOpenChange={setIsShareOpen}
