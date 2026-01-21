@@ -313,7 +313,9 @@ export function PlayerCardCompact({
               )}
             </AnimatePresence>
             {isMe && isReady && (
-              <span className="text-[10px] bg-[var(--color-gold)]/90 text-[#1a1614] px-1.5 rounded-sm font-bold leading-none py-0.5 shadow-sm">YOU</span>
+              <span className="text-[10px] bg-[var(--color-gold)]/90 text-[#1a1614] px-1.5 rounded-sm font-bold leading-none py-0.5 shadow-sm">
+                {t("common.you")}
+              </span>
             )}
           </div>
         ) : (
@@ -325,7 +327,9 @@ export function PlayerCardCompact({
                 !isReady && "opacity-50"
               )}>{player.seat + 1}</span>
               {isMe && isReady && (
-                <span className="text-[10px] bg-[var(--color-gold)]/90 text-[#1a1614] px-1.5 rounded-sm font-bold leading-none py-0.5 shadow-sm">YOU</span>
+                <span className="text-[10px] bg-[var(--color-gold)]/90 text-[#1a1614] px-1.5 rounded-sm font-bold leading-none py-0.5 shadow-sm">
+                  {t("common.you")}
+                </span>
               )}
             </div>
 

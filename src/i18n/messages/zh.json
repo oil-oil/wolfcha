@@ -874,6 +874,10 @@
   "page": {
     "voteHelp": "怎么投票？",
     "tutorialTitle": "玩法说明",
+    "roleHelp": "{role}是什么？",
+    "badgeLabel": "警徽",
+    "roleLabel": "身份",
+    "settings": "设置",
     "rolePending": "待揭晓",
     "audioSettings": "声音设置",
     "closeNotebook": "关闭笔记",
@@ -894,10 +898,39 @@
     "turnToLastWords": "发表遗言",
     "badgeElectionInProgress": "警徽评选进行中",
     "voteInProgress": "投票进行中",
+    "emptyState": {
+      "summoning": "召集",
+      "playersEntering": "玩家们正在入场...",
+      "recruiting": "正在召集同伴"
+    },
+    "newMessages": "{count} 条新消息",
     "nextRoundHint": "轻触继续，轮到下一位",
     "nextRoundButton": "下一位",
     "continue": "继续",
     "ok": "OK",
+    "back": "返回",
+    "speaking": "正在陈述…",
+    "messageCount": "{count} 条消息",
+    "advanceHintPrefix": "点击或按",
+    "advanceHintSuffix": "继续",
+    "playAgainHint": "下次还来玩啊",
+    "actionConfirmPrompt": "你选择{action} <highlight>{target}</highlight>，确定吗？",
+    "actionConfirm": "确认{action}",
+    "gameEnd": {
+      "villageWin": "GG！<highlight>好人阵营</highlight>胜利！",
+      "wolfWin": "GG！<highlight>狼人阵营</highlight>胜利！"
+    },
+    "badgeSignup": {
+      "question": "你要竞选警长吗？",
+      "skip": "不竞选",
+      "join": "我要竞选"
+    },
+    "badgeTransfer": {
+      "title": "警徽移交",
+      "description": "你已出局，请选择将警徽移交给一名存活玩家",
+      "hint": "点击头像选择移交对象",
+      "tear": "撕毁警徽（不移交）"
+    },
     "nightAction": {
       "wolfAwake": "狼人请睁眼",
       "wolfActing": "狼人正在选择目标",
@@ -907,6 +940,21 @@
       "seerChecking": "预言家正在查验",
       "hunterAwake": "猎人发动技能",
       "hunterActing": "猎人正在开枪"
+    },
+    "witch": {
+      "poisonUsed": "毒药已用尽。",
+      "confirmPoisonPrompt": "你选择对 <highlight>{target}</highlight> 使用毒药，确定吗？",
+      "attackedTonight": "今晚 <highlight>{target}</highlight> 被狼人袭击。",
+      "healUsedNote": "（解药已用尽）",
+      "youCan": "你可以",
+      "saveAction": "救他",
+      "saveSuffix": "。",
+      "noAttackTonight": "今晚无人被袭击。",
+      "poisonHintPrefix": " 或者点击玩家头像使用",
+      "poisonLabel": "毒药",
+      "poisonHintSuffix": "。",
+      "poisonUsedNote": "（毒药已用尽）",
+      "doNothing": "什么都不做"
     },
     "action": {
       "vote": "投票给",
@@ -924,6 +972,126 @@
       "send": "发送",
       "finishSpeech": "结束发言"
     }
+  },
+  "tutorialOverlay": {
+    "guideLabel": "指南",
+    "confirm": "我知道了",
+    "autoPromptOff": "不再自动提示",
+    "roleTitle": "{role}可以做什么？",
+    "actionLabel": "操作：",
+    "tipsLabel": "提示",
+    "nightIntro": {
+      "title": "夜晚我们可以做什么？",
+      "line1": "夜晚只有<strong>狼人和神职</strong>会行动，村民与猎人等待天亮。",
+      "line2": "系统会依次提示对应职业睁眼。轮到你时，屏幕会显示你的职业立绘。",
+      "line3": "操作方式：点击玩家头像选择目标，再点击确认即可。"
+    },
+    "dayIntro": {
+      "title": "白天我们做什么？",
+      "line1": "白天所有存活的玩家都会参与，通过发言和投票找出狼人。",
+      "step1": {
+        "title": "① 公布昨夜结果",
+        "desc": "系统公布谁出局了"
+      },
+      "step2": {
+        "title": "② 依次发言",
+        "desc": "轮到你时说出推理和怀疑"
+      },
+      "step3": {
+        "title": "③ 投票放逐",
+        "desc": "得票最多的人出局"
+      },
+      "line3": "发言时说出你的推理依据，好人要团结起来找到真正的狼人。"
+    },
+    "roles": {
+      "Werewolf": {
+        "desc": "你的目标是消灭所有好人",
+        "points": [
+          "夜晚与其他狼人商议，选择一名好人击杀",
+          "白天伪装成好人，误导其他玩家的判断"
+        ],
+        "action": "点击好人头像选择击杀目标",
+        "tips": ["和队友配合好", "说话要像好人，但别太完美"]
+      },
+      "Seer": {
+        "desc": "你可以查验玩家的真实身份",
+        "points": [
+          "夜晚查验一名玩家，系统告诉你是好人还是狼人",
+          "白天通过发言传递查验信息，引导投票"
+        ],
+        "action": "点击玩家头像进行查验",
+        "tips": ["慢慢建立信任再公布信息", "先让别人相信你是预言家"]
+      },
+      "Witch": {
+        "desc": "你有解药和毒药各一瓶",
+        "points": [
+          "解药：可以救活当晚被狼人击杀的玩家（一次）",
+          "毒药：可以毒杀任意一名玩家（一次）"
+        ],
+        "action": "选择救人、毒人或跳过",
+        "tips": ["药很珍贵，不要随便用", "信息不够时等一等"]
+      },
+      "Hunter": {
+        "desc": "你出局时可以开枪带走一人",
+        "points": [
+          "夜晚不需要行动，等待天亮",
+          "当你死亡或被放逐时，可以开枪带走一人"
+        ],
+        "action": "点击玩家头像开枪",
+        "tips": ["不要轻易暴露身份", "出局前想清楚谁最可疑"]
+      },
+      "Guard": {
+        "desc": "你可以保护玩家免受狼人击杀",
+        "points": [
+          "夜晚守护一名玩家，他当晚不会被狼人击杀",
+          "不能连续两晚守护同一人"
+        ],
+        "action": "点击玩家头像进行守护",
+        "tips": ["守住关键时刻比守关键人更重要", "不要暴露守了谁"]
+      },
+      "Villager": {
+        "desc": "你没有特殊能力，但判断同样重要",
+        "points": [
+          "夜晚不需要行动，等待天亮",
+          "白天认真听发言，找出逻辑漏洞，投票可疑的人"
+        ],
+        "action": "投票时点击玩家头像",
+        "tips": ["说话要有依据", "多听多想"]
+      }
+    }
+  },
+  "voiceRecorder": {
+    "actions": {
+      "stop": "停止录音",
+      "voiceInput": "语音输入",
+      "holdToTalk": "长按 / 语音输入"
+    },
+    "status": {
+      "transcribing": "识别中"
+    },
+    "errors": {
+      "micUnavailable": "无法打开麦克风",
+      "recordFailed": "录音失败，请重试",
+      "noAudio": "没有录到声音",
+      "noTranscript": "没有识别到内容",
+      "sttFailed": "语音识别失败"
+    }
+  },
+  "notebook": {
+    "title": "笔记本",
+    "clear": "清空笔记",
+    "clearConfirm": "确定要清空笔记吗？",
+    "placeholder": "在这里记录游戏线索..."
+  },
+  "wolfPlanning": {
+    "title": "狼人协作",
+    "subtitle": "选择今晚的击杀目标",
+    "teammateStatus": "队友投票状态:",
+    "thinking": "思考中...",
+    "targetSummary": "目标汇总:",
+    "votes": "{count}票",
+    "consensus": "狼队已达成一致！",
+    "hint": "点击玩家头像选择击杀目标"
   },
   "dayPhase": {
     "organizing": "（正在组织语言…）",

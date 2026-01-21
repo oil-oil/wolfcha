@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
   output: "standalone",
   /* config options here */
   reactCompiler: true,
+  async rewrites() {
+    return [
+      { source: "/zh", destination: "/" },
+      { source: "/zh/", destination: "/" },
+    ];
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version ?? "0.0.0",
   },

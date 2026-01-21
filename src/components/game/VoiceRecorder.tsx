@@ -4,6 +4,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Microphone, SpinnerGap, StopCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type RecorderStatus = "idle" | "recording" | "transcribing";
 
@@ -128,6 +129,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
   { disabled, isNight, onTranscript },
   ref
 ) {
+  const t = useTranslations();
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -219,9 +221,9 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         scheduleReleaseStream();
       })
       .catch((e) => {
-        setError(e instanceof Error ? e.message : "无法打开麦克风");
+        setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
       });
-  }, [acquireStream, canUse, disabled, scheduleReleaseStream, status]);
+  }, [acquireStream, canUse, disabled, scheduleReleaseStream, status, t]);
 
   const start = useCallback(async () => {
     if (!canUse) return;
@@ -264,7 +266,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       };
 
       recorder.onerror = () => {
-        setError("录音失败，请重试");
+        setError(t("voiceRecorder.errors.recordFailed"));
         setStatus("idle");
         cleanupMedia();
       };
@@ -276,7 +278,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
         if (blob.size === 0) {
           setStatus("idle");
-          setError("没有录到声音");
+          setError(t("voiceRecorder.errors.noAudio"));
           return;
         }
 
@@ -299,12 +301,12 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
           const json = (await resp.json()) as any;
           const transcript = typeof json?.text === "string" ? json.text.trim() : "";
           if (!transcript) {
-            setError("没有识别到内容");
+            setError(t("voiceRecorder.errors.noTranscript"));
           } else {
             onTranscript(transcript);
           }
         } catch (e) {
-          setError(e instanceof Error ? e.message : "语音识别失败");
+          setError(e instanceof Error ? e.message : t("voiceRecorder.errors.sttFailed"));
         } finally {
           setStatus("idle");
           scheduleReleaseStream();
@@ -319,11 +321,11 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       }, 1000);
     } catch (e) {
       setStatus("idle");
-      setError(e instanceof Error ? e.message : "无法打开麦克风");
+      setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
       cleanupMedia();
       scheduleReleaseStream();
     }
-  }, [acquireStream, canUse, cleanupMedia, disabled, isBusy, onTranscript, scheduleReleaseStream]);
+  }, [acquireStream, canUse, cleanupMedia, disabled, isBusy, onTranscript, scheduleReleaseStream, t]);
 
   const stop = useCallback(() => {
     if (status === "idle") return;
@@ -377,12 +379,12 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         onClick={isRecording ? stop : start}
         disabled={disabled || status === "transcribing"}
         className={buttonClassName}
-        title={isRecording ? "停止录音" : "语音输入"}
+        title={isRecording ? t("voiceRecorder.actions.stop") : t("voiceRecorder.actions.voiceInput")}
       >
         {status === "transcribing" ? (
           <>
             <SpinnerGap size={14} className="animate-spin" weight="bold" />
-            识别中
+            {t("voiceRecorder.status.transcribing")}
           </>
         ) : isRecording ? (
           <>
@@ -393,7 +395,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         ) : (
           <>
             <Microphone size={14} weight="fill" />
-            长按 / 语音输入
+            {t("voiceRecorder.actions.holdToTalk")}
           </>
         )}
       </button>

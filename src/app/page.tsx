@@ -797,13 +797,13 @@ export default function Home() {
 
   const tutorialHelpLabel = useMemo(() => {
     if (isRoleActionForHuman && humanPlayer) {
-      return `${getRoleLabel(humanPlayer.role)}是什么？`;
+      return t("page.roleHelp", { role: getRoleLabel(humanPlayer.role) });
     }
     if (gameState.phase === "DAY_VOTE" || gameState.phase === "DAY_BADGE_ELECTION") {
       return t("page.voteHelp");
     }
     return t("page.tutorialTitle");
-  }, [gameState.phase, humanPlayer, isRoleActionForHuman]);
+  }, [gameState.phase, humanPlayer, isRoleActionForHuman, t]);
 
   const showTutorialHelp = useMemo(() => {
     return (
@@ -1237,8 +1237,10 @@ export default function Home() {
                   </div>
                   {gameState.badge.holderSeat !== null && (
                     <div className="wc-topbar__item">
-                      <span className="text-xs uppercase tracking-wider opacity-60">警徽</span>
-                      <span className="font-serif text-lg font-bold text-[var(--color-gold)]">{gameState.badge.holderSeat + 1}号</span>
+                      <span className="text-xs uppercase tracking-wider opacity-60">{t("page.badgeLabel")}</span>
+                      <span className="font-serif text-lg font-bold text-[var(--color-gold)]">
+                        {t("mentions.seatLabel", { seat: gameState.badge.holderSeat + 1 })}
+                      </span>
                     </div>
                   )}
                   <div className="wc-phase-badge">
@@ -1254,7 +1256,7 @@ export default function Home() {
                     {needsHumanAction && (
                       <span className="flex items-center gap-1.5 font-semibold text-xs px-2 py-0.5 rounded-full ml-1 bg-[var(--color-gold)]/20 text-[var(--color-gold)]">
                         <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
-                        轮到你
+                        {t("ui.waitingAction")}
                       </span>
                     )}
                   </div>
@@ -1262,7 +1264,7 @@ export default function Home() {
 
                 <div className="flex items-center gap-3">
                   <div className="wc-topbar__item wc-topbar__item--role">
-                    <span className="text-xs uppercase tracking-wider opacity-60">身份</span>
+                    <span className="text-xs uppercase tracking-wider opacity-60">{t("page.roleLabel")}</span>
                     <span className="font-bold text-[var(--color-gold)]">
                       {canShowRole ? getRoleLabel(humanPlayer?.role) : t("page.rolePending")}
                     </span>
@@ -1275,7 +1277,7 @@ export default function Home() {
                     className="inline-flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1 text-xs text-[var(--text-primary)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]"
                   >
                     <GearSix size={16} />
-                    设置
+                    {t("page.settings")}
                   </button>
                 </div>
               </div>
