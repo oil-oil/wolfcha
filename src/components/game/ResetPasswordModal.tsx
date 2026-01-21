@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { translateAuthError } from "@/lib/auth-errors";
 import {
   Dialog,
   DialogContent,
@@ -61,13 +62,8 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
       });
 
       if (error) {
-        // Translate common error messages
-        let message = error.message;
-        if (message.includes("New password should be different")) {
-          message = "新密码不能与旧密码相同";
-        } else if (message.includes("Password should be at least")) {
-          message = "密码长度至少为 6 位";
-        } else if (message.includes("Auth session missing")) {
+        let message = translateAuthError(error.message);
+        if (error.message.includes("Auth session missing")) {
           message = "重置链接已过期，请重新发起重置请求";
         }
         toast.error("重置失败", { description: message });

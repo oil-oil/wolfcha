@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { translateAuthError } from "@/lib/auth-errors";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +55,7 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
       });
 
       if (error) {
-        toast.error("修改失败", { description: error.message });
+        toast.error("修改失败", { description: translateAuthError(error.message) });
       } else {
         toast.success("密码已更新");
         // Reset form

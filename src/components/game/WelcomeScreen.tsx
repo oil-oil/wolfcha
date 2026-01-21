@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, ShareNetwork, SignOut, UserCircle } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -14,6 +14,7 @@ import { AuthModal } from "@/components/game/AuthModal";
 import { SharePanel } from "@/components/game/SharePanel";
 import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
+import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { useCredits } from "@/hooks/useCredits";
 
 function buildDefaultRoles(playerCount: number): Role[] {
@@ -135,6 +136,7 @@ export function WelcomeScreen({
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
 
@@ -356,6 +358,17 @@ export function WelcomeScreen({
       />
       <AuthModal open={isAuthOpen} onOpenChange={setIsAuthOpen} />
       <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />
+      <UserProfileModal
+        open={isUserProfileOpen}
+        onOpenChange={setIsUserProfileOpen}
+        email={user?.email}
+        credits={credits ?? undefined}
+        referralCode={referralCode}
+        totalReferrals={totalReferrals}
+        onChangePassword={() => setIsAccountOpen(true)}
+        onShareInvite={() => setIsShareOpen(true)}
+        onSignOut={signOut}
+      />
       <ResetPasswordModal 
         open={isPasswordRecovery} 
         onOpenChange={(open) => !open && clearPasswordRecovery()}
@@ -370,11 +383,16 @@ export function WelcomeScreen({
 
       <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
         {user ? (
-          <div className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)]">
+          <button
+            type="button"
+            onClick={() => setIsUserProfileOpen(true)}
+            className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+            title="查看账号信息"
+          >
             <UserCircle size={16} />
             <span className="truncate max-w-[160px]">{user.email ?? "已登录"}</span>
             <span className="opacity-70">剩余 {creditsLoading ? "..." : (credits ?? 0)} 局</span>
-          </div>
+          </button>
         ) : (
           <Button
             type="button"
@@ -388,35 +406,15 @@ export function WelcomeScreen({
         )}
 
         {user && (
-          <>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsAccountOpen(true)}
-              className="h-9 text-sm gap-2"
-            >
-              <UserCircle size={16} />
-              账户
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsShareOpen(true)}
-              className="h-9 text-sm gap-2"
-            >
-              <ShareNetwork size={16} />
-              分享邀请
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={signOut}
-              className="h-9 text-sm gap-2"
-            >
-              <SignOut size={16} />
-              退出
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsUserProfileOpen(true)}
+            className="h-9 text-sm gap-2 md:hidden"
+          >
+            <UserCircle size={16} />
+            账号信息
+          </Button>
         )}
 
         <Button
