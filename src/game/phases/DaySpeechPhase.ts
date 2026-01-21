@@ -42,6 +42,24 @@ type DaySpeechRuntime = {
 export class DaySpeechPhase extends GamePhase {
   private isMovingToNextSpeaker = false;
 
+  private resolveSpeechDirection(state: GameState, startSeat: number | null): "clockwise" | "counterclockwise" {
+    if (startSeat === null) return "clockwise";
+    const sheriffSeat = state.badge.holderSeat;
+    if (sheriffSeat === null) return "clockwise";
+
+    const aliveSeats = state.players.filter((p) => p.alive).map((p) => p.seat).sort((a, b) => a - b);
+    if (!aliveSeats.includes(startSeat) || !aliveSeats.includes(sheriffSeat)) return "clockwise";
+
+    const total = aliveSeats.length;
+    const startIndex = aliveSeats.indexOf(startSeat);
+    const sheriffIndex = aliveSeats.indexOf(sheriffSeat);
+    if (startIndex === sheriffIndex) return "clockwise";
+
+    const clockwiseSteps = (sheriffIndex - startIndex + total) % total;
+    const counterSteps = (startIndex - sheriffIndex + total) % total;
+    return clockwiseSteps >= counterSteps ? "clockwise" : "counterclockwise";
+  }
+
   async onEnter(_context: GameContext): Promise<void> {
     return;
   }
@@ -132,6 +150,7 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
 1. 只基于当前局势与规则做判断，不要编造人设背景或口头禅。
 2. 发言简洁清晰，说明你这一轮的判断与行动意图。
 3. 分成 2-5 条消息气泡，长短不一，模拟打字节奏。
+4. 只讨论存活玩家，避免围绕已出局玩家展开推理或复盘。
 
 【输出格式】
 返回 JSON 字符串数组，每个元素是一条消息气泡。
@@ -143,6 +162,7 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
 3. **局内优先**：发言以本局信息为主（发言、站边、投票、夜里结果），避免编剧情节或展开场外话题。
 4. **自然对话**：像真人在群聊里打字一样说话。可以是断断续续的短句，可以有感叹、犹豫或情绪化的表达。不要写成“逻辑分析报告”。
 5. **针对性互动**：仔细听前几个人的发言，对他们的观点、语气甚至态度做出反应。如果觉得某人好笑就笑，觉得某人胡扯就怼。
+6. **仅限存活玩家**：不要围绕已出局玩家展开推理或复盘，重点讨论当前存活玩家的发言和投票。
 
 【说话指南】
 - 允许口语化表达（如：呃、那个、我说...），但不要过度堆砌。
@@ -336,10 +356,12 @@ ${speakOrderHint}
               : null;
         const firstSpeaker =
           startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
+        const speechDirection = this.resolveSpeechDirection(speechState, startSeat);
         speechState = {
           ...speechState,
           daySpeechStartSeat: startSeat,
           currentSpeakerSeat: firstSpeaker?.seat ?? null,
+          speechDirection,
         };
 
         runtime.setDialogue("主持人", "请各位玩家依次发言", false);
@@ -385,10 +407,12 @@ ${speakOrderHint}
           : null;
     const firstSpeaker =
       startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
+    const speechDirection = this.resolveSpeechDirection(speechState, startSeat);
     speechState = {
       ...speechState,
       daySpeechStartSeat: startSeat,
       currentSpeakerSeat: firstSpeaker?.seat ?? null,
+      speechDirection,
     };
 
     runtime.setDialogue("主持人", "请各位玩家依次发言", false);
@@ -447,9 +471,11 @@ ${speakOrderHint}
       } else if (state.phase === "DAY_BADGE_SPEECH") {
         nextSeat = getNextCandidateSeat();
       } else if (isDaySpeech && isSheriffAlive) {
-        nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true);
+        const direction = state.speechDirection ?? "clockwise";
+        nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
       } else {
-        nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1);
+        const direction = state.speechDirection ?? "clockwise";
+        nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
       }
 
       const startSeat = state.daySpeechStartSeat;

@@ -1195,7 +1195,7 @@ export function DialogArea({
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-3"
                 >
-                  <div className="wc-input-box relative" style={{ minHeight: '112px', alignItems: 'flex-start', padding: '14px 16px' }}>
+                  <div className="wc-input-box relative" style={{ minHeight: "112px", alignItems: "flex-start", padding: "14px 16px 56px" }}>
                     <MentionInput
                       key={`mention-input-${gameState.phase}-${gameState.currentSpeakerSeat}`}
                       value={inputText}

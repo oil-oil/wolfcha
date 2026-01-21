@@ -396,6 +396,19 @@ export function useGameLogic() {
     [buildVotePhaseExtras]
   );
 
+  const resolveVotesSafely = useCallback(async (
+    state: GameState,
+    token: ReturnType<typeof getToken>
+  ) => {
+    if (isResolvingVotesRef.current) return;
+    isResolvingVotesRef.current = true;
+    try {
+      await resolveVotePhase(state, token);
+    } finally {
+      isResolvingVotesRef.current = false;
+    }
+  }, [resolveVotePhase]);
+
   // ============================================
   // 白天阶段
   // ============================================
@@ -614,19 +627,17 @@ export function useGameLogic() {
       return;
     }
     if (isResolvingVotesRef.current) return;
+    if (isWaitingForAI) return;
 
     const aliveIds = gameState.players.filter((p) => p.alive).map((p) => p.playerId);
     const allVoted = aliveIds.every((id) => typeof gameState.votes[id] === "number");
     
     if (allVoted && aliveIds.length > 0) {
       console.log("[wolfcha] useEffect: All votes detected, triggering resolveVotePhase as safety net");
-      isResolvingVotesRef.current = true;
       const token = getToken();
-      resolveVotePhase(gameState, token).finally(() => {
-        isResolvingVotesRef.current = false;
-      });
+      void resolveVotesSafely(gameState, token);
     }
-  }, [gameState.phase, gameState.votes, gameState.players, getToken, resolveVotePhase]);
+  }, [gameState.phase, gameState.votes, gameState.players, getToken, resolveVotesSafely, isWaitingForAI]);
 
   // ============================================
   // 同步 gameStateRef
@@ -1077,6 +1088,7 @@ export function useGameLogic() {
     if (baseState.phase !== "DAY_VOTE" && baseState.phase !== "DAY_BADGE_ELECTION") return;
     const targetPlayer = baseState.players.find((p) => p.seat === targetSeat);
     if (!targetPlayer || !targetPlayer.alive) return;
+    if (typeof baseState.votes[humanPlayer.playerId] === "number") return;
 
     if (baseState.phase === "DAY_BADGE_ELECTION") {
       const candidates = baseState.badge.candidates || [];
@@ -1130,11 +1142,11 @@ export function useGameLogic() {
     
     console.log("[wolfcha] handleHumanVote: allVoted =", allVoted, "votes count =", Object.keys(latestState.votes).length, "alive count =", aliveIds.length);
     
-    if (allVoted) {
+    if (allVoted && !isWaitingForAI) {
       const token = getToken();
-      await resolveVotePhase(latestState, token);
+      await resolveVotesSafely(latestState, token);
     }
-  }, [humanPlayer, setGameState, badgePhase, getToken, resolveVotePhase]);
+  }, [humanPlayer, setGameState, badgePhase, getToken, resolveVotesSafely, isWaitingForAI]);
 
   /** 夜晚行动 */
   const handleNightAction = useCallback(async (targetSeat: number, witchAction?: "save" | "poison" | "pass") => {

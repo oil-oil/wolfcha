@@ -82,6 +82,7 @@ export function createInitialGameState(): GameState {
     currentSpeakerSeat: null,
     nextSpeakerSeatOverride: null,
     daySpeechStartSeat: null,
+    speechDirection: "clockwise",
     pkTargets: undefined,
     pkSource: undefined,
     badge: {
@@ -294,7 +295,12 @@ export function killPlayer(state: GameState, seat: number): GameState {
   };
 }
 
-export function getNextAliveSeat(state: GameState, currentSeat: number, excludeSheriff = false): number | null {
+export function getNextAliveSeat(
+  state: GameState,
+  currentSeat: number,
+  excludeSheriff = false,
+  direction: "clockwise" | "counterclockwise" = "clockwise"
+): number | null {
   const sheriffSeat = state.badge.holderSeat;
   let alivePlayers = state.players.filter((p) => p.alive);
   
@@ -306,8 +312,14 @@ export function getNextAliveSeat(state: GameState, currentSeat: number, excludeS
   if (alivePlayers.length === 0) return null;
 
   const sortedSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
+  if (sortedSeats.length === 0) return null;
+
+  if (direction === "counterclockwise") {
+    const prevSeat = [...sortedSeats].reverse().find((s) => s < currentSeat);
+    return prevSeat ?? sortedSeats[sortedSeats.length - 1];
+  }
+
   const nextSeat = sortedSeats.find((s) => s > currentSeat);
-  
   return nextSeat ?? sortedSeats[0];
 }
 

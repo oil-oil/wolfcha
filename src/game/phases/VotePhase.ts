@@ -67,22 +67,33 @@ export class VotePhase extends GamePhase {
     }
 
     const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
-    for (const aiPlayer of aiPlayers) {
-      if (!isTokenValid(token)) return;
-      setIsWaitingForAI(true);
-      const targetSeat = await generateAIVote(currentState, aiPlayer);
-      if (!isTokenValid(token)) return;
+    let tokenInvalidated = false;
+    setIsWaitingForAI(true);
+    try {
+      for (const aiPlayer of aiPlayers) {
+        if (!isTokenValid(token)) {
+          tokenInvalidated = true;
+          break;
+        }
+        const targetSeat = await generateAIVote(currentState, aiPlayer);
+        if (!isTokenValid(token)) {
+          tokenInvalidated = true;
+          break;
+        }
 
-      setGameState((prevState) => ({
-        ...prevState,
-        votes: { ...prevState.votes, [aiPlayer.playerId]: targetSeat },
-      }));
-      currentState = {
-        ...currentState,
-        votes: { ...currentState.votes, [aiPlayer.playerId]: targetSeat },
-      };
+        setGameState((prevState) => ({
+          ...prevState,
+          votes: { ...prevState.votes, [aiPlayer.playerId]: targetSeat },
+        }));
+        currentState = {
+          ...currentState,
+          votes: { ...currentState.votes, [aiPlayer.playerId]: targetSeat },
+        };
+      }
+    } finally {
+      setIsWaitingForAI(false);
     }
-    setIsWaitingForAI(false);
+    if (tokenInvalidated) return;
 
     if (!humanPlayer?.alive) {
       await this.resolveVotes(currentState, runtime);

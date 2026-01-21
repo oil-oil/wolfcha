@@ -2,6 +2,8 @@ export type Role = "Villager" | "Werewolf" | "Seer" | "Witch" | "Hunter" | "Guar
 
 export type DifficultyLevel = "easy" | "normal" | "hard";
 
+export type SpeechDirection = "clockwise" | "counterclockwise";
+
 export type DevPreset = "MILK_POISON_TEST" | "LAST_WORDS_TEST";
 
 export interface StartGameOptions {
@@ -128,6 +130,7 @@ export interface GameState {
   currentSpeakerSeat: number | null;
   nextSpeakerSeatOverride?: number | null;
   daySpeechStartSeat: number | null;
+  speechDirection?: SpeechDirection;
   pkTargets?: number[];
   pkSource?: "badge" | "vote";
   badge: {

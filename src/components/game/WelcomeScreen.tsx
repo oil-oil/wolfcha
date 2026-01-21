@@ -98,6 +98,7 @@ interface WelcomeScreenProps {
   humanName: string;
   setHumanName: (name: string) => void;
   onStart: (options?: StartGameOptions) => void | Promise<void>;
+  onAbort?: () => void;
   isLoading: boolean;
   isGenshinMode: boolean;
   onGenshinModeChange: (value: boolean) => void;
@@ -107,6 +108,7 @@ export function WelcomeScreen({
   humanName,
   setHumanName,
   onStart,
+  onAbort,
   isLoading,
   isGenshinMode,
   onGenshinModeChange,
@@ -125,6 +127,7 @@ export function WelcomeScreen({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const paperRef = useRef<HTMLDivElement | null>(null);
   const sealButtonRef = useRef<HTMLButtonElement | null>(null);
+  const isStartingRef = useRef(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
@@ -280,6 +283,7 @@ export function WelcomeScreen({
 
   const handleConfirm = async () => {
     if (!canConfirm) return;
+    if (isStartingRef.current) return;
 
     if (!user) {
       setIsAuthOpen(true);
@@ -293,12 +297,7 @@ export function WelcomeScreen({
       return;
     }
 
-    const consumed = await consumeCredit();
-    if (!consumed) {
-      setIsShareOpen(true);
-      toast.error("扣除额度失败", { description: "请稍后重试。" });
-      return;
-    }
+    isStartingRef.current = true;
 
     const seal = sealButtonRef.current;
     if (seal) createParticles(seal);
@@ -311,6 +310,26 @@ export function WelcomeScreen({
       const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
       void onStart({ fixedRoles: roles, devPreset: preset, difficulty, playerCount });
     }, 800);
+
+    void consumeCredit()
+      .then((consumed) => {
+        if (consumed) return;
+        // Credit deduction failed, abort the game and show share panel
+        setIsTransitioning(false);
+        onAbort?.();
+        setIsShareOpen(true);
+        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+      })
+      .catch(() => {
+        // Credit deduction failed, abort the game and show share panel
+        setIsTransitioning(false);
+        onAbort?.();
+        setIsShareOpen(true);
+        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+      })
+      .finally(() => {
+        isStartingRef.current = false;
+      });
   };
 
   return (

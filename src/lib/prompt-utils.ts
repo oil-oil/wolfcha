@@ -147,6 +147,7 @@ export const buildDailySummariesSection = (state: GameState): string => {
 };
 
 export const buildTodayTranscript = (state: GameState, maxChars: number): string => {
+  const aliveIds = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i];
@@ -169,7 +170,7 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
   );
 
   const transcript = slice
-    .filter((m) => !m.isSystem)
+    .filter((m) => !m.isSystem && aliveIds.has(m.playerId))
     .map((m) => `${m.playerName}: ${m.content}`)
     .join("\n");
 

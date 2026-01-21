@@ -1084,6 +1084,7 @@ export default function Home() {
               humanName={humanName}
               setHumanName={setHumanName}
               onStart={(options) => startGame({ ...(options ?? {}), isGenshinMode })}
+              onAbort={restartGame}
               isLoading={isLoading}
               isGenshinMode={isGenshinMode}
               onGenshinModeChange={setGenshinMode}
