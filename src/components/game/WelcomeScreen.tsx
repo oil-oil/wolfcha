@@ -12,6 +12,7 @@ import { DevModeButton } from "@/components/DevTools";
 import { GameSetupModal } from "@/components/game/GameSetupModal";
 import { AuthModal } from "@/components/game/AuthModal";
 import { SharePanel } from "@/components/game/SharePanel";
+import { AccountModal } from "@/components/game/AccountModal";
 import { useCredits } from "@/hooks/useCredits";
 
 function buildDefaultRoles(playerCount: number): Role[] {
@@ -130,6 +131,7 @@ export function WelcomeScreen({
   const isStartingRef = useRef(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
 
@@ -350,6 +352,7 @@ export function WelcomeScreen({
         onGenshinModeChange={onGenshinModeChange}
       />
       <AuthModal open={isAuthOpen} onOpenChange={setIsAuthOpen} />
+      <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />
       <SharePanel
         open={isShareOpen}
         onOpenChange={setIsShareOpen}
@@ -378,6 +381,15 @@ export function WelcomeScreen({
 
         {user && (
           <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAccountOpen(true)}
+              className="h-9 text-sm gap-2"
+            >
+              <UserCircle size={16} />
+              账户
+            </Button>
             <Button
               type="button"
               variant="outline"

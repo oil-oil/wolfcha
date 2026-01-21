@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/lib/supabase";
@@ -26,10 +26,92 @@ interface AuthModalProps {
 
 type AuthMode = "magic_link" | "password";
 
+// Error message translations for Supabase Auth
+const errorTranslations: Record<string, string> = {
+  "Invalid login credentials": "邮箱或密码错误",
+  "Email not confirmed": "邮箱尚未验证，请检查邮箱并点击确认链接",
+  "User already registered": "该邮箱已注册，请直接登录",
+  "Password should be at least 6 characters": "密码长度至少为 6 位",
+  "Unable to validate email address: invalid format": "邮箱格式不正确",
+  "Signup requires a valid password": "请输入有效的密码",
+  "To signup, please provide your email": "请输入邮箱地址",
+  "Email rate limit exceeded": "请求过于频繁，请稍后再试",
+  "For security purposes, you can only request this after": "出于安全考虑，请稍后再试",
+  "Email link is invalid or has expired": "邮箱链接已失效或过期，请重新获取",
+  "Token has expired or is invalid": "验证已过期，请重新操作",
+  "New password should be different from the old password": "新密码不能与旧密码相同",
+  "Auth session missing": "登录已过期，请重新登录",
+  "User not found": "用户不存在",
+};
+
+// Function to translate error messages
+function translateError(message: string): string {
+  // Check for exact match first
+  if (errorTranslations[message]) {
+    return errorTranslations[message];
+  }
+  
+  // Check for partial matches (for messages with dynamic content like seconds)
+  for (const [key, translation] of Object.entries(errorTranslations)) {
+    if (message.includes(key)) {
+      // Handle rate limit with seconds
+      const secondsMatch = message.match(/after (\d+) seconds?/);
+      if (secondsMatch) {
+        return `出于安全考虑，请 ${secondsMatch[1]} 秒后再试`;
+      }
+      return translation;
+    }
+  }
+  
+  return message;
+}
+
 export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>("magic_link");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const authContainerRef = useRef<HTMLDivElement>(null);
+
+  // Monitor and translate error messages in Auth UI
+  useEffect(() => {
+    if (!open || !authContainerRef.current) return;
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            // Find error message elements
+            const errorElements = node.querySelectorAll('[class*="message"]');
+            errorElements.forEach((el) => {
+              if (el.textContent) {
+                const translated = translateError(el.textContent);
+                if (translated !== el.textContent) {
+                  el.textContent = translated;
+                }
+              }
+            });
+          }
+        });
+
+        // Also check for text content changes in existing elements
+        if (mutation.type === "characterData" && mutation.target.parentElement) {
+          const text = mutation.target.textContent || "";
+          const translated = translateError(text);
+          if (translated !== text) {
+            mutation.target.textContent = translated;
+          }
+        }
+      });
+    });
+
+    observer.observe(authContainerRef.current, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => observer.disconnect();
+  }, [open]);
 
   const redirectTo = useMemo(() => {
     if (typeof window === "undefined") return undefined;
@@ -51,7 +133,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     });
     setLoading(false);
     if (error) {
-      toast.error("发送失败", { description: error.message });
+      toast.error("发送失败", { description: translateError(error.message) });
     } else {
       toast.success("登录链接已发送", { description: "请检查邮箱，点击链接即可登录" });
     }
@@ -185,15 +267,17 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             </form>
           </TabsContent>
           <TabsContent value="password">
-            <Auth
-              supabaseClient={supabase}
-              appearance={appearance}
-              localization={localization}
-              providers={[]}
-              view="sign_in"
-              showLinks={true}
-              redirectTo={redirectTo}
-            />
+            <div ref={authContainerRef}>
+              <Auth
+                supabaseClient={supabase}
+                appearance={appearance}
+                localization={localization}
+                providers={[]}
+                view="sign_in"
+                showLinks={true}
+                redirectTo={redirectTo}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
