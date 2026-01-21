@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { CheckCircle } from "@phosphor-icons/react";
 import type { Player } from "@/types/game";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
+import { useTranslations } from "next-intl";
 
 interface VoteResultData {
   targetSeat: number;
@@ -32,6 +33,7 @@ export function VoteResultCard({
   isNight = false,
   isGenshinMode = false,
 }: VoteResultCardProps) {
+  const t = useTranslations();
   return (
     <div className={`wc-vote-result-card rounded-lg border ${isNight ? 'border-white/10 bg-black/20' : 'border-[var(--border-color)] bg-[var(--bg-secondary)]'} p-4 my-3`}>
       {/* 标题 */}
@@ -68,7 +70,7 @@ export function VoteResultCard({
                 )}
                 <div className="flex flex-col">
                   <span className="text-sm font-bold text-[var(--color-danger)]">
-                    {result.targetSeat + 1}号
+                    {t("voteResult.seatLabel", { seat: result.targetSeat + 1 })}
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] leading-tight">
                     {result.targetName}
@@ -101,7 +103,7 @@ export function VoteResultCard({
                           className="w-3.5 h-3.5 rounded-full"
                         />
                       )}
-                      <span>{voterSeat + 1}号</span>
+                      <span>{t("voteResult.seatLabel", { seat: voterSeat + 1 })}</span>
                     </motion.div>
                   );
                 })}
@@ -110,7 +112,9 @@ export function VoteResultCard({
               {/* 票数统计 */}
               <div className="wc-vote-result-count flex items-center justify-center min-w-[50px]">
                 <span className="text-base font-bold text-[var(--color-accent)]">
-                  {result.voteCount % 1 === 0 ? result.voteCount : result.voteCount.toFixed(1)}票
+                  {t("voteResult.voteCount", {
+                    count: result.voteCount % 1 === 0 ? result.voteCount : result.voteCount.toFixed(1),
+                  })}
                 </span>
               </div>
             </motion.div>

@@ -1,0 +1,1142 @@
+{
+  "app": {
+    "title": "Wolfcha - 猹杀",
+    "description": "单人沉浸式复古童话狼人杀"
+  },
+  "locale": {
+    "label": "语言",
+    "zh": "中文",
+    "en": "English"
+  },
+  "difficulty": {
+    "easy": "新手局",
+    "normal": "标准局",
+    "hard": "高阶局"
+  },
+  "roles": {
+    "villager": "村民",
+    "werewolf": "狼人",
+    "seer": "预言家",
+    "witch": "女巫",
+    "hunter": "猎人",
+    "guard": "守卫"
+  },
+  "welcome": {
+    "account": {
+      "viewInfo": "查看账号信息",
+      "loggedIn": "已登录",
+      "remaining": "剩余 {count} 局",
+      "info": "账号信息"
+    },
+    "auth": {
+      "signIn": "登录/注册"
+    },
+    "settings": "设置",
+    "tutorial": "玩法教学",
+    "subtitle": "The Shadow Game",
+    "oath": {
+      "line1": "我自愿加入这场关于谎言与真相的游戏。",
+      "line2": "当夜幕降临，我将隐藏我的身份；",
+      "line3": "当黎明升起，我将审判罪恶。"
+    },
+    "signature": {
+      "label": "签署你的名字",
+      "placeholder": "在此签名..."
+    },
+    "sealHint": {
+      "ready": "按下印章以生效",
+      "waiting": "签署名字后才可生效"
+    },
+    "transition": {
+      "title": "游戏开始",
+      "subtitle": "The Game Begins"
+    },
+    "roleConfig": {
+      "godLabelFull": "预女猎守",
+      "godLabelNoGuard": "预女猎",
+      "hint": "需满足：{wolfCount}狼 {godLabel} {villagerCount}民"
+    },
+    "toast": {
+      "signInFirst": "请先登录或注册",
+      "noCredits": {
+        "title": "额度不足",
+        "description": "分享邀请可获得更多额度。"
+      },
+      "creditFail": {
+        "title": "扣除额度失败",
+        "description": "请分享邀请获取更多额度。"
+      }
+    },
+    "dev": {
+      "title": "开发者模式",
+      "tabs": {
+        "preset": "预设",
+        "roles": "配置"
+      },
+      "preset": {
+        "title": "预设场景测试",
+        "clear": "清除",
+        "none": "无",
+        "milkPoison": "毒奶测试",
+        "lastWords": "遗言测试"
+      },
+      "roles": {
+        "title": "身份配置（{count}人局）",
+        "ready": "配置完成",
+        "seat": "{seat}号"
+      }
+    }
+  },
+  "authErrors": {
+    "invalidLogin": "邮箱或密码错误",
+    "emailNotConfirmed": "邮箱尚未验证，请检查邮箱并点击确认链接",
+    "userAlreadyRegistered": "该邮箱已注册，请直接登录",
+    "passwordTooShort": "密码长度至少为 6 位",
+    "invalidEmail": "邮箱格式不正确",
+    "signupRequiresPassword": "请输入有效的密码",
+    "signupRequiresEmail": "请输入邮箱地址",
+    "emailRateLimit": "请求过于频繁，请稍后再试",
+    "rateLimitWait": "出于安全考虑，请稍后再试",
+    "rateLimitSeconds": "出于安全考虑，请 {seconds} 秒后再试",
+    "emailLinkInvalid": "邮箱链接已失效或过期，请重新获取",
+    "tokenInvalid": "验证已过期，请重新操作",
+    "samePassword": "新密码不能与旧密码相同",
+    "sessionMissing": "登录已过期，请重新登录",
+    "userNotFound": "用户不存在"
+  },
+  "settings": {
+    "title": "设置",
+    "description": "调整偏好并导出日志",
+    "about": {
+      "title": "关于我们",
+      "description": "了解 Wolfcha",
+      "appName": "Wolfcha（猹人杀）",
+      "version": "版本号：v{version}",
+      "group": {
+        "title": "加入用户群",
+        "description": "扫码入群，反馈问题与建议",
+        "alt": "Wolfcha 用户群",
+        "missing": "未找到群组图片（public/group.png）"
+      },
+      "back": "返回设置",
+      "cardTitle": "关于我们",
+      "cardDescription": "Logo、版本号、入群二维码",
+      "view": "查看"
+    },
+    "audio": {
+      "bgmVolume": "背景音量",
+      "masterSwitch": "总开关",
+      "masterDescription": "关闭后将静音所有音效",
+      "aiVoice": "角色配音",
+      "aiVoiceDescription": "控制 AI 角色语音播放"
+    },
+    "logs": {
+      "title": "日志",
+      "description": "遇到问题时，可导出 JSON 日志便于定位",
+      "copy": "复制 JSON",
+      "export": "导出文件"
+    },
+    "toast": {
+      "copySuccess": "已复制日志 JSON",
+      "copyFail": {
+        "title": "复制失败",
+        "description": "当前环境不支持剪贴板或权限被拒绝"
+      },
+      "exportSuccess": "已导出日志文件",
+      "exportFail": "导出失败"
+    }
+  },
+  "playerCount": {
+    "title": "玩家数量",
+    "description": "选择对局人数与标准职位配置",
+    "countLabel": "{count}人",
+    "footer": "仅调整人数与职位配置，玩法流程保持一致。",
+    "options": {
+      "8": {
+        "title": "8人局",
+        "subtitle": "紧凑对局",
+        "description": "3狼 3神 2民",
+        "roles": "神职：预言家、女巫、猎人"
+      },
+      "9": {
+        "title": "9人局",
+        "subtitle": "经典入门",
+        "description": "3狼 3神 3民",
+        "roles": "神职：预言家、女巫、猎人"
+      },
+      "10": {
+        "title": "10人局",
+        "subtitle": "标准配置",
+        "description": "3狼 3神 4民",
+        "roles": "神职：预言家、女巫、猎人"
+      },
+      "11": {
+        "title": "11人局",
+        "subtitle": "加速博弈",
+        "description": "4狼 4神 3民",
+        "roles": "神职：预言家、女巫、猎人、守卫"
+      },
+      "12": {
+        "title": "12人局",
+        "subtitle": "经典满配",
+        "description": "4狼 4神 4民",
+        "roles": "神职：预言家、女巫、猎人、守卫"
+      }
+    }
+  },
+  "difficultySelector": {
+    "title": "难度设置",
+    "description": "选择 AI 的推理深度与话术强度",
+    "footer": "难度只影响 AI 行为强度，游戏规则保持一致。",
+    "options": {
+      "easy": {
+        "title": "新手局",
+        "subtitle": "轻松氛围",
+        "description": "更直觉、更容易信任他人，适合初次体验。",
+        "tag": "放松"
+      },
+      "normal": {
+        "title": "标准局",
+        "subtitle": "均衡推理",
+        "description": "信息量适中，逻辑与表演强度平衡。",
+        "tag": "经典"
+      },
+      "hard": {
+        "title": "高阶局",
+        "subtitle": "深度对抗",
+        "description": "推理更复杂，博弈更激烈，适合老玩家。",
+        "tag": "挑战"
+      }
+    }
+  }
+  ,
+  "gameSetup": {
+    "title": "游戏设置",
+    "description": "在开局前调整难度与人数",
+    "difficulty": "难度",
+    "difficultyPlaceholder": "选择难度",
+    "playerCount": "人数",
+    "playerCountPlaceholder": "选择人数",
+    "genshin": {
+      "title": "大模型原神模式",
+      "description": "默认情况下会为每位 AI 生成接近真实用户的角色背景与名字。开启后不再生成角色背景与名字，直接使用模型原名；如有重名会自动在后面加序号"
+    }
+  }
+  ,
+  "authModal": {
+    "title": "登录或注册",
+    "description": "登录后可获得额度并使用分享奖励。",
+    "tabs": {
+      "magicLink": "邮箱登录",
+      "password": "密码登录"
+    },
+    "magicLink": {
+      "description": "输入邮箱，我们将发送一个登录链接。新用户会自动注册。"
+    },
+    "fields": {
+      "email": "邮箱",
+      "password": "密码"
+    },
+    "placeholders": {
+      "email": "请输入邮箱",
+      "password": "请输入密码",
+      "passwordMin": "请输入密码（至少 6 位）"
+    },
+    "actions": {
+      "sending": "发送中...",
+      "sendMagicLink": "发送登录链接",
+      "signingIn": "登录中...",
+      "signIn": "登录",
+      "signingUp": "注册中...",
+      "signUp": "注册",
+      "sendReset": "发送重置邮件"
+    },
+    "links": {
+      "forgotPassword": "忘记密码？",
+      "noAccount": "还没有账号？去注册",
+      "haveAccount": "已有账号？去登录",
+      "backToSignIn": "返回登录"
+    },
+    "forgot": {
+      "description": "输入您的邮箱，我们将发送密码重置链接。"
+    },
+    "errors": {
+      "emailRequired": "请输入邮箱",
+      "passwordRequired": "请输入密码",
+      "passwordTooShort": "密码长度至少为 6 位"
+    },
+    "messages": {
+      "magicLinkSent": "登录链接已发送，请检查邮箱",
+      "signUpExisting": "如果该邮箱未注册，您将收到验证邮件。如已注册，请直接登录。",
+      "signUpConfirm": "注册成功！请检查邮箱完成验证。",
+      "resetSent": "重置邮件已发送，请检查邮箱"
+    },
+    "toasts": {
+      "magicLinkSent": {
+        "title": "登录链接已发送",
+        "description": "请检查邮箱，点击链接即可登录"
+      },
+      "signInSuccess": "登录成功",
+      "signUpSuccess": "注册成功",
+      "signUpConfirm": {
+        "title": "注册成功",
+        "description": "请检查邮箱完成验证"
+      },
+      "resetSent": {
+        "title": "重置邮件已发送",
+        "description": "请检查邮箱"
+      }
+    }
+  }
+  ,
+  "resetPassword": {
+    "title": "重置密码",
+    "description": "请输入您的新密码。密码长度至少为 6 位。",
+    "fields": {
+      "newPassword": "新密码",
+      "confirmPassword": "确认新密码"
+    },
+    "placeholders": {
+      "newPassword": "请输入新密码",
+      "confirmPassword": "请再次输入新密码"
+    },
+    "actions": {
+      "resetting": "重置中...",
+      "confirm": "确认重置密码"
+    },
+    "errors": {
+      "newPasswordRequired": "请输入新密码",
+      "passwordTooShort": "密码长度至少为 6 位",
+      "passwordMismatch": "两次输入的密码不一致",
+      "linkExpired": "重置链接已过期，请重新发起重置请求"
+    },
+    "toasts": {
+      "resetSuccess": {
+        "title": "密码重置成功",
+        "description": "您现在可以使用新密码登录"
+      },
+      "resetFail": {
+        "title": "重置失败",
+        "description": "发生未知错误"
+      }
+    }
+  }
+  ,
+  "accountModal": {
+    "title": "修改密码",
+    "description": "修改您的账户密码。密码长度至少为 6 位。",
+    "fields": {
+      "newPassword": "新密码",
+      "confirmPassword": "确认新密码"
+    },
+    "placeholders": {
+      "newPassword": "请输入新密码",
+      "confirmPassword": "请再次输入新密码"
+    },
+    "actions": {
+      "cancel": "取消",
+      "updating": "更新中...",
+      "update": "更新密码"
+    },
+    "errors": {
+      "newPasswordRequired": "请输入新密码",
+      "passwordTooShort": "密码长度至少为 6 位",
+      "passwordMismatch": "两次输入的密码不一致"
+    },
+    "toasts": {
+      "updateSuccess": "密码已更新",
+      "updateFail": {
+        "title": "修改失败",
+        "description": "发生未知错误"
+      }
+    }
+  }
+  ,
+  "userProfile": {
+    "title": "账号信息",
+    "description": "查看账号信息与账户操作",
+    "loggedIn": "已登录",
+    "empty": "—",
+    "fields": {
+      "email": "邮箱",
+      "credits": "剩余额度",
+      "referrals": "邀请人数",
+      "referralCode": "邀请码"
+    },
+    "actions": {
+      "copy": "复制邀请码",
+      "changePassword": "修改密码",
+      "shareInvite": "分享邀请",
+      "signOut": "退出登录"
+    },
+    "toasts": {
+      "copySuccess": "邀请码已复制",
+      "copyFail": {
+        "title": "复制失败",
+        "description": "当前环境不支持剪贴板或权限被拒绝"
+      }
+    }
+  }
+  ,
+  "sharePanel": {
+    "title": "分享链接",
+    "description": "每邀请一位新用户注册可获得 3 局额度。",
+    "loading": "加载中...",
+    "invitedCount": "已邀请人数：{count}",
+    "actions": {
+      "copy": "复制链接",
+      "copying": "复制中..."
+    },
+    "toasts": {
+      "copySuccess": "分享链接已复制",
+      "copyFail": "复制失败，请手动复制"
+    }
+  }
+  ,
+  "bottomAction": {
+    "cancel": "取消",
+    "confirmVote": "确认投票: {seat} 号",
+    "confirmSeer": "确认查验: {seat} 号",
+    "confirmWolf": "确认击杀: {seat} 号",
+    "confirmGuard": "确认守护: {seat} 号",
+    "confirmHunter": "确认开枪: {seat} 号",
+    "confirmPoison": "确认对 {seat}号 使用毒药?",
+    "confirmPoisonAction": "确认毒杀",
+    "saveTarget": "救 {seat}号",
+    "poisonUsed": "毒药已耗尽",
+    "clickToPoison": "点击头像用毒",
+    "pass": "跳过",
+    "gameEnd": {
+      "villageWin": "好人阵营胜利！",
+      "wolfWin": "狼人阵营胜利！"
+    },
+    "restart": "重新开始"
+  }
+  ,
+  "mentions": {
+    "playerLabel": "{seat}号 {name}",
+    "seatLabel": "{seat}号",
+    "mention": "@{seat}号",
+    "noMatch": "没有匹配的玩家"
+  }
+  ,
+  "common": {
+    "you": "你",
+    "none": "无",
+    "unknown": "未知"
+  },
+  "alignments": {
+    "wolf": "狼人",
+    "good": "好人"
+  },
+  "playerCard": {
+    "wolfTeam": "狼队",
+    "badgeHolder": "警长",
+    "badgeCandidate": "竞选",
+    "joining": "正在入场"
+  }
+  ,
+  "voteResult": {
+    "seatLabel": "{seat}号",
+    "voteCount": "{count}票"
+  }
+  ,
+  "votingProgress": {
+    "votedCount": "{voted}/{total} 已投票",
+    "totalVotes": "总票数 {count}",
+    "waiting": "等待投票中...",
+    "waitingLabel": "等待中:",
+    "youSuffix": "(你)"
+  }
+  ,
+  "persona": {
+    "strategy": {
+      "aggressive": "激进",
+      "safe": "保守",
+      "balanced": "平衡"
+    }
+  },
+  "playerDetail": {
+    "out": "已出局",
+    "you": "你",
+    "age": "{age}岁",
+    "model": "模型：{model}",
+    "background": "背景",
+    "voiceStyle": "说话风格",
+    "selfRole": "这是你的角色"
+  }
+  ,
+  "tutorialModal": {
+    "title": "新手教学：狼人杀怎么玩？",
+    "intro": "这是一个“隐藏身份 + 推理 + 讲话博弈”的阵营游戏。你只需要跟随系统提示，在需要你行动或发言时做选择即可。",
+    "sections": {
+      "factions": {
+        "title": "1. 阵营与胜利条件",
+        "line1": "好人阵营：村民、预言家、女巫、猎人、守卫。目标是找出并投票放逐所有狼人。",
+        "line2": "狼人阵营：狼人。目标是让好人数量不足以继续对抗（通常是狼人数量 ≥ 存活好人数量）。"
+      },
+      "flow": {
+        "title": "2. 游戏流程（夜晚 → 白天循环）",
+        "line1": "夜晚：部分角色按顺序行动（守卫/狼人/女巫/预言家等）。",
+        "line2": "白天：公布昨夜结果，然后依次发言，最后投票放逐。",
+        "line3": "特殊：若猎人被放逐/死亡，可能触发“开枪带走一人”。"
+      },
+      "speech": {
+        "title": "3. 发言与投票（新手建议）",
+        "line1": "先听：关注每个人的发言逻辑、前后是否矛盾。",
+        "line2": "讲清楚：你为什么怀疑/相信某人（基于谁的发言、哪些细节）。",
+        "line3": "投票前复盘：谁的说法最站不住脚，谁在“带节奏”。"
+      },
+      "roles": {
+        "title": "4. 职业说明（本局：预女猎守）",
+        "werewolf": {
+          "title": "狼人",
+          "description": "夜晚选择一名玩家击杀。狼人之间互为队友（夜晚可能需要协作）。白天要隐藏身份、制造混乱。"
+        },
+        "seer": {
+          "title": "预言家",
+          "description": "夜晚查验一名玩家是“狼人”还是“好人”。白天通常需要用发言建立可信度，带领好人阵营。"
+        },
+        "witch": {
+          "title": "女巫",
+          "description": "有解药与毒药（通常各一次）：解药可救昨夜被杀的玩家；毒药可毒杀一名玩家。注意节奏与信息量。"
+        },
+        "hunter": {
+          "title": "猎人",
+          "description": "若死亡/被放逐，可能获得一次开枪机会，带走一名玩家。关键在于死前给出明确的“枪口信息”。"
+        },
+        "guard": {
+          "title": "守卫",
+          "description": "夜晚守护一名玩家，使其免受狼人击杀（具体规则以本局提示为准）。通常用于保护关键角色。"
+        },
+        "villager": {
+          "title": "村民",
+          "description": "没有夜晚技能，但白天的发言与投票同样关键：用逻辑与信息站队，帮助找狼。"
+        }
+      },
+      "tips": {
+        "title": "5. 小提示",
+        "line1": "如果你是狼人：尽量让自己像好人，制造“合理的怀疑链”，避免同一夜聊崩。",
+        "line2": "如果你是好人：少做“无根据的情绪票”，多用“可验证的信息”做推理。"
+      }
+    },
+    "actions": {
+      "close": "我知道了"
+    }
+  }
+  ,
+  "roleReveal": {
+    "cardTitle": "身份牌",
+    "cardHint": "请独自查看",
+    "dealing": {
+      "title": "正在发放身份牌…",
+      "subtitle": "请稍等",
+      "footer": "稍等片刻，马上开始。"
+    },
+    "identityLabel": "你的身份",
+    "abilitiesLabel": "能力",
+    "tipsLabel": "提醒",
+    "nextLabel": "接下来",
+    "actions": {
+      "continue": "继续"
+    },
+    "roles": {
+      "werewolf": {
+        "title": "狼人",
+        "subtitle": "夜晚狩猎，白天伪装。",
+        "abilities": [
+          "夜晚与同伴商议，选择一名玩家击杀",
+          "白天伪装好人，误导他人判断"
+        ],
+        "tips": [
+          "和队友配合好，不要在夜里聊崩",
+          "白天发言别太完美，容易被识破"
+        ]
+      },
+      "seer": {
+        "title": "预言家",
+        "subtitle": "你能看清身份，但要让人相信你。",
+        "abilities": [
+          "夜晚查验一名玩家（好人/狼人）",
+          "白天用信息引导投票"
+        ],
+        "tips": [
+          "先建立可信度，再抛信息",
+          "信息节奏别太快"
+        ]
+      },
+      "witch": {
+        "title": "女巫",
+        "subtitle": "救与杀只在一念之间。",
+        "abilities": [
+          "解药：救活当夜被袭击的玩家（一次）",
+          "毒药：毒杀一名玩家（一次）"
+        ],
+        "tips": [
+          "药很珍贵，别被节奏牵着走",
+          "信息不足时宁可等一等"
+        ]
+      },
+      "hunter": {
+        "title": "猎人",
+        "subtitle": "出局时可开枪带走一人。",
+        "abilities": [
+          "当你被放逐或被袭击出局，可开枪带走一人"
+        ],
+        "tips": [
+          "别轻易暴露身份",
+          "出局前想清楚目标"
+        ]
+      },
+      "guard": {
+        "title": "守卫",
+        "subtitle": "守住关键的人与时机。",
+        "abilities": [
+          "夜晚守护一名玩家，使其免于当夜袭击",
+          "通常不能连续两晚守护同一人"
+        ],
+        "tips": [
+          "守住关键时刻",
+          "别暴露守护对象"
+        ]
+      },
+      "villager": {
+        "title": "村民",
+        "subtitle": "没有技能，但有判断。",
+        "abilities": [
+          "夜晚无需行动",
+          "白天通过发言与投票找出狼人"
+        ],
+        "tips": [
+          "发言要有依据",
+          "保持逻辑自洽"
+        ]
+      }
+    },
+    "nextStep": {
+      "werewolf": "稍后轮到你行动时，点选一名玩家作为袭击目标。",
+      "seer": "稍后轮到你行动时，点选一名玩家进行查验。",
+      "witch": "稍后你将决定是否用药。",
+      "guard": "稍后轮到你行动时，点选一名玩家进行守护。",
+      "hunter": "你先观察局势，关键时刻再亮出子弹。",
+      "villager": "你暂时无需行动，先倾听与观察。",
+      "default": "舞台已经就位。跟随主持人的提示行动即可。"
+    }
+  },
+  "speakers": {
+    "host": "主持人",
+    "system": "系统",
+    "hint": "提示",
+    "seerResult": "查验结果"
+  },
+  "system": {
+    "gameStart": "人到齐了，开始吧。",
+    "nightFall": "第 {day} 夜，天黑请闭眼",
+    "dayBreak": "天亮了，请睁眼",
+    "dayBreakShort": "天亮了",
+    "voteStartShort": "进入投票环节",
+    "guardActionStart": "守卫请睁眼",
+    "wolfActionStart": "狼人请睁眼",
+    "witchActionStart": "女巫请睁眼",
+    "seerActionStart": "预言家请睁眼",
+    "peacefulNight": "昨晚平安无事",
+    "playerKilled": "{seat}号 {name} 昨晚出局",
+    "playerMilkKilled": "{seat}号 {name} 昨晚被毒奶带走",
+    "playerPoisoned": "{seat}号 {name} 昨晚中毒出局",
+    "badgeSpeechStart": "警徽竞选开始，请候选人依次发言",
+    "badgeElectionStart": "开始警徽评选",
+    "badgeRevote": "警徽平票，重新投票",
+    "badgeElected": "警徽授予 {seat}号 {name}（{votes}票）",
+    "dayDiscussion": "开始自由发言",
+    "voteStart": "发言结束，开始投票。",
+    "playerExecuted": "{seat}号 {name} 以 {votes} 票出局",
+    "voteTie": "票数相同，今天无人出局",
+    "villageWin": "好人获胜。",
+    "wolfWin": "狼人获胜。",
+    "seerResult": "查验结果：{seat}号是{result}",
+    "wolfAttack": "你们决定击杀：{seat}号 {name}",
+    "witchSave": "你使用了解药",
+    "witchPoison": "你对 {seat}号 {name} 使用了毒药",
+    "guardProtect": "你守护了 {seat}号 {name}",
+    "hunterShoot": "{hunterSeat}号猎人开枪带走了 {targetSeat}号 {targetName}",
+    "badgeTransferStart": "{seat}号 {name} 是警长，请选择移交警徽的对象或撕毁警徽",
+    "badgeTransferred": "警徽移交给 {toSeat}号 {toName}",
+    "badgeTorn": "{seat}号 {name} 选择撕毁警徽",
+    "patterns": {
+      "nightFall": "^第\\s*\\d+\\s*夜，天黑请闭眼$",
+      "playerKilled": "^\\d+号\\s+.+\\s+昨晚出局$",
+      "playerPoisoned": "^\\d+号\\s+.+\\s+昨晚中毒出局$",
+      "badgeElected": "^\\s*警徽授予\\s*\\d+号\\s+.+（\\d+票）\\s*$",
+      "badgeTransferred": "^警徽移交给\\s*\\d+号\\s+.+$",
+      "playerExecuted": "^\\d+号\\s+.+\\s+以\\s+\\d+\\s+票出局$",
+      "voteTie": "^票数相同，今天无人出局$"
+    }
+  },
+  "ui": {
+    "waitingSeer": "选择一名玩家进行查验",
+    "seerChecking": "预言家正在选择要查验的对象…",
+    "waitingWolf": "选择要击杀的目标",
+    "wolfActing": "狼人正在商量要击杀的目标…",
+    "wolfCoordinating": "等待狼队友选择击杀目标…",
+    "waitingWitch": "选择是否用药",
+    "witchActing": "女巫正在决定是否使用药水…",
+    "waitingGuard": "选择一名玩家进行守护",
+    "guardActing": "守卫正在选择要守护的对象…",
+    "badgeVotePrompt": "点击头像投票选警徽",
+    "hunterShoot": "点选目标，扣下最后一枪",
+    "hunterAiming": "猎人正在选择要带走的目标…",
+    "yourTurn": "轮到你了，开始发言吧",
+    "votePrompt": "点击头像投票",
+    "clickToVote": "点击头像投票",
+    "aiThinking": "有人正在思考…",
+    "aiVoting": "大家正在投票…",
+    "aiSpeaking": "有人正在发言…",
+    "waitingAction": "轮到你了",
+    "waitingOthers": "等待其他玩家…",
+    "generatingRoles": "正在邀请其他玩家…",
+    "startGame": "开始游戏",
+    "restart": "再来一局",
+    "speechOrder": "请各位玩家依次发言",
+    "generatingVoice": "生成语音"
+  },
+  "prompts": {
+    "daySpeech": {
+      "speakOrder": {
+        "first": "你是第1个发言，其他人都还没发言。",
+        "last": "你是最后一个发言（第{speakOrder}/{totalSpeakers}个），所有人都已经发言完毕，不要说\"等X号发言\"或\"看X号接下来怎么说\"这类话。",
+        "middle": "你是第{speakOrder}/{totalSpeakers}个发言。已发言: {spokenList}；未发言: {unspokenList}。"
+      },
+      "campaign": {
+        "badge": "【竞选要求】给出上警理由（信息位、带队能力、对局势判断、站边等）。\n必须给带队承诺或本轮关注点（如：今天先看谁、怎么归票、怎么处理对跳）。",
+        "pk": "【PK要求】指出对手不适合或你更合适的原因，并给出带队承诺或本轮关注点。"
+      },
+      "roleHints": {
+        "werewolf": "你是狼人，要伪装成好人，可以适当甩锅但不要太刻意",
+        "seer": "你是预言家，可以选择跳身份或先潜水观察"
+      },
+      "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n【场景】\n这是一个线上狼人杀游戏，玩家通过打字交流。\n\n{winCondition}\n\n{persona}\n\n{difficultyHint}",
+      "task": {
+        "lastWords": "你已经出局，现在发表遗言。",
+        "campaign": "警徽竞选发言阶段，发表你的竞选发言。",
+        "dayDiscussion": "白天讨论环节，发表你的看法。",
+        "section": "【任务】\n{taskLine}{campaignRequirements}"
+      },
+      "guidelines": {
+        "genshin": "【说话要求】\n1. 只基于当前局势与规则做判断，不要编造人设背景或口头禅。\n2. 发言简洁清晰，说明你这一轮的判断与行动意图。\n3. 仅允许提及有效座位号：1号-{totalSeats}号（严禁出现@12、12号等超出范围的编号）。\n4. 只讨论存活玩家，避免围绕已出局玩家展开推理或复盘。\n\n【输出格式】\n返回 JSON 字符串数组，每个元素是一条消息气泡。\n示例：\n[\"我倾向先看3号的发言细节。\", \"今天我会把票集中在2号或3号。\"]",
+        "default": "【核心原则】\n1. **沉浸式扮演**：你就是{playerName}，完全融入这个角色的性格和说话习惯。不要只是“模仿”风格，要思考“如果我是他，我现在会怎么想，怎么说”。\n2. **性格鲜明**：如果你的设定是暴躁的，那就表现得不耐烦；如果是蠢萌的，那就表现得迷糊一点。不要因为是游戏就强行变身“逻辑大师”。\n3. **局内优先**：发言以本局信息为主（发言、站边、投票、夜里结果），避免编剧情节或展开场外话题。\n4. **自然对话**：像真人在群聊里打字一样说话。可以是断断续续的短句，可以有感叹、犹豫或情绪化的表达。不要写成“逻辑分析报告”。\n5. **针对性互动**：仔细听前几个人的发言，对他们的观点、语气甚至态度做出反应。如果觉得某人好笑就笑，觉得某人胡扯就怼。\n6. **仅限存活玩家**：不要围绕已出局玩家展开推理或复盘，重点讨论当前存活玩家的发言和投票。\n\n【说话指南】\n- 允许口语化表达（如：呃、那个、我说...），但不要过度堆砌。\n- 人设只体现在语气和措辞里，不要讲设定经历或个人剧情。\n- 提到其他玩家时，建议使用\"X号\"（如\"3号\"），但在语境清晰时也可以用自然代词（\"你\"、\"前面那个\"）。\n- 仅允许提及有效座位号：1号-{totalSeats}号（严禁出现@12、12号等超出范围的编号）。\n- 严禁出现剧本括号动作（如：*推眼镜*），只输出语音/文字内容。\n- 分成 2-5 条自然的消息气泡，长短不一，模拟打字节奏。\n{roleHintLine}\n\n【输出格式】\n返回 JSON 字符串数组，每个元素是一条消息气泡。\n示例：\n[\"哎不是...\", \"3号你这逻辑也太牵强了吧？\", \"我感觉你就像是在硬找茬，真的。\"]"
+      },
+      "phaseHint": {
+        "badge": "你正在进行警徽竞选发言，请严格满足竞选要求。",
+        "pk": "你正在进行警徽PK发言，请严格满足PK要求。"
+      },
+      "phaseSection": "【当前环节】\n{phaseHint}",
+      "userNoTranscript": "（暂无，你是第{speakOrder}个发言）",
+      "userNoSelfSpeech": "（无）",
+      "user": "{gameContext}\n\n【本日讨论记录】\n{todayTranscript}\n\n【你本日已说过的话】\n{selfSpeech}\n\n{phaseHintSection}\n\n【发言顺序】\n{speakOrderHint}\n\n轮到你发言，返回JSON数组："
+    },
+    "vote": {
+      "roleHint": {
+        "werewolf": "提示：避免投狼队友，但也别太明显保人",
+        "seer": "提示：根据查验结果决定"
+      },
+      "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+      "task": "【任务】\n投票环节，选择一名玩家处决。\n尽量与自己本日发言保持一致。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n\n可选: {options}\n\n{roleHints}",
+      "option": "{seat}号({name})",
+      "userNoTranscript": "（无）",
+      "userNoSelfSpeech": "（你今天没有发言）",
+      "user": "{gameContext}\n\n【本日讨论记录】\n{todayTranscript}\n\n【你本日发言汇总】\n\"{selfSpeech}\"\n\n你投几号？\n\n【格式】\n只回复座位数字，如: 3\n不要解释，不要输出多余文字，不要代码块"
+    },
+    "night": {
+      "option": "{seat}号({name})",
+      "optionName": "({name})",
+      "seer": {
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "checkedLine": "已查验过: {list}（不建议重复查验）",
+        "task": "【任务】\n夜晚查验阶段，选择一名玩家查验身份。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n{checkedLine}\n\n可选: {options}",
+        "user": "{context}\n\n你要查验几号？\n\n【格式】\n只回复座位数字，如: 5\n不要解释，不要输出多余文字，不要代码块"
+      },
+      "wolf": {
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}",
+        "teammates": "狼队友: {list}",
+        "solo": "你是唯一存活的狼人",
+        "rules": "{winCondition}\n\n{difficultyHint}",
+        "teammateVotes": "【队友意向】\n{lines}\n提示：建议跟随队友集火同一目标！",
+        "voteLine": "- {seat}号({name}) 想杀: {targetSeat}号{targetName}",
+        "task": "【任务】\n夜晚击杀阶段，选择一名好人击杀。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n{teammateVotesSection}\n\n可选: {options}\n",
+        "user": "{context}\n\n你们要杀几号？\n\n【格式】\n只回复座位数字，如: 2\n不要解释，不要输出多余文字，不要代码块"
+      },
+      "guard": {
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "lastTarget": "上晚保护了{seat}号，今晚不能选",
+        "task": "【任务】\n夜晚守护阶段，选择一名玩家保护，使其今晚不被狼人杀害。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n注意：不能连续两晚保护同一人！\n注意：若你守护了刀口且女巫同时使用解药救人，会触发“毒奶/奶穿”，刀口仍会死亡。\n\n可选: {options}\n{lastTargetLine}",
+        "user": "{context}\n\n你要保护几号？\n\n【格式】\n只回复座位数字，如: 3\n不要解释，不要输出多余文字，不要代码块"
+      },
+      "witch": {
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "victimLine": "狼人袭击了 {seat}号 {name}",
+        "noSense": "解药已用，无法感知刀口",
+        "noAttack": "今晚无人被袭击",
+        "saveOption": "- 输入 \"save\" 使用解药救 {seat}号",
+        "noSelfSave": "- 女巫不可自救",
+        "noSave": "- 解药已用完或无人被杀",
+        "poisonOption": "- 输入 \"poison X\" 毒杀X号玩家（如 \"poison 3\"）",
+        "noPoison": "- 毒药已用完",
+        "task": "【药水状态】\n解药: {healStatus}\n毒药: {poisonStatus}\n\n【今晚情况】\n{tonightInfo}\n\n【任务】\n决定是否使用药水（每晚最多用一瓶）：\n本环节只需要输出指令，不要分析，不要角色扮演。\n{saveLine}\n{poisonLine}\n- 输入 \"pass\" 不使用药水\n注意：同一晚只能使用一瓶药水！\n注意：若守卫守护了刀口且你同时使用解药救人，会触发\"毒奶/奶穿\"，刀口仍会死亡。\n\n可毒目标: {poisonTargets}",
+        "user": "{context}\n\n你要怎么做？\n\n【格式】\n回复: save / poison X / pass\n只输出上述指令本身，不要解释，不要输出多余文字，不要代码块"
+      }
+    }
+    ,
+    "badge": {
+      "option": "{seat}号({name})",
+      "election": {
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "task": "【任务】\n现在进行警徽评选。选择一名玩家获得警徽。\n好人阵营：优先选择你认为更可信、更有领导力、发言更清晰的玩家。\n狼人阵营：优先选择狼队友或你认为容易掌控、能带偏节奏的玩家。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n\n可选: {options}\n",
+        "contextHeader": "第{day}天 警徽评选",
+        "contextWolves": "狼队友: {list}",
+        "contextRecent": "最近发言(节选):\n{text}",
+        "user": "{context}\n\n你把警徽投给几号？\n\n【格式】\n只回复座位数字，如: 3\n不要解释，不要输出多余文字，不要代码块"
+      },
+      "transfer": {
+        "roleHintWerewolf": "提示：考虑移交给狼队友或者看起来可信的好人，或者撕毁警徽",
+        "roleHintGood": "提示：移交给你认为最可信的好人玩家，或者撕毁警徽",
+        "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "task": "【任务】\n你已经出局，需要将警徽移交给一名存活的玩家或选择撕毁警徽。\n如果你选择移交，请选择你认为最值得信任的玩家继承警徽。\n如果你选择撕毁警徽，请回复\"0\"。\n\n可选: {options}，或回复\"0\"撕毁警徽\n\n{roleHints}\n\n【格式】\n只回复座位数字，如: 3\n不要解释，不要输出多余文字，不要代码块",
+        "noTranscript": "（无）",
+        "user": "{context}\n\n【本日讨论记录】\n{todayTranscript}\n\n你把警徽移交给几号？（回复\"0\"表示撕毁警徽）"
+      }
+    }
+  },
+  "badgePhase": {
+    "voteDetailTitle": "警长竞选投票详情",
+    "tiePk": "警徽平票，进入PK发言",
+    "signupStart": "进入警徽竞选报名环节",
+    "noSignup": "无人报名竞选警长，跳过警徽竞选",
+    "transferPrompt": "请选择移交警徽的对象"
+  },
+  "votePhase": {
+    "voteDetailTitle": "投票详情",
+    "tiePk": "放逐平票，进入PK发言"
+  },
+  "phase": {
+    "lobby": { "description": "准备开始" },
+    "setup": { "description": "生成角色中..." },
+    "nightStart": { "description": "夜晚降临" },
+    "nightGuard": { "description": "守卫行动中", "human": "选择要保护的玩家" },
+    "nightWolf": { "description": "狼人行动中", "human": "选择击杀目标" },
+    "nightWitch": { "description": "女巫行动中", "human": "是否使用药水？" },
+    "nightSeer": { "description": "预言家行动中", "human": "选择查验目标" },
+    "nightResolve": { "description": "天亮了" },
+    "dayStart": { "description": "白天开始" },
+    "badgeSignup": { "description": "警徽竞选报名", "human": "是否竞选警长" },
+    "badgeSpeech": { "description": "警徽竞选发言" },
+    "badgeElection": {
+      "description": "警徽评选",
+      "human": "投票选警徽",
+      "noVote": "你是候选人，无需投票"
+    },
+    "pkSpeech": { "description": "PK发言" },
+    "daySpeech": { "description": "发言阶段" },
+    "speechYourTurn": "轮到你发言",
+    "lastWords": { "description": "遗言阶段" },
+    "dayVote": { "description": "投票阶段" },
+    "dayResolve": { "description": "处决结算" },
+    "badgeTransfer": { "description": "警长移交警徽", "human": "选择移交警徽的对象" },
+    "hunterShoot": { "description": "猎人开枪", "human": "选择开枪目标" },
+    "gameEnd": { "description": "游戏结束", "villageWin": "好人胜利", "wolfWin": "狼人胜利" }
+  },
+  "page": {
+    "voteHelp": "怎么投票？",
+    "tutorialTitle": "玩法说明",
+    "rolePending": "待揭晓",
+    "audioSettings": "声音设置",
+    "closeNotebook": "关闭笔记",
+    "openNotebook": "打开笔记",
+    "witchPoisonUsed": {
+      "title": "毒药已用过了",
+      "description": "今晚只能选择救人，或直接跳过。"
+    }
+  },
+  "ritual": {
+    "gameStart": "开局",
+    "badgeSignup": "警徽竞选报名",
+    "badgeSpeechTitle": "警徽竞选开始",
+    "badgeSpeechSubtitle": "请候选人依次发言"
+  },
+  "dialog": {
+    "turnToSpeak": "轮到你",
+    "turnToLastWords": "发表遗言",
+    "badgeElectionInProgress": "警徽评选进行中",
+    "voteInProgress": "投票进行中",
+    "nextRoundHint": "轻触继续，轮到下一位",
+    "nextRoundButton": "下一位",
+    "continue": "继续",
+    "ok": "OK",
+    "nightAction": {
+      "wolfAwake": "狼人请睁眼",
+      "wolfActing": "狼人正在选择目标",
+      "witchAwake": "女巫请睁眼",
+      "witchActing": "女巫正在行动",
+      "seerAwake": "预言家请睁眼",
+      "seerChecking": "预言家正在查验",
+      "hunterAwake": "猎人发动技能",
+      "hunterActing": "猎人正在开枪"
+    },
+    "action": {
+      "vote": "投票给",
+      "badgeVote": "把警徽投给",
+      "seerCheck": "查验",
+      "wolfKill": "击杀",
+      "guardProtect": "守护",
+      "hunterShoot": "射击",
+      "badgeTransfer": "将警徽移交给",
+      "select": "选择"
+    },
+    "input": {
+      "lastWordsPlaceholder": "有什么想说的？",
+      "defaultPlaceholder": "你怎么看？",
+      "send": "发送",
+      "finishSpeech": "结束发言"
+    }
+  },
+  "dayPhase": {
+    "organizing": "（正在组织语言…）",
+    "interrupted": "（话音被打断了）",
+    "lastWordsSystem": "请 {seat}号 {name} 发表遗言",
+    "lastWordsPrompt": "请你发表遗言（{seat}号 {name}）"
+  },
+  "specialEvents": {
+    "hunterPrompt": "你是猎人，请选择开枪目标（或放弃）",
+    "villageWinLine": "好人阵营胜利，村庄恢复了和平",
+    "wolfWinLine": "狼人阵营胜利，村庄陷入黑暗",
+    "roleRevealItem": "{seat}号 {name}: {role}",
+    "roleRevealLine": "身份揭晓：{list}"
+  },
+  "gameLogic": {
+    "errors": {
+      "openRouterUnauthorized": {
+        "title": "OpenRouter 401 Unauthorized",
+        "description": "常见原因：1) 改了 .env.local 但没重启 next dev；2) key 带了引号/空格/换行；3) key 已失效。"
+      },
+      "requestFailed": "请求失败",
+      "systemError": "出错了: {error}"
+    },
+    "night": {
+      "guardNoRepeat": "守卫不能连续两晚守护同一人",
+      "guardProtect": "你保护了 {seat}号 {name}",
+      "wolfVote": "你投票选择袭击 {seat}号 {name}，等待队友投票...",
+      "wolfTimeout": {
+        "title": "队友响应超时",
+        "description": "AI 狼人跟随你的选择"
+      },
+      "wolfTie": {
+        "dialogue": "狼队投票出现平票，请重新选择目标。",
+        "title": "狼队平票",
+        "description": "请重新点击玩家头像选择击杀目标"
+      },
+      "wolfChosen": "狼队决定袭击 {seat}号 {name}",
+      "witchSave": "你使用了解药",
+      "witchPoison": "你对 {seat}号 {name} 使用了毒药",
+      "witchPass": "你选择不使用药水",
+      "seerResult": "{seat}号 {name} 是{result}"
+    }
+  },
+  "gameMaster": {
+    "invalidSeat": "（无效座位）",
+    "summary": {
+      "system": "你是狼人杀的记录员。\n\n把给定的记录压缩为 3-6 条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 10-35 字\n- 优先保留：公投出局/遗言、关键站边/指控、明显的归票/改票、夜晚死亡信息（如果在记录里）\n\n输出格式：返回 JSON 数组，例如：[\"第1天: 2号被放逐，遗言踩10号\", \"9号曾投给1号\"]",
+      "user": "【第{day}天 白天记录】\n{transcript}\n\n请返回 JSON 数组："
+    }
+  },
+  "characterGenerator": {
+    "rosterLine": "{index}. {name} ({gender}, {age}岁) - {basicInfo}",
+    "rosterLineSimple": "{index}. {name} ({gender}) - {basicInfo}",
+    "nicknamePrompt": "你是取名助手，为模型英文名生成中文昵称。\n\n【模型列表】\n{list}\n\n【要求】\n1. 每个模型给对应数量的昵称（同一模型昵称彼此不同）\n2. 1-4 字为主，可中英混合\n3. 有趣、好记，能呼应英文名\n4. items[].model 必须与上方列表中的模型名称完全一致\n5. 不要重复，不要加引号或编号\n\n【输出 JSON】\n{\n  \"items\": [\n    { \"model\": \"ModelX\", \"nicknames\": [\"小X\", \"X仔\"] }\n  ]\n}\n\n现在输出：",
+    "baseProfilesPrompt": "你是一个狼人杀游戏的角色设计师。\n\n【当前剧本背景】\n标题：{title}\n背景：{description}\n角色建议：{rolesHint}\n\n【任务】\n生成 {count} 个玩家角色档案。这些是\"玩狼人杀的普通人\"，不是悬疑剧本的角色。\n\n【重要】\n- 这是狼人杀游戏，角色需要能正常讨论、投票、发言\n- 口头禅要像口语习惯/语气词/连接词，避免夸张或“动漫式”口癖\n- 口头禅只是偶尔使用，不要每句话都重复或固定句尾\n- 背景是普通人的职业/身份，不要悬疑剧情\n- 角色要有性格差异，但说话方式要正常\n\n【输出要求】\n1. 必须严格输出 JSON 对象\n2. 必须恰好 {count} 个档案\n3. 每个档案字段：\n   - displayName: string（符合场景的名字，2-3个字）\n   - gender: \"male\" | \"female\"\n   - age: number（20-55）\n   - mbti: string（4字母，如 INTJ/ENFP）\n   - basicInfo: string（一句话职业/身份，如\"开出租的老司机\"、\"刚毕业的大学生\"）\n4. 名字必须各不相同\n\n【示例】\n{\n  \"profiles\": [\n    { \"displayName\": \"张伟\", \"gender\": \"male\", \"age\": 35, \"mbti\": \"ESTJ\", \"basicInfo\": \"开了十年出租车的老司机\" },\n    { \"displayName\": \"林小雨\", \"gender\": \"female\", \"age\": 24, \"mbti\": \"ENFP\", \"basicInfo\": \"互联网公司的产品经理\" }\n  ]\n}\n\n现在输出：",
+    "fullPersonasPrompt": "你是狼人杀游戏的角色设计师。\n\n【场景】\n{title} - {description}\n\n【全员档案】\n{roster}\n\n【任务】\n为每个角色补全 persona，让他们在狼人杀游戏中有自然且有辨识度的说话风格。\n请自由发挥，确保每个人的性格、说话习惯和表达节奏都有明显差异，但整体像真实玩家而不是戏剧角色。\n\n【重要约束】\n- 这是狼人杀游戏，角色需要能正常讨论、分析、投票\n- 角色发言需聚焦局内，不要引导编剧情节或场外聊天\n- voiceRules 需体现具体说话特征\n- backgroundStory 是简单职业描述，10-20字，如\"暴躁的卡车司机\"、\"刚睡醒的宅男\"\n- styleLabel 用简短标签概括性格或表达方式\n- riskBias 根据性格选择（safe/balanced/aggressive）\n\n【输出要求】\n1. 必须输出 JSON：{ \"characters\": [...] }\n2. 必须恰好 {count} 个角色，顺序与档案一致\n3. persona.gender/age/mbti 必须与档案完全一致\n\n【输出结构】\n{\n  \"characters\": [\n{schema}\n  ]\n}\n\n现在输出：",
+    "repairBaseProfilesPrompt": "你是一个严格的 JSON 修复器。\n\n【目标】\n把输入修复成严格 JSON 对象，结构为 { \"profiles\": [...] }，并确保 profiles 恰好 {count} 个。\n\n【字段要求】\n- displayName: string\n- gender: \"male\" | \"female\" | \"nonbinary\"\n- age: number（16-70）\n- mbti: string（4 字母，例如 INTJ/ENFP）\n- basicInfo: string\n\n【场景】\n{title}\n{description}\n\n【输入】\n{raw}\n\n【输出】\n只输出 JSON：",
+    "repairFullPersonasPrompt": "你是一个严格的 JSON 修复器。\n\n【目标】\n把输入修复成严格 JSON 对象，结构为 { \"characters\": [...] }，并确保 characters 恰好 {count} 个。\n\n【必须严格满足】\n1. characters 顺序必须与基础档案一致\n2. persona.gender/age/mbti 必须与对应档案一致\n3. backgroundStory 必须是 1 句话\n4. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板\n\n【场景】\n{title}\n{description}\n\n【全员基础档案】\n{roster}\n\n【输入】\n{raw}\n\n【输出】\n{\n  \"characters\": [\n{schema}\n  ]\n}\n\n注意：只输出 JSON，不要解释。"
+  },
+  "scenarios": {
+    "high_school_reunion": {
+      "title": "同学聚会",
+      "description": "十年后的同学聚会，老同学们重逢。有人混得好，有人不如意，往事和现实交织。",
+      "rolesHint": "角色类型：班长、学霸、班花/班草、老实人、社牛。对话风格：生活化、怀旧、偶尔攀比。"
+    },
+    "family_dinner": {
+      "title": "年夜饭",
+      "description": "一大家子围坐年夜饭，表面和气，但总有些话题容易擦枪走火。",
+      "rolesHint": "角色类型：长辈、晚辈、亲戚、配偶。对话风格：家常、关心中带刺、爱劝和。"
+    },
+    "wedding_banquet": {
+      "title": "婚礼酒席",
+      "description": "婚礼现场喜气洋洋，但亲友之间的老账新仇都在酒杯里。",
+      "rolesHint": "角色类型：新人、双方父母、伴郎伴娘、前任、爱挑事的亲戚。对话风格：客套、阴阳怪气。"
+    },
+    "community_committee": {
+      "title": "业委会开会",
+      "description": "小区业委会开会讨论物业费，业主们各执一词，火药味十足。",
+      "rolesHint": "角色类型：热心业主、物业经理、爱录音的大爷、带娃宝妈。对话风格：群聊语气、互怼。"
+    },
+    "tech_startup": {
+      "title": "创业公司",
+      "description": "创业公司团建，表面增强凝聚力，实则职场政治暗流涌动。",
+      "rolesHint": "角色类型：创始人、程序员、产品经理、实习生、行政。对话风格：互联网黑话、吐槽。"
+    },
+    "hospital_oncall": {
+      "title": "医院急诊",
+      "description": "急诊室值班夜，一起棘手的病例让所有人神经绷紧。",
+      "rolesHint": "角色类型：主治医生、实习医生、护士长、患者家属。对话风格：专业、压力大。"
+    },
+    "esports_house": {
+      "title": "电竞战队",
+      "description": "电竞战队成绩下滑，训练赛变成互相甩锅的现场。",
+      "rolesHint": "角色类型：选手、教练、经纪人、替补。对话风格：电竞黑话、节奏快。"
+    },
+    "cooking_competition": {
+      "title": "厨艺比赛",
+      "description": "厨艺比赛决赛后台，选手们表面客气，暗中较劲。",
+      "rolesHint": "角色类型：夺冠热门、新人、评委、导演。对话风格：客气但算计。"
+    },
+    "detective_noir": {
+      "title": "侦探事务所",
+      "description": "侦探事务所里，一桩悬案的相关人员聚集。每个人都有不愿说的秘密。",
+      "rolesHint": "角色类型：侦探、委托人、嫌疑人、证人、助手。对话风格：克制、爱试探、反问多。"
+    },
+    "cruise_ship": {
+      "title": "邮轮派对",
+      "description": "豪华邮轮上，一位重要乘客失踪。船已离港，没人能下船。",
+      "rolesHint": "角色类型：富豪、船长、服务生、神秘乘客。对话风格：上流社交、暗示。"
+    },
+    "subway_night_shift": {
+      "title": "地铁末班车",
+      "description": "末班地铁因故障停在隧道里，乘客们开始互相猜疑。",
+      "rolesHint": "角色类型：司机、上班族、学生、保安、神秘乘客。对话风格：都市口语、焦虑。"
+    },
+    "museum_night": {
+      "title": "博物馆夜班",
+      "description": "博物馆闭馆后，监控出现异常。展厅里有脚步声，钥匙不翼而飞。",
+      "rolesHint": "角色类型：保安、馆员、修复师、实习生。对话风格：谨慎、互相盘问。"
+    },
+    "co_working_space": {
+      "title": "共享办公",
+      "description": "共享办公区突发停电，项目临近发布，大家都在找责任人。",
+      "rolesHint": "角色类型：创业者、自由职业者、运维、投资人、实习生。对话风格：商务口吻、暗含火药味。"
+    },
+    "escape_room": {
+      "title": "密室逃脱",
+      "description": "密室逃脱进行到一半，有道具丢失导致卡关，玩家开始互相怀疑。",
+      "rolesHint": "角色类型：带队玩家、胆小队友、老玩家、店员、临时拼团。对话风格：紧张、推理、吐槽。"
+    },
+    "music_festival_backstage": {
+      "title": "音乐节后台",
+      "description": "演出临近，设备突然出故障，主办方与艺人团队紧急对峙。",
+      "rolesHint": "角色类型：乐队成员、主办方、舞台总监、灯光师、粉丝代表。对话风格：快节奏、情绪起伏。"
+    },
+    "airport_delay": {
+      "title": "机场延误",
+      "description": "航班大面积延误，旅客情绪爆炸，各种矛盾集中爆发。",
+      "rolesHint": "角色类型：地勤、乘客、律师、带娃家长。对话风格：现实口语、投诉。"
+    },
+    "train_sleeping_car": {
+      "title": "火车卧铺",
+      "description": "长途卧铺车厢里，深夜有人翻箱倒柜，乘客们互相猜疑。",
+      "rolesHint": "角色类型：乘务员、商贩、背包客、大叔大妈。对话风格：生活化、疑心重。"
+    },
+    "retirement_home": {
+      "title": "养老院",
+      "description": "养老院活动室里，大爷大妈们进行脑力活动，谁也不服谁。",
+      "rolesHint": "角色类型：退休干部、广场舞领队、富豪、八卦老太。对话风格：啰嗦、倚老卖老。"
+    },
+    "livestream_house": {
+      "title": "主播合租屋",
+      "description": "几位主播合租直播，突然有人被曝黑料，互相怀疑是谁泄露的。",
+      "rolesHint": "角色类型：主播、运营、粉丝、剪辑师。对话风格：网络梗、公关话术。"
+    },
+    "campfire_summer": {
+      "title": "夏令营",
+      "description": "夏令营篝火晚会后，营地出现失窃事件，大家互相指责。",
+      "rolesHint": "角色类型：教官、孩子王、透明人、告状精。对话风格：少年感、嘴硬。"
+    }
+  },
+  "promptUtils": {
+    "roleText": {
+      "werewolf": "狼人（坏人阵营）",
+      "seer": "预言家（好人阵营，每晚可查验一人身份）",
+      "witch": "女巫（好人阵营，有一瓶解药可救人，一瓶毒药可毒人）",
+      "hunter": "猎人（好人阵营，死亡时可开枪带走一人）",
+      "guard": "守卫（好人阵营，每晚可保护一人不被狼人杀害）",
+      "villager": "村民（好人阵营）"
+    },
+    "winCondition": {
+      "werewolf": "【获胜条件】狼人数量 >= 好人数量 时狼人胜利\n【核心目标】\n- 每晚与狼队友商议击杀目标，优先杀神职（预言家>女巫>猎人>守卫）\n- 白天伪装好人，引导论放逐好人\n- 保护狼队友，避免被集火",
+      "seer": "【获胜条件】放逐所有狼人时好人胜利\n【核心目标】\n- 每晚查验可疑玩家，積累信息\n- 选择合适时机公开身份，带领好人放逐狼人\n- 注意保护自己，预言家是狼人首要击杀目标",
+      "witch": "【获胜条件】放逐所有狼人时好人胜利\n【核心目标】\n- 解药谨慎使用，救关键神职或确定的好人\n- 毒药留给确认的狼人或危险玩家\n- 注意：女巫不能自救，每晚最多用一瓶药",
+      "hunter": "【获胜条件】放逐所有狼人时好人胜利\n【核心目标】\n- 白天積极发言，分析局势\n- 死亡时可开枪带走一人，留给确认的狼人\n- 注意：被毒死无法开枪",
+      "guard": "【获胜条件】放逐所有狼人时好人胜利\n【核心目标】\n- 每晚保护可能被狼人击杀的玩家\n- 不能连续两晚保护同一人\n- 根据场上信息判断狼人的击杀目标",
+      "villager": "【获胜条件】放逐所有狼人时好人胜利\n【核心目标】\n- 白天认真听发言，分析每个人的行为\n- 通过投票放逐狼人\n- 配合神职的引导"
+    },
+    "difficultySpeech": {
+      "easy": "【难度】新手局（轻松、直觉）\n【风格指令】\n- 以直觉和情绪为主，少做复杂推理或多轮逻辑链\n- 更容易相信他人或随主流观点\n- 狼人：更谨慎保命，少用高阶战术，可出现小破绽\n- 好人：更多跟随信息位，少强推",
+      "normal": "【难度】标准局（均衡推理）\n【风格指令】\n- 关注发言矛盾、站边变化、投票去向\n- 观点清晰但不过度武断\n- 狼人：以自然逻辑自证，适度带节奏\n- 好人：必要时强势归票",
+      "hard": "【难度】高阶局（深度对抗）\n【风格指令】\n- 记录并对照发言顺序、立场变化、投票链条、收益关系\n- 主动构建论点与反证，识别搅局、钓鱼、伪逻辑\n- 狼人：分工掩护、软站边+关键时刻转向、制造信息差与误导\n- 好人：强势质询、反制带节奏、精准点狼"
+    },
+    "difficultyDecision": {
+      "roleNoteWerewolf": "狼人侧更关注击杀收益与神职威胁。",
+      "roleNoteGood": "好人侧更关注信息价值与可信度。",
+      "easy": "【难度策略】偏直觉与从众，不追求最优解。{roleNote}",
+      "normal": "【难度策略】平衡风险与收益，避免明显逆逻辑选择。{roleNote}",
+      "hard": "【难度策略】追求最优策略，结合投票链、发言动机与收益关系决策。{roleNote}"
+    },
+    "persona": {
+      "section": "【角色设定】\n性格: {styleLabel}\n说话习惯: {voiceRules}\n风格: {riskLabel}",
+      "riskAggressive": "激进型，喜欢主动质疑",
+      "riskSafe": "保守型，喜欢观察",
+      "riskBalanced": "平衡型"
+    },
+    "aliveCounts": "【人数概况】\n总存活: {count}",
+    "dailySummaryItem": "第{day}天: {summary}",
+    "dailySummarySection": "【历史关键信息】\n{lines}",
+    "gameContext": {
+      "playerLine": "{seat}号 {name}{youSuffix}",
+      "youSuffix": " (你)",
+      "header": "【当前局势】\n第{day}天 {phase}\n有效座位号范围: 1号-{totalSeats}号（共{totalSeats}人），严禁提及范围外座位号\n存活玩家:\n{playerList}",
+      "night": "夜晚",
+      "day": "白天",
+      "systemAnnouncements": "【系统公告】\n{lines}",
+      "deadPlayers": "【出局玩家】\n{lines}",
+      "death": {
+        "wolf": "{seat}号 {name} 被狼人杀死",
+        "poison": "{seat}号 {name} 被女巫毒死",
+        "generic": "{seat}号 {name} 被{reason}",
+        "vote": "{seat}号 {name} 被投票处决"
+      },
+      "deathReason": {
+        "wolf": "狼人杀死",
+        "poison": "女巫毒死",
+        "other": "杀死"
+      },
+      "todayDeaths": "【今日死亡】\n{lines}",
+      "voteHistoryHeader": "【历史投票】",
+      "voteDayHeader": "第{day}天投票:",
+      "voteGroup": "{seat}号{name}(共{count}票): {voters}",
+      "seatName": "{seat}号 {name}",
+      "seatNameCompact": "{seat}号{name}",
+      "seatLabel": "{seat}号",
+      "listSeparator": "、",
+      "seerHistoryHeader": "【查验记录】",
+      "seerHistoryItem": "第{day}夜: {seat}号 {name} - {result}",
+      "witchStatusHeader": "【药水状态】",
+      "witchHeal": "解药: {status}",
+      "witchPoison": "毒药: {status}",
+      "used": "已使用",
+      "available": "可用",
+      "witchHealAction": "第{day}夜: 你用解药救了 {seat}号 {name}",
+      "witchPoisonAction": "第{day}夜: 你用毒药毒了 {seat}号 {name}",
+      "witchHistory": "【你的用药记录】\n{lines}",
+      "guardLast": "【上晚保护】{seat}号 {name}（今晚不能连续保护）",
+      "wolfTeammates": "【狼队友】\n{list}",
+      "currentVotes": "【当前投票】\n{lines}",
+      "voteLine": "{voter} -> {target}"
+    }
+  }
+}

@@ -6,6 +6,7 @@ import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { TutorialModal } from "@/components/game/TutorialModal";
 import type { DevPreset, DifficultyLevel, Role, StartGameOptions } from "@/types/game";
 import { DevModeButton } from "@/components/DevTools";
@@ -16,6 +17,7 @@ import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { useCredits } from "@/hooks/useCredits";
+import { useAppLocale } from "@/i18n/useAppLocale";
 
 function buildDefaultRoles(playerCount: number): Role[] {
   switch (playerCount) {
@@ -116,6 +118,8 @@ export function WelcomeScreen({
   isGenshinMode,
   onGenshinModeChange,
 }: WelcomeScreenProps) {
+  const t = useTranslations();
+  const { locale, setLocale } = useAppLocale();
   const {
     user,
     credits,
@@ -149,14 +153,14 @@ export function WelcomeScreen({
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
 
   const roleOptions: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
-  const roleLabels: Record<Role, string> = {
-    Villager: "村民",
-    Werewolf: "狼人",
-    Seer: "预言家",
-    Witch: "女巫",
-    Hunter: "猎人",
-    Guard: "守卫",
-  };
+  const roleLabels: Record<Role, string> = useMemo(() => ({
+    Villager: t("roles.villager"),
+    Werewolf: t("roles.werewolf"),
+    Seer: t("roles.seer"),
+    Witch: t("roles.witch"),
+    Hunter: t("roles.hunter"),
+    Guard: t("roles.guard"),
+  }), [t]);
 
   const [fixedRoles, setFixedRoles] = useState<(Role | "")[]>(() => buildDefaultRoles(10));
 
@@ -193,22 +197,19 @@ export function WelcomeScreen({
 
   const roleConfigHint = useMemo(() => {
     const expected = getRoleCountConfig(playerCount);
-    const godLabel = expected.guardCount > 0 ? "预女猎守" : "预女猎";
-    return `需满足：${expected.wolfCount}狼 ${godLabel} ${expected.villagerCount}民`;
-  }, [playerCount]);
+    const godLabel = expected.guardCount > 0
+      ? t("welcome.roleConfig.godLabelFull")
+      : t("welcome.roleConfig.godLabelNoGuard");
+    return t("welcome.roleConfig.hint", {
+      wolfCount: expected.wolfCount,
+      godLabel,
+      villagerCount: expected.villagerCount,
+    });
+  }, [playerCount, t]);
 
   const canConfirm = useMemo(() => {
     return !!humanName.trim() && !isLoading && !isTransitioning && !creditsLoading;
   }, [humanName, isLoading, isTransitioning, creditsLoading]);
-
-  const difficultyLabel = useMemo(() => {
-    const labels: Record<DifficultyLevel, string> = {
-      easy: "新手局",
-      normal: "标准局",
-      hard: "高阶局",
-    };
-    return labels[difficulty];
-  }, [difficulty]);
 
   useEffect(() => {
     const paper = paperRef.current;
@@ -294,13 +295,15 @@ export function WelcomeScreen({
 
     if (!user) {
       setIsAuthOpen(true);
-      toast("请先登录或注册");
+      toast(t("welcome.toast.signInFirst"));
       return;
     }
 
     if (credits !== null && credits <= 0) {
       setIsShareOpen(true);
-      toast("额度不足", { description: "分享邀请可获得更多额度。" });
+      toast(t("welcome.toast.noCredits.title"), {
+        description: t("welcome.toast.noCredits.description"),
+      });
       return;
     }
 
@@ -325,14 +328,18 @@ export function WelcomeScreen({
         setIsTransitioning(false);
         onAbort?.();
         setIsShareOpen(true);
-        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+        toast.error(t("welcome.toast.creditFail.title"), {
+          description: t("welcome.toast.creditFail.description"),
+        });
       })
       .catch(() => {
         // Credit deduction failed, abort the game and show share panel
         setIsTransitioning(false);
         onAbort?.();
         setIsShareOpen(true);
-        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+        toast.error(t("welcome.toast.creditFail.title"), {
+          description: t("welcome.toast.creditFail.description"),
+        });
       })
       .finally(() => {
         isStartingRef.current = false;
@@ -382,16 +389,37 @@ export function WelcomeScreen({
       />
 
       <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-1 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2 py-1 text-xs text-[var(--text-primary)]">
+          <span className="uppercase tracking-wider opacity-60">{t("locale.label")}</span>
+          <button
+            type="button"
+            onClick={() => setLocale("zh")}
+            aria-pressed={locale === "zh"}
+            className={`px-1.5 py-0.5 rounded ${locale === "zh" ? "bg-[var(--color-accent-bg)] text-[var(--color-accent)]" : "opacity-70"}`}
+          >
+            {t("locale.zh")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLocale("en")}
+            aria-pressed={locale === "en"}
+            className={`px-1.5 py-0.5 rounded ${locale === "en" ? "bg-[var(--color-accent-bg)] text-[var(--color-accent)]" : "opacity-70"}`}
+          >
+            {t("locale.en")}
+          </button>
+        </div>
         {user ? (
           <button
             type="button"
             onClick={() => setIsUserProfileOpen(true)}
             className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-            title="查看账号信息"
+            title={t("welcome.account.viewInfo")}
           >
             <UserCircle size={16} />
-            <span className="truncate max-w-[160px]">{user.email ?? "已登录"}</span>
-            <span className="opacity-70">剩余 {creditsLoading ? "..." : (credits ?? 0)} 局</span>
+            <span className="truncate max-w-[160px]">{user.email ?? t("welcome.account.loggedIn")}</span>
+            <span className="opacity-70">
+              {t("welcome.account.remaining", { count: creditsLoading ? "..." : (credits ?? 0) })}
+            </span>
           </button>
         ) : (
           <Button
@@ -401,7 +429,7 @@ export function WelcomeScreen({
             className="h-9 text-sm gap-2"
           >
             <UserCircle size={16} />
-            登录/注册
+            {t("welcome.auth.signIn")}
           </Button>
         )}
 
@@ -413,7 +441,7 @@ export function WelcomeScreen({
             className="h-9 text-sm gap-2 md:hidden"
           >
             <UserCircle size={16} />
-            账号信息
+            {t("welcome.account.info")}
           </Button>
         )}
 
@@ -424,10 +452,10 @@ export function WelcomeScreen({
           className="h-9 text-sm gap-2"
         >
           <GearSix size={16} />
-          设置
+          {t("welcome.settings")}
         </Button>
         <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
-          玩法教学
+          {t("welcome.tutorial")}
         </Button>
       </div>
 
@@ -445,26 +473,26 @@ export function WelcomeScreen({
               <PawPrint weight="fill" size={42} />
             </div>
             <div className="wc-contract-title">WOLFCHA</div>
-            <div className="wc-contract-subtitle">The Shadow Game</div>
+            <div className="wc-contract-subtitle">{t("welcome.subtitle")}</div>
           </div>
 
           <div className="mt-7 text-center wc-contract-body">
             <div className="wc-contract-oath">
-              我自愿加入这场关于谎言与真相的游戏。
+              {t("welcome.oath.line1")}
               <br />
-              当夜幕降临，我将隐藏我的身份；
+              {t("welcome.oath.line2")}
               <br />
-              当黎明升起，我将审判罪恶。
+              {t("welcome.oath.line3")}
             </div>
 
             <div className="mt-8">
-              <div className="wc-contract-label">签署你的名字</div>
+              <div className="wc-contract-label">{t("welcome.signature.label")}</div>
               <div className="relative mt-2">
                 <input
                   type="text"
                   value={humanName}
                   onChange={(e) => setHumanName(e.target.value)}
-                  placeholder="Signature Here..."
+                  placeholder={t("welcome.signature.placeholder")}
                   className="wc-signature-input"
                   autoComplete="off"
                   autoFocus
@@ -488,7 +516,7 @@ export function WelcomeScreen({
 
           <div className="mt-8 flex flex-col items-center gap-3">
             <div className="wc-seal-hint">
-              {canConfirm ? "按下印章以生效" : "签署名字后才可生效"}
+              {canConfirm ? t("welcome.sealHint.ready") : t("welcome.sealHint.waiting")}
             </div>
             <button
               ref={sealButtonRef}
@@ -522,8 +550,8 @@ export function WelcomeScreen({
               animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
               transition={{ delay: 0.18, duration: 0.55, ease: "easeOut" }}
             >
-              <div className="wc-transition-title">游戏开始</div>
-              <div className="wc-transition-subtitle">The Game Begins</div>
+              <div className="wc-transition-title">{t("welcome.transition.title")}</div>
+              <div className="wc-transition-subtitle">{t("welcome.transition.subtitle")}</div>
             </motion.div>
           </motion.div>
         )}
@@ -551,7 +579,7 @@ export function WelcomeScreen({
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50">
                 <div className="flex items-center gap-2">
                   <Wrench size={20} className="text-yellow-400" />
-                  <span className="font-bold text-white">开发者模式</span>
+                  <span className="font-bold text-white">{t("welcome.dev.title")}</span>
                 </div>
                 <button
                   onClick={() => setIsDevConsoleOpen(false)}
@@ -572,7 +600,7 @@ export function WelcomeScreen({
                   : "text-gray-400 hover:text-white hover:bg-gray-800/30"
               }`}
             >
-              预设
+              {t("welcome.dev.tabs.preset")}
             </button>
             <button
               type="button"
@@ -583,7 +611,7 @@ export function WelcomeScreen({
                   : "text-gray-400 hover:text-white hover:bg-gray-800/30"
               }`}
             >
-              配置
+              {t("welcome.dev.tabs.roles")}
             </button>
           </div>
 
@@ -591,13 +619,13 @@ export function WelcomeScreen({
             {devTab === "preset" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-gray-300">预设场景测试</div>
+                  <div className="text-xs font-semibold text-gray-300">{t("welcome.dev.preset.title")}</div>
                   <button
                     type="button"
                     onClick={() => setDevPreset("")}
                     className="text-xs text-gray-400 hover:text-white"
                   >
-                    清除
+                    {t("welcome.dev.preset.clear")}
                   </button>
                 </div>
                 <select
@@ -605,9 +633,9 @@ export function WelcomeScreen({
                   onChange={(e) => setDevPreset(e.target.value as DevPreset | "")}
                   className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400"
                 >
-                  <option value="">无</option>
-                  <option value="MILK_POISON_TEST">毒奶测试</option>
-                  <option value="LAST_WORDS_TEST">遗言测试</option>
+                  <option value="">{t("welcome.dev.preset.none")}</option>
+                  <option value="MILK_POISON_TEST">{t("welcome.dev.preset.milkPoison")}</option>
+                  <option value="LAST_WORDS_TEST">{t("welcome.dev.preset.lastWords")}</option>
                 </select>
               </div>
             )}
@@ -615,16 +643,20 @@ export function WelcomeScreen({
             {devTab === "roles" && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-gray-300">{`身份配置（${playerCount}人局）`}</div>
+                  <div className="text-xs font-semibold text-gray-300">
+                    {t("welcome.dev.roles.title", { count: playerCount })}
+                  </div>
                   <div className={`text-xs ${roleConfigValid ? "text-green-400" : "text-gray-400"}`}>
-                    {roleConfigValid ? "配置完成" : roleConfigHint}
+                    {roleConfigValid ? t("welcome.dev.roles.ready") : roleConfigHint}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   {fixedRoles.map((role, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="w-10 text-xs text-gray-400">{idx + 1}号</span>
+                      <span className="w-10 text-xs text-gray-400">
+                        {t("welcome.dev.roles.seat", { seat: idx + 1 })}
+                      </span>
                       <select
                         value={role}
                         onChange={(e) => {

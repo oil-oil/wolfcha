@@ -11,7 +11,8 @@ import {
   checkWinCondition,
   generateHunterShoot,
 } from "@/lib/game-master";
-import { SYSTEM_MESSAGES } from "@/lib/game-texts";
+import { getSystemMessages } from "@/lib/game-texts";
+import { useTranslations } from "next-intl";
 import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
@@ -37,6 +38,10 @@ export interface SpecialEventsActions {
 export function useSpecialEvents(
   callbacks: SpecialEventsCallbacks
 ): SpecialEventsActions {
+  const t = useTranslations();
+  const systemMessages = getSystemMessages();
+  const speakerHost = t("speakers.host");
+  const speakerSystem = t("speakers.system");
   const [, setGameState] = useAtom(gameStateAtom);
 
   const { setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid } = callbacks;
@@ -56,7 +61,7 @@ export function useSpecialEvents(
       // 存储是否夜间死亡的信息，供后续 handleNightAction 使用
       (currentState as GameState & { _hunterDiedAtNight?: boolean })._hunterDiedAtNight = diedAtNight;
       setGameState(currentState);
-      setDialogue("系统", "你是猎人，请选择开枪目标（或放弃）", false);
+      setDialogue(speakerSystem, t("specialEvents.hunterPrompt"), false);
       return;
     }
 
@@ -71,8 +76,8 @@ export function useSpecialEvents(
       currentState = killPlayer(currentState, targetSeat);
       const target = currentState.players.find((p) => p.seat === targetSeat);
       if (target) {
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName));
-        setDialogue("主持人", SYSTEM_MESSAGES.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName), false);
+        currentState = addSystemMessage(currentState, systemMessages.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName));
+        setDialogue(speakerHost, systemMessages.hunterShoot(hunter.seat + 1, targetSeat + 1, target.displayName), false);
       }
 
       // 记录猎人开枪
@@ -127,12 +132,12 @@ export function useSpecialEvents(
     currentState = { ...currentState, winner };
 
     const roleReveal = currentState.players
-      .map((p) => `${p.seat + 1}号 ${p.displayName}: ${getRoleName(p.role)}`)
+      .map((p) => t("specialEvents.roleRevealItem", { seat: p.seat + 1, name: p.displayName, role: getRoleName(p.role) }))
       .join(" | ");
 
-    currentState = addSystemMessage(currentState, winner === "village" ? SYSTEM_MESSAGES.villageWin : SYSTEM_MESSAGES.wolfWin);
-    currentState = addSystemMessage(currentState, `身份揭晓：${roleReveal}`);
-    setDialogue("主持人", winner === "village" ? "好人阵营胜利，村庄恢复了和平" : "狼人阵营胜利，村庄陷入黑暗", false);
+    currentState = addSystemMessage(currentState, winner === "village" ? systemMessages.villageWin : systemMessages.wolfWin);
+    currentState = addSystemMessage(currentState, t("specialEvents.roleRevealLine", { list: roleReveal }));
+    setDialogue(speakerHost, winner === "village" ? t("specialEvents.villageWinLine") : t("specialEvents.wolfWinLine"), false);
 
     setGameState(currentState);
     
@@ -205,9 +210,9 @@ export function useSpecialEvents(
     if (!isTokenValid(token)) return;
 
     currentState = transitionPhase(currentState, "DAY_START");
-    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
+    currentState = addSystemMessage(currentState, systemMessages.dayBreak);
     setGameState(currentState);
-    setDialogue("主持人", SYSTEM_MESSAGES.dayBreak, false);
+    setDialogue(speakerHost, systemMessages.dayBreak, false);
 
     // 播放旁白语音
     await playNarrator("dayBreak");

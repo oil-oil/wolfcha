@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Microphone, Sparkle } from "@phosphor-icons/react";
 import type { Player, Role } from "@/types/game";
 import { cn } from "@/lib/utils";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
+import { useTranslations } from "next-intl";
 
 interface PlayerCardCompactProps {
   player: Player;
@@ -27,17 +28,6 @@ interface PlayerCardCompactProps {
   isBadgeCandidate?: boolean;
   variant?: "default" | "mobile";
 }
-
-const getRoleLabel = (role: Role) => {
-  switch (role) {
-    case "Werewolf": return "狼人";
-    case "Seer": return "预言家";
-    case "Witch": return "女巫";
-    case "Hunter": return "猎人";
-    case "Guard": return "守卫";
-    default: return "村民";
-  }
-};
 
 const revealedAvatarIds = new Set<string>();
 
@@ -61,6 +51,7 @@ export function PlayerCardCompact({
   isBadgeCandidate = false,
   variant = "default",
 }: PlayerCardCompactProps) {
+  const t = useTranslations();
   const isDead = !player.alive;
   const isMe = player.isHuman;
   const isReady = isMe ? !!player.displayName?.trim() : !!player.agentProfile?.persona;
@@ -118,8 +109,17 @@ export function PlayerCardCompact({
     }
   })();
 
+  const roleLabels = useMemo<Record<Role, string>>(() => ({
+    Werewolf: t("roles.werewolf"),
+    Seer: t("roles.seer"),
+    Witch: t("roles.witch"),
+    Hunter: t("roles.hunter"),
+    Guard: t("roles.guard"),
+    Villager: t("roles.villager"),
+  }), [t]);
+  const getRoleLabel = (role: Role) => roleLabels[role] ?? t("roles.villager");
   const persona = player.agentProfile?.persona;
-  const styleLabel = isGenshinMode ? (isMe ? "你" : "") : persona?.styleLabel || (isMe ? "你" : "");
+  const styleLabel = isGenshinMode ? (isMe ? t("common.you") : "") : persona?.styleLabel || (isMe ? t("common.you") : "");
   const modelLabel = player.agentProfile?.modelRef?.model;
 
   const isModelAvatar = isGenshinMode && !player.isHuman;
@@ -246,7 +246,7 @@ export function PlayerCardCompact({
       {/* 狼人队友标记 */}
       {showWolfTeamBadge && !isDead && isReady && (
         <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 bg-[var(--color-blood)] text-white border border-black/20 shadow-sm text-[10px] font-semibold tracking-wide">
-          狼队
+          {t("playerCard.wolfTeam")}
         </div>
       )}
 
@@ -256,21 +256,21 @@ export function PlayerCardCompact({
           "absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 border border-black/20 shadow-sm text-[10px] font-semibold tracking-wide text-white",
           seerCheckResult === 'wolf' ? 'bg-[var(--color-blood)]' : 'bg-[var(--color-success)]'
         )}>
-          {seerCheckResult === 'wolf' ? '狼人' : '好人'}
+          {seerCheckResult === "wolf" ? t("alignments.wolf") : t("alignments.good")}
         </div>
       )}
 
       {/* 警徽标记 */}
       {isBadgeHolder && !isDead && isReady && (
         <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 bg-[var(--color-gold)] border border-black/20 shadow-[0_0_8px_rgba(184,134,11,0.35)] text-[10px] font-semibold tracking-wide text-[var(--bg-dark)]">
-          警长
+          {t("playerCard.badgeHolder")}
         </div>
       )}
       
       {/* 警长候选人标记 */}
       {isBadgeCandidate && !isDead && isReady && (
         <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 bg-[var(--color-gold)] border border-black/20 shadow-sm text-[10px] font-semibold tracking-wide text-[var(--bg-dark)]">
-          竞选
+          {t("playerCard.badgeCandidate")}
         </div>
       )}
 
@@ -388,7 +388,7 @@ export function PlayerCardCompact({
               className="text-[var(--text-muted)] text-xs flex items-center gap-1"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-gold)]/60" />
-              正在入场
+              {t("playerCard.joining")}
             </motion.div>
           )}
         </div>

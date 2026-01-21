@@ -12,6 +12,7 @@ import {
   NightIcon,
 } from "@/components/icons/FlatIcons";
 import type { Phase, Player } from "@/types/game";
+import { useTranslations } from "next-intl";
 
 interface RoleRevealOverlayProps {
   open: boolean;
@@ -30,100 +31,95 @@ type RoleMeta = {
   tips: string[];
 };
 
-function getRoleMeta(role: Player["role"]): RoleMeta {
+function getRoleMeta(role: Player["role"], t: ReturnType<typeof useTranslations>): RoleMeta {
   switch (role) {
     case "Werewolf":
       return {
-        title: "狼人",
-        subtitle: "夜晚狩猎，白天伪装。",
+        title: t("roleReveal.roles.werewolf.title"),
+        subtitle: t("roleReveal.roles.werewolf.subtitle"),
         color: "var(--color-wolf)",
         bg: "var(--color-wolf-bg)",
         Icon: WerewolfIcon,
-        abilities: [
-          "夜晚与同伴商议，选择一名玩家击杀",
-          "白天伪装好人，误导他人判断",
-        ],
-        tips: [
-          "和队友配合好，不要在夜里聊崩",
-          "白天发言别太完美，容易被识破",
-        ],
+        abilities: t.raw("roleReveal.roles.werewolf.abilities"),
+        tips: t.raw("roleReveal.roles.werewolf.tips"),
       };
     case "Seer":
       return {
-        title: "预言家",
-        subtitle: "你能看清身份，但要让人相信你。",
+        title: t("roleReveal.roles.seer.title"),
+        subtitle: t("roleReveal.roles.seer.subtitle"),
         color: "var(--color-seer)",
         bg: "var(--color-seer-bg)",
         Icon: SeerIcon,
-        abilities: ["夜晚查验一名玩家（好人/狼人）", "白天用信息引导投票"],
-        tips: ["先建立可信度，再抛信息", "信息节奏别太快"],
+        abilities: t.raw("roleReveal.roles.seer.abilities"),
+        tips: t.raw("roleReveal.roles.seer.tips"),
       };
     case "Witch":
       return {
-        title: "女巫",
-        subtitle: "救与杀只在一念之间。",
+        title: t("roleReveal.roles.witch.title"),
+        subtitle: t("roleReveal.roles.witch.subtitle"),
         color: "var(--color-witch)",
         bg: "var(--color-witch-bg)",
         Icon: WitchIcon,
-        abilities: ["解药：救活当夜被袭击的玩家（一次）", "毒药：毒杀一名玩家（一次）"],
-        tips: ["药很珍贵，别被节奏牵着走", "信息不足时宁可等一等"],
+        abilities: t.raw("roleReveal.roles.witch.abilities"),
+        tips: t.raw("roleReveal.roles.witch.tips"),
       };
     case "Hunter":
       return {
-        title: "猎人",
-        subtitle: "出局时可开枪带走一人。",
+        title: t("roleReveal.roles.hunter.title"),
+        subtitle: t("roleReveal.roles.hunter.subtitle"),
         color: "var(--color-hunter)",
         bg: "var(--color-hunter-bg)",
         Icon: HunterIcon,
-        abilities: ["当你被放逐或被袭击出局，可开枪带走一人"],
-        tips: ["别轻易暴露身份", "出局前想清楚目标"],
+        abilities: t.raw("roleReveal.roles.hunter.abilities"),
+        tips: t.raw("roleReveal.roles.hunter.tips"),
       };
     case "Guard":
       return {
-        title: "守卫",
-        subtitle: "守住关键的人与时机。",
+        title: t("roleReveal.roles.guard.title"),
+        subtitle: t("roleReveal.roles.guard.subtitle"),
         color: "var(--color-guard)",
         bg: "var(--color-guard-bg)",
         Icon: GuardIcon,
-        abilities: ["夜晚守护一名玩家，使其免于当夜袭击", "通常不能连续两晚守护同一人"],
-        tips: ["守住关键时刻", "别暴露守护对象"],
+        abilities: t.raw("roleReveal.roles.guard.abilities"),
+        tips: t.raw("roleReveal.roles.guard.tips"),
       };
     default:
       return {
-        title: "村民",
-        subtitle: "没有技能，但有判断。",
+        title: t("roleReveal.roles.villager.title"),
+        subtitle: t("roleReveal.roles.villager.subtitle"),
         color: "var(--color-villager)",
         bg: "var(--color-villager-bg)",
         Icon: VillagerIcon,
-        abilities: ["夜晚无需行动", "白天通过发言与投票找出狼人"],
-        tips: ["发言要有依据", "保持逻辑自洽"],
+        abilities: t.raw("roleReveal.roles.villager.abilities"),
+        tips: t.raw("roleReveal.roles.villager.tips"),
       };
   }
 }
 
-function getNextStepText(role: Player["role"], phase: Phase) {
+function getNextStepText(role: Player["role"], phase: Phase, t: ReturnType<typeof useTranslations>) {
   if (phase === "NIGHT_START") {
     switch (role) {
       case "Werewolf":
-        return "稍后轮到你行动时，点选一名玩家作为袭击目标。";
+        return t("roleReveal.nextStep.werewolf");
       case "Seer":
-        return "稍后轮到你行动时，点选一名玩家进行查验。";
+        return t("roleReveal.nextStep.seer");
       case "Witch":
-        return "稍后你将决定是否用药。";
+        return t("roleReveal.nextStep.witch");
       case "Guard":
-        return "稍后轮到你行动时，点选一名玩家进行守护。";
+        return t("roleReveal.nextStep.guard");
       case "Hunter":
-        return "你先观察局势，关键时刻再亮出子弹。";
+        return t("roleReveal.nextStep.hunter");
       default:
-        return "你暂时无需行动，先倾听与观察。";
+        return t("roleReveal.nextStep.villager");
     }
   }
 
-  return "舞台已经就位。跟随主持人的提示行动即可。";
+  return t("roleReveal.nextStep.default");
 }
 
 export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevealOverlayProps) {
-  const meta = getRoleMeta(player.role);
+  const t = useTranslations();
+  const meta = getRoleMeta(player.role, t);
   const NextStepIcon = NightIcon;
 
   const isNight = phase.includes("NIGHT");
@@ -186,8 +182,8 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                       }}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="text-xs font-bold tracking-wider uppercase text-white/60">身份牌</div>
-                        <div className="text-xs text-white/55">请独自查看</div>
+                        <div className="text-xs font-bold tracking-wider uppercase text-white/60">{t("roleReveal.cardTitle")}</div>
+                        <div className="text-xs text-white/55">{t("roleReveal.cardHint")}</div>
                       </div>
                       <div className="mt-6 flex items-center justify-center">
                         <motion.div
@@ -209,11 +205,11 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                           >
                             <meta.Icon size={28} className="text-white/90" />
                           </div>
-                          <div className="text-sm font-bold text-white/85">正在发放身份牌…</div>
-                          <div className="text-xs text-white/55">请稍等</div>
+                          <div className="text-sm font-bold text-white/85">{t("roleReveal.dealing.title")}</div>
+                          <div className="text-xs text-white/55">{t("roleReveal.dealing.subtitle")}</div>
                         </motion.div>
                       </div>
-                      <div className="mt-6 text-center text-sm text-white/70">稍等片刻，马上开始。</div>
+                      <div className="mt-6 text-center text-sm text-white/70">{t("roleReveal.dealing.footer")}</div>
                     </div>
                   </div>
 
@@ -228,7 +224,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <div className="text-xs font-bold tracking-wider uppercase text-white/60">你的身份</div>
+                          <div className="text-xs font-bold tracking-wider uppercase text-white/60">{t("roleReveal.identityLabel")}</div>
                           <div className="mt-1 flex items-center gap-3">
                             <div
                               className="w-12 h-12 rounded-2xl flex items-center justify-center"
@@ -250,7 +246,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                         </div>
 
                         <div className="shrink-0 text-right">
-                          <div className="text-xs text-white/55">{player.seat + 1}号</div>
+                          <div className="text-xs text-white/55">{t("voteResult.seatLabel", { seat: player.seat + 1 })}</div>
                           <div className="text-sm font-semibold text-white/80">{player.displayName}</div>
                         </div>
                       </div>
@@ -265,7 +261,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
 
                       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="rounded-2xl p-4" style={{ background: "rgba(0,0,0,0.20)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">能力</div>
+                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">{t("roleReveal.abilitiesLabel")}</div>
                           <div className="mt-2 space-y-2">
                             {meta.abilities.map((t, i) => (
                               <div key={i} className="text-sm text-white/80 leading-relaxed">
@@ -276,7 +272,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                         </div>
 
                         <div className="rounded-2xl p-4" style={{ background: "rgba(0,0,0,0.20)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">提醒</div>
+                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">{t("roleReveal.tipsLabel")}</div>
                           <div className="mt-2 space-y-2">
                             {meta.tips.map((t, i) => (
                               <div key={i} className="text-sm text-white/75 leading-relaxed">
@@ -294,9 +290,9 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                           <NextStepIcon size={18} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">接下来</div>
+                          <div className="text-xs font-bold tracking-wider text-white/60 uppercase">{t("roleReveal.nextLabel")}</div>
                           <div className="mt-1 text-sm text-white/80 leading-relaxed">
-                            {getNextStepText(player.role, phase)}
+                            {getNextStepText(player.role, phase, t)}
                           </div>
                         </div>
                         <div className="shrink-0">
@@ -305,7 +301,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                             className="inline-flex items-center justify-center h-10 px-5 text-sm font-bold rounded-xl border-none cursor-pointer transition-all duration-150 bg-white text-black hover:bg-white/90 active:scale-[0.98]"
                             style={{ boxShadow: `0 10px 30px rgba(0,0,0,0.35), 0 0 0 2px ${String(cardAccent)}22` }}
                           >
-                            继续
+                            {t("roleReveal.actions.continue")}
                           </button>
                         </div>
                       </div>

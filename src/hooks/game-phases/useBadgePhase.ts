@@ -10,7 +10,8 @@ import {
   generateAIBadgeVote,
   generateBadgeTransfer,
 } from "@/lib/game-master";
-import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/game-texts";
+import { getSystemMessages, getUiText } from "@/lib/game-texts";
+import { useTranslations } from "next-intl";
 import { DELAY_CONFIG, GAME_CONFIG, BADGE_SIGNUP_PROBABILITY } from "@/lib/game-constants";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
@@ -43,6 +44,12 @@ export interface BadgePhaseActions {
 export function useBadgePhase(
   callbacks: BadgePhaseCallbacks
 ): BadgePhaseActions {
+  const t = useTranslations();
+  const systemMessages = getSystemMessages();
+  const uiText = getUiText();
+  const speakerHost = t("speakers.host");
+  const speakerHint = t("speakers.hint");
+  const speakerSystem = t("speakers.system");
   const [gameState, setGameState] = useAtom(gameStateAtom);
 
   const {
@@ -94,13 +101,13 @@ export function useBadgePhase(
         const target = players.find(p => p.seat === Number(targetSeat));
         return {
           targetSeat: Number(targetSeat),
-          targetName: target?.displayName || "未知",
+          targetName: target?.displayName || t("common.unknown"),
           voterSeats: voters,
           voteCount: voters.length
         };
       });
 
-    return `[VOTE_RESULT]${JSON.stringify({ title: "警长竞选投票详情", results: badgeVoteResults })}`;
+    return `[VOTE_RESULT]${JSON.stringify({ title: t("badgePhase.voteDetailTitle"), results: badgeVoteResults })}`;
   }, []);
 
   // 用于防止重复结算的标志
@@ -122,9 +129,9 @@ export function useBadgePhase(
         votes: {},
       },
     };
-    currentState = addSystemMessage(currentState, "警徽平票，进入PK发言");
+    currentState = addSystemMessage(currentState, t("badgePhase.tiePk"));
     setGameState(currentState);
-    setDialogue("主持人", "警徽平票，进入PK发言", false);
+    setDialogue(speakerHost, t("badgePhase.tiePk"), false);
 
     await delay(DELAY_CONFIG.DIALOGUE);
     await waitForUnpause();
@@ -133,7 +140,7 @@ export function useBadgePhase(
     if (firstSpeaker && !firstSpeaker.isHuman) {
       await runAISpeech(currentState, firstSpeaker);
     } else if (firstSpeaker?.isHuman) {
-      setDialogue("提示", UI_TEXT.yourTurn, false);
+      setDialogue(speakerHint, uiText.yourTurn, false);
     }
   }, [setGameState, setDialogue, waitForUnpause, runAISpeech]);
 
@@ -191,9 +198,9 @@ export function useBadgePhase(
             history: { ...state.badge.history, [state.day]: { ...state.badge.votes } },
           },
         };
-        nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
+        nextState = addSystemMessage(nextState, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
         setGameState(nextState);
-        setDialogue("主持人", SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
+        setDialogue(speakerHost, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
 
         await delay(DELAY_CONFIG.DIALOGUE);
         isResolvingBadgeElectionRef.current = false;
@@ -233,10 +240,10 @@ export function useBadgePhase(
     // 添加投票详情
     const badgeVoteDetailMessage = generateBadgeVoteDetails(state.badge.votes, state.players, state.badge.candidates || []);
     nextState = addSystemMessage(nextState, badgeVoteDetailMessage);
-    nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
+    nextState = addSystemMessage(nextState, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount));
 
     setGameState(nextState);
-    setDialogue("主持人", SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
+    setDialogue(speakerHost, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", votedCount), false);
 
     await delay(DELAY_CONFIG.DIALOGUE);
     isResolvingBadgeElectionRef.current = false;
@@ -257,7 +264,7 @@ export function useBadgePhase(
       },
     };
 
-    currentState = addSystemMessage(currentState, "进入警徽竞选报名环节");
+    currentState = addSystemMessage(currentState, t("badgePhase.signupStart"));
     setGameState(currentState);
     clearDialogue();
 
@@ -302,9 +309,9 @@ export function useBadgePhase(
       .map((p) => p.seat);
 
     if (candidates.length === 0) {
-      let nextState = addSystemMessage(state, "无人报名竞选警长，跳过警徽竞选");
+      let nextState = addSystemMessage(state, t("badgePhase.noSignup"));
       setGameState(nextState);
-      setDialogue("主持人", "无人报名竞选警长，跳过警徽竞选", false);
+      setDialogue(speakerHost, t("badgePhase.noSignup"), false);
       await delay(DELAY_CONFIG.DIALOGUE);
       await onBadgeElectionComplete(nextState);
       return;
@@ -339,8 +346,8 @@ export function useBadgePhase(
     let currentState = transitionPhase(state, "DAY_BADGE_SPEECH");
     currentState = { ...currentState, currentSpeakerSeat: null, daySpeechStartSeat: null };
 
-    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeSpeechStart);
-    setDialogue("主持人", SYSTEM_MESSAGES.badgeSpeechStart, false);
+    currentState = addSystemMessage(currentState, systemMessages.badgeSpeechStart);
+    setDialogue(speakerHost, systemMessages.badgeSpeechStart, false);
 
     const candidates = currentState.badge.candidates || [];
     const candidatePlayers = currentState.players.filter((p) => p.alive && candidates.includes(p.seat));
@@ -365,7 +372,7 @@ export function useBadgePhase(
     if (firstSpeaker && !firstSpeaker.isHuman) {
       await runAISpeech(currentState, firstSpeaker);
     } else if (firstSpeaker?.isHuman) {
-      setDialogue("提示", UI_TEXT.yourTurn, false);
+      setDialogue(speakerHint, uiText.yourTurn, false);
     }
   }, [setGameState, setDialogue, waitForUnpause, runAISpeech]);
 
@@ -386,7 +393,7 @@ export function useBadgePhase(
     };
 
     if (!isRevote) {
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeElectionStart);
+      currentState = addSystemMessage(currentState, systemMessages.badgeElectionStart);
       
       // 播放警徽竞选投票语音
       await playNarrator("badgeElectionStart");
@@ -404,9 +411,9 @@ export function useBadgePhase(
           history: { ...currentState.badge.history, [currentState.day]: {} },
         },
       };
-      nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", 1));
+      nextState = addSystemMessage(nextState, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", 1));
       setGameState(nextState);
-      setDialogue("主持人", SYSTEM_MESSAGES.badgeElected(winnerSeat + 1, winner?.displayName || "", 1), false);
+      setDialogue(speakerHost, systemMessages.badgeElected(winnerSeat + 1, winner?.displayName || "", 1), false);
       await delay(DELAY_CONFIG.DIALOGUE);
       await onBadgeElectionComplete(nextState);
       return;
@@ -418,9 +425,9 @@ export function useBadgePhase(
     
     // 只对非候选人显示投票提示
     if (human?.alive && !humanIsCandidate) {
-      setDialogue("主持人", UI_TEXT.badgeVotePrompt, false);
+      setDialogue(speakerHost, uiText.badgeVotePrompt, false);
     } else {
-      setDialogue("主持人", UI_TEXT.aiVoting, false);
+      setDialogue(speakerHost, uiText.aiVoting, false);
     }
     setGameState(currentState);
     const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !candidates.includes(p.seat));
@@ -461,7 +468,7 @@ export function useBadgePhase(
     afterTransfer: (s: GameState) => Promise<void>
   ) => {
     let currentState = transitionPhase(state, "BADGE_TRANSFER");
-    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeTransferStart(sheriff.seat + 1, sheriff.displayName));
+    currentState = addSystemMessage(currentState, systemMessages.badgeTransferStart(sheriff.seat + 1, sheriff.displayName));
     setGameState(currentState);
 
     await waitForUnpause();
@@ -469,7 +476,7 @@ export function useBadgePhase(
     if (sheriff.isHuman) {
       // 保存回调以便人类操作后继续流程
       humanBadgeTransferCallbackRef.current = afterTransfer;
-      setDialogue("系统", "请选择移交警徽的对象", false);
+      setDialogue(speakerSystem, t("badgePhase.transferPrompt"), false);
       return;
     }
 
@@ -484,8 +491,8 @@ export function useBadgePhase(
         ...currentState,
         badge: { ...currentState.badge, holderSeat: null },
       };
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeTorn(sheriff.seat + 1, sheriff.displayName));
-      setDialogue("主持人", SYSTEM_MESSAGES.badgeTorn(sheriff.seat + 1, sheriff.displayName), false);
+      currentState = addSystemMessage(currentState, systemMessages.badgeTorn(sheriff.seat + 1, sheriff.displayName));
+      setDialogue(speakerHost, systemMessages.badgeTorn(sheriff.seat + 1, sheriff.displayName), false);
     } else {
       // 正常移交
       const target = currentState.players.find((p) => p.seat === targetSeat);
@@ -494,8 +501,8 @@ export function useBadgePhase(
           ...currentState,
           badge: { ...currentState.badge, holderSeat: targetSeat },
         };
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeTransferred(sheriff.seat + 1, targetSeat + 1, target.displayName));
-        setDialogue("主持人", SYSTEM_MESSAGES.badgeTransferred(sheriff.seat + 1, targetSeat + 1, target.displayName), false);
+        currentState = addSystemMessage(currentState, systemMessages.badgeTransferred(sheriff.seat + 1, targetSeat + 1, target.displayName));
+        setDialogue(speakerHost, systemMessages.badgeTransferred(sheriff.seat + 1, targetSeat + 1, target.displayName), false);
       }
     }
     setGameState(currentState);
@@ -521,8 +528,8 @@ export function useBadgePhase(
         ...gameState,
         badge: { ...gameState.badge, holderSeat: null },
       };
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeTorn(sheriffSeat! + 1, human.displayName));
-      setDialogue("主持人", SYSTEM_MESSAGES.badgeTorn(sheriffSeat! + 1, human.displayName), false);
+      currentState = addSystemMessage(currentState, systemMessages.badgeTorn(sheriffSeat! + 1, human.displayName));
+      setDialogue(speakerHost, systemMessages.badgeTorn(sheriffSeat! + 1, human.displayName), false);
     } else {
       // 正常移交
       const target = gameState.players.find((p) => p.seat === targetSeat);
@@ -532,8 +539,8 @@ export function useBadgePhase(
         ...gameState,
         badge: { ...gameState.badge, holderSeat: targetSeat },
       };
-      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.badgeTransferred(sheriffSeat! + 1, targetSeat + 1, target.displayName));
-      setDialogue("主持人", SYSTEM_MESSAGES.badgeTransferred(sheriffSeat! + 1, targetSeat + 1, target.displayName), false);
+      currentState = addSystemMessage(currentState, systemMessages.badgeTransferred(sheriffSeat! + 1, targetSeat + 1, target.displayName));
+      setDialogue(speakerHost, systemMessages.badgeTransferred(sheriffSeat! + 1, targetSeat + 1, target.displayName), false);
     }
 
     setGameState(currentState);

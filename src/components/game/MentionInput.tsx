@@ -8,6 +8,7 @@ import { type SuggestionKeyDownProps, type SuggestionProps } from "@tiptap/sugge
 import type { ModelRef, Player } from "@/types/game";
 import type { Gender } from "@/lib/character-generator";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
+import { getI18n } from "@/i18n/translator";
 
 type MentionCandidate = {
   id: string;
@@ -40,6 +41,16 @@ interface MentionInputProps {
   players: Player[];
 }
 
+const formatPlayerLabel = (seat: number, name: string) => {
+  const { t } = getI18n();
+  return t("mentions.playerLabel", { seat, name });
+};
+
+const formatMentionText = (seat: number) => {
+  const { t } = getI18n();
+  return t("mentions.mention", { seat });
+};
+
 function createSuggestionItems(players: Player[]) {
   return ({ query }: { query: string }) => {
     const q = query.trim().toLowerCase();
@@ -47,7 +58,7 @@ function createSuggestionItems(players: Player[]) {
     return candidates
       .map((p): MentionCandidate => ({
         id: String(p.seat + 1),
-        label: `${p.seat + 1}号 ${p.displayName}`,
+        label: formatPlayerLabel(p.seat + 1, p.displayName),
         seat: p.seat,
         displayName: p.displayName,
         playerId: p.playerId,
@@ -120,7 +131,7 @@ function renderSuggestionList(isGenshinMode: boolean, onOpenChange?: (open: bool
           selectedIndex = 0;
           const empty = document.createElement("div");
           empty.className = "px-3 py-2 text-xs text-slate-500";
-          empty.textContent = "没有匹配的玩家";
+          empty.textContent = getI18n().t("mentions.noMatch");
           el.appendChild(empty);
           return;
         }
@@ -249,11 +260,11 @@ export function MentionInput({
           render: suggestionRenderer,
         },
         renderText({ node }) {
-          // Store as plain text: "@3号小明"
-          const seat = node.attrs.id;
+          // Store as plain text: "@Seat 3 Name"
+          const seat = Number(node.attrs.id);
           const label = node.attrs.label;
           if (typeof label === "string" && label.length > 0) return `@${label}`;
-          return `@${seat}号`;
+          return formatMentionText(seat);
         },
       }),
     ],

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { translateAuthError } from "@/lib/auth-errors";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ interface ResetPasswordModalProps {
 }
 
 export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPasswordModalProps) {
+  const t = useTranslations();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,17 +42,17 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
 
     // Validation
     if (!newPassword.trim()) {
-      toast.error("请输入新密码");
+      toast.error(t("resetPassword.errors.newPasswordRequired"));
       return;
     }
 
     if (newPassword.length < 6) {
-      toast.error("密码长度至少为 6 位");
+      toast.error(t("resetPassword.errors.passwordTooShort"));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error("两次输入的密码不一致");
+      toast.error(t("resetPassword.errors.passwordMismatch"));
       return;
     }
 
@@ -64,18 +66,22 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
       if (error) {
         let message = translateAuthError(error.message);
         if (error.message.includes("Auth session missing")) {
-          message = "重置链接已过期，请重新发起重置请求";
+          message = t("resetPassword.errors.linkExpired");
         }
-        toast.error("重置失败", { description: message });
+        toast.error(t("resetPassword.toasts.resetFail.title"), { description: message });
       } else {
-        toast.success("密码重置成功", { description: "您现在可以使用新密码登录" });
+        toast.success(t("resetPassword.toasts.resetSuccess.title"), {
+          description: t("resetPassword.toasts.resetSuccess.description"),
+        });
         setNewPassword("");
         setConfirmPassword("");
         onOpenChange(false);
         onSuccess?.();
       }
     } catch (err) {
-      toast.error("重置失败", { description: "发生未知错误" });
+      toast.error(t("resetPassword.toasts.resetFail.title"), {
+        description: t("resetPassword.toasts.resetFail.description"),
+      });
     } finally {
       setLoading(false);
     }
@@ -87,20 +93,20 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LockKey size={20} />
-            重置密码
+            {t("resetPassword.title")}
           </DialogTitle>
           <DialogDescription>
-            请输入您的新密码。密码长度至少为 6 位。
+            {t("resetPassword.description")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="reset-new-password">新密码</Label>
+            <Label htmlFor="reset-new-password">{t("resetPassword.fields.newPassword")}</Label>
             <Input
               id="reset-new-password"
               type="password"
-              placeholder="请输入新密码"
+              placeholder={t("resetPassword.placeholders.newPassword")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               disabled={loading}
@@ -111,11 +117,11 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="reset-confirm-password">确认新密码</Label>
+            <Label htmlFor="reset-confirm-password">{t("resetPassword.fields.confirmPassword")}</Label>
             <Input
               id="reset-confirm-password"
               type="password"
-              placeholder="请再次输入新密码"
+              placeholder={t("resetPassword.placeholders.confirmPassword")}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
@@ -129,7 +135,7 @@ export function ResetPasswordModal({ open, onOpenChange, onSuccess }: ResetPassw
             disabled={loading}
             className="w-full"
           >
-            {loading ? "重置中..." : "确认重置密码"}
+            {loading ? t("resetPassword.actions.resetting") : t("resetPassword.actions.confirm")}
           </Button>
         </form>
       </DialogContent>

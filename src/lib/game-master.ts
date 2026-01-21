@@ -17,6 +17,7 @@ import { aiLogger } from "./ai-logger";
 import { PhaseManager } from "@/game/core/PhaseManager";
 import type { PromptResult } from "@/game/core/types";
 import { buildCachedSystemMessageFromParts } from "./prompt-utils";
+import { getI18n } from "@/i18n/translator";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -45,7 +46,10 @@ function sanitizeSeatMentions(text: string, totalSeats: number): string {
   const replaceIfInvalid = (raw: string, numStr: string) => {
     const n = Number.parseInt(numStr, 10);
     if (!Number.isFinite(n)) return raw;
-    if (n < 1 || n > totalSeats) return "（无效座位）";
+    if (n < 1 || n > totalSeats) {
+      const { t } = getI18n();
+      return t("gameMaster.invalidSeat");
+    }
     return raw;
   };
 
@@ -176,12 +180,13 @@ export function getRoleConfiguration(playerCount: number): Role[] {
 export function setupPlayers(
   characters: GeneratedCharacter[],
   humanSeat: number = 0,
-  humanName: string = "你",
+  humanName: string = "",
   playerCount: number = 10,
   fixedRoles?: Role[],
   seedPlayerIds?: string[],
   modelRefs?: ModelRef[]
 ): Player[] {
+  const { t } = getI18n();
   const totalPlayers = playerCount;
   const roles = getRoleConfiguration(totalPlayers);
   const assignedRoles = fixedRoles && fixedRoles.length === totalPlayers ? fixedRoles : shuffleArray(roles);
@@ -201,7 +206,7 @@ export function setupPlayers(
       players.push({
         playerId: getPlayerIdForSeat(seat),
         seat,
-        displayName: humanName.trim() || "你",
+        displayName: humanName.trim() || t("common.you"),
         alive: true,
         role,
         alignment,
@@ -235,10 +240,11 @@ export function addSystemMessage(
   state: GameState,
   content: string
 ): GameState {
+  const { t } = getI18n();
   const message: ChatMessage = {
     id: uuidv4(),
     playerId: "system",
-    playerName: "主持人",
+    playerName: t("speakers.host"),
     content,
     timestamp: Date.now(),
     day: state.day,
@@ -388,12 +394,13 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
 export async function generateDailySummary(
   state: GameState
 ): Promise<string[]> {
+  const { t } = getI18n();
   const startTime = Date.now();
 
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i];
-      if (m.isSystem && m.content === "天亮了") return i;
+      if (m.isSystem && m.content === t("system.dayBreakShort")) return i;
     }
     return 0;
   })();
@@ -405,9 +412,8 @@ export async function generateDailySummary(
     .join("\n")
     .slice(0, 12000);
 
-  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为 3-6 条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 10-35 字\n- 优先保留：公投出局/遗言、关键站边/指控、明显的归票/改票、夜晚死亡信息（如果在记录里）\n\n输出格式：返回 JSON 数组，例如：["第1天: 2号被放逐，遗言踩10号", "9号曾投给1号"]`;
-
-  const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 数组：`;
+  const system = t("gameMaster.summary.system");
+  const user = t("gameMaster.summary.user", { day: state.day, transcript });
 
   const messages: OpenRouterMessage[] = [
     { role: "system", content: system },

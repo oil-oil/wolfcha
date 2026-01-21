@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { useAtom } from "jotai";
 import type { GameState, Player, Phase } from "@/types/game";
 import { gameStateAtom } from "@/store/game-machine";
@@ -38,6 +39,8 @@ export function useDayPhase(
   humanPlayer: Player | null,
   callbacks: DayPhaseCallbacks
 ): DayPhaseActions {
+  const t = useTranslations();
+  const speakerHost = t("speakers.host");
   const [gameState, setGameState] = useAtom(gameStateAtom);
 
   const {
@@ -91,17 +94,17 @@ export function useDayPhase(
 
     currentSpeakingPlayerRef.current = player.playerId;
     setIsWaitingForAI(true);
-    setDialogue(player.displayName, "（正在组织语言…）", false);
+    setDialogue(player.displayName, t("dayPhase.organizing"), false);
 
     try {
       let segments: string[];
       try {
         segments = await generateAISpeechSegments(state, player);
       } catch {
-        segments = ["（话音被打断了）"];
+        segments = [t("dayPhase.interrupted")];
       }
 
-      setDialogue(player.displayName, "（正在组织语言…）", false);
+      setDialogue(player.displayName, t("dayPhase.organizing"), false);
 
       const normalizedSegments = segments.map((segment) => segment.trim()).filter((segment) => segment.length > 0);
 
@@ -163,13 +166,13 @@ export function useDayPhase(
     let currentState = speaker.alive ? killPlayer(state, seat) : state;
     currentState = transitionPhase(currentState, "DAY_LAST_WORDS");
     currentState = { ...currentState, currentSpeakerSeat: seat };
-    currentState = addSystemMessage(currentState, `请 ${seat + 1}号 ${speaker.displayName} 发表遗言`);
+    currentState = addSystemMessage(currentState, t("dayPhase.lastWordsSystem", { seat: seat + 1, name: speaker.displayName }));
     setGameState(currentState);
 
     if (speaker.isHuman) {
       // 保存回调，等待人类发言完毕后调用
       setAfterLastWords(afterLastWords);
-      setDialogue("主持人", `请你发表遗言（${seat + 1}号 ${speaker.displayName}）`, false);
+      setDialogue(speakerHost, t("dayPhase.lastWordsPrompt", { seat: seat + 1, name: speaker.displayName }), false);
       return;
     }
 

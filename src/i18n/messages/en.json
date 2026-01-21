@@ -1,0 +1,1142 @@
+{
+  "app": {
+    "title": "Wolfcha",
+    "description": "Single-player immersive retro fairytale Werewolf"
+  },
+  "locale": {
+    "label": "Language",
+    "zh": "中文",
+    "en": "English"
+  },
+  "difficulty": {
+    "easy": "Beginner",
+    "normal": "Standard",
+    "hard": "Advanced"
+  },
+  "roles": {
+    "villager": "Villager",
+    "werewolf": "Werewolf",
+    "seer": "Seer",
+    "witch": "Witch",
+    "hunter": "Hunter",
+    "guard": "Guard"
+  },
+  "welcome": {
+    "account": {
+      "viewInfo": "View account details",
+      "loggedIn": "Signed in",
+      "remaining": "Remaining {count} rounds",
+      "info": "Account"
+    },
+    "auth": {
+      "signIn": "Sign in / Sign up"
+    },
+    "settings": "Settings",
+    "tutorial": "How to play",
+    "subtitle": "The Shadow Game",
+    "oath": {
+      "line1": "I willingly enter this game of lies and truth.",
+      "line2": "When night descends, I will hide my identity;",
+      "line3": "When dawn arrives, I will judge the guilty."
+    },
+    "signature": {
+      "label": "Sign your name",
+      "placeholder": "Signature here..."
+    },
+    "sealHint": {
+      "ready": "Press the seal to confirm",
+      "waiting": "Sign your name to continue"
+    },
+    "transition": {
+      "title": "Game begins",
+      "subtitle": "The Game Begins"
+    },
+    "roleConfig": {
+      "godLabelFull": "Seer/Witch/Hunter/Guard",
+      "godLabelNoGuard": "Seer/Witch/Hunter",
+      "hint": "Required: {wolfCount} wolves, {godLabel}, {villagerCount} villagers"
+    },
+    "toast": {
+      "signInFirst": "Please sign in or register first.",
+      "noCredits": {
+        "title": "Not enough credits",
+        "description": "Share an invite to earn more credits."
+      },
+      "creditFail": {
+        "title": "Failed to deduct credits",
+        "description": "Share an invite to earn more credits."
+      }
+    },
+    "dev": {
+      "title": "Developer mode",
+      "tabs": {
+        "preset": "Presets",
+        "roles": "Roles"
+      },
+      "preset": {
+        "title": "Preset scenario tests",
+        "clear": "Clear",
+        "none": "None",
+        "milkPoison": "Milk poison test",
+        "lastWords": "Last words test"
+      },
+      "roles": {
+        "title": "Role setup ({count} players)",
+        "ready": "Ready",
+        "seat": "Seat {seat}"
+      }
+    }
+  },
+  "authErrors": {
+    "invalidLogin": "Invalid email or password.",
+    "emailNotConfirmed": "Email not confirmed. Please check your inbox.",
+    "userAlreadyRegistered": "This email is already registered. Please sign in.",
+    "passwordTooShort": "Password must be at least 6 characters.",
+    "invalidEmail": "Invalid email format.",
+    "signupRequiresPassword": "Please enter a valid password.",
+    "signupRequiresEmail": "Please enter your email.",
+    "emailRateLimit": "Too many requests. Please try again later.",
+    "rateLimitWait": "For security reasons, please try again later.",
+    "rateLimitSeconds": "For security reasons, please try again in {seconds} seconds.",
+    "emailLinkInvalid": "Email link is invalid or expired.",
+    "tokenInvalid": "Verification expired. Please retry.",
+    "samePassword": "New password must be different from the old password.",
+    "sessionMissing": "Session expired. Please sign in again.",
+    "userNotFound": "User not found."
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Adjust preferences and export logs",
+    "about": {
+      "title": "About",
+      "description": "Learn about Wolfcha",
+      "appName": "Wolfcha",
+      "version": "Version: v{version}",
+      "group": {
+        "title": "Join the community",
+        "description": "Scan to join and share feedback",
+        "alt": "Wolfcha community group",
+        "missing": "Group image not found (public/group.png)"
+      },
+      "back": "Back to settings",
+      "cardTitle": "About",
+      "cardDescription": "Logo, version, and community QR",
+      "view": "View"
+    },
+    "audio": {
+      "bgmVolume": "Background volume",
+      "masterSwitch": "Master switch",
+      "masterDescription": "Mute all sound effects when off",
+      "aiVoice": "Character voice",
+      "aiVoiceDescription": "Control AI character voice playback"
+    },
+    "logs": {
+      "title": "Logs",
+      "description": "Export JSON logs to help troubleshooting",
+      "copy": "Copy JSON",
+      "export": "Export file"
+    },
+    "toast": {
+      "copySuccess": "Log JSON copied",
+      "copyFail": {
+        "title": "Copy failed",
+        "description": "Clipboard is unavailable or permission denied"
+      },
+      "exportSuccess": "Log file exported",
+      "exportFail": "Export failed"
+    }
+  },
+  "playerCount": {
+    "title": "Player count",
+    "description": "Choose player count and standard role setup",
+    "countLabel": "{count} players",
+    "footer": "Only player count and roles change; gameplay flow stays the same.",
+    "options": {
+      "8": {
+        "title": "8 players",
+        "subtitle": "Compact match",
+        "description": "3 wolves, 3 specials, 2 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter"
+      },
+      "9": {
+        "title": "9 players",
+        "subtitle": "Classic entry",
+        "description": "3 wolves, 3 specials, 3 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter"
+      },
+      "10": {
+        "title": "10 players",
+        "subtitle": "Standard setup",
+        "description": "3 wolves, 3 specials, 4 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter"
+      },
+      "11": {
+        "title": "11 players",
+        "subtitle": "Faster showdown",
+        "description": "4 wolves, 4 specials, 3 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter, Guard"
+      },
+      "12": {
+        "title": "12 players",
+        "subtitle": "Full classic",
+        "description": "4 wolves, 4 specials, 4 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter, Guard"
+      }
+    }
+  },
+  "difficultySelector": {
+    "title": "Difficulty",
+    "description": "Choose AI reasoning depth and speech intensity",
+    "footer": "Difficulty only affects AI behavior strength; rules stay the same.",
+    "options": {
+      "easy": {
+        "title": "Beginner",
+        "subtitle": "Relaxed tone",
+        "description": "More intuitive and trusting, ideal for first-timers.",
+        "tag": "Easy"
+      },
+      "normal": {
+        "title": "Standard",
+        "subtitle": "Balanced reasoning",
+        "description": "Moderate info, balanced logic and performance.",
+        "tag": "Classic"
+      },
+      "hard": {
+        "title": "Advanced",
+        "subtitle": "Deep confrontation",
+        "description": "More complex reasoning and sharper mind games.",
+        "tag": "Challenge"
+      }
+    }
+  }
+  ,
+  "gameSetup": {
+    "title": "Game setup",
+    "description": "Adjust difficulty and player count before starting",
+    "difficulty": "Difficulty",
+    "difficultyPlaceholder": "Select difficulty",
+    "playerCount": "Player count",
+    "playerCountPlaceholder": "Select player count",
+    "genshin": {
+      "title": "Model original mode",
+      "description": "By default, each AI gets a realistic persona and name. When enabled, persona and names are not generated; the model's original name is used with numeric suffixes for duplicates."
+    }
+  }
+  ,
+  "authModal": {
+    "title": "Sign in or sign up",
+    "description": "Sign in to access credits and share rewards.",
+    "tabs": {
+      "magicLink": "Email link",
+      "password": "Password"
+    },
+    "magicLink": {
+      "description": "Enter your email and we'll send a login link. New users will be registered automatically."
+    },
+    "fields": {
+      "email": "Email",
+      "password": "Password"
+    },
+    "placeholders": {
+      "email": "Enter your email",
+      "password": "Enter your password",
+      "passwordMin": "Enter a password (at least 6 characters)"
+    },
+    "actions": {
+      "sending": "Sending...",
+      "sendMagicLink": "Send login link",
+      "signingIn": "Signing in...",
+      "signIn": "Sign in",
+      "signingUp": "Signing up...",
+      "signUp": "Sign up",
+      "sendReset": "Send reset email"
+    },
+    "links": {
+      "forgotPassword": "Forgot password?",
+      "noAccount": "No account? Sign up",
+      "haveAccount": "Already have an account? Sign in",
+      "backToSignIn": "Back to sign in"
+    },
+    "forgot": {
+      "description": "Enter your email and we'll send a password reset link."
+    },
+    "errors": {
+      "emailRequired": "Please enter your email.",
+      "passwordRequired": "Please enter your password.",
+      "passwordTooShort": "Password must be at least 6 characters."
+    },
+    "messages": {
+      "magicLinkSent": "Login link sent. Please check your email.",
+      "signUpExisting": "If this email isn't registered, you'll receive a verification email. If it is, please sign in.",
+      "signUpConfirm": "Sign-up successful. Please check your email to verify.",
+      "resetSent": "Reset email sent. Please check your inbox."
+    },
+    "toasts": {
+      "magicLinkSent": {
+        "title": "Login link sent",
+        "description": "Check your email and click the link to sign in"
+      },
+      "signInSuccess": "Signed in",
+      "signUpSuccess": "Signed up",
+      "signUpConfirm": {
+        "title": "Sign-up successful",
+        "description": "Please check your email to verify"
+      },
+      "resetSent": {
+        "title": "Reset email sent",
+        "description": "Please check your inbox"
+      }
+    }
+  }
+  ,
+  "resetPassword": {
+    "title": "Reset password",
+    "description": "Enter your new password. It must be at least 6 characters.",
+    "fields": {
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password"
+    },
+    "placeholders": {
+      "newPassword": "Enter new password",
+      "confirmPassword": "Re-enter new password"
+    },
+    "actions": {
+      "resetting": "Resetting...",
+      "confirm": "Confirm reset"
+    },
+    "errors": {
+      "newPasswordRequired": "Please enter a new password.",
+      "passwordTooShort": "Password must be at least 6 characters.",
+      "passwordMismatch": "Passwords do not match.",
+      "linkExpired": "Reset link expired. Please request a new one."
+    },
+    "toasts": {
+      "resetSuccess": {
+        "title": "Password reset",
+        "description": "You can now sign in with your new password"
+      },
+      "resetFail": {
+        "title": "Reset failed",
+        "description": "An unknown error occurred"
+      }
+    }
+  }
+  ,
+  "accountModal": {
+    "title": "Change password",
+    "description": "Update your account password. It must be at least 6 characters.",
+    "fields": {
+      "newPassword": "New password",
+      "confirmPassword": "Confirm new password"
+    },
+    "placeholders": {
+      "newPassword": "Enter new password",
+      "confirmPassword": "Re-enter new password"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "updating": "Updating...",
+      "update": "Update password"
+    },
+    "errors": {
+      "newPasswordRequired": "Please enter a new password.",
+      "passwordTooShort": "Password must be at least 6 characters.",
+      "passwordMismatch": "Passwords do not match."
+    },
+    "toasts": {
+      "updateSuccess": "Password updated",
+      "updateFail": {
+        "title": "Update failed",
+        "description": "An unknown error occurred"
+      }
+    }
+  }
+  ,
+  "userProfile": {
+    "title": "Account",
+    "description": "View account details and actions",
+    "loggedIn": "Signed in",
+    "empty": "—",
+    "fields": {
+      "email": "Email",
+      "credits": "Credits",
+      "referrals": "Referrals",
+      "referralCode": "Referral code"
+    },
+    "actions": {
+      "copy": "Copy referral code",
+      "changePassword": "Change password",
+      "shareInvite": "Share invite",
+      "signOut": "Sign out"
+    },
+    "toasts": {
+      "copySuccess": "Referral code copied",
+      "copyFail": {
+        "title": "Copy failed",
+        "description": "Clipboard is unavailable or permission denied"
+      }
+    }
+  }
+  ,
+  "sharePanel": {
+    "title": "Share link",
+    "description": "Invite a new user and earn 3 game credits.",
+    "loading": "Loading...",
+    "invitedCount": "Invited: {count}",
+    "actions": {
+      "copy": "Copy link",
+      "copying": "Copying..."
+    },
+    "toasts": {
+      "copySuccess": "Share link copied",
+      "copyFail": "Copy failed. Please copy manually."
+    }
+  }
+  ,
+  "bottomAction": {
+    "cancel": "Cancel",
+    "confirmVote": "Confirm vote: Seat {seat}",
+    "confirmSeer": "Confirm check: Seat {seat}",
+    "confirmWolf": "Confirm kill: Seat {seat}",
+    "confirmGuard": "Confirm guard: Seat {seat}",
+    "confirmHunter": "Confirm shot: Seat {seat}",
+    "confirmPoison": "Poison Seat {seat}?",
+    "confirmPoisonAction": "Confirm poison",
+    "saveTarget": "Save Seat {seat}",
+    "poisonUsed": "Poison used up",
+    "clickToPoison": "Tap a player to poison",
+    "pass": "Pass",
+    "gameEnd": {
+      "villageWin": "Villagers win!",
+      "wolfWin": "Werewolves win!"
+    },
+    "restart": "Restart"
+  }
+  ,
+  "mentions": {
+    "playerLabel": "Seat {seat} {name}",
+    "seatLabel": "Seat {seat}",
+    "mention": "@Seat {seat}",
+    "noMatch": "No matching players"
+  }
+  ,
+  "common": {
+    "you": "You",
+    "none": "None",
+    "unknown": "Unknown"
+  },
+  "alignments": {
+    "wolf": "Werewolf",
+    "good": "Villager"
+  },
+  "playerCard": {
+    "wolfTeam": "Wolf team",
+    "badgeHolder": "Sheriff",
+    "badgeCandidate": "Candidate",
+    "joining": "Joining..."
+  }
+  ,
+  "voteResult": {
+    "seatLabel": "Seat {seat}",
+    "voteCount": "{count} votes"
+  }
+  ,
+  "votingProgress": {
+    "votedCount": "{voted}/{total} voted",
+    "totalVotes": "Total {count}",
+    "waiting": "Waiting for votes...",
+    "waitingLabel": "Waiting:",
+    "youSuffix": " (you)"
+  }
+  ,
+  "persona": {
+    "strategy": {
+      "aggressive": "Aggressive",
+      "safe": "Cautious",
+      "balanced": "Balanced"
+    }
+  },
+  "playerDetail": {
+    "out": "Eliminated",
+    "you": "YOU",
+    "age": "{age} yrs",
+    "model": "Model: {model}",
+    "background": "Background",
+    "voiceStyle": "Voice style",
+    "selfRole": "This is your role"
+  }
+  ,
+  "tutorialModal": {
+    "title": "Beginner Guide: How to Play Werewolf",
+    "intro": "This is a faction game of hidden roles, reasoning, and table talk. Follow the system prompts and act or speak when it's your turn.",
+    "sections": {
+      "factions": {
+        "title": "1. Factions and Win Conditions",
+        "line1": "Good side: Villager, Seer, Witch, Hunter, Guard. Win by banishing all werewolves.",
+        "line2": "Wolf side: Werewolves. Win when good players can no longer oppose them (usually wolves ≥ alive goods)."
+      },
+      "flow": {
+        "title": "2. Game Flow (Night → Day Cycle)",
+        "line1": "Night: roles act in order (Guard/Werewolf/Witch/Seer, etc.).",
+        "line2": "Day: reveal the night outcome, speak in order, then vote to banish.",
+        "line3": "Special: if the Hunter dies or is banished, they may shoot one player."
+      },
+      "speech": {
+        "title": "3. Speaking and Voting (Tips)",
+        "line1": "Listen first: watch for contradictions and logic gaps.",
+        "line2": "Explain clearly: why you suspect or trust someone (based on what was said).",
+        "line3": "Review before voting: who seems least consistent or is pushing the narrative."
+      },
+      "roles": {
+        "title": "4. Role Overview (This game: Seer/Witch/Hunter/Guard)",
+        "werewolf": {
+          "title": "Werewolf",
+          "description": "Choose a player to kill at night. Werewolves are teammates and may coordinate. Hide your identity by day."
+        },
+        "seer": {
+          "title": "Seer",
+          "description": "Check one player each night to learn if they're a wolf or good. Build credibility during the day."
+        },
+        "witch": {
+          "title": "Witch",
+          "description": "Has one antidote and one poison. Antidote saves last night's victim; poison kills a player. Use with good timing."
+        },
+        "hunter": {
+          "title": "Hunter",
+          "description": "If killed or banished, may shoot one player. Leave clear final info before dying."
+        },
+        "guard": {
+          "title": "Guard",
+          "description": "Protect one player at night from a wolf kill (exact rules follow prompts). Often protects key roles."
+        },
+        "villager": {
+          "title": "Villager",
+          "description": "No night skills, but daytime speech and votes are crucial. Use logic and information to find wolves."
+        }
+      },
+      "tips": {
+        "title": "5. Quick Tips",
+        "line1": "If you're a wolf: blend in, build reasonable suspicion chains, avoid collapsing the discussion.",
+        "line2": "If you're good: avoid emotional votes; use verifiable info to reason."
+      }
+    },
+    "actions": {
+      "close": "Got it"
+    }
+  }
+  ,
+  "roleReveal": {
+    "cardTitle": "Role card",
+    "cardHint": "View privately",
+    "dealing": {
+      "title": "Dealing role card...",
+      "subtitle": "Please wait",
+      "footer": "Almost ready."
+    },
+    "identityLabel": "Your role",
+    "abilitiesLabel": "Abilities",
+    "tipsLabel": "Tips",
+    "nextLabel": "Next",
+    "actions": {
+      "continue": "Continue"
+    },
+    "roles": {
+      "werewolf": {
+        "title": "Werewolf",
+        "subtitle": "Hunt at night, disguise by day.",
+        "abilities": [
+          "Coordinate with teammates at night to choose a target",
+          "Disguise as a good player during the day"
+        ],
+        "tips": [
+          "Coordinate with your team, avoid collapsing the night talk",
+          "Don't be too perfect in daytime speech"
+        ]
+      },
+      "seer": {
+        "title": "Seer",
+        "subtitle": "You see identities, but must be trusted.",
+        "abilities": [
+          "Check one player each night (good/wolf)",
+          "Guide votes with verified info by day"
+        ],
+        "tips": [
+          "Build credibility before dropping info",
+          "Don't reveal too fast"
+        ]
+      },
+      "witch": {
+        "title": "Witch",
+        "subtitle": "Life or death is a single decision.",
+        "abilities": [
+          "Antidote: save the night victim (once)",
+          "Poison: kill one player (once)"
+        ],
+        "tips": [
+          "Potions are precious; don't be dragged by tempo",
+          "Wait if information is lacking"
+        ]
+      },
+      "hunter": {
+        "title": "Hunter",
+        "subtitle": "If eliminated, you may shoot one player.",
+        "abilities": [
+          "If banished or killed, you can take one player with you"
+        ],
+        "tips": [
+          "Don't expose too early",
+          "Choose your target before you fall"
+        ]
+      },
+      "guard": {
+        "title": "Guard",
+        "subtitle": "Protect the key person at the right time.",
+        "abilities": [
+          "Protect one player at night from attacks",
+          "Usually cannot guard the same player on consecutive nights"
+        ],
+        "tips": [
+          "Protect the key moments",
+          "Don't reveal your target"
+        ]
+      },
+      "villager": {
+        "title": "Villager",
+        "subtitle": "No skills, but sound judgment.",
+        "abilities": [
+          "No night action",
+          "Find wolves through speech and voting"
+        ],
+        "tips": [
+          "Speak with evidence",
+          "Stay logically consistent"
+        ]
+      }
+    },
+    "nextStep": {
+      "werewolf": "When it's your turn, select a player to attack.",
+      "seer": "When it's your turn, select a player to check.",
+      "witch": "Soon you'll decide whether to use a potion.",
+      "guard": "When it's your turn, select a player to protect.",
+      "hunter": "Observe first; reveal your shot when it matters.",
+      "villager": "You don't act yet. Listen and observe.",
+      "default": "The stage is set. Follow the host's prompts."
+    }
+  },
+  "speakers": {
+    "host": "Host",
+    "system": "System",
+    "hint": "Hint",
+    "seerResult": "Check Result"
+  },
+  "system": {
+    "gameStart": "Everyone is here. Let's begin.",
+    "nightFall": "Night {day}. Close your eyes.",
+    "dayBreak": "Day breaks. Open your eyes.",
+    "dayBreakShort": "Day breaks",
+    "voteStartShort": "Voting begins",
+    "guardActionStart": "Guard, open your eyes.",
+    "wolfActionStart": "Werewolves, open your eyes.",
+    "witchActionStart": "Witch, open your eyes.",
+    "seerActionStart": "Seer, open your eyes.",
+    "peacefulNight": "It was a peaceful night.",
+    "playerKilled": "Seat {seat} {name} was eliminated last night.",
+    "playerMilkKilled": "Seat {seat} {name} was taken by milk poison last night.",
+    "playerPoisoned": "Seat {seat} {name} was poisoned last night.",
+    "badgeSpeechStart": "Badge election begins. Candidates speak in order.",
+    "badgeElectionStart": "Start badge voting.",
+    "badgeRevote": "Badge vote tied. Re-vote.",
+    "badgeElected": "Badge awarded to Seat {seat} {name} ({votes} votes).",
+    "dayDiscussion": "Free discussion begins.",
+    "voteStart": "Discussion ends. Start voting.",
+    "playerExecuted": "Seat {seat} {name} was executed with {votes} votes.",
+    "voteTie": "Tie vote. No one is eliminated today.",
+    "villageWin": "Villagers win.",
+    "wolfWin": "Werewolves win.",
+    "seerResult": "Check result: Seat {seat} is {result}.",
+    "wolfAttack": "You decide to kill: Seat {seat} {name}",
+    "witchSave": "You used the antidote.",
+    "witchPoison": "You poisoned Seat {seat} {name}.",
+    "guardProtect": "You protected Seat {seat} {name}.",
+    "hunterShoot": "Hunter Seat {hunterSeat} shot Seat {targetSeat} {targetName}.",
+    "badgeTransferStart": "Seat {seat} {name} is the sheriff. Choose a badge transfer or tear it.",
+    "badgeTransferred": "Badge transferred to Seat {toSeat} {toName}.",
+    "badgeTorn": "Seat {seat} {name} tore the badge.",
+    "patterns": {
+      "nightFall": "^Night\\s*\\d+\\.?\\s*Close your eyes\\.?$",
+      "playerKilled": "^Seat\\s+\\d+\\s+.+\\s+was eliminated last night\\.?$",
+      "playerPoisoned": "^Seat\\s+\\d+\\s+.+\\s+was poisoned last night\\.?$",
+      "badgeElected": "^Badge awarded to Seat\\s+\\d+\\s+.+\\s+\\(\\d+ votes\\)\\.?$",
+      "badgeTransferred": "^Badge transferred to Seat\\s+\\d+\\s+.+\\.?$",
+      "playerExecuted": "^Seat\\s+\\d+\\s+.+\\s+was executed with\\s+\\d+ votes\\.?$",
+      "voteTie": "^Tie vote\\. No one is eliminated today\\.?$"
+    }
+  },
+  "ui": {
+    "waitingSeer": "Select a player to check",
+    "seerChecking": "The seer is choosing a target...",
+    "waitingWolf": "Choose a target to kill",
+    "wolfActing": "Werewolves are deciding their target...",
+    "wolfCoordinating": "Waiting for the wolf team to pick a target...",
+    "waitingWitch": "Decide whether to use a potion",
+    "witchActing": "The witch is deciding whether to use a potion...",
+    "waitingGuard": "Select a player to protect",
+    "guardActing": "The guard is choosing a target...",
+    "badgeVotePrompt": "Tap an avatar to vote for sheriff",
+    "hunterShoot": "Pick a target and pull the final trigger",
+    "hunterAiming": "The hunter is choosing a target...",
+    "yourTurn": "Your turn to speak",
+    "votePrompt": "Tap an avatar to vote",
+    "clickToVote": "Tap an avatar to vote",
+    "aiThinking": "Someone is thinking...",
+    "aiVoting": "Everyone is voting...",
+    "aiSpeaking": "Someone is speaking...",
+    "waitingAction": "Your turn",
+    "waitingOthers": "Waiting for other players...",
+    "generatingRoles": "Inviting other players...",
+    "startGame": "Start game",
+    "restart": "Play again",
+    "speechOrder": "Players speak in order",
+    "generatingVoice": "Generating voice"
+  },
+  "prompts": {
+    "daySpeech": {
+      "speakOrder": {
+        "first": "You are the first speaker. No one else has spoken yet.",
+        "last": "You are the last speaker ({speakOrder}/{totalSpeakers}). Everyone has already spoken; do not say things like \"wait for Seat X\".",
+        "middle": "You are speaker {speakOrder}/{totalSpeakers}. Spoken: {spokenList}; Unspoken: {unspokenList}."
+      },
+      "campaign": {
+        "badge": "【Campaign requirements】Explain why you're running (info position, leadership, judgment, alignment, etc.).\nMake a commitment or focus for this round (who to watch, how to vote, how to handle claims).",
+        "pk": "【PK requirements】Explain why you're more suitable than the opponent, and state your leadership focus for this round."
+      },
+      "roleHints": {
+        "werewolf": "You are a werewolf. Disguise as good; shift blame subtly but not too hard.",
+        "seer": "You are the seer. You may claim or keep a low profile."
+      },
+      "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n【Scenario】\nThis is an online Werewolf game. Players communicate by text.\n\n{winCondition}\n\n{persona}\n\n{difficultyHint}",
+      "task": {
+        "lastWords": "You have been eliminated. Deliver your final words.",
+        "campaign": "Sheriff campaign speech. Deliver your campaign statement.",
+        "dayDiscussion": "Day discussion. Share your view.",
+        "section": "【Task】\n{taskLine}{campaignRequirements}"
+      },
+      "guidelines": {
+        "genshin": "【Speaking rules】\n1. Base judgments on current state and rules. Don't invent personas or catchphrases.\n2. Keep it concise and explain your intent for this round.\n3. Only mention valid seats: 1-{totalSeats} (no @12 or out-of-range numbers).\n4. Only discuss living players; avoid postmortems.\n\n【Output format】\nReturn a JSON string array, each element a message bubble.\nExample:\n[\"I'm leaning toward Seat 3's details.\", \"I'll focus my vote between 2 and 3 today.\"]",
+        "default": "【Core principles】\n1. **Immersive roleplay**: You are {playerName}. Fully adopt the character's personality and speaking habits.\n2. **Distinct personality**: If you're hot-headed, be impatient; if you're clumsy, be a bit scattered. Don't turn into a logic robot.\n3. **In-game focus**: Base speech on this game's info (speeches, stances, votes, night results). Avoid outside storylines.\n4. **Natural chat**: Speak like a real person in group chat—short lines, hesitations, emotions. Don't write a report.\n5. **Targeted interaction**: React to previous speakers' opinions and attitudes.\n6. **Only living players**: Avoid discussing eliminated players; focus on current speakers and votes.\n\n【Speaking guide】\n- Casual phrasing is fine, but don't overdo fillers.\n- Persona shows in tone and wording, not backstory.\n- Refer to others as \"Seat X\" when possible.\n- Only mention valid seats: 1-{totalSeats} (no @12 or out-of-range numbers).\n- No stage directions (e.g., *pushes glasses*). Output only speech.\n- Split into 2-5 natural message bubbles of varying length.\n{roleHintLine}\n\n【Output format】\nReturn a JSON string array, each element a message bubble.\nExample:\n[\"Hey...\", \"Seat 3, your logic feels off.\", \"Feels like you're forcing it.\"]"
+      },
+      "phaseHint": {
+        "badge": "You are delivering a sheriff campaign speech. Follow campaign requirements strictly.",
+        "pk": "You are delivering a sheriff PK speech. Follow PK requirements strictly."
+      },
+      "phaseSection": "【Current phase】\n{phaseHint}",
+      "userNoTranscript": "(None yet. You are speaker #{speakOrder}.)",
+      "userNoSelfSpeech": "(None)",
+      "user": "{gameContext}\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech today】\n{selfSpeech}\n\n{phaseHintSection}\n\n【Speaking order】\n{speakOrderHint}\n\nYour turn. Return a JSON array:"
+    },
+    "vote": {
+      "roleHint": {
+        "werewolf": "Hint: avoid voting a wolf teammate, but don't be too obvious",
+        "seer": "Hint: decide based on your check result"
+      },
+      "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+      "task": "【Task】\nVoting phase: choose a player to execute.\nStay consistent with your speech today.\nOnly output the seat number. No analysis or roleplay.\n\nOptions: {options}\n\n{roleHints}",
+      "option": "Seat {seat} ({name})",
+      "userNoTranscript": "(None)",
+      "userNoSelfSpeech": "(You didn't speak today)",
+      "user": "{gameContext}\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+    },
+    "night": {
+      "option": "Seat {seat} ({name})",
+      "optionName": "({name})",
+      "seer": {
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "checkedLine": "Already checked: {list} (avoid repeat checks)",
+        "task": "【Task】\nNight check phase: choose one player to check.\nOnly output the seat number. No analysis or roleplay.\n{checkedLine}\n\nOptions: {options}",
+        "user": "{context}\n\nWhich seat will you check?\n\n【Format】\nReply with a seat number only, e.g., 5\nNo explanations, no extra text, no code blocks"
+      },
+      "wolf": {
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}",
+        "teammates": "Wolf teammates: {list}",
+        "solo": "You are the only living werewolf",
+        "rules": "{winCondition}\n\n{difficultyHint}",
+        "teammateVotes": "【Teammate intent】\n{lines}\nHint: focus fire with teammates!",
+        "voteLine": "- Seat {seat} ({name}) wants to kill: Seat {targetSeat}{targetName}",
+        "task": "【Task】\nNight kill phase: choose a good player to kill.\nOnly output the seat number. No analysis or roleplay.\n{teammateVotesSection}\n\nOptions: {options}\n",
+        "user": "{context}\n\nWhich seat do you want to kill?\n\n【Format】\nReply with a seat number only, e.g., 2\nNo explanations, no extra text, no code blocks"
+      },
+      "guard": {
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "lastTarget": "You protected Seat {seat} last night; cannot pick again",
+        "task": "【Task】\nNight guard phase: choose a player to protect.\nOnly output the seat number. No analysis or roleplay.\nNote: cannot protect the same player on consecutive nights.\nNote: if you protect the target and the witch also saves, it triggers \"milk poison\" and the target still dies.\n\nOptions: {options}\n{lastTargetLine}",
+        "user": "{context}\n\nWhich seat do you want to protect?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+      },
+      "witch": {
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "victimLine": "Wolves attacked Seat {seat} {name}",
+        "noSense": "Antidote already used; no info on the target",
+        "noAttack": "No one was attacked tonight",
+        "saveOption": "- Input \"save\" to use antidote on Seat {seat}",
+        "noSelfSave": "- Witch cannot self-save",
+        "noSave": "- Antidote unavailable or no victim",
+        "poisonOption": "- Input \"poison X\" to poison Seat X (e.g., \"poison 3\")",
+        "noPoison": "- Poison already used",
+        "task": "【Potion status】\nAntidote: {healStatus}\nPoison: {poisonStatus}\n\n【Tonight】\n{tonightInfo}\n\n【Task】\nDecide whether to use a potion (at most one per night):\nOnly output commands. No analysis or roleplay.\n{saveLine}\n{poisonLine}\n- Input \"pass\" to use no potion\nNote: only one potion can be used per night.\nNote: if the guard protects the target and you also save, it triggers \"milk poison\" and the target still dies.\n\nPoison targets: {poisonTargets}",
+        "user": "{context}\n\nWhat will you do?\n\n【Format】\nReply: save / poison X / pass\nOnly output the command itself, no explanation or extra text"
+      }
+    }
+    ,
+    "badge": {
+      "option": "Seat {seat} ({name})",
+      "election": {
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "task": "【Task】\nSheriff election: choose a player to receive the badge.\nGood team: prioritize the most trustworthy, leader-like, and clear speaker.\nWolf team: prioritize wolf teammates or easily controlled targets.\nOnly output the seat number. No analysis or roleplay.\n\nOptions: {options}\n",
+        "contextHeader": "Day {day} Sheriff election",
+        "contextWolves": "Wolf teammates: {list}",
+        "contextRecent": "Recent speech (excerpt):\n{text}",
+        "user": "{context}\n\nWhich seat do you vote for sheriff?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+      },
+      "transfer": {
+        "roleHintWerewolf": "Hint: transfer to a wolf teammate or a controllable good player, or tear the badge",
+        "roleHintGood": "Hint: transfer to the most trustworthy good player, or tear the badge",
+        "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+        "task": "【Task】\nYou are eliminated. Transfer the badge to a living player or tear it.\nIf transferring, choose the most trustworthy player.\nIf tearing, reply \"0\".\n\nOptions: {options}, or reply \"0\" to tear the badge\n\n{roleHints}\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks",
+        "noTranscript": "(None)",
+        "user": "{context}\n\n【Today's discussion】\n{todayTranscript}\n\nWhich seat do you transfer the badge to? (Reply \"0\" to tear it)"
+      }
+    }
+  },
+  "badgePhase": {
+    "voteDetailTitle": "Sheriff election vote details",
+    "tiePk": "Sheriff vote tied. Enter PK speeches.",
+    "signupStart": "Sheriff election signup begins",
+    "noSignup": "No one signed up. Sheriff election skipped.",
+    "transferPrompt": "Choose a player to transfer the badge"
+  },
+  "votePhase": {
+    "voteDetailTitle": "Vote details",
+    "tiePk": "Execution tied. Enter PK speeches."
+  },
+  "phase": {
+    "lobby": { "description": "Ready to start" },
+    "setup": { "description": "Generating roles..." },
+    "nightStart": { "description": "Night falls" },
+    "nightGuard": { "description": "Guard in action", "human": "Choose a player to protect" },
+    "nightWolf": { "description": "Werewolves in action", "human": "Choose a kill target" },
+    "nightWitch": { "description": "Witch in action", "human": "Use a potion?" },
+    "nightSeer": { "description": "Seer in action", "human": "Choose a player to check" },
+    "nightResolve": { "description": "Day breaks" },
+    "dayStart": { "description": "Day begins" },
+    "badgeSignup": { "description": "Sheriff signup", "human": "Run for sheriff?" },
+    "badgeSpeech": { "description": "Sheriff speeches" },
+    "badgeElection": {
+      "description": "Sheriff election",
+      "human": "Vote for sheriff",
+      "noVote": "You're a candidate; no vote needed"
+    },
+    "pkSpeech": { "description": "PK speeches" },
+    "daySpeech": { "description": "Discussion phase" },
+    "speechYourTurn": "Your turn to speak",
+    "lastWords": { "description": "Last words" },
+    "dayVote": { "description": "Voting phase" },
+    "dayResolve": { "description": "Execution resolution" },
+    "badgeTransfer": { "description": "Sheriff badge transfer", "human": "Choose a badge transfer target" },
+    "hunterShoot": { "description": "Hunter shot", "human": "Choose a target to shoot" },
+    "gameEnd": { "description": "Game over", "villageWin": "Villagers win", "wolfWin": "Werewolves win" }
+  },
+  "page": {
+    "voteHelp": "How to vote?",
+    "tutorialTitle": "How to play",
+    "rolePending": "Hidden",
+    "audioSettings": "Audio settings",
+    "closeNotebook": "Close notes",
+    "openNotebook": "Open notes",
+    "witchPoisonUsed": {
+      "title": "Poison already used",
+      "description": "Tonight you can only save, or skip."
+    }
+  },
+  "ritual": {
+    "gameStart": "Game start",
+    "badgeSignup": "Sheriff signup",
+    "badgeSpeechTitle": "Sheriff speeches begin",
+    "badgeSpeechSubtitle": "Candidates speak in order"
+  },
+  "dialog": {
+    "turnToSpeak": "your turn",
+    "turnToLastWords": "last words",
+    "badgeElectionInProgress": "Sheriff election in progress",
+    "voteInProgress": "Voting in progress",
+    "nextRoundHint": "Tap to continue, next speaker",
+    "nextRoundButton": "Next",
+    "continue": "Continue",
+    "ok": "OK",
+    "nightAction": {
+      "wolfAwake": "Werewolves, open your eyes",
+      "wolfActing": "Werewolves are choosing a target",
+      "witchAwake": "Witch, open your eyes",
+      "witchActing": "Witch is acting",
+      "seerAwake": "Seer, open your eyes",
+      "seerChecking": "Seer is checking",
+      "hunterAwake": "Hunter action",
+      "hunterActing": "Hunter is aiming"
+    },
+    "action": {
+      "vote": "Vote",
+      "badgeVote": "Vote sheriff",
+      "seerCheck": "Check",
+      "wolfKill": "Kill",
+      "guardProtect": "Protect",
+      "hunterShoot": "Shoot",
+      "badgeTransfer": "Transfer badge to",
+      "select": "Select"
+    },
+    "input": {
+      "lastWordsPlaceholder": "Any last words?",
+      "defaultPlaceholder": "What do you think?",
+      "send": "Send",
+      "finishSpeech": "End speech"
+    }
+  },
+  "dayPhase": {
+    "organizing": "(Organizing thoughts...)",
+    "interrupted": "(Interrupted)",
+    "lastWordsSystem": "Seat {seat} {name}, please give your last words",
+    "lastWordsPrompt": "Please deliver your last words (Seat {seat} {name})"
+  },
+  "specialEvents": {
+    "hunterPrompt": "You are the hunter. Choose a target to shoot (or skip).",
+    "villageWinLine": "The villagers win. Peace returns to the village.",
+    "wolfWinLine": "The werewolves win. Darkness falls on the village.",
+    "roleRevealItem": "Seat {seat} {name}: {role}",
+    "roleRevealLine": "Role reveal: {list}"
+  },
+  "gameLogic": {
+    "errors": {
+      "openRouterUnauthorized": {
+        "title": "OpenRouter 401 Unauthorized",
+        "description": "Common causes: 1) Updated .env.local without restarting dev server; 2) key contains quotes/spaces/newlines; 3) key expired."
+      },
+      "requestFailed": "Request failed",
+      "systemError": "Error: {error}"
+    },
+    "night": {
+      "guardNoRepeat": "The guard cannot protect the same player twice in a row.",
+      "guardProtect": "You protected Seat {seat} {name}.",
+      "wolfVote": "You voted to attack Seat {seat} {name}. Waiting for teammates...",
+      "wolfTimeout": {
+        "title": "Teammate timeout",
+        "description": "AI wolves follow your choice"
+      },
+      "wolfTie": {
+        "dialogue": "Wolf votes are tied. Please choose again.",
+        "title": "Wolf tie",
+        "description": "Tap a player avatar to choose a target"
+      },
+      "wolfChosen": "Wolf team attacks Seat {seat} {name}.",
+      "witchSave": "You used the antidote.",
+      "witchPoison": "You poisoned Seat {seat} {name}.",
+      "witchPass": "You chose not to use a potion.",
+      "seerResult": "Seat {seat} {name} is {result}"
+    }
+  },
+  "gameMaster": {
+    "invalidSeat": "(Invalid seat)",
+    "summary": {
+      "system": "You are a Werewolf game recorder.\n\nCompress the given log into 3–6 key facts for long-term memory.\n\nRequirements:\n- Summarize only what appears in the log; do not infer\n- Each item 10–35 characters\n- Prioritize: executions/last words, key alignments/accusations, clear vote shifts, night deaths (if present)\n\nOutput format: return a JSON array, e.g., [\"Day 1: Seat 2 executed; last words accuse 10\", \"Seat 9 voted Seat 1\"]",
+      "user": "【Day {day} daytime log】\n{transcript}\n\nReturn a JSON array:"
+    }
+  },
+  "characterGenerator": {
+    "rosterLine": "{index}. {name} ({gender}, age {age}) - {basicInfo}",
+    "rosterLineSimple": "{index}. {name} ({gender}) - {basicInfo}",
+    "nicknamePrompt": "You are a naming assistant. Create Chinese nicknames from model English names.\n\n【Model list】\n{list}\n\n【Requirements】\n1. Provide the requested number of nicknames per model (unique per model)\n2. Prefer 1–4 characters; Chinese or mixed\n3. Fun and memorable; echo the English name\n4. items[].model must exactly match the model name above\n5. No duplicates, no quotes or numbering\n\n【Output JSON】\n{\n  \"items\": [\n    { \"model\": \"ModelX\", \"nicknames\": [\"XiaoX\", \"X-Boy\"] }\n  ]\n}\n\nNow output:",
+    "baseProfilesPrompt": "You are a Werewolf game character designer.\n\n【Scenario background】\nTitle: {title}\nBackground: {description}\nRole hints: {rolesHint}\n\n【Task】\nGenerate {count} player profiles. These are normal people playing Werewolf, not mystery story characters.\n\n【Important】\n- This is a Werewolf game; profiles must allow discussion and voting\n- Catchphrases should feel like casual filler; avoid over-the-top anime quirks\n- Catchphrases should be occasional, not every sentence\n- Backgrounds are ordinary occupations/identities; no mystery drama\n- Characters should vary, but their speech should be natural\n\n【Output requirements】\n1. Must output strict JSON object\n2. Must have exactly {count} profiles\n3. Each profile fields:\n   - displayName: string (2–3 characters, fits scenario)\n   - gender: \"male\" | \"female\"\n   - age: number (20–55)\n   - mbti: string (4 letters like INTJ/ENFP)\n   - basicInfo: string (one-sentence occupation/identity)\n4. Names must be unique\n\n【Example】\n{\n  \"profiles\": [\n    { \"displayName\": \"Zhang Wei\", \"gender\": \"male\", \"age\": 35, \"mbti\": \"ESTJ\", \"basicInfo\": \"Taxi driver with 10 years\" },\n    { \"displayName\": \"Lin Xiaoyu\", \"gender\": \"female\", \"age\": 24, \"mbti\": \"ENFP\", \"basicInfo\": \"Product manager at a tech company\" }\n  ]\n}\n\nNow output:",
+    "fullPersonasPrompt": "You are a Werewolf game character designer.\n\n【Scenario】\n{title} - {description}\n\n【Roster】\n{roster}\n\n【Task】\nFill in persona for each role so they speak naturally and distinctively in a Werewolf game.\nEnsure each character has distinct personality, speaking habits, and rhythm, but all feel like real players.\n\n【Important constraints】\n- This is a Werewolf game; profiles must support discussion, analysis, voting\n- Keep speech in-game; avoid side plots or out-of-game chatter\n- voiceRules must reflect specific speaking traits\n- backgroundStory is a simple occupation description, 10–20 words\n- styleLabel is a short personality tag\n- riskBias based on personality (safe/balanced/aggressive)\n\n【Output requirements】\n1. Must output JSON: { \"characters\": [...] }\n2. Must have exactly {count} roles, in the same order as the roster\n3. persona.gender/age/mbti must match the roster\n\n【Output structure】\n{\n  \"characters\": [\n{schema}\n  ]\n}\n\nNow output:",
+    "repairBaseProfilesPrompt": "You are a strict JSON fixer.\n\n【Goal】\nFix the input into a strict JSON object with structure { \"profiles\": [...] } and ensure exactly {count} profiles.\n\n【Field requirements】\n- displayName: string\n- gender: \"male\" | \"female\" | \"nonbinary\"\n- age: number (16–70)\n- mbti: string (4 letters like INTJ/ENFP)\n- basicInfo: string\n\n【Scenario】\n{title}\n{description}\n\n【Input】\n{raw}\n\n【Output】\nOnly output JSON:",
+    "repairFullPersonasPrompt": "You are a strict JSON fixer.\n\n【Goal】\nFix the input into a strict JSON object with structure { \"characters\": [...] } and ensure exactly {count} characters.\n\n【Must satisfy】\n1. Character order must match the base roster\n2. persona.gender/age/mbti must match the roster\n3. backgroundStory must be a single sentence\n4. styleLabel and voiceRules should be preserved or minimally repaired, not replaced with templates\n\n【Scenario】\n{title}\n{description}\n\n【Base roster】\n{roster}\n\n【Input】\n{raw}\n\n【Output】\n{\n  \"characters\": [\n{schema}\n  ]\n}\n\nNote: output JSON only."
+  },
+  "scenarios": {
+    "high_school_reunion": {
+      "title": "Class reunion",
+      "description": "Ten years later, old classmates reunite. Some made it, some didn't; past and present collide.",
+      "rolesHint": "Roles: class president, top student, popular kid, honest type, social butterfly. Tone: casual, nostalgic, a bit competitive."
+    },
+    "family_dinner": {
+      "title": "New Year's dinner",
+      "description": "A big family dinner on New Year's Eve. Peaceful on the surface, but some topics spark conflict.",
+      "rolesHint": "Roles: elders, younger relatives, spouses. Tone: homey, caring but sharp, peacekeeping."
+    },
+    "wedding_banquet": {
+      "title": "Wedding banquet",
+      "description": "A joyous wedding banquet, but old grudges simmer among relatives and friends.",
+      "rolesHint": "Roles: couple, both parents, bridesmaids/groomsmen, ex, troublemaking aunt. Tone: polite with passive aggression."
+    },
+    "community_committee": {
+      "title": "Homeowners meeting",
+      "description": "A community meeting about maintenance fees turns heated as owners clash.",
+      "rolesHint": "Roles: enthusiastic owner, property manager, recording uncle, mom with kids. Tone: group chat bickering."
+    },
+    "tech_startup": {
+      "title": "Startup company",
+      "description": "A team-building event for a startup. Team spirit on the surface, office politics underneath.",
+      "rolesHint": "Roles: founder, engineer, PM, intern, admin. Tone: tech jargon, complaints."
+    },
+    "hospital_oncall": {
+      "title": "ER on-call night",
+      "description": "An on-call ER night; a tough case puts everyone on edge.",
+      "rolesHint": "Roles: attending doctor, resident, head nurse, family member. Tone: professional, stressed."
+    },
+    "esports_house": {
+      "title": "Esports team",
+      "description": "The team is underperforming; practice devolves into blame.",
+      "rolesHint": "Roles: players, coach, agent, substitute. Tone: esports slang, fast-paced."
+    },
+    "cooking_competition": {
+      "title": "Cooking competition",
+      "description": "Backstage at the finals, contestants smile while competing fiercely.",
+      "rolesHint": "Roles: favorite, newcomer, judge, producer. Tone: polite but calculating."
+    },
+    "detective_noir": {
+      "title": "Detective agency",
+      "description": "People tied to a cold case gather; everyone hides secrets.",
+      "rolesHint": "Roles: detective, client, suspect, witness, assistant. Tone: restrained, probing, lots of questions."
+    },
+    "cruise_ship": {
+      "title": "Cruise party",
+      "description": "A VIP disappears on a luxury cruise. The ship has left port—no one can leave.",
+      "rolesHint": "Roles: tycoon, captain, staff, mysterious passenger. Tone: upper-class social, insinuations."
+    },
+    "subway_night_shift": {
+      "title": "Last subway",
+      "description": "The last train stalls in a tunnel; passengers grow suspicious.",
+      "rolesHint": "Roles: driver, office worker, student, security, mysterious rider. Tone: urban, anxious."
+    },
+    "museum_night": {
+      "title": "Museum night shift",
+      "description": "After closing, cameras glitch; footsteps echo and keys go missing.",
+      "rolesHint": "Roles: guard, curator, restorer, intern. Tone: cautious, interrogative."
+    },
+    "co_working_space": {
+      "title": "Co-working space",
+      "description": "A sudden blackout hits the co-working space before launch; everyone looks for someone to blame.",
+      "rolesHint": "Roles: founder, freelancer, ops, investor, intern. Tone: businesslike, tense."
+    },
+    "escape_room": {
+      "title": "Escape room",
+      "description": "An escape room prop goes missing and the group gets stuck; suspicion rises.",
+      "rolesHint": "Roles: leader, timid teammate, veteran, staff, random joiner. Tone: tense, detective, venting."
+    },
+    "music_festival_backstage": {
+      "title": "Music festival backstage",
+      "description": "A last-minute equipment failure sparks a standoff between organizers and artists.",
+      "rolesHint": "Roles: band member, organizer, stage director, lighting tech, fan rep. Tone: fast, emotional."
+    },
+    "airport_delay": {
+      "title": "Airport delays",
+      "description": "Massive flight delays trigger frustration and conflict.",
+      "rolesHint": "Roles: ground staff, passengers, lawyer, parent with kids. Tone: realistic, complaint-heavy."
+    },
+    "train_sleeping_car": {
+      "title": "Sleeper train",
+      "description": "Late at night, someone rummages through bags; passengers accuse each other.",
+      "rolesHint": "Roles: attendant, vendor, backpacker, uncles/aunties. Tone: everyday, suspicious."
+    },
+    "retirement_home": {
+      "title": "Senior center",
+      "description": "In the activity room, seniors compete in brain games and refuse to back down.",
+      "rolesHint": "Roles: retired cadre, dance leader, wealthy elder, gossiping grandma. Tone: verbose, seniority-driven."
+    },
+    "livestream_house": {
+      "title": "Streamer house",
+      "description": "Streamers living together get hit by a scandal leak; everyone suspects each other.",
+      "rolesHint": "Roles: streamer, operator, fan, editor. Tone: internet memes, PR talk."
+    },
+    "campfire_summer": {
+      "title": "Summer camp",
+      "description": "After the bonfire, a theft occurs; campers accuse one another.",
+      "rolesHint": "Roles: instructor, camp leader, quiet kid, tattletale. Tone: youthful, sassy."
+    }
+  },
+  "promptUtils": {
+    "roleText": {
+      "werewolf": "Werewolf (evil team)",
+      "seer": "Seer (good team, checks one player each night)",
+      "witch": "Witch (good team, one antidote and one poison)",
+      "hunter": "Hunter (good team, may shoot on death)",
+      "guard": "Guard (good team, protects one player each night)",
+      "villager": "Villager (good team)"
+    },
+    "winCondition": {
+      "werewolf": "【Win condition】Werewolves win when their count >= good players\n【Core goals】\n- Coordinate nightly kills; prioritize key roles (Seer > Witch > Hunter > Guard)\n- Disguise as good during the day and steer eliminations\n- Protect wolf teammates from focus",
+      "seer": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Check suspicious players nightly and collect info\n- Reveal at the right time to lead eliminations\n- Protect yourself; seer is a top wolf target",
+      "witch": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Use antidote carefully to save key roles or confirmed good\n- Save poison for confirmed wolves or high-risk players\n- Note: witch cannot self-save and can use only one potion per night",
+      "hunter": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Speak actively and analyze during the day\n- On death, shoot a confirmed wolf\n- Note: if poisoned, you cannot shoot",
+      "guard": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Protect likely wolf targets each night\n- Cannot protect the same player on consecutive nights\n- Infer wolf targets from table info",
+      "villager": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Listen carefully and analyze behavior during the day\n- Eliminate wolves by voting\n- Coordinate with key roles"
+    },
+    "difficultySpeech": {
+      "easy": "【Difficulty】Beginner (relaxed, intuitive)\n【Style】\n- Rely on intuition and emotion; avoid complex chains\n- More likely to trust others or follow the majority\n- Werewolf: play safely; avoid advanced tactics; small slips allowed\n- Good: follow info roles more; fewer hard pushes",
+      "normal": "【Difficulty】Standard (balanced reasoning)\n【Style】\n- Watch for contradictions, shifts, and voting direction\n- Clear opinions without being overly dogmatic\n- Werewolf: justify naturally and guide softly\n- Good: lead votes when needed",
+      "hard": "【Difficulty】Advanced (deep contest)\n【Style】\n- Track order, stance shifts, vote chains, and payoff relationships\n- Build arguments and counterarguments; spot bait and fake logic\n- Werewolf: cover each other, soft-stance then pivot, create info gaps\n- Good: strong pressure, counter momentum, precise wolf calls"
+    },
+    "difficultyDecision": {
+      "roleNoteWerewolf": "Werewolves prioritize kill payoff and threat of key roles.",
+      "roleNoteGood": "Good players prioritize info value and credibility.",
+      "easy": "【Difficulty strategy】Lean on intuition and consensus; not optimal. {roleNote}",
+      "normal": "【Difficulty strategy】Balance risk and reward; avoid obvious anti-logic. {roleNote}",
+      "hard": "【Difficulty strategy】Pursue optimal play with vote chains, motives, and payoff. {roleNote}"
+    },
+    "persona": {
+      "section": "【Persona】\nPersonality: {styleLabel}\nSpeaking habits: {voiceRules}\nStyle: {riskLabel}",
+      "riskAggressive": "Aggressive; likes to challenge",
+      "riskSafe": "Cautious; prefers to observe",
+      "riskBalanced": "Balanced"
+    },
+    "aliveCounts": "【Player count】\nAlive: {count}",
+    "dailySummaryItem": "Day {day}: {summary}",
+    "dailySummarySection": "【Key history】\n{lines}",
+    "gameContext": {
+      "playerLine": "Seat {seat} {name}{youSuffix}",
+      "youSuffix": " (you)",
+      "header": "【Current state】\nDay {day} {phase}\nValid seats: 1-{totalSeats} (total {totalSeats}); do not mention out-of-range seats\nAlive players:\n{playerList}",
+      "night": "Night",
+      "day": "Day",
+      "systemAnnouncements": "【System announcements】\n{lines}",
+      "deadPlayers": "【Eliminated players】\n{lines}",
+      "death": {
+        "wolf": "Seat {seat} {name} was killed by wolves",
+        "poison": "Seat {seat} {name} was poisoned by the witch",
+        "generic": "Seat {seat} {name} was {reason}",
+        "vote": "Seat {seat} {name} was executed by vote"
+      },
+      "deathReason": {
+        "wolf": "killed by wolves",
+        "poison": "poisoned by the witch",
+        "other": "eliminated"
+      },
+      "todayDeaths": "【Deaths today】\n{lines}",
+      "voteHistoryHeader": "【Vote history】",
+      "voteDayHeader": "Day {day} votes:",
+      "voteGroup": "Seat {seat} {name} ({count} votes): {voters}",
+      "seatName": "Seat {seat} {name}",
+      "seatNameCompact": "Seat {seat} {name}",
+      "seatLabel": "Seat {seat}",
+      "listSeparator": ", ",
+      "seerHistoryHeader": "【Seer checks】",
+      "seerHistoryItem": "Night {day}: Seat {seat} {name} - {result}",
+      "witchStatusHeader": "【Potion status】",
+      "witchHeal": "Antidote: {status}",
+      "witchPoison": "Poison: {status}",
+      "used": "Used",
+      "available": "Available",
+      "witchHealAction": "Night {day}: You saved Seat {seat} {name} with antidote",
+      "witchPoisonAction": "Night {day}: You poisoned Seat {seat} {name}",
+      "witchHistory": "【Your potion history】\n{lines}",
+      "guardLast": "【Last protection】Seat {seat} {name} (cannot protect again tonight)",
+      "wolfTeammates": "【Wolf teammates】\n{list}",
+      "currentVotes": "【Current votes】\n{lines}",
+      "voteLine": "{voter} -> {target}"
+    }
+  }
+}

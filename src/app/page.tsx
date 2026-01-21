@@ -30,6 +30,9 @@ import { useTypewriter } from "@/hooks/useTypewriter";
 import { useGameLogic } from "@/hooks/useGameLogic";
 import type { Player, Role } from "@/types/game";
 import { PHASE_CONFIGS } from "@/store/game-machine";
+import { getI18n } from "@/i18n/translator";
+import { getSystemMessages, getSystemPatterns } from "@/lib/game-texts";
+import { useTranslations } from "next-intl";
 
 // Components
 import { WelcomeScreen } from "@/components/game/WelcomeScreen";
@@ -52,7 +55,6 @@ import { useSettings } from "@/hooks/useSettings";
 import { useTutorial } from "@/hooks/useTutorial";
 
 const RITUAL_CUE_DURATION_SECONDS = 2.2;
-const NIGHTFALL_CUE_REGEX = /^第\s*\d+\s*夜，天黑请闭眼$/;
 const DAY_NIGHT_BLINK = {
   closeMs: 360,
   holdMs: 120,
@@ -65,38 +67,49 @@ const REFERRAL_STORAGE_KEY = "wolfcha_referral";
 const dicebearUrl = (seed: string) => buildSimpleAvatarUrl(seed);
 
 const getRoleLabel = (role?: Role | null) => {
+  const { t } = getI18n();
   switch (role) {
-    case "Werewolf": return "狼人";
-    case "Seer": return "预言家";
-    case "Witch": return "女巫";
-    case "Hunter": return "猎人";
-    case "Guard": return "守卫";
-    case "Villager": return "村民";
+    case "Werewolf": return t("roles.werewolf");
+    case "Seer": return t("roles.seer");
+    case "Witch": return t("roles.witch");
+    case "Hunter": return t("roles.hunter");
+    case "Guard": return t("roles.guard");
+    case "Villager": return t("roles.villager");
     default: return "?";
   }
 };
 
 function getRitualCueFromSystemMessage(content: string): { title: string; subtitle?: string } | null {
+  const { t } = getI18n();
+  const systemMessages = getSystemMessages();
+  const patterns = getSystemPatterns();
+  const nightFallRegex = new RegExp(patterns.nightFall);
+  const playerKilledRegex = new RegExp(patterns.playerKilled);
+  const playerPoisonedRegex = new RegExp(patterns.playerPoisoned);
+  const badgeElectedRegex = new RegExp(patterns.badgeElected);
+  const playerExecutedRegex = new RegExp(patterns.playerExecuted);
   const text = content.trim();
-  if (text === "人到齐了，开始吧。") return { title: "开局" };
-  if (NIGHTFALL_CUE_REGEX.test(text)) return { title: text };
-  if (text === "守卫请睁眼") return { title: text };
-  if (text === "狼人请睁眼") return { title: text };
-  if (text === "女巫请睁眼") return { title: text };
-  if (text === "预言家请睁眼") return { title: text };
-  if (text === "昨晚平安无事") return { title: "昨晚平安无事" };
-  if (/^\d+号\s+.+\s+昨晚出局$/.test(text)) return { title: text };
-  if (/^\d+号\s+.+\s+昨晚中毒出局$/.test(text)) return { title: text };
-  if (text === "天亮了，请睁眼") return { title: "天亮了，请睁眼" };
-  if (text === "进入警徽竞选报名环节") return { title: "警徽竞选报名" };
-  if (text === "警徽竞选开始，请候选人依次发言") return { title: "警徽竞选开始", subtitle: "请候选人依次发言" };
-  if (text === "开始警徽评选") return { title: text };
-  if (text === "警徽平票，重新投票") return { title: text };
-  if (/^\s*警徽授予\s*\d+号\s+.+（\d+票）\s*$/.test(text)) return { title: text };
-  if (text === "开始自由发言") return { title: "开始自由发言" };
-  if (text === "发言结束，开始投票。") return { title: text };
-  if (/^\d+号\s+.+\s+以\s+\d+\s+票出局$/.test(text)) return { title: text };
-  if (text === "票数相同，今天无人出局") return { title: text };
+  if (text === systemMessages.gameStart) return { title: t("ritual.gameStart") };
+  if (nightFallRegex.test(text)) return { title: text };
+  if (text === systemMessages.guardActionStart) return { title: text };
+  if (text === systemMessages.wolfActionStart) return { title: text };
+  if (text === systemMessages.witchActionStart) return { title: text };
+  if (text === systemMessages.seerActionStart) return { title: text };
+  if (text === systemMessages.peacefulNight) return { title: systemMessages.peacefulNight };
+  if (playerKilledRegex.test(text)) return { title: text };
+  if (playerPoisonedRegex.test(text)) return { title: text };
+  if (text === systemMessages.dayBreak) return { title: systemMessages.dayBreak };
+  if (text === t("badgePhase.signupStart")) return { title: t("ritual.badgeSignup") };
+  if (text === systemMessages.badgeSpeechStart) {
+    return { title: t("ritual.badgeSpeechTitle"), subtitle: t("ritual.badgeSpeechSubtitle") };
+  }
+  if (text === systemMessages.badgeElectionStart) return { title: systemMessages.badgeElectionStart };
+  if (text === systemMessages.badgeRevote) return { title: systemMessages.badgeRevote };
+  if (badgeElectedRegex.test(text)) return { title: text };
+  if (text === systemMessages.dayDiscussion) return { title: systemMessages.dayDiscussion };
+  if (text === systemMessages.voteStart) return { title: systemMessages.voteStart };
+  if (playerExecutedRegex.test(text)) return { title: text };
+  if (text === systemMessages.voteTie) return { title: systemMessages.voteTie };
   return null;
 }
 
@@ -105,6 +118,7 @@ function getRitualCueFromSystemMessage(content: string): { title: string; subtit
 // ============ 主组件 ============
 
 export default function Home() {
+  const t = useTranslations();
   const {
     humanName,
     setHumanName,
@@ -589,7 +603,7 @@ export default function Home() {
     const text = currentDialogue?.text || "";
     if (!currentDialogue?.isStreaming) return 25;
     if (!text.trim()) return 25;
-    if (text.includes("正在组织语言") || text.includes("生成语音")) return 25;
+    if (text.includes(t("dayPhase.organizing")) || text.includes(t("ui.generatingVoice"))) return 25;
 
     const player = gameState.players.find((p) => p.displayName === currentDialogue.speaker);
     const voiceId = resolveVoiceId(
@@ -784,9 +798,9 @@ export default function Home() {
       return `${getRoleLabel(humanPlayer.role)}是什么？`;
     }
     if (gameState.phase === "DAY_VOTE" || gameState.phase === "DAY_BADGE_ELECTION") {
-      return "怎么投票？";
+      return t("page.voteHelp");
     }
-    return "玩法说明";
+    return t("page.tutorialTitle");
   }, [gameState.phase, humanPlayer, isRoleActionForHuman]);
 
   const showTutorialHelp = useMemo(() => {
@@ -922,8 +936,8 @@ export default function Home() {
       humanPlayer.role === "Witch" &&
       gameState.roleAbilities.witchPoisonUsed
     ) {
-      toast("毒药已用过了", {
-        description: "今晚只能选择救人，或直接跳过。",
+      toast(t("page.witchPoisonUsed.title"), {
+        description: t("page.witchPoisonUsed.description"),
       });
       return;
     }
@@ -982,8 +996,8 @@ export default function Home() {
     if (config.humanDescription) {
       return config.humanDescription(humanPlayer, gameState);
     }
-    return config.description;
-  }, [gameState, humanPlayer]);
+    return t(config.description);
+  }, [gameState, humanPlayer, t]);
 
   const needsHumanAction = useMemo(() => {
     return PHASE_CONFIGS[gameState.phase].requiresHumanInput(humanPlayer, gameState);
@@ -1248,14 +1262,14 @@ export default function Home() {
                   <div className="wc-topbar__item wc-topbar__item--role">
                     <span className="text-xs uppercase tracking-wider opacity-60">身份</span>
                     <span className="font-bold text-[var(--color-gold)]">
-                      {canShowRole ? getRoleLabel(humanPlayer?.role) : "待揭晓"}
+                      {canShowRole ? getRoleLabel(humanPlayer?.role) : t("page.rolePending")}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsSettingsOpen(true)}
-                    title="声音设置"
-                    aria-label="声音设置"
+                    title={t("page.audioSettings")}
+                    aria-label={t("page.audioSettings")}
                     className="inline-flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1 text-xs text-[var(--text-primary)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]"
                   >
                     <GearSix size={16} />
@@ -1434,7 +1448,7 @@ export default function Home() {
       <button
         onClick={() => setIsNotebookOpen((v) => !v)}
         className="wc-notebook-fab"
-        title={isNotebookOpen ? "关闭笔记" : "打开笔记"}
+        title={isNotebookOpen ? t("page.closeNotebook") : t("page.openNotebook")}
         type="button"
       >
         {isNotebookOpen ? <X size={24} /> : <NotePencil size={24} />}
