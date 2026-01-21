@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { TutorialModal } from "@/components/game/TutorialModal";
@@ -16,6 +17,59 @@ import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { useCredits } from "@/hooks/useCredits";
+
+type SponsorCardProps = {
+  href: string;
+  className: string;
+  rotate: string;
+  delay: number;
+  logoSrc?: string;
+  logoAlt?: string;
+  label?: string;
+  name?: string;
+  note?: string;
+  children?: React.ReactNode;
+};
+
+function SponsorCard({
+  href,
+  className,
+  rotate,
+  delay,
+  logoSrc,
+  logoAlt,
+  label,
+  name,
+  note,
+  children,
+}: SponsorCardProps) {
+  const ariaLabel = [label, name, note].filter(Boolean).join(" · ");
+  return (
+    <motion.a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay, duration: 0.5 }}
+      className={className}
+      style={{ "--card-rotate": rotate } as React.CSSProperties}
+      aria-label={ariaLabel || undefined}
+      title={ariaLabel || undefined}
+    >
+      <span className="wc-sponsor-card__border" aria-hidden="true" />
+      <div className="wc-sponsor-card__content">
+        {logoSrc && (
+          <img src={logoSrc} alt={logoAlt ?? ""} className="wc-sponsor-card__logo" />
+        )}
+        {label && <div className="wc-sponsor-card__label">{label}</div>}
+        {name && <div className="wc-sponsor-card__name">{name}</div>}
+        {note && <div className="wc-sponsor-card__note">{note}</div>}
+        {children}
+      </div>
+    </motion.a>
+  );
+}
 
 function buildDefaultRoles(playerCount: number): Role[] {
   switch (playerCount) {
@@ -116,6 +170,10 @@ export function WelcomeScreen({
   isGenshinMode,
   onGenshinModeChange,
 }: WelcomeScreenProps) {
+  const sponsorEmail = "zhihuang.oiloil@gmail.com";
+  const sponsorMailto =
+    "mailto:zhihuang.oiloil@gmail.com?subject=Wolfcha%20赞助合作&body=你好，我对%20Wolfcha%20项目很感兴趣，希望能够提供以下支持：%0A%0A-（模型额度/算力）%0A-（语音/音效资源）%0A-（设计/产品协作）%0A-（其他）%0A%0A我的联系方式：%0A%0A";
+
   const {
     user,
     credits,
@@ -137,6 +195,7 @@ export function WelcomeScreen({
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
+  const [isSponsorOpen, setIsSponsorOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
   const [githubStars, setGithubStars] = useState<number | null>(null);
@@ -303,6 +362,15 @@ export function WelcomeScreen({
     }
   };
 
+  const handleCopySponsorEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(sponsorEmail);
+      toast.success("已复制邮箱", { description: sponsorEmail });
+    } catch {
+      toast("邮箱地址", { description: sponsorEmail });
+    }
+  };
+
   const handleConfirm = async () => {
     if (!canConfirm) return;
     if (isStartingRef.current) return;
@@ -396,7 +464,87 @@ export function WelcomeScreen({
         totalReferrals={totalReferrals}
       />
 
+      <Dialog open={isSponsorOpen} onOpenChange={setIsSponsorOpen}>
+        <DialogContent className="max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Handshake size={18} weight="duotone" />
+              成为赞助商
+            </DialogTitle>
+            <DialogDescription>
+              你的支持会直接帮助 Wolfcha 跑得更稳、让更多人可以免费玩到。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm leading-relaxed text-[var(--text-primary)]">
+            <p>
+              Wolfcha 是一个公益性质的 AI 狼人杀项目。我们把成本主要花在模型调用、语音合成、服务器与内容生产上。
+              如果你愿意帮我们一把，无论支持多少、以什么形式，我们都会非常感激。
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
+              <li>模型额度 / 算力 / 服务器资源</li>
+              <li>语音、音效、立绘等素材支持</li>
+              <li>设计、产品、运营协作与建议</li>
+              <li>渠道与社区传播（转发也很有帮助）</li>
+            </ul>
+            <p className="text-[var(--text-secondary)]">
+              我们会在首页以“印章”的方式向赞助方致谢；如需匿名，也完全没问题。
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleCopySponsorEmail} className="gap-2">
+              <EnvelopeSimple size={16} />
+              复制邮箱
+            </Button>
+            <Button asChild className="gap-2">
+              <a href={sponsorMailto} target="_blank" rel="noopener noreferrer">
+                <EnvelopeSimple size={16} />
+                发邮件联系
+              </a>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scattered sponsor cards */}
+      <div className="wc-sponsor-cards" aria-label="赞助商展示">
+        {/* Sponsor card - OpenCreator (左侧) */}
+        <SponsorCard
+          href="https://opencreator.io/"
+          className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--left-center wc-sponsor-card--featured"
+          rotate="-6deg"
+          delay={0.3}
+          logoSrc="/sponsor/opencreator.png"
+          logoAlt="OpenCreator"
+          name="OpenCreator"
+          note="OpenCreator 帮助我们生成夜晚所有的角色立绘"
+        />
+
+        {/* Sponsor card - Minimax (右上) */}
+        <SponsorCard
+          href="https://minimaxi.com/"
+          className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-top"
+          rotate="5deg"
+          delay={0.45}
+          logoSrc="/sponsor/minimax.png"
+          logoAlt="Minimax"
+          name="Minimax"
+          note="Minimax 帮助我们生成过场音效与白天语音"
+        />
+      </div>
+
       <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIsSponsorOpen(true)}
+          className="h-9 text-sm gap-2"
+        >
+          <Handshake size={16} />
+          成为赞助商
+        </Button>
+
         <a
           href="https://github.com/oil-oil/wolfcha"
           target="_blank"
