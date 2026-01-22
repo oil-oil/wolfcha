@@ -8,6 +8,7 @@ import {
   type Phase,
   type ChatMessage,
   type Alignment,
+  type DailySummaryFact,
   GENERATOR_MODEL,
   SUMMARY_MODEL,
   AVAILABLE_MODELS,
@@ -118,6 +119,7 @@ export function createInitialGameState(): GameState {
     lastVoteReasons: {},
     voteHistory: {},
     dailySummaries: {},
+    dailySummaryFacts: {},
     nightActions: {},
     roleAbilities: {
       witchHealUsed: false,
@@ -391,7 +393,7 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
 
 export async function generateDailySummary(
   state: GameState
-): Promise<string[]> {
+): Promise<{ bullets: string[]; facts: DailySummaryFact[] }> {
   const startTime = Date.now();
   const summaryModel = SUMMARY_MODEL;
 
@@ -406,13 +408,20 @@ export async function generateDailySummary(
   const dayMessages = state.messages.slice(dayStartIndex);
 
   const transcript = dayMessages
-    .map((m) => `${m.playerName}: ${m.content}`)
+    .map((m) => {
+      if (m.isSystem) return `系统: ${m.content}`;
+      const player = state.players.find((p) => p.playerId === m.playerId);
+      const seatLabel = player ? `${player.seat + 1}号` : "";
+      const nameLabel = player?.displayName || m.playerName;
+      const speaker = seatLabel ? `${seatLabel} ${nameLabel}`.trim() : nameLabel;
+      return `${speaker}: ${m.content}`;
+    })
     .join("\n")
     .slice(0, 15000);
 
-  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为几条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 15-50 字，尽量详细但保持简洁\n- 必须包含“投票逻辑/理由线索”（谁投谁 + 简短理由/依据）\n- 优先保留：公投出局/遗言、关键站边/指控、明确归票/改票、夜晚死亡信息（如果在记录里）\n- 记录重要发言要点（如跳身份、关键推理、指控对象）\n- 若出现自相矛盾或与发言相反的投票，必须记录\n- 保留玩家之间的互动关系（如谁支持谁、谁质疑谁）\n\n输出格式：返回 JSON 数组，例如：["第1天: 2号被放逐，遗言踩10号", "9号投1号，理由是对跳预言家", "3号质疑5号发言逻辑"]`;
+  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为几条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 15-50 字，尽量详细但保持简洁\n- 必须包含“投票逻辑/理由线索”（谁投谁 + 简短理由/依据）\n- 优先保留：公投出局/遗言、关键站边/指控、明确归票/改票、夜晚死亡信息（如果在记录里）\n- 记录重要发言要点（如跳身份、关键推理、指控对象）\n- 若出现自相矛盾或与发言相反的投票，必须记录\n- 保留玩家之间的互动关系（如谁支持谁、谁质疑谁）\n- 提到玩家时必须包含座位号（如“2号”“10号”）\n- 若为系统事件，可将 speakerSeat 留空\n\n输出格式：返回 JSON 对象，例如：\n{\n  "facts": [\n    {\n      "fact": "第1天: 2号被放逐，遗言踩10号",\n      "type": "death",\n      "speakerSeat": 2,\n      "targetSeat": 10\n    },\n    {\n      "fact": "9号投1号，理由是对跳预言家",\n      "type": "vote",\n      "speakerSeat": 9,\n      "targetSeat": 1\n    }\n  ]\n}`;
 
-  const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 数组：`;
+  const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 对象：`;
 
   const messages: LLMMessage[] = [
     { role: "system", content: system },
@@ -443,6 +452,64 @@ export async function generateDailySummary(
     },
   });
 
+  const facts: DailySummaryFact[] = [];
+  const bullets: string[] = [];
+
+  try {
+    const objectMatch = cleanedDaily.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      const obj = JSON.parse(objectMatch[0]) as { facts?: DailySummaryFact[] };
+      if (Array.isArray(obj.facts)) {
+        obj.facts.forEach((item) => {
+          if (!item || typeof item !== "object") return;
+          const factText =
+            typeof (item as DailySummaryFact).fact === "string"
+              ? (item as DailySummaryFact).fact.trim()
+              : "";
+          if (!factText) return;
+          facts.push({
+            fact: factText,
+            day: state.day,
+            speakerSeat:
+              typeof (item as DailySummaryFact).speakerSeat === "number"
+                ? (item as DailySummaryFact).speakerSeat
+                : (item as DailySummaryFact).speakerSeat ?? null,
+            speakerName:
+              typeof (item as DailySummaryFact).speakerName === "string"
+                ? (item as DailySummaryFact).speakerName
+                : undefined,
+            targetSeat:
+              typeof (item as DailySummaryFact).targetSeat === "number"
+                ? (item as DailySummaryFact).targetSeat
+                : (item as DailySummaryFact).targetSeat ?? null,
+            targetName:
+              typeof (item as DailySummaryFact).targetName === "string"
+                ? (item as DailySummaryFact).targetName
+                : undefined,
+            type:
+              typeof (item as DailySummaryFact).type === "string"
+                ? (item as DailySummaryFact).type
+                : undefined,
+            evidence:
+              typeof (item as DailySummaryFact).evidence === "string"
+                ? (item as DailySummaryFact).evidence
+                : undefined,
+          });
+        });
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+
+  if (facts.length > 0) {
+    const cleanedFacts = facts
+      .map((f) => f.fact.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    return { bullets: cleanedFacts, facts: facts.slice(0, 12) };
+  }
+
   try {
     const jsonMatch = cleanedDaily.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
@@ -453,7 +520,7 @@ export async function generateDailySummary(
           .map((s) => s.trim())
           .filter(Boolean)
           .slice(0, 10);
-        if (cleaned.length > 0) return cleaned;
+        if (cleaned.length > 0) return { bullets: cleaned, facts: [] };
       }
     }
   } catch {
@@ -466,7 +533,8 @@ export async function generateDailySummary(
     .filter(Boolean)
     .slice(0, 6);
 
-  return fallback.length > 0 ? fallback : [result.content.trim()].filter(Boolean);
+  const fallbackBullets = fallback.length > 0 ? fallback : [result.content.trim()].filter(Boolean);
+  return { bullets: fallbackBullets, facts: [] };
 }
 
 export async function* generateAISpeechStream(

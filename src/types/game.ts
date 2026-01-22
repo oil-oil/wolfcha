@@ -167,6 +167,7 @@ export interface GameState {
     }
   >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list
+  dailySummaryFacts: Record<number, DailySummaryFact[]>; // day -> structured facts
   nightActions: {
     guardTarget?: number;        // 守卫保护的目标
     lastGuardTarget?: number;    // 上一晚守卫保护的目标（不能连续保护同一人）
@@ -187,6 +188,17 @@ export interface GameState {
     hunterCanShoot: boolean;     // 猎人是否能开枪（被毒死不能开枪）
   };
   winner: Alignment | null;
+}
+
+export interface DailySummaryFact {
+  fact: string;
+  day?: number;
+  speakerSeat?: number | null;
+  speakerName?: string;
+  targetSeat?: number | null;
+  targetName?: string;
+  type?: "vote" | "claim" | "suspicion" | "defense" | "alignment" | "death" | "switch" | "other";
+  evidence?: string;
 }
 
 export const AVAILABLE_MODELS: ModelRef[] = [

@@ -124,22 +124,37 @@ export const buildAliveCountsSection = (state: GameState): string => {
 };
 
 export const buildDailySummariesSection = (state: GameState): string => {
+  const factEntries = Object.entries(state.dailySummaryFacts || {})
+    .map(([day, facts]) => ({ day: Number(day), facts }))
+    .filter((x) => Number.isFinite(x.day) && Array.isArray(x.facts));
+
   const entries = Object.entries(state.dailySummaries || {})
     .map(([day, bullets]) => ({ day: Number(day), bullets }))
-    .filter((x) => Number.isFinite(x.day) && Array.isArray(x.bullets))
-    .sort((a, b) => a.day - b.day);
+    .filter((x) => Number.isFinite(x.day) && Array.isArray(x.bullets));
 
-  if (entries.length === 0) return "";
+  const merged = new Map<number, { facts?: typeof factEntries[number]["facts"]; bullets?: string[] }>();
+  factEntries.forEach((entry) => {
+    merged.set(entry.day, { facts: entry.facts });
+  });
+  entries.forEach((entry) => {
+    const prev = merged.get(entry.day) || {};
+    merged.set(entry.day, { ...prev, bullets: entry.bullets });
+  });
+
+  if (merged.size === 0) return "";
 
   const lines: string[] = [];
-  for (const e of entries) {
-    const cleaned = e.bullets
+  for (const [day, entry] of Array.from(merged.entries()).sort((a, b) => a[0] - b[0])) {
+    const factTexts = (entry.facts || [])
+      .map((f) => (typeof f.fact === "string" ? f.fact.trim() : ""))
+      .filter(Boolean);
+    const bulletTexts = (entry.bullets || [])
       .filter((x): x is string => typeof x === "string")
       .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 8);
+      .filter(Boolean);
+    const cleaned = (factTexts.length > 0 ? factTexts : bulletTexts).slice(0, 8);
     if (cleaned.length === 0) continue;
-    lines.push(`第${e.day}天: ${cleaned.join("；")}`);
+    lines.push(`第${day}天: ${cleaned.join("；")}`);
   }
 
   if (lines.length === 0) return "";
@@ -177,11 +192,16 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
   if (!transcript) return "";
   if (transcript.length <= maxChars) return transcript;
 
+  const summaryFacts = state.dailySummaryFacts?.[state.day];
   const summaryBullets = state.dailySummaries?.[state.day];
-  if (summaryBullets && summaryBullets.length > 0) {
+  const summaryItems =
+    summaryFacts && summaryFacts.length > 0
+      ? summaryFacts.map((f) => f.fact).filter(Boolean)
+      : summaryBullets || [];
+  if (summaryItems.length > 0) {
     // 使用更多摘要条目（最多8条），保留更多信息
-    const summaryText = summaryBullets
-      .map((s) => s.trim())
+    const summaryText = summaryItems
+      .map((s) => String(s).trim())
       .filter(Boolean)
       .slice(0, 8)
       .join("；");

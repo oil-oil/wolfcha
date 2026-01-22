@@ -342,20 +342,53 @@ export function useGameLogic() {
   // ============================================
   // 每日总结生成
   // ============================================
-  const maybeGenerateDailySummary = useCallback(async (state: GameState): Promise<GameState> => {
-    if (state.day <= 0) return state;
-    if (state.dailySummaries?.[state.day]?.length) return state;
-    if (!state.messages || state.messages.length === 0) return state;
-    try {
-      const summary = await generateDailySummary(state);
-      if (!summary || summary.length === 0) return state;
-      return {
-        ...state,
-        dailySummaries: { ...state.dailySummaries, [state.day]: summary },
-      };
-    } catch {
-      return state;
-    }
+  const maybeGenerateDailySummary = useCallback(
+    async (state: GameState, options?: { force?: boolean }): Promise<GameState> => {
+      if (state.day <= 0) return state;
+      if (!options?.force && state.dailySummaries?.[state.day]?.length) return state;
+      if (!state.messages || state.messages.length === 0) return state;
+      try {
+        const summary = await generateDailySummary(state);
+        if (!summary || summary.bullets.length === 0) return state;
+        return {
+          ...state,
+          dailySummaries: { ...state.dailySummaries, [state.day]: summary.bullets },
+          dailySummaryFacts: { ...state.dailySummaryFacts, [state.day]: summary.facts },
+        };
+      } catch {
+        return state;
+      }
+    },
+    []
+  );
+
+  const buildRawDayTranscript = useCallback((state: GameState): string => {
+    const aliveIds = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
+    const dayStartIndex = (() => {
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.isSystem && m.content === "天亮了") return i;
+      }
+      return 0;
+    })();
+
+    const voteStartIndex = (() => {
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.isSystem && m.content === "进入投票环节") return i;
+      }
+      return state.messages.length;
+    })();
+
+    const slice = state.messages.slice(
+      dayStartIndex,
+      voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
+    );
+
+    return slice
+      .filter((m) => !m.isSystem && aliveIds.has(m.playerId))
+      .map((m) => `${m.playerName}: ${m.content}`)
+      .join("\n");
   }, []);
 
   // ============================================
@@ -377,13 +410,17 @@ export function useGameLogic() {
   // ============================================
   const enterVotePhase = useCallback(
     async (state: GameState, token: ReturnType<typeof getToken>, options?: { isRevote?: boolean }) => {
-      // 后台生成摘要，不阻塞投票阶段
-      if (!state.dailySummaries?.[state.day]?.length && state.messages?.length) {
-        void maybeGenerateDailySummary(state)
+      // 后台生成摘要，不阻塞投票阶段（覆盖草稿）
+      if (state.messages?.length) {
+        void maybeGenerateDailySummary(state, { force: true })
           .then((summarized) => {
             setGameState((prev) => {
               if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
-              return { ...prev, dailySummaries: summarized.dailySummaries };
+              return {
+                ...prev,
+                dailySummaries: summarized.dailySummaries,
+                dailySummaryFacts: summarized.dailySummaryFacts,
+              };
             });
           })
           .catch(() => {
@@ -514,12 +551,16 @@ export function useGameLogic() {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
 
-    // 后台生成每日总结
-    void maybeGenerateDailySummary(state)
+    // 后台生成每日总结（覆盖草稿）
+    void maybeGenerateDailySummary(state, { force: true })
       .then((summarized) => {
         setGameState((prev) => {
           if (prev.gameId !== summarized.gameId) return prev;
-          return { ...prev, dailySummaries: summarized.dailySummaries };
+          return {
+            ...prev,
+            dailySummaries: summarized.dailySummaries,
+            dailySummaryFacts: summarized.dailySummaryFacts,
+          };
         });
       })
       .catch(() => {});
@@ -1407,6 +1448,26 @@ export function useGameLogic() {
     if (currentSegment && currentSegment.trim().length > 0) {
       const newState = addPlayerMessage(gameStateRef.current, player.playerId, currentSegment);
       setGameState(newState);
+
+      const rawTranscript = buildRawDayTranscript(newState);
+      const shouldSummarizeEarly =
+        newState.day > 0 &&
+        !newState.dailySummaries?.[newState.day]?.length &&
+        rawTranscript.length > 9000;
+      if (shouldSummarizeEarly) {
+        void maybeGenerateDailySummary(newState)
+          .then((summarized) => {
+            setGameState((prev) => {
+              if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
+              return {
+                ...prev,
+                dailySummaries: summarized.dailySummaries,
+                dailySummaryFacts: summarized.dailySummaryFacts,
+              };
+            });
+          })
+          .catch(() => {});
+      }
     }
 
     const result = advanceSpeechQueue();
