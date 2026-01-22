@@ -162,7 +162,6 @@ export const buildDailySummariesSection = (state: GameState): string => {
 };
 
 export const buildTodayTranscript = (state: GameState, maxChars: number): string => {
-  const aliveIds = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i];
@@ -185,7 +184,7 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
   );
 
   const transcript = slice
-    .filter((m) => !m.isSystem && aliveIds.has(m.playerId))
+    .filter((m) => !m.isSystem)
     .map((m) => `${m.playerName}: ${m.content}`)
     .join("\n");
 
@@ -262,11 +261,12 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
   const systemLines = slice
     .filter((m) => m.isSystem)
     .map((m) => String(m.content || "").trim())
-    .filter((c) => c && c !== "天亮了" && c !== "进入投票环节")
-    .slice(0, Math.max(0, maxLines));
+    .filter((c) => c && c !== "天亮了" && c !== "进入投票环节");
 
-  if (systemLines.length === 0) return "";
-  return systemLines.join("\n");
+  const limit = Math.max(0, maxLines);
+  if (limit === 0 || systemLines.length === 0) return "";
+  const recentLines = systemLines.length > limit ? systemLines.slice(-limit) : systemLines;
+  return recentLines.join("\n");
 };
 
 export const buildGameContext = (
@@ -348,6 +348,10 @@ ${playerList}`;
 
   if (state.voteHistory && Object.keys(state.voteHistory).length > 0) {
     context += `\n\n【历史投票】`;
+    const sheriffSeat = state.badge.holderSeat;
+    const sheriffPlayer =
+      sheriffSeat !== null ? state.players.find((p) => p.seat === sheriffSeat) : null;
+    const sheriffPlayerId = sheriffPlayer?.playerId;
     Object.entries(state.voteHistory).forEach(([day, votes]) => {
       context += `\n第${day}天投票:`;
       const voteGroups: Record<number, number[]> = {};
@@ -363,7 +367,15 @@ ${playerList}`;
         .forEach(([target, voters]) => {
           const targetPlayer = state.players.find(p => p.seat === Number(target));
           const voterNumbers = voters.map(s => `${s + 1}号`).join('、');
-          context += `\n  ${Number(target) + 1}号${targetPlayer?.displayName}(共${voters.length}票): ${voterNumbers}`;
+          const weightedVotes = voters.reduce((sum, seat) => {
+            const voter = state.players.find((p) => p.seat === seat);
+            if (!voter) return sum;
+            return sum + (voter.playerId === sheriffPlayerId ? 1.5 : 1);
+          }, 0);
+          const voteLabel = Number.isInteger(weightedVotes)
+            ? `${weightedVotes}`
+            : weightedVotes.toFixed(1);
+          context += `\n  ${Number(target) + 1}号${targetPlayer?.displayName}(共${voteLabel}票): ${voterNumbers}`;
         });
     });
   }
@@ -413,7 +425,7 @@ ${playerList}`;
 
   if (player.role === "Werewolf") {
     const teammates = state.players.filter(
-      (p) => p.role === "Werewolf" && p.playerId !== player.playerId
+      (p) => p.role === "Werewolf" && p.alive && p.playerId !== player.playerId
     );
     if (teammates.length > 0) {
       context += `\n\n【狼队友】
@@ -421,7 +433,8 @@ ${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}`;
     }
   }
 
-  const voteEntries = Object.entries(state.votes);
+  const showCurrentVotes = state.phase === "DAY_VOTE" || state.phase === "DAY_RESOLVE";
+  const voteEntries = showCurrentVotes ? Object.entries(state.votes) : [];
   if (voteEntries.length > 0) {
     const voteLines = voteEntries
       .map(([voterId, targetSeat]) => {
