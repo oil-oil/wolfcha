@@ -377,11 +377,31 @@ export function useGameLogic() {
   // ============================================
   const enterVotePhase = useCallback(
     async (state: GameState, token: ReturnType<typeof getToken>, options?: { isRevote?: boolean }) => {
+      // 后台生成摘要，不阻塞投票阶段
+      if (!state.dailySummaries?.[state.day]?.length && state.messages?.length) {
+        void maybeGenerateDailySummary(state)
+          .then((summarized) => {
+            setGameState((prev) => {
+              if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
+              return { ...prev, dailySummaries: summarized.dailySummaries };
+            });
+          })
+          .catch(() => {
+            // ignore summary errors
+          });
+      }
+      
       queuePhaseExtras("DAY_VOTE", buildVotePhaseExtras(token, options));
-      const nextState = transitionPhase(state, "DAY_VOTE");
+      const clearedState: GameState = {
+        ...state,
+        votes: {},
+        lastVoteReasons: state.voteReasons ? { ...state.voteReasons } : {},
+        voteReasons: {},
+      };
+      const nextState = transitionPhase(clearedState, "DAY_VOTE");
       setGameState(nextState);
     },
-    [buildVotePhaseExtras, queuePhaseExtras, setGameState, transitionPhase]
+    [buildVotePhaseExtras, maybeGenerateDailySummary, queuePhaseExtras, setGameState, transitionPhase]
   );
 
   const resolveVotePhase = useCallback(

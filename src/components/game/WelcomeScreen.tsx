@@ -19,6 +19,7 @@ import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { useCredits } from "@/hooks/useCredits";
 
 type SponsorCardProps = {
+  sponsorId: string;
   href: string;
   className: string;
   rotate: string;
@@ -31,7 +32,21 @@ type SponsorCardProps = {
   children?: React.ReactNode;
 };
 
+// Track sponsor click
+async function trackSponsorClick(sponsorId: string) {
+  try {
+    await fetch("/api/sponsor/click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sponsorId, ref: "homepage" }),
+    });
+  } catch {
+    // Silently fail - don't block navigation
+  }
+}
+
 function SponsorCard({
+  sponsorId,
   href,
   className,
   rotate,
@@ -44,9 +59,17 @@ function SponsorCard({
   children,
 }: SponsorCardProps) {
   const ariaLabel = [label, name, note].filter(Boolean).join(" · ");
+  
+  const handleClick = () => {
+    void trackSponsorClick(sponsorId);
+  };
+
+  // Add ref parameter to href for tracking on sponsor's side
+  const hrefWithRef = href.includes("?") ? `${href}&ref=wolfcha` : `${href}?ref=wolfcha`;
+
   return (
     <motion.a
-      href={href}
+      href={hrefWithRef}
       target="_blank"
       rel="noopener noreferrer"
       initial={{ opacity: 0 }}
@@ -56,6 +79,7 @@ function SponsorCard({
       style={{ "--card-rotate": rotate } as React.CSSProperties}
       aria-label={ariaLabel || undefined}
       title={ariaLabel || undefined}
+      onClick={handleClick}
     >
       <span className="wc-sponsor-card__border" aria-hidden="true" />
       <div className="wc-sponsor-card__content">
@@ -596,6 +620,7 @@ export function WelcomeScreen({
       <div className="wc-sponsor-cards" aria-label="赞助商展示">
         {/* Sponsor card - OpenCreator (左侧) */}
         <SponsorCard
+          sponsorId="opencreator"
           href="https://opencreator.io/"
           className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--left-center wc-sponsor-card--featured"
           rotate="-6deg"
@@ -608,6 +633,7 @@ export function WelcomeScreen({
 
         {/* Sponsor card - Minimax (右上) */}
         <SponsorCard
+          sponsorId="minimax"
           href="https://minimaxi.com/"
           className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-top"
           rotate="5deg"
@@ -731,21 +757,23 @@ export function WelcomeScreen({
           {/* Mobile: inline sponsor stamps at top of paper */}
           <div className="wc-paper-sponsors sm:hidden">
             <a
-              href="https://opencreator.io/"
+              href="https://opencreator.io/?ref=wolfcha"
               target="_blank"
               rel="noopener noreferrer"
               className="wc-paper-stamp"
               style={{ "--stamp-rotate": "-8deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("opencreator")}
             >
               <img src="/sponsor/opencreator.png" alt="OpenCreator" className="wc-paper-stamp__logo" />
               <span className="wc-paper-stamp__name">OpenCreator</span>
             </a>
             <a
-              href="https://minimaxi.com/"
+              href="https://minimaxi.com/?ref=wolfcha"
               target="_blank"
               rel="noopener noreferrer"
               className="wc-paper-stamp"
               style={{ "--stamp-rotate": "6deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("minimax")}
             >
               <img src="/sponsor/minimax.png" alt="Minimax" className="wc-paper-stamp__logo" />
               <span className="wc-paper-stamp__name">Minimax</span>

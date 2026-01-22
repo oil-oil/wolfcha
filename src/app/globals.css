@@ -3480,6 +3480,52 @@ input[type="submit"]:not(:disabled),
   opacity: 0.35;
 }
 
+.wc-night-action-target {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(9, 9, 12, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  min-width: 200px;
+  justify-content: center;
+}
+
+.wc-night-action-target__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.wc-night-action-target__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wc-night-action-target__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.wc-night-action-target__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 /* Screen shake for impact moments */
 .wc-night-action-overlay[data-variant="wolf"],
 .wc-night-action-overlay[data-variant="hunter"] {
@@ -4058,12 +4104,18 @@ input[type="submit"]:not(:disabled),
 
 /* ========== Paper Inline Stamps (Mobile) ========== */
 .wc-paper-sponsors {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 8px 8px;
-  margin-bottom: 4px;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .wc-paper-sponsors {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 8px 8px;
+    margin-bottom: 4px;
+  }
 }
 
 .wc-paper-stamp {

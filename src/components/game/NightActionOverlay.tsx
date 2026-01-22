@@ -6,10 +6,15 @@
 export type NightActionOverlayType = "wolf" | "witch-save" | "witch-poison" | "hunter" | "seer";
  
  interface NightActionOverlayProps {
-   overlay: { type: NightActionOverlayType; id: number } | null;
+  overlay: {
+    type: NightActionOverlayType;
+    id: number;
+    target?: { seat: number; name: string; avatarUrl?: string };
+  } | null;
  }
  
  export function NightActionOverlay({ overlay }: NightActionOverlayProps) {
+  const target = overlay?.target;
    return (
      <AnimatePresence>
        {overlay && (
@@ -90,6 +95,24 @@ export type NightActionOverlayType = "wolf" | "witch-save" | "witch-poison" | "h
               <div className="wc-night-seer-ring wc-night-seer-ring--1" />
               <div className="wc-night-seer-ring wc-night-seer-ring--2" />
             </>
+          )}
+
+          {target && (
+            <div className="wc-night-action-target" aria-hidden="true">
+              {target.avatarUrl && (
+                <img
+                  className="wc-night-action-target__avatar"
+                  src={target.avatarUrl}
+                  alt=""
+                />
+              )}
+              <div className="wc-night-action-target__text">
+                <span className="wc-night-action-target__label">目标</span>
+                <span className="wc-night-action-target__name">
+                  {target.seat + 1}号 {target.name}
+                </span>
+              </div>
+            </div>
           )}
          </motion.div>
        )}

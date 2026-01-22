@@ -175,7 +175,27 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
     .join("\n");
 
   if (!transcript) return "";
-  return transcript.slice(0, maxChars);
+  if (transcript.length <= maxChars) return transcript;
+
+  const summaryBullets = state.dailySummaries?.[state.day];
+  if (summaryBullets && summaryBullets.length > 0) {
+    // 使用更多摘要条目（最多8条），保留更多信息
+    const summaryText = summaryBullets
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 8)
+      .join("；");
+    const header = `【早段摘要】${summaryText}\n【最近发言】\n`;
+    // 保留更多最近发言（至少保留60%的空间给最近发言）
+    const minRecentChars = Math.floor(maxChars * 0.6);
+    const headerLength = header.length;
+    const tailLimit = Math.max(minRecentChars, maxChars - headerLength);
+    const tail = tailLimit > 0 ? transcript.slice(-tailLimit) : "";
+    return `${header}${tail}`.trim();
+  }
+
+  // 如果没有摘要，使用滑动窗口策略：保留最后的内容
+  return transcript.slice(-maxChars);
 };
 
 export const buildPlayerTodaySpeech = (state: GameState, player: Player, maxChars: number): string => {

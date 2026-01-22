@@ -76,6 +76,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
   const canSeeRole = isMe || isWolfTeammate || !renderPlayer.alive;
   const isIdentityReady = isMe ? !!renderPlayer.displayName?.trim() : !!persona;
   const avatarSrc = getPlayerAvatarUrl(renderPlayer, isGenshinMode);
+  const showModelTag = !!modelLabel && isGenshinMode && !renderPlayer.isHuman;
 
   return (
     <AnimatePresence
@@ -140,6 +141,11 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                   {isMe && <span className="text-xs font-bold bg-[var(--color-accent)] text-white px-2 py-0.5 rounded">YOU</span>}
                 </div>
                 <h2 className="text-xl font-black text-[var(--text-primary)]">{renderPlayer.displayName}</h2>
+                {showModelTag && (
+                  <div className="mt-1 text-xs font-semibold text-[var(--text-muted)]">
+                    模型：{modelLabel}
+                  </div>
+                )}
                 
                 {/* 身份标签 - 仅可见时显示 */}
                 {canSeeRole && (

@@ -52,6 +52,7 @@ export class VotePhase extends GamePhase {
       currentSpeakerSeat: null,
       nextSpeakerSeatOverride: null,
       votes: {},
+      voteReasons: {},
       pkTargets: isRevote ? context.state.pkTargets : undefined,
       pkSource: isRevote ? "vote" : undefined,
     };
@@ -75,7 +76,7 @@ export class VotePhase extends GamePhase {
           tokenInvalidated = true;
           break;
         }
-        const targetSeat = await generateAIVote(currentState, aiPlayer);
+        const vote = await generateAIVote(currentState, aiPlayer);
         if (!isTokenValid(token)) {
           tokenInvalidated = true;
           break;
@@ -83,11 +84,13 @@ export class VotePhase extends GamePhase {
 
         setGameState((prevState) => ({
           ...prevState,
-          votes: { ...prevState.votes, [aiPlayer.playerId]: targetSeat },
+          votes: { ...prevState.votes, [aiPlayer.playerId]: vote.seat },
+          voteReasons: { ...(prevState.voteReasons || {}), [aiPlayer.playerId]: vote.reason },
         }));
         currentState = {
           ...currentState,
-          votes: { ...currentState.votes, [aiPlayer.playerId]: targetSeat },
+          votes: { ...currentState.votes, [aiPlayer.playerId]: vote.seat },
+          voteReasons: { ...(currentState.voteReasons || {}), [aiPlayer.playerId]: vote.reason },
         };
       }
     } finally {
@@ -133,9 +136,9 @@ ${getWinCondition(player.role)}
 
 ${difficultyHint}`;
     const dynamicContent = `【任务】
-投票环节，选择一名玩家处决。
+投票环节，选择一名玩家处决，并说明理由。
 尽量与自己本日发言保持一致。
-本环节只需要给出座位数字，不要分析，不要角色扮演。
+理由要求：中文，10-25字，指出关键依据，不要角色扮演。
 
 可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
 
@@ -147,16 +150,19 @@ ${roleHints}
     ];
     const system = buildSystemTextFromParts(systemParts);
 
+    const lastReason = state.lastVoteReasons?.[player.playerId];
     const user = `${gameContext}
 
 ${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : "【本日讨论记录】\n（无）"}
 
 ${selfSpeech ? `【你本日发言汇总】\n"${selfSpeech}"` : "【你本日发言汇总】\n（你今天没有发言）"}
 
+${lastReason ? `【你上一轮投票理由】\n${lastReason}` : "【你上一轮投票理由】\n（无）"}
+
 你投几号？
 
 【格式】
-只回复座位数字，如: 3
+返回JSON，如 {"seat": 3, "reason": "理由（10-25字）"}
 不要解释，不要输出多余文字，不要代码块`;
 
     return { system, user, systemParts };

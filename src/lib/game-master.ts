@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type Alignment,
   GENERATOR_MODEL,
+  SUMMARY_MODEL,
   AVAILABLE_MODELS,
   type ModelRef,
 } from "@/types/game";
@@ -112,6 +113,8 @@ export function createInitialGameState(): GameState {
       revoteCount: 0,
     },
     votes: {},
+    voteReasons: {},
+    lastVoteReasons: {},
     voteHistory: {},
     dailySummaries: {},
     nightActions: {},
@@ -135,7 +138,7 @@ export function getRoleConfiguration(playerCount: number): Role[] {
       "Seer",
       "Witch",
       "Hunter",
-      "Villager",
+      "Guard",
       "Villager",
       "Villager",
       "Villager",
@@ -389,6 +392,7 @@ export async function generateDailySummary(
   state: GameState
 ): Promise<string[]> {
   const startTime = Date.now();
+  const summaryModel = SUMMARY_MODEL;
 
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -403,9 +407,9 @@ export async function generateDailySummary(
   const transcript = dayMessages
     .map((m) => `${m.playerName}: ${m.content}`)
     .join("\n")
-    .slice(0, 12000);
+    .slice(0, 15000);
 
-  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为 3-6 条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 10-35 字\n- 优先保留：公投出局/遗言、关键站边/指控、明显的归票/改票、夜晚死亡信息（如果在记录里）\n\n输出格式：返回 JSON 数组，例如：["第1天: 2号被放逐，遗言踩10号", "9号曾投给1号"]`;
+  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为 5-10 条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 15-50 字，尽量详细但保持简洁\n- 必须包含“投票逻辑/理由线索”（谁投谁 + 简短理由/依据）\n- 优先保留：公投出局/遗言、关键站边/指控、明确归票/改票、夜晚死亡信息（如果在记录里）\n- 记录重要发言要点（如跳身份、关键推理、指控对象）\n- 若出现自相矛盾或与发言相反的投票，必须记录\n- 保留玩家之间的互动关系（如谁支持谁、谁质疑谁）\n\n输出格式：返回 JSON 数组，例如：["第1天: 2号被放逐，遗言踩10号", "9号投1号，理由是对跳预言家", "3号质疑5号发言逻辑"]`;
 
   const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 数组：`;
 
@@ -415,10 +419,10 @@ export async function generateDailySummary(
   ];
 
   const result = await generateCompletion({
-    model: GENERATOR_MODEL,
+    model: summaryModel,
     messages,
     temperature: GAME_TEMPERATURE.SUMMARY,
-    max_tokens: 220,
+    max_tokens: 1000,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -426,8 +430,8 @@ export async function generateDailySummary(
         schema: {
           type: "array",
           items: { type: "string" },
-          minItems: 1,
-          maxItems: 8,
+          minItems: 5,
+          maxItems: 10,
         },
         strict: true,
       },
@@ -439,7 +443,7 @@ export async function generateDailySummary(
   await aiLogger.log({
     type: "daily_summary",
     request: {
-      model: GENERATOR_MODEL,
+      model: summaryModel,
       messages,
     },
     response: { content: cleanedDaily, duration: Date.now() - startTime },
@@ -454,7 +458,7 @@ export async function generateDailySummary(
           .filter((x): x is string => typeof x === "string")
           .map((s) => s.trim())
           .filter(Boolean)
-          .slice(0, 8);
+          .slice(0, 10);
         if (cleaned.length > 0) return cleaned;
       }
     }
@@ -624,7 +628,7 @@ export async function generateAISpeechSegments(
 export async function generateAIVote(
   state: GameState,
   player: Player
-): Promise<number> {
+): Promise<{ seat: number; reason: string }> {
   const prompt = resolvePhasePrompt("DAY_VOTE", state, player);
   const eligibleSeats = state.pkSource === "vote" && state.pkTargets && state.pkTargets.length > 0
     ? new Set(state.pkTargets)
@@ -641,19 +645,64 @@ export async function generateAIVote(
       model: player.agentProfile!.modelRef.model,
       messages,
       temperature: GAME_TEMPERATURE.ACTION,
-      max_tokens: 32,
+      max_tokens: 120,
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "vote_seat",
-          schema: { type: "string" },
+          name: "vote_with_reason",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              seat: { type: "integer", minimum: 1 },
+              reason: { type: "string" },
+            },
+            required: ["seat", "reason"],
+          },
           strict: true,
         },
       },
     });
 
-    const cleanedVote = stripMarkdownCodeFences(result.content);
+    const rawContent = result.content;
+    const cleanedVote = stripMarkdownCodeFences(rawContent);
+    const cleaned = cleanedVote.trim();
+    
+    let parsedResult: { seat: number; reason: string } | null = null;
+    
+    try {
+      const parsed = JSON.parse(cleaned) as { seat?: number; reason?: string };
+      const seat = typeof parsed.seat === "number" ? parsed.seat - 1 : NaN;
+      const validSeats = alivePlayers.map((p) => p.seat);
+      if (Number.isFinite(seat) && validSeats.includes(seat)) {
+        const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
+        parsedResult = { seat, reason: reason || "未提供理由" };
+      }
+    } catch {
+      // Fallback to regex parsing below
+    }
 
+    if (!parsedResult) {
+      const match = cleaned.match(/\d+/);
+      if (match) {
+        const seat = parseInt(match[0], 10) - 1;
+        const validSeats = alivePlayers.map((p) => p.seat);
+        if (validSeats.includes(seat)) {
+          parsedResult = { seat, reason: "解析失败-仅座位" };
+        }
+      }
+    }
+
+    if (!parsedResult) {
+      if (alivePlayers.length === 0) {
+        parsedResult = { seat: player.seat, reason: "无可选目标" };
+      } else {
+        const fallback = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+        parsedResult = { seat: fallback, reason: "随机选择" };
+      }
+    }
+
+    // Log with both raw and parsed data
     await aiLogger.log({
       type: "vote",
       request: { 
@@ -661,11 +710,20 @@ export async function generateAIVote(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: cleanedVote, duration: Date.now() - startTime },
+      response: { 
+        content: cleanedVote, 
+        raw: rawContent,
+        parsed: parsedResult,
+        duration: Date.now() - startTime 
+      },
     });
 
-    result = { content: cleanedVote };
+    return parsedResult;
   } catch (error) {
+    const fallbackResult = alivePlayers.length === 0
+      ? { seat: player.seat, reason: "无可选目标" }
+      : { seat: alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat, reason: "随机选择" };
+    
     await aiLogger.log({
       type: "vote",
       request: {
@@ -673,25 +731,16 @@ export async function generateAIVote(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: "", duration: Date.now() - startTime },
+      response: { 
+        content: "", 
+        parsed: fallbackResult,
+        duration: Date.now() - startTime 
+      },
       error: String(error),
     });
 
-    if (alivePlayers.length === 0) return player.seat;
-    return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    return fallbackResult;
   }
-
-  const match = result.content.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  if (alivePlayers.length === 0) return player.seat;
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
 }
 
 export async function generateAIBadgeVote(
@@ -795,7 +844,22 @@ export async function generateSeerAction(
     max_tokens: 16,
   });
 
-  const cleanedSeer = stripMarkdownCodeFences(result.content);
+  const rawContent = result.content;
+  const cleanedSeer = stripMarkdownCodeFences(rawContent);
+
+  const match = cleanedSeer.match(/\d+/);
+  let parsedSeat: number;
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      parsedSeat = seat;
+    } else {
+      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  } else {
+    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
 
   await aiLogger.log({
     type: "seer_action",
@@ -804,19 +868,15 @@ export async function generateSeerAction(
       messages,
       player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
     },
-    response: { content: cleanedSeer, duration: Date.now() - startTime },
+    response: { 
+      content: cleanedSeer, 
+      raw: rawContent,
+      parsed: { targetSeat: parsedSeat },
+      duration: Date.now() - startTime 
+    },
   });
 
-  const match = cleanedSeer.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedSeat;
 }
 
 export async function generateWolfAction(
@@ -838,7 +898,22 @@ export async function generateWolfAction(
     max_tokens: 16,
   });
 
-  const cleanedWolf = stripMarkdownCodeFences(result.content);
+  const rawContent = result.content;
+  const cleanedWolf = stripMarkdownCodeFences(rawContent);
+
+  const match = cleanedWolf.match(/\d+/);
+  let parsedSeat: number;
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      parsedSeat = seat;
+    } else {
+      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  } else {
+    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
 
   await aiLogger.log({
     type: "wolf_action",
@@ -847,19 +922,15 @@ export async function generateWolfAction(
       messages,
       player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
     },
-    response: { content: cleanedWolf, duration: Date.now() - startTime },
+    response: { 
+      content: cleanedWolf, 
+      raw: rawContent,
+      parsed: { targetSeat: parsedSeat },
+      duration: Date.now() - startTime 
+    },
   });
 
-  const match = cleanedWolf.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedSeat;
 }
 
 export type WitchAction =

@@ -39,8 +39,41 @@ export interface Database {
         };
         Relationships: [];
       };
+      sponsor_clicks: {
+        Row: {
+          id: string;
+          sponsor_id: string;
+          ref: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sponsor_id: string;
+          ref?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sponsor_id?: string;
+          ref?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
-    Views: Record<string, never>;
+    Views: {
+      sponsor_click_stats: {
+        Row: {
+          sponsor_id: string;
+          total_clicks: number;
+          active_days: number;
+          last_click_at: string | null;
+        };
+      };
+    };
     Functions: Record<string, never>;
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

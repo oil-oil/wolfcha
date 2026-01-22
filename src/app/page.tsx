@@ -472,6 +472,7 @@ export default function Home() {
   const [nightActionOverlay, setNightActionOverlay] = useState<{
     type: NightActionOverlayType;
     id: number;
+    target?: { seat: number; name: string; avatarUrl?: string };
   } | null>(null);
   const nightActionOverlayTimerRef = useRef<number | null>(null);
   const showDevTools =
@@ -826,17 +827,28 @@ export default function Home() {
     setIsTutorialOpen(false);
   }, [showTable]);
 
-  const triggerNightOverlay = useCallback((type: NightActionOverlayType) => {
+  const triggerNightOverlay = useCallback((type: NightActionOverlayType, targetSeat?: number) => {
     if (!showTable) return;
     if (isRoleRevealOpen) return;
-    setNightActionOverlay({ type, id: Date.now() });
+    const target =
+      typeof targetSeat === "number"
+        ? gameState.players.find((p) => p.seat === targetSeat)
+        : null;
+    const targetPayload = target
+      ? {
+          seat: target.seat,
+          name: target.displayName,
+          avatarUrl: dicebearUrl(target.displayName),
+        }
+      : undefined;
+    setNightActionOverlay({ type, id: Date.now(), target: targetPayload });
     if (nightActionOverlayTimerRef.current !== null) {
       window.clearTimeout(nightActionOverlayTimerRef.current);
     }
     nightActionOverlayTimerRef.current = window.setTimeout(() => {
       setNightActionOverlay(null);
     }, 1500);
-  }, [isRoleRevealOpen, showTable]);
+  }, [gameState.players, isRoleRevealOpen, showTable]);
 
   useEffect(() => {
     if (!showTable) {
@@ -855,19 +867,19 @@ export default function Home() {
     const canSeeHunter = role === "Hunter";
 
     if (canSeeWolf && typeof wolfTarget === "number" && wolfTarget !== last.wolfTarget) {
-      triggerNightOverlay("wolf");
+      triggerNightOverlay("wolf", wolfTarget);
     }
 
     if (canSeeWitch && witchSave && witchSave !== last.witchSave) {
-      triggerNightOverlay("witch-save");
+      triggerNightOverlay("witch-save", wolfTarget);
     }
 
     if (canSeeWitch && typeof witchPoison === "number" && witchPoison !== last.witchPoison) {
-      triggerNightOverlay("witch-poison");
+      triggerNightOverlay("witch-poison", witchPoison);
     }
 
     if (canSeeSeer && typeof seerTarget === "number" && seerTarget !== last.seerTarget) {
-      triggerNightOverlay("seer");
+      triggerNightOverlay("seer", seerTarget);
     }
 
     const hunterShot =
@@ -876,8 +888,8 @@ export default function Home() {
     const hunterShotKey = hunterShot
       ? `${gameState.day}-${hunterShot.hunterSeat}-${hunterShot.targetSeat}`
       : null;
-    if (canSeeHunter && hunterShotKey && hunterShotKey !== last.hunterShotKey) {
-      triggerNightOverlay("hunter");
+    if (canSeeHunter && hunterShot && hunterShotKey && hunterShotKey !== last.hunterShotKey) {
+      triggerNightOverlay("hunter", hunterShot.targetSeat);
     }
 
     lastNightActionRef.current = {
