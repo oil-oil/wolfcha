@@ -14,7 +14,7 @@
 
 现有赞助商：
 
-*   [Zenmux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
+*   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
 *   [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link) - 提供编程、游戏语音与过场音效能力支持
 *   [OpenCreator](https://opencreator.io/) - 提供角色 AI 立绘生成支持
 
@@ -91,7 +91,7 @@
 *   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
 *   **Animations**: [Framer Motion](https://www.framer.com/motion/)
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [Zenmux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
+*   **AI Integration**: [ZenMux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
 *   **TTS**: [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link)
 
 ## 🚀 本地运行

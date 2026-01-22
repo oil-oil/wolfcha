@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -30,6 +30,9 @@ type AuthMode = "magic_link" | "password";
 type PasswordView = "sign_in" | "sign_up" | "forgot_password";
 
 export function AuthModal({ open, onOpenChange }: AuthModalProps) {
+  const EMAIL_SEND_COOLDOWN_SECONDS = 60;
+  const EMAIL_SEND_COOLDOWN_STORAGE_KEY = "wolfcha_auth_email_cooldown_until";
+
   const [mode, setMode] = useState<AuthMode>("magic_link");
   const [passwordView, setPasswordView] = useState<PasswordView>("sign_in");
   
@@ -39,6 +42,60 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [emailCooldownUntilMs, setEmailCooldownUntilMs] = useState<number | null>(null);
+
+  const emailCooldownSecondsLeft = useMemo(() => {
+    if (!emailCooldownUntilMs) return 0;
+    const seconds = Math.ceil((emailCooldownUntilMs - Date.now()) / 1000);
+    return Math.max(0, seconds);
+  }, [emailCooldownUntilMs]);
+
+  const startEmailCooldown = (seconds = EMAIL_SEND_COOLDOWN_SECONDS) => {
+    const until = Date.now() + seconds * 1000;
+    setEmailCooldownUntilMs(until);
+    try {
+      localStorage.setItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY, String(until));
+    } catch {
+      // Ignore storage errors (e.g. private mode)
+    }
+  };
+
+  useEffect(() => {
+    // Restore cooldown on mount / refresh
+    try {
+      const raw = localStorage.getItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+      if (!raw) return;
+      const until = Number(raw);
+      if (!Number.isFinite(until)) return;
+      if (until > Date.now()) setEmailCooldownUntilMs(until);
+      else localStorage.removeItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!emailCooldownUntilMs) return;
+    if (emailCooldownUntilMs <= Date.now()) {
+      setEmailCooldownUntilMs(null);
+      try {
+        localStorage.removeItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setEmailCooldownUntilMs((prev) => {
+        if (!prev) return prev;
+        if (prev <= Date.now()) return null;
+        return prev;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [emailCooldownUntilMs]);
 
   const redirectTo = useMemo(() => {
     if (typeof window === "undefined") return undefined;
@@ -72,6 +129,10 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       setError("请输入邮箱");
       return;
     }
+    if (emailCooldownSecondsLeft > 0) {
+      setError(`发送过于频繁，请在 ${emailCooldownSecondsLeft}s 后再试`);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -84,8 +145,20 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     setLoading(false);
     if (error) {
-      setError(translateAuthError(error.message));
+      const status = (error as unknown as { status?: number }).status;
+      const code = (error as unknown as { code?: string }).code;
+      if (
+        status === 429 ||
+        code === "over_email_send_rate_limit" ||
+        /rate limit/i.test(error.message)
+      ) {
+        startEmailCooldown();
+        setError("发送过于频繁，请稍后再试");
+      } else {
+        setError(translateAuthError(error.message));
+      }
     } else {
+      startEmailCooldown();
       setSuccessMessage("登录链接已发送，请检查邮箱");
       toast.success("登录链接已发送", { description: "请检查邮箱，点击链接即可登录" });
     }
@@ -177,6 +250,10 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       setError("请输入邮箱");
       return;
     }
+    if (emailCooldownSecondsLeft > 0) {
+      setError(`发送过于频繁，请在 ${emailCooldownSecondsLeft}s 后再试`);
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -186,8 +263,20 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     setLoading(false);
     if (error) {
-      setError(translateAuthError(error.message));
+      const status = (error as unknown as { status?: number }).status;
+      const code = (error as unknown as { code?: string }).code;
+      if (
+        status === 429 ||
+        code === "over_email_send_rate_limit" ||
+        /rate limit/i.test(error.message)
+      ) {
+        startEmailCooldown();
+        setError("发送过于频繁，请稍后再试");
+      } else {
+        setError(translateAuthError(error.message));
+      }
     } else {
+      startEmailCooldown();
       setSuccessMessage("重置邮件已发送，请检查邮箱");
       toast.success("重置邮件已发送", { description: "请检查邮箱" });
     }
@@ -245,8 +334,16 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "发送中..." : "发送登录链接"}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || emailCooldownSecondsLeft > 0}
+              >
+                {loading
+                  ? "发送中..."
+                  : emailCooldownSecondsLeft > 0
+                    ? `请稍候（${emailCooldownSecondsLeft}s）`
+                    : "发送登录链接"}
               </Button>
             </form>
           </TabsContent>
@@ -401,8 +498,16 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "发送中..." : "发送重置邮件"}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading || emailCooldownSecondsLeft > 0}
+                >
+                  {loading
+                    ? "发送中..."
+                    : emailCooldownSecondsLeft > 0
+                      ? `请稍候（${emailCooldownSecondsLeft}s）`
+                      : "发送重置邮件"}
                 </Button>
 
                 <div className="flex justify-center text-sm">

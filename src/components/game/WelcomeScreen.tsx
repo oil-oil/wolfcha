@@ -662,7 +662,7 @@ export function WelcomeScreen({
           note="Minimax 帮助我们生成过场音效与白天语音"
         />
 
-        {/* Sponsor card - Zenmux (右下) */}
+        {/* Sponsor card - ZenMux (右下) */}
         <SponsorCard
           sponsorId="zenmux"
           href="https://zenmux.ai/aboutus"
@@ -670,8 +670,8 @@ export function WelcomeScreen({
           rotate="-4deg"
           delay={0.6}
           logoSrc="/sponsor/zenmux.png"
-          logoAlt="Zenmux"
-          name="Zenmux"
+          logoAlt="ZenMux"
+          name="ZenMux"
           note="聚合全球顶尖大模型，为每一场逻辑博弈注入敏锐灵魂。"
         />
       </div>
@@ -817,8 +817,8 @@ export function WelcomeScreen({
               style={{ "--stamp-rotate": "-3deg" } as React.CSSProperties}
               onClick={() => void trackSponsorClick("zenmux")}
             >
-              <img src="/sponsor/zenmux.png" alt="Zenmux" className="wc-paper-stamp__logo" />
-              <span className="wc-paper-stamp__name">Zenmux</span>
+              <img src="/sponsor/zenmux.png" alt="ZenMux" className="wc-paper-stamp__logo" />
+              <span className="wc-paper-stamp__name">ZenMux</span>
             </a>
           </div>
 
