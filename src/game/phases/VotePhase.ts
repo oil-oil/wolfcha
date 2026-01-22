@@ -18,12 +18,11 @@ import {
   tallyVotes,
   transitionPhase,
 } from "@/lib/game-master";
-import { getSystemMessages, getUiText } from "@/lib/game-texts";
+import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/game-texts";
 import { DELAY_CONFIG } from "@/lib/game-constants";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { getPlayerDiedKey } from "@/lib/narrator-voice";
-import { getI18n } from "@/i18n/translator";
 
 type VotePhaseRuntime = {
   token: FlowToken;
@@ -44,14 +43,9 @@ export class VotePhase extends GamePhase {
     const runtime = this.getRuntime(context);
     if (!runtime) return;
 
-    const { t } = getI18n();
-    const speakerHost = t("speakers.host");
-    const speakerHint = t("speakers.hint");
     const { humanPlayer, setDialogue, setGameState, setIsWaitingForAI, waitForUnpause, isTokenValid, token } = runtime;
     const isRevote = runtime.isRevote === true;
 
-    const systemMessages = getSystemMessages();
-    const uiText = getUiText();
     let currentState = transitionPhase(context.state, "DAY_VOTE");
     currentState = {
       ...currentState,
@@ -62,15 +56,15 @@ export class VotePhase extends GamePhase {
       pkTargets: isRevote ? context.state.pkTargets : undefined,
       pkSource: isRevote ? "vote" : undefined,
     };
-    currentState = addSystemMessage(currentState, systemMessages.voteStart);
-    setDialogue(speakerHost, humanPlayer?.alive ? uiText.votePrompt : uiText.aiVoting, false);
+    currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.voteStart);
+    setDialogue("主持人", humanPlayer?.alive ? UI_TEXT.votePrompt : UI_TEXT.aiVoting, false);
     setGameState(currentState);
 
     await playNarrator("voteStart");
     await waitForUnpause();
 
     if (humanPlayer?.alive) {
-      setDialogue(speakerHint, uiText.clickToVote, false);
+      setDialogue("提示", UI_TEXT.clickToVote, false);
     }
 
     const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman);
@@ -110,7 +104,6 @@ export class VotePhase extends GamePhase {
   }
 
   getPrompt(context: GameContext, player: Player): PromptResult {
-    const { t } = getI18n();
     const state = context.state;
     const gameContext = buildGameContext(state, player);
     const eligibleSeats =
@@ -128,39 +121,50 @@ export class VotePhase extends GamePhase {
     const todayTranscript = buildTodayTranscript(state, 9000);
     const selfSpeech = buildPlayerTodaySpeech(state, player, 1200);
 
+    const seerHistory = state.nightActions.seerHistory || [];
     const roleHints =
       player.role === "Werewolf"
-        ? t("prompts.vote.roleHint.werewolf")
-        : player.role === "Seer" && state.nightActions.seerResult
-          ? t("prompts.vote.roleHint.seer")
+        ? "提示：避免投狼队友，但也别太明显保人"
+        : player.role === "Seer" && seerHistory.length > 0
+          ? "提示：根据查验结果决定"
           : "";
 
-    const cacheableContent = t("prompts.vote.base", {
-      seat: player.seat + 1,
-      name: player.displayName,
-      role: getRoleText(player.role),
-      winCondition: getWinCondition(player.role),
-      difficultyHint,
-    });
-    const dynamicContent = t("prompts.vote.task", {
-      options: alivePlayers
-        .map((p) =>
-          t("prompts.vote.option", { seat: p.seat + 1, name: p.displayName })
-        )
-        .join(t("promptUtils.gameContext.listSeparator")),
-      roleHints,
-    });
+    const cacheableContent = `【身份】
+你是 ${player.seat + 1}号「${player.displayName}」
+身份: ${getRoleText(player.role)}
+
+${getWinCondition(player.role)}
+
+${difficultyHint}`;
+    const dynamicContent = `【任务】
+投票环节，选择一名玩家处决，并说明理由。
+尽量与自己本日发言保持一致。
+理由要求：中文，10-25字，指出关键依据，不要角色扮演。
+
+可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
+
+${roleHints}
+`;
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
       { text: dynamicContent },
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.vote.user", {
-      gameContext,
-      todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
-      selfSpeech: selfSpeech || t("prompts.vote.userNoSelfSpeech"),
-    });
+    const lastReason = state.lastVoteReasons?.[player.playerId];
+    const user = `${gameContext}
+
+${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : "【本日讨论记录】\n（无）"}
+
+${selfSpeech ? `【你本日发言汇总】\n"${selfSpeech}"` : "【你本日发言汇总】\n（你今天没有发言）"}
+
+${lastReason ? `【你上一轮投票理由】\n${lastReason}` : "【你上一轮投票理由】\n（无）"}
+
+你投几号？
+
+【格式】
+返回JSON，如 {"seat": 3, "reason": "理由（10-25字）"}
+不要解释，不要输出多余文字，不要代码块`;
 
     return { system, user, systemParts };
   }
@@ -207,7 +211,6 @@ export class VotePhase extends GamePhase {
     title: string,
     sheriffSeat: number | null
   ): string {
-    const { t } = getI18n();
     const sheriffPlayer =
       sheriffSeat !== null ? players.find((p) => p.seat === sheriffSeat && p.alive) : null;
     const sheriffPlayerId = sheriffPlayer?.playerId;
@@ -237,7 +240,7 @@ export class VotePhase extends GamePhase {
         });
         return {
           targetSeat: Number(targetSeat),
-          targetName: target?.displayName || t("common.unknown"),
+          targetName: target?.displayName || "未知",
           voterSeats,
           voteCount,
         };
@@ -248,9 +251,6 @@ export class VotePhase extends GamePhase {
   }
 
   private async resolveVotes(state: GameState, runtime: VotePhaseRuntime): Promise<void> {
-    const { t } = getI18n();
-    const speakerHost = t("speakers.host");
-    const speakerHint = t("speakers.hint");
     let currentState = transitionPhase(state, "DAY_RESOLVE");
 
     const currentVotes = { ...state.votes };
@@ -283,12 +283,7 @@ export class VotePhase extends GamePhase {
 
     runtime.setGameState(currentState);
 
-    const voteDetailMessage = this.generateVoteDetails(
-      currentVotes,
-      currentState.players,
-      t("votePhase.voteDetailTitle"),
-      currentState.badge.holderSeat
-    );
+    const voteDetailMessage = this.generateVoteDetails(currentVotes, currentState.players, "投票详情", currentState.badge.holderSeat);
     currentState = addSystemMessage(currentState, voteDetailMessage);
 
     if (result) {
@@ -296,11 +291,11 @@ export class VotePhase extends GamePhase {
       const executed = currentState.players.find((p) => p.seat === result.seat);
       currentState = addSystemMessage(
         currentState,
-        getSystemMessages().playerExecuted(result.seat + 1, executed?.displayName || "", result.count)
+        SYSTEM_MESSAGES.playerExecuted(result.seat + 1, executed?.displayName || "", result.count)
       );
       runtime.setDialogue(
-        speakerHost,
-        getSystemMessages().playerExecuted(result.seat + 1, executed?.displayName || "", result.count),
+        "主持人",
+        SYSTEM_MESSAGES.playerExecuted(result.seat + 1, executed?.displayName || "", result.count),
         false
       );
 
@@ -332,9 +327,9 @@ export class VotePhase extends GamePhase {
           currentSpeakerSeat: firstSeat,
           daySpeechStartSeat: firstSeat,
         };
-        nextState = addSystemMessage(nextState, t("votePhase.tiePk"));
+        nextState = addSystemMessage(nextState, "放逐平票，进入PK发言");
         runtime.setGameState(nextState);
-        runtime.setDialogue(speakerHost, t("votePhase.tiePk"), false);
+        runtime.setDialogue("主持人", "放逐平票，进入PK发言", false);
 
         await delay(DELAY_CONFIG.DIALOGUE);
         await runtime.waitForUnpause();
@@ -343,7 +338,7 @@ export class VotePhase extends GamePhase {
         if (firstSpeaker && !firstSpeaker.isHuman) {
           await runtime.runAISpeech(nextState, firstSpeaker);
         } else if (firstSpeaker?.isHuman) {
-          runtime.setDialogue(speakerHint, getUiText().yourTurn, false);
+          runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
         }
         return;
       }
@@ -353,8 +348,8 @@ export class VotePhase extends GamePhase {
         pkTargets: undefined,
         pkSource: undefined,
       };
-      currentState = addSystemMessage(currentState, getSystemMessages().voteTie);
-      runtime.setDialogue(speakerHost, getSystemMessages().voteTie, false);
+      currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.voteTie);
+      runtime.setDialogue("主持人", SYSTEM_MESSAGES.voteTie, false);
     }
 
     runtime.setGameState(currentState);

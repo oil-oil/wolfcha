@@ -1,15 +1,15 @@
-export type OpenRouterContentPart =
+export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
   | { type: "image_url"; image_url: { url: string; detail?: string } }
   | { type: "input_audio"; input_audio: { data: string; format: "mp3" | "wav" } };
 
-export interface OpenRouterMessage {
+export interface LLMMessage {
   role: "system" | "user" | "assistant";
-  content: string | OpenRouterContentPart[];
+  content: string | LLMContentPart[];
   reasoning_details?: unknown;
 }
 
-export interface OpenRouterResponse {
+export interface ChatCompletionResponse {
   id: string;
   choices: {
     message: {
@@ -35,13 +35,13 @@ export type ResponseFormat =
         name: string;
         description?: string;
         schema: unknown;
-        strict?: boolean | null;
+        // Note: 'strict' is not supported by ZenMux, use json_object for simple cases
       };
     };
 
 export interface GenerateOptions {
   model: string;
-  messages: OpenRouterMessage[];
+  messages: LLMMessage[];
   temperature?: number;
   max_tokens?: number;
   reasoning?: { enabled: boolean };
@@ -104,7 +104,7 @@ export function stripMarkdownCodeFences(text: string): string {
 
 export async function generateCompletion(
   options: GenerateOptions
-): Promise<{ content: string; reasoning_details?: unknown; raw: OpenRouterResponse }> {
+): Promise<{ content: string; reasoning_details?: unknown; raw: ChatCompletionResponse }> {
   const maxTokens =
     typeof options.max_tokens === "number" && Number.isFinite(options.max_tokens)
       ? Math.max(16, Math.floor(options.max_tokens))
@@ -139,12 +139,20 @@ export async function generateCompletion(
     }
   }
 
-  const result: OpenRouterResponse = await response.json();
-  const assistantMessage = result.choices?.[0]?.message;
+  const result: ChatCompletionResponse = await response.json();
+  const choice = result.choices?.[0];
+  const assistantMessage = choice?.message;
 
   if (!assistantMessage) {
     throw new Error(
       `No response from model. Raw response: ${JSON.stringify(result).slice(0, 500)}`
+    );
+  }
+
+  // Warn if output was truncated due to max_tokens
+  if (choice.finish_reason === "length") {
+    console.warn(
+      `[LLM] Output truncated (finish_reason=length). Consider increasing max_tokens.`
     );
   }
 

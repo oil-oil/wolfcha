@@ -1116,6 +1116,12 @@ export default function Home() {
               isLoading={isLoading}
               isGenshinMode={isGenshinMode}
               onGenshinModeChange={setGenshinMode}
+              bgmVolume={bgmVolume}
+              isSoundEnabled={isSoundEnabled}
+              isAiVoiceEnabled={isAiVoiceEnabled}
+              onBgmVolumeChange={setBgmVolume}
+              onSoundEnabledChange={setSoundEnabled}
+              onAiVoiceEnabledChange={setAiVoiceEnabled}
             />
           </motion.div>
         ) : (

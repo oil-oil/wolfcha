@@ -585,12 +585,14 @@ export function applyBackwardJump(
     newState.dayHistory = { ...newState.dayHistory };
     newState.voteHistory = { ...newState.voteHistory };
     newState.dailySummaries = { ...newState.dailySummaries };
+    newState.dailySummaryFacts = { ...newState.dailySummaryFacts };
 
     for (const day of analysis.daysToClean) {
       delete newState.nightHistory[day];
       delete newState.dayHistory[day];
       delete newState.voteHistory[day];
       delete newState.dailySummaries[day];
+      delete newState.dailySummaryFacts[day];
     }
   }
 
@@ -599,6 +601,7 @@ export function applyBackwardJump(
     newState.dayHistory = { ...newState.dayHistory };
     newState.voteHistory = { ...newState.voteHistory };
     newState.dailySummaries = { ...newState.dailySummaries };
+    newState.dailySummaryFacts = { ...newState.dailySummaryFacts };
 
     const targetIdx = getPhaseIndex(target.phase);
 
@@ -610,8 +613,10 @@ export function applyBackwardJump(
       delete newState.dayHistory[target.day];
       delete newState.voteHistory[target.day];
       delete newState.dailySummaries[target.day];
+      delete newState.dailySummaryFacts[target.day];
     } else {
       delete newState.dailySummaries[target.day];
+      delete newState.dailySummaryFacts[target.day];
 
       if (targetIdx <= getPhaseIndex("DAY_VOTE")) {
         delete newState.voteHistory[target.day];

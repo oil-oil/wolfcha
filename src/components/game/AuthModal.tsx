@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
 import {
   Tabs,
   TabsContent,
@@ -31,7 +30,9 @@ type AuthMode = "magic_link" | "password";
 type PasswordView = "sign_in" | "sign_up" | "forgot_password";
 
 export function AuthModal({ open, onOpenChange }: AuthModalProps) {
-  const t = useTranslations();
+  const EMAIL_SEND_COOLDOWN_SECONDS = 60;
+  const EMAIL_SEND_COOLDOWN_STORAGE_KEY = "wolfcha_auth_email_cooldown_until";
+
   const [mode, setMode] = useState<AuthMode>("magic_link");
   const [passwordView, setPasswordView] = useState<PasswordView>("sign_in");
   
@@ -41,6 +42,60 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [emailCooldownUntilMs, setEmailCooldownUntilMs] = useState<number | null>(null);
+
+  const emailCooldownSecondsLeft = useMemo(() => {
+    if (!emailCooldownUntilMs) return 0;
+    const seconds = Math.ceil((emailCooldownUntilMs - Date.now()) / 1000);
+    return Math.max(0, seconds);
+  }, [emailCooldownUntilMs]);
+
+  const startEmailCooldown = (seconds = EMAIL_SEND_COOLDOWN_SECONDS) => {
+    const until = Date.now() + seconds * 1000;
+    setEmailCooldownUntilMs(until);
+    try {
+      localStorage.setItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY, String(until));
+    } catch {
+      // Ignore storage errors (e.g. private mode)
+    }
+  };
+
+  useEffect(() => {
+    // Restore cooldown on mount / refresh
+    try {
+      const raw = localStorage.getItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+      if (!raw) return;
+      const until = Number(raw);
+      if (!Number.isFinite(until)) return;
+      if (until > Date.now()) setEmailCooldownUntilMs(until);
+      else localStorage.removeItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!emailCooldownUntilMs) return;
+    if (emailCooldownUntilMs <= Date.now()) {
+      setEmailCooldownUntilMs(null);
+      try {
+        localStorage.removeItem(EMAIL_SEND_COOLDOWN_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setEmailCooldownUntilMs((prev) => {
+        if (!prev) return prev;
+        if (prev <= Date.now()) return null;
+        return prev;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [emailCooldownUntilMs]);
 
   const redirectTo = useMemo(() => {
     if (typeof window === "undefined") return undefined;
@@ -71,7 +126,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError(t("authModal.errors.emailRequired"));
+      setError("请输入邮箱");
+      return;
+    }
+    if (emailCooldownSecondsLeft > 0) {
+      setError(`发送过于频繁，请在 ${emailCooldownSecondsLeft}s 后再试`);
       return;
     }
     setLoading(true);
@@ -86,12 +145,22 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     setLoading(false);
     if (error) {
-      setError(translateAuthError(error.message));
+      const status = (error as unknown as { status?: number }).status;
+      const code = (error as unknown as { code?: string }).code;
+      if (
+        status === 429 ||
+        code === "over_email_send_rate_limit" ||
+        /rate limit/i.test(error.message)
+      ) {
+        startEmailCooldown();
+        setError("发送过于频繁，请稍后再试");
+      } else {
+        setError(translateAuthError(error.message));
+      }
     } else {
-      setSuccessMessage(t("authModal.messages.magicLinkSent"));
-      toast.success(t("authModal.toasts.magicLinkSent.title"), {
-        description: t("authModal.toasts.magicLinkSent.description"),
-      });
+      startEmailCooldown();
+      setSuccessMessage("登录链接已发送，请检查邮箱");
+      toast.success("登录链接已发送", { description: "请检查邮箱，点击链接即可登录" });
     }
   };
 
@@ -99,11 +168,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError(t("authModal.errors.emailRequired"));
+      setError("请输入邮箱");
       return;
     }
     if (!password) {
-      setError(t("authModal.errors.passwordRequired"));
+      setError("请输入密码");
       return;
     }
     setLoading(true);
@@ -118,7 +187,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     if (error) {
       setError(translateAuthError(error.message));
     } else {
-      toast.success(t("authModal.toasts.signInSuccess"));
+      toast.success("登录成功");
       onOpenChange(false);
       resetForm();
     }
@@ -128,15 +197,15 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError(t("authModal.errors.emailRequired"));
+      setError("请输入邮箱");
       return;
     }
     if (!password) {
-      setError(t("authModal.errors.passwordRequired"));
+      setError("请输入密码");
       return;
     }
     if (password.length < 6) {
-      setError(t("authModal.errors.passwordTooShort"));
+      setError("密码长度至少为 6 位");
       return;
     }
     setLoading(true);
@@ -160,18 +229,16 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       
       if (isExistingUser) {
         // User already exists - show helpful message without revealing this fact explicitly
-        setSuccessMessage(t("authModal.messages.signUpExisting"));
+        setSuccessMessage("如果该邮箱未注册，您将收到验证邮件。如已注册，请直接登录。");
       } else if (data.session) {
         // Auto-confirmed, user is logged in
-        toast.success(t("authModal.toasts.signUpSuccess"));
+        toast.success("注册成功");
         onOpenChange(false);
         resetForm();
       } else if (data.user) {
         // New user, needs email confirmation
-        setSuccessMessage(t("authModal.messages.signUpConfirm"));
-        toast.success(t("authModal.toasts.signUpConfirm.title"), {
-          description: t("authModal.toasts.signUpConfirm.description"),
-        });
+        setSuccessMessage("注册成功！请检查邮箱完成验证。");
+        toast.success("注册成功", { description: "请检查邮箱完成验证" });
       }
     }
   };
@@ -180,7 +247,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError(t("authModal.errors.emailRequired"));
+      setError("请输入邮箱");
+      return;
+    }
+    if (emailCooldownSecondsLeft > 0) {
+      setError(`发送过于频繁，请在 ${emailCooldownSecondsLeft}s 后再试`);
       return;
     }
     setLoading(true);
@@ -192,12 +263,22 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
 
     setLoading(false);
     if (error) {
-      setError(translateAuthError(error.message));
+      const status = (error as unknown as { status?: number }).status;
+      const code = (error as unknown as { code?: string }).code;
+      if (
+        status === 429 ||
+        code === "over_email_send_rate_limit" ||
+        /rate limit/i.test(error.message)
+      ) {
+        startEmailCooldown();
+        setError("发送过于频繁，请稍后再试");
+      } else {
+        setError(translateAuthError(error.message));
+      }
     } else {
-      setSuccessMessage(t("authModal.messages.resetSent"));
-      toast.success(t("authModal.toasts.resetSent.title"), {
-        description: t("authModal.toasts.resetSent.description"),
-      });
+      startEmailCooldown();
+      setSuccessMessage("重置邮件已发送，请检查邮箱");
+      toast.success("重置邮件已发送", { description: "请检查邮箱" });
     }
   };
 
@@ -211,29 +292,29 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("authModal.title")}</DialogTitle>
-          <DialogDescription>{t("authModal.description")}</DialogDescription>
+          <DialogTitle>登录或注册</DialogTitle>
+          <DialogDescription>登录后可获得额度并使用分享奖励。</DialogDescription>
         </DialogHeader>
 
         <Tabs value={mode} onValueChange={handleModeChange}>
           <TabsList className="w-full">
-            <TabsTrigger value="magic_link" className="flex-1">{t("authModal.tabs.magicLink")}</TabsTrigger>
-            <TabsTrigger value="password" className="flex-1">{t("authModal.tabs.password")}</TabsTrigger>
+            <TabsTrigger value="magic_link" className="flex-1">邮箱登录</TabsTrigger>
+            <TabsTrigger value="password" className="flex-1">密码登录</TabsTrigger>
           </TabsList>
 
           {/* Magic Link Tab */}
           <TabsContent value="magic_link">
             <form onSubmit={handleMagicLink} className="space-y-4 pt-4">
               <p className="text-sm text-[var(--text-muted)]">
-                {t("authModal.magicLink.description")}
+                输入邮箱，我们将发送一个登录链接。新用户会自动注册。
               </p>
               
               <div className="space-y-2">
-                <Label htmlFor="magic-email">{t("authModal.fields.email")}</Label>
+                <Label htmlFor="magic-email">邮箱</Label>
                 <Input
                   id="magic-email"
                   type="email"
-                  placeholder={t("authModal.placeholders.email")}
+                  placeholder="请输入邮箱"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loading}
@@ -253,8 +334,16 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? t("authModal.actions.sending") : t("authModal.actions.sendMagicLink")}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={loading || emailCooldownSecondsLeft > 0}
+              >
+                {loading
+                  ? "发送中..."
+                  : emailCooldownSecondsLeft > 0
+                    ? `请稍候（${emailCooldownSecondsLeft}s）`
+                    : "发送登录链接"}
               </Button>
             </form>
           </TabsContent>
@@ -265,11 +354,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {passwordView === "sign_in" && (
               <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">{t("authModal.fields.email")}</Label>
+                  <Label htmlFor="signin-email">邮箱</Label>
                   <Input
                     id="signin-email"
                     type="email"
-                    placeholder={t("authModal.placeholders.email")}
+                    placeholder="请输入邮箱"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -278,11 +367,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">{t("authModal.fields.password")}</Label>
+                  <Label htmlFor="signin-password">密码</Label>
                   <Input
                     id="signin-password"
                     type="password"
-                    placeholder={t("authModal.placeholders.password")}
+                    placeholder="请输入密码"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
@@ -297,7 +386,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? t("authModal.actions.signingIn") : t("authModal.actions.signIn")}
+                  {loading ? "登录中..." : "登录"}
                 </Button>
 
                 <div className="flex flex-col items-center gap-2 text-sm">
@@ -306,14 +395,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("forgot_password")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    {t("authModal.links.forgotPassword")}
+                    忘记密码？
                   </button>
                   <button
                     type="button"
                     onClick={() => handlePasswordViewChange("sign_up")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    {t("authModal.links.noAccount")}
+                    还没有账号？去注册
                   </button>
                 </div>
               </form>
@@ -323,11 +412,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {passwordView === "sign_up" && (
               <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">{t("authModal.fields.email")}</Label>
+                  <Label htmlFor="signup-email">邮箱</Label>
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder={t("authModal.placeholders.email")}
+                    placeholder="请输入邮箱"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -336,11 +425,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">{t("authModal.fields.password")}</Label>
+                  <Label htmlFor="signup-password">密码</Label>
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder={t("authModal.placeholders.passwordMin")}
+                    placeholder="请输入密码（至少 6 位）"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
@@ -362,7 +451,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? t("authModal.actions.signingUp") : t("authModal.actions.signUp")}
+                  {loading ? "注册中..." : "注册"}
                 </Button>
 
                 <div className="flex justify-center text-sm">
@@ -371,7 +460,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("sign_in")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    {t("authModal.links.haveAccount")}
+                    已有账号？去登录
                   </button>
                 </div>
               </form>
@@ -381,15 +470,15 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {passwordView === "forgot_password" && (
               <form onSubmit={handleForgotPassword} className="space-y-4 pt-4">
                 <p className="text-sm text-[var(--text-muted)]">
-                  {t("authModal.forgot.description")}
+                  输入您的邮箱，我们将发送密码重置链接。
                 </p>
 
                 <div className="space-y-2">
-                  <Label htmlFor="forgot-email">{t("authModal.fields.email")}</Label>
+                  <Label htmlFor="forgot-email">邮箱</Label>
                   <Input
                     id="forgot-email"
                     type="email"
-                    placeholder={t("authModal.placeholders.email")}
+                    placeholder="请输入邮箱"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -409,8 +498,16 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? t("authModal.actions.sending") : t("authModal.actions.sendReset")}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading || emailCooldownSecondsLeft > 0}
+                >
+                  {loading
+                    ? "发送中..."
+                    : emailCooldownSecondsLeft > 0
+                      ? `请稍候（${emailCooldownSecondsLeft}s）`
+                      : "发送重置邮件"}
                 </Button>
 
                 <div className="flex justify-center text-sm">
@@ -419,7 +516,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("sign_in")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    {t("authModal.links.backToSignIn")}
+                    返回登录
                   </button>
                 </div>
               </form>

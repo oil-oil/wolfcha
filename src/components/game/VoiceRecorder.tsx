@@ -4,7 +4,6 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Microphone, SpinnerGap, StopCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { useTranslations } from "next-intl";
 
 type RecorderStatus = "idle" | "recording" | "transcribing";
 
@@ -129,7 +128,6 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
   { disabled, isNight, onTranscript },
   ref
 ) {
-  const t = useTranslations();
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
@@ -143,6 +141,8 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
   const isRecording = status === "recording";
   const isBusy = status !== "idle";
+  const sttEnabled = false;
+  const sttDisabled = disabled || !sttEnabled;
 
   const canUse = useMemo(() => {
     return typeof window !== "undefined" && typeof navigator !== "undefined";
@@ -192,11 +192,14 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
   }, []);
 
   useEffect(() => {
+    if (!sttEnabled) {
+      setError("语音识别暂不可用");
+    }
     return () => {
       cleanupMedia();
       stopStreamNow();
     };
-  }, [cleanupMedia, stopStreamNow]);
+  }, [cleanupMedia, stopStreamNow, sttEnabled]);
 
   const acquireStream = useCallback(async (): Promise<MediaStream> => {
     if (streamRef.current) {
@@ -211,7 +214,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
   const prepare = useCallback(() => {
     if (!canUse) return;
-    if (disabled) return;
+    if (sttDisabled) return;
     if (status === "transcribing") return;
 
     stopRequestedRef.current = false;
@@ -221,13 +224,13 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         scheduleReleaseStream();
       })
       .catch((e) => {
-        setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
+        setError(e instanceof Error ? e.message : "无法打开麦克风");
       });
-  }, [acquireStream, canUse, disabled, scheduleReleaseStream, status, t]);
+  }, [acquireStream, canUse, scheduleReleaseStream, status, sttDisabled]);
 
   const start = useCallback(async () => {
     if (!canUse) return;
-    if (disabled || isBusy) return;
+    if (sttDisabled || isBusy) return;
 
     setError(null);
     setSeconds(0);
@@ -266,7 +269,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       };
 
       recorder.onerror = () => {
-        setError(t("voiceRecorder.errors.recordFailed"));
+        setError("录音失败，请重试");
         setStatus("idle");
         cleanupMedia();
       };
@@ -278,7 +281,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
         if (blob.size === 0) {
           setStatus("idle");
-          setError(t("voiceRecorder.errors.noAudio"));
+          setError("没有录到声音");
           return;
         }
 
@@ -301,12 +304,12 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
           const json = (await resp.json()) as any;
           const transcript = typeof json?.text === "string" ? json.text.trim() : "";
           if (!transcript) {
-            setError(t("voiceRecorder.errors.noTranscript"));
+            setError("没有识别到内容");
           } else {
             onTranscript(transcript);
           }
         } catch (e) {
-          setError(e instanceof Error ? e.message : t("voiceRecorder.errors.sttFailed"));
+          setError(e instanceof Error ? e.message : "语音识别失败");
         } finally {
           setStatus("idle");
           scheduleReleaseStream();
@@ -321,11 +324,11 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       }, 1000);
     } catch (e) {
       setStatus("idle");
-      setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
+      setError(e instanceof Error ? e.message : "无法打开麦克风");
       cleanupMedia();
       scheduleReleaseStream();
     }
-  }, [acquireStream, canUse, cleanupMedia, disabled, isBusy, onTranscript, scheduleReleaseStream, t]);
+  }, [acquireStream, canUse, cleanupMedia, isBusy, onTranscript, scheduleReleaseStream, sttDisabled]);
 
   const stop = useCallback(() => {
     if (status === "idle") return;
@@ -366,7 +369,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
   const buttonClassName = cn(
     "h-8 px-3 rounded text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer",
-    disabled || isBusy ? "opacity-40 cursor-not-allowed" : "",
+    sttDisabled || isBusy ? "opacity-40 cursor-not-allowed" : "",
     isRecording
       ? "border-[var(--color-danger)]/50 text-[var(--color-danger)] bg-transparent hover:bg-[var(--color-danger)]/10"
       : "border-[var(--color-gold)]/50 text-[var(--color-gold)] bg-transparent hover:bg-[var(--color-gold)]/10"
@@ -377,14 +380,20 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       <button
         type="button"
         onClick={isRecording ? stop : start}
-        disabled={disabled || status === "transcribing"}
+        disabled={sttDisabled || status === "transcribing"}
         className={buttonClassName}
-        title={isRecording ? t("voiceRecorder.actions.stop") : t("voiceRecorder.actions.voiceInput")}
+        title={
+          isRecording
+            ? "停止录音"
+            : sttEnabled
+              ? "语音输入"
+              : "语音识别暂不可用"
+        }
       >
         {status === "transcribing" ? (
           <>
             <SpinnerGap size={14} className="animate-spin" weight="bold" />
-            {t("voiceRecorder.status.transcribing")}
+            识别中
           </>
         ) : isRecording ? (
           <>
@@ -395,7 +404,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         ) : (
           <>
             <Microphone size={14} weight="fill" />
-            {t("voiceRecorder.actions.holdToTalk")}
+            长按 / 语音输入
           </>
         )}
       </button>

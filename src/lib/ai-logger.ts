@@ -3,7 +3,7 @@
  * 记录所有 AI 调用用于复盘
  */
 
-import type { OpenRouterMessage } from "./openrouter";
+import type { LLMMessage } from "./llm";
 import { generateUUID } from "./utils";
 
 export interface AILogEntry {
@@ -12,7 +12,8 @@ export interface AILogEntry {
   type: "speech" | "vote" | "badge_vote" | "badge_transfer" | "seer_action" | "wolf_action" | "guard_action" | "witch_action" | "hunter_shoot" | "character_generation" | "daily_summary" | "wolf_chat";
   request: {
     model: string;
-    messages: OpenRouterMessage[];
+    messages: LLMMessage[];
+    temperature?: number;
     player?: {
       playerId: string;
       displayName: string;
@@ -23,7 +24,9 @@ export interface AILogEntry {
   response: {
     content: string;
     duration: number;
-    raw?: string; // Original raw response before processing
+    raw?: string; // Original raw response content before processing
+    rawResponse?: string; // Full API response object as JSON string
+    finishReason?: string; // finish_reason from API response
     parsed?: unknown; // Parsed/structured result
   };
   error?: string;

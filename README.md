@@ -8,6 +8,16 @@
   </p>
 </div>
 
+## 🙏 感谢赞助
+
+![Minimax Banner](public/sponsor/minimax-banner.jpg)
+
+现有赞助商：
+
+*   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
+*   [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link) - 提供编程、游戏语音与过场音效能力支持
+*   [OpenCreator](https://opencreator.io/) - 提供角色 AI 立绘生成支持
+
 ---
 
 > **Note**: 这是一个诞生于 **「观猹 + 魔搭 环球黑客松」** 的 AI 原生游戏项目。
@@ -38,8 +48,8 @@
 *   **DeepSeek V3.2**
 *   **Qwen3-235B-A22B**
 *   **Kimi K2**
-*   **Qwen3-Max**
-*   **Seed 1.6 (ByteDance)**
+*   **Gemini 3 Flash**
+*   **Seed 1.8 (ByteDance)**
 
 <div align="center">
   <img src="https://img.shields.io/badge/DeepSeek-V3.2-1B75FF?style=for-the-badge" alt="DeepSeek" />
@@ -77,12 +87,12 @@
 *   **Language**: [TypeScript](https://www.typescriptlang.org/)
 *   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
 *   **UI Components**: [Radix UI](https://www.radix-ui.com/), [Lucide React](https://lucide.dev/)
-*   **State Management**: [Jotai](https://jotai.org/)
+*   **State Management**: [Jotai](https://jotai.org/) 
 *   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
 *   **Animations**: [Framer Motion](https://www.framer.com/motion/)
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: OpenRouter (Unified interface for LLMs)
-*   **TTS**: Minimax
+*   **AI Integration**: [ZenMux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
+*   **TTS**: [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link)
 
 ## 🚀 本地运行
 
@@ -107,7 +117,7 @@ npm install
 
 3.  **配置环境变量**
 
-你需要配置相应的 API Keys (OpenRouter, Minimax 等) 才能运行完整功能。请参考 `.env.example` (如果有) 或自行创建 `.env.local`。
+你需要配置相应的 API Keys (ZenMux, Minimax 等) 才能运行完整功能。请参考 `.env.example` 并创建 `.env.local`。
 
 4.  **启动开发服务器**
 
