@@ -1,13 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical, Users } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { TutorialModal } from "@/components/game/TutorialModal";
 import type { DevPreset, DifficultyLevel, Role, StartGameOptions } from "@/types/game";
 import { DevModeButton } from "@/components/DevTools";
 import { GameSetupModal } from "@/components/game/GameSetupModal";
@@ -221,7 +220,6 @@ export function WelcomeScreen({
     isPasswordRecovery,
     clearPasswordRecovery,
   } = useCredits();
-  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const paperRef = useRef<HTMLDivElement | null>(null);
@@ -232,6 +230,8 @@ export function WelcomeScreen({
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
+  const [isGroupOpen, setIsGroupOpen] = useState(false);
+  const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
@@ -465,7 +465,6 @@ export function WelcomeScreen({
       <div className="wc-contract-fog" aria-hidden="true" />
       <div className="wc-contract-vignette" aria-hidden="true" />
 
-      <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
       <GameSetupModal
         open={isSetupOpen}
         onOpenChange={setIsSetupOpen}
@@ -506,6 +505,33 @@ export function WelcomeScreen({
         referralCode={referralCode}
         totalReferrals={totalReferrals}
       />
+
+      <Dialog open={isGroupOpen} onOpenChange={setIsGroupOpen}>
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users size={18} weight="duotone" />
+              加入游戏群
+            </DialogTitle>
+            <DialogDescription>扫码入群，反馈问题与建议。</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 flex items-center justify-center">
+            {groupImgOk !== false && (
+              <img
+                src="/group.png"
+                alt="Wolfcha 用户群"
+                className="w-full max-w-[280px] max-h-[50vh] rounded-md border-2 border-[var(--border-color)] bg-white object-contain"
+                onLoad={() => setGroupImgOk(true)}
+                onError={() => setGroupImgOk(false)}
+              />
+            )}
+            {groupImgOk === false && (
+              <div className="text-xs text-[var(--text-muted)]">未找到群组图片（public/group.png）</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSponsorOpen} onOpenChange={setIsSponsorOpen}>
         <DialogContent className="max-w-[560px]">
@@ -554,7 +580,7 @@ export function WelcomeScreen({
         <DialogContent className="max-w-[420px]">
           <DialogHeader>
             <DialogTitle>快捷操作</DialogTitle>
-            <DialogDescription>在这里快速进入设置、教学与账号信息。</DialogDescription>
+            <DialogDescription>在这里快速进入设置与账号信息。</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Button
@@ -580,17 +606,6 @@ export function WelcomeScreen({
             >
               <GearSix size={16} />
               设置
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-start"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                setIsTutorialOpen(true);
-              }}
-            >
-              玩法教学
             </Button>
             {user ? (
               <Button
@@ -676,34 +691,42 @@ export function WelcomeScreen({
         />
       </div>
 
-      <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
+      <div className="wc-welcome-actions absolute top-5 right-5 z-20 flex items-center gap-2">
         <div className="hidden sm:flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsSponsorOpen(true)}
-            className="h-9 text-sm gap-2"
-          >
-            <Handshake size={16} />
-            成为赞助商
-          </Button>
-
           <a
             href="https://github.com/oil-oil/wolfcha"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
+            className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
             title="View on GitHub"
           >
-            <GithubLogo size={16} className="group-hover:scale-110 transition-transform" />
+            <GithubLogo size={15} className="group-hover:scale-110 transition-transform" />
             <span className="hidden lg:inline">GitHub</span>
             <span className="flex items-center gap-1 text-[var(--color-gold)]">
-              <Star size={13} weight="fill" className="group-hover:scale-110 transition-transform" />
-              <span className="font-serif text-sm font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+              <Star size={12} weight="fill" className="group-hover:scale-110 transition-transform" />
+              <span className="font-serif text-xs font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
                 {githubStars !== null ? githubStars.toLocaleString() : '···'}
               </span>
             </span>
           </a>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsSponsorOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Handshake size={16} />
+            成为赞助商
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsGroupOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Users size={16} />
+            加入游戏群
+          </Button>
 
           {user ? (
             <button
@@ -721,7 +744,7 @@ export function WelcomeScreen({
               type="button"
               variant="outline"
               onClick={() => setIsAuthOpen(true)}
-              className="h-9 text-sm gap-2"
+              className="h-8 text-xs gap-2"
             >
               <UserCircle size={16} />
               登录/注册
@@ -733,7 +756,7 @@ export function WelcomeScreen({
               type="button"
               variant="outline"
               onClick={() => setIsUserProfileOpen(true)}
-              className="h-9 text-sm gap-2 md:hidden"
+              className="h-8 text-xs gap-2 md:hidden"
             >
               <UserCircle size={16} />
               账号信息
@@ -744,13 +767,10 @@ export function WelcomeScreen({
             type="button"
             variant="outline"
             onClick={() => setIsSetupOpen(true)}
-            className="h-9 text-sm gap-2"
+            className="h-8 text-xs gap-2"
           >
             <GearSix size={16} />
             设置
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
-            玩法教学
           </Button>
         </div>
 
@@ -759,7 +779,7 @@ export function WelcomeScreen({
             type="button"
             variant="outline"
             onClick={() => setIsSponsorOpen(true)}
-            className="h-9 text-sm gap-2"
+            className="h-8 text-xs gap-2"
           >
             <Handshake size={16} />
             赞助
@@ -767,8 +787,17 @@ export function WelcomeScreen({
           <Button
             type="button"
             variant="outline"
+            onClick={() => setIsGroupOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Users size={16} />
+            入群
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="h-9 w-9 px-0"
+            className="h-8 w-8 px-0"
             aria-label="更多操作"
           >
             <DotsThreeOutlineVertical size={18} />
