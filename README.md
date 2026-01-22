@@ -93,8 +93,6 @@
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
 *   **AI Integration**: [Zenmux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
 *   **TTS**: [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link)
-*   **AI Integration**: ZenMux (Unified interface for LLMs)
-*   **TTS**: Minimax
 
 ## 🚀 本地运行
 
