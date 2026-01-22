@@ -13,6 +13,7 @@ export interface AILogEntry {
   request: {
     model: string;
     messages: LLMMessage[];
+    temperature?: number;
     player?: {
       playerId: string;
       displayName: string;

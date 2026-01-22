@@ -562,6 +562,7 @@ export async function* generateAISpeechStream(
       request: { 
         model: player.agentProfile!.modelRef.model,
         messages,
+        temperature: GAME_TEMPERATURE.SPEECH,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
       response: {
@@ -605,12 +606,60 @@ export async function generateAISpeechSegments(
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
 
+  const extractQuotedSegments = (text: string): string[] => {
+    const start = text.indexOf("[");
+    const end = text.lastIndexOf("]");
+    const slice = start >= 0 && end > start ? text.slice(start, end + 1) : text;
+    const matches = slice.match(/"(?:\\.|[^"\\])*"/g) ?? [];
+    const out: string[] = [];
+    for (const m of matches) {
+      try {
+        const s = JSON.parse(m);
+        if (typeof s === "string") {
+          const cleaned = s.trim();
+          if (cleaned) out.push(cleaned);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return out;
+  };
+
+  const extractObjectSegments = (text: string): string[] => {
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (!objectMatch) return [];
+    try {
+      const parsed = JSON.parse(objectMatch[0]) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+
+      const out: string[] = [];
+      for (const v of Object.values(parsed as Record<string, unknown>)) {
+        if (typeof v === "string") {
+          const cleaned = v.trim();
+          if (cleaned) out.push(cleaned);
+          continue;
+        }
+        if (Array.isArray(v)) {
+          for (const item of v) {
+            if (typeof item === "string") {
+              const cleaned = item.trim();
+              if (cleaned) out.push(cleaned);
+            }
+          }
+        }
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  };
+
   try {
     const result = await generateCompletion({
       model: player.agentProfile!.modelRef.model,
       messages,
       temperature: GAME_TEMPERATURE.SPEECH,
-      response_format: { type: "json_object" },
     });
 
     const cleanedSpeech = stripMarkdownCodeFences(result.content);
@@ -651,6 +700,14 @@ export async function generateAISpeechSegments(
     } catch {
       // JSON解析失败，按换行分割
     }
+
+    const objectExtracted = extractObjectSegments(sanitizedSpeech);
+    if (objectExtracted.length > 0) return objectExtracted;
+
+    const extracted = extractQuotedSegments(sanitizedSpeech)
+      .map((s) => s.trim().replace(/^['"]+|['"]+$/g, ""))
+      .filter((s) => s.length > 0);
+    if (extracted.length > 0) return extracted;
 
     // 降级处理：按换行或句号分割
     const fallbackSegments = sanitizedSpeech

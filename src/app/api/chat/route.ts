@@ -105,6 +105,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { model, messages, temperature, max_tokens, stream, reasoning, response_format } = body;
 
+    const normalizedTemperature =
+      typeof temperature === "number" && Number.isFinite(temperature) ? temperature : 0.7;
+    const cappedTemperature = (() => {
+      const lower = typeof model === "string" ? model.toLowerCase() : "";
+      if (lower.startsWith("moonshotai/")) {
+        return Math.min(Math.max(0, normalizedTemperature), 1);
+      }
+      return Math.max(0, normalizedTemperature);
+    })();
+
     // Process messages based on model capabilities
     let processedMessages = messages;
     
@@ -119,7 +129,7 @@ export async function POST(request: NextRequest) {
     const requestBody: Record<string, unknown> = {
       model,
       messages: processedMessages,
-      temperature: temperature ?? 0.7,
+      temperature: cappedTemperature,
     };
 
     if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {

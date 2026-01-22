@@ -345,8 +345,6 @@ export function DialogArea({
   useEffect(() => {
     preloadRolePortraits();
   }, []);
-
-  const isSpeechPhase = gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS";
   
   // 判断是否需要用户手动点击/按键继续（而非自动过场）
   const needsManualContinue = useMemo(() => {
@@ -1281,7 +1279,7 @@ export function DialogArea({
                     </div>
                   
                   {/* 底部信息栏 */}
-                  <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                  <div className={`flex items-center justify-between mt-4 pt-3 border-t min-h-7 ${isNight ? "border-white/10" : "border-black/5"}`}> 
                     <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                       {isTyping ? (
                         <>
@@ -1290,44 +1288,36 @@ export function DialogArea({
                         </>
                       ) : null}
                     </div>
-                    <AnimatePresence>
-                      {!isTyping && needsManualContinue && (
-                        <motion.div 
-                          initial={{ opacity: 0, x: 10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 10 }}
-                          transition={{ duration: 0.25, ease: "easeOut" }}
-                          className={`flex items-center gap-1.5 text-xs ${isNight ? "text-white/70" : "text-[var(--text-secondary)]"}`}
-                        >
-                          <span>点击或按</span>
-                          <kbd className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono text-[11px] ${
-                            isNight 
-                              ? "bg-white/10 border-white/20 text-white/80" 
-                              : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
-                          }`}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="9 10 4 15 9 20" />
-                              <path d="M20 4v7a4 4 0 0 1-4 4H4" />
-                            </svg>
-                            Enter
-                          </kbd>
-                          <span>继续</span>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                    {isSpeechPhase && isTyping && (
-                      <button
-                        className="wc-action-btn text-xs h-7 px-3"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAdvance();
-                        }}
-                        type="button"
-                      >
-                        {waitingForNextRound ? "下一位" : currentDialogue ? "继续" : "OK"}
-                        <CaretRight size={12} weight="bold" />
-                      </button>
-                    )}
+                    <div className="h-7 flex items-center justify-end">
+                      <AnimatePresence initial={false}>
+                        {!isTyping && needsManualContinue ? (
+                          <motion.div
+                            key="enter-hint"
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            transition={{ duration: 0.25, ease: "easeOut" }}
+                            className={`flex items-center gap-1.5 text-xs ${isNight ? "text-white/70" : "text-[var(--text-secondary)]"}`}
+                          >
+                            <span>点击或按</span>
+                            <kbd className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono text-[11px] ${
+                              isNight
+                                ? "bg-white/10 border-white/20 text-white/80"
+                                : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                            }`}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 10 4 15 9 20" />
+                                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+                              </svg>
+                              Enter
+                            </kbd>
+                            <span>继续</span>
+                          </motion.div>
+                        ) : (
+                          <div key="placeholder" className="h-7" />
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </motion.div>
               )}
