@@ -3482,6 +3482,52 @@ input[type="submit"]:not(:disabled),
   opacity: 0.35;
 }
 
+.wc-night-action-target {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(9, 9, 12, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+  min-width: 200px;
+  justify-content: center;
+}
+
+.wc-night-action-target__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.wc-night-action-target__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wc-night-action-target__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.wc-night-action-target__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 /* Screen shake for impact moments */
 .wc-night-action-overlay[data-variant="wolf"],
 .wc-night-action-overlay[data-variant="hunter"] {
@@ -4049,6 +4095,86 @@ input[type="submit"]:not(:disabled),
   .wc-sponsor-card--right-bottom {
     right: 6%;
   }
+}
+
+/* Mobile: hide floating sponsor cards, use inline stamps instead */
+@media (max-width: 768px) {
+  .wc-sponsor-cards {
+    display: none;
+  }
+}
+
+/* ========== Paper Inline Stamps (Mobile) ========== */
+.wc-paper-sponsors {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .wc-paper-sponsors {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 8px 8px;
+    margin-bottom: 4px;
+  }
+}
+
+.wc-paper-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 72px;
+  padding: 10px 8px;
+  border-radius: 999px;
+  aspect-ratio: 1 / 1;
+  text-decoration: none;
+  rotate: var(--stamp-rotate, 0deg);
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.wc-paper-stamp::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: 999px;
+  border: 2px dashed rgba(20, 20, 20, 0.25);
+  pointer-events: none;
+}
+
+.wc-paper-stamp::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 20, 20, 0.12);
+  pointer-events: none;
+}
+
+.wc-paper-stamp:hover {
+  opacity: 0.75;
+  transform: scale(1.05);
+}
+
+.wc-paper-stamp__logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: grayscale(1) brightness(0.4) contrast(1.2);
+  mix-blend-mode: multiply;
+}
+
+.wc-paper-stamp__name {
+  font-family: 'Cinzel', var(--font-title), ui-serif, Georgia, serif;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(20, 20, 20, 0.65);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  mix-blend-mode: multiply;
 }
 
 /* Responsive positioning for larger screens */

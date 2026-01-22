@@ -77,6 +77,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
     if (!strategy) return strategyLabels.balanced;
     return strategyLabels[strategy] ?? strategyLabels.balanced;
   };
+  const showModelTag = !!modelLabel && isGenshinMode && !renderPlayer.isHuman;
 
   return (
     <AnimatePresence
@@ -147,6 +148,11 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                   )}
                 </div>
                 <h2 className="text-xl font-black text-[var(--text-primary)]">{renderPlayer.displayName}</h2>
+                {showModelTag && (
+                  <div className="mt-1 text-xs font-semibold text-[var(--text-muted)]">
+                    模型：{modelLabel}
+                  </div>
+                )}
                 
                 {/* 身份标签 - 仅可见时显示 */}
                 {canSeeRole && (

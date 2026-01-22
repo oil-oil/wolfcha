@@ -58,6 +58,7 @@ export class VotePhase extends GamePhase {
       currentSpeakerSeat: null,
       nextSpeakerSeatOverride: null,
       votes: {},
+      voteReasons: {},
       pkTargets: isRevote ? context.state.pkTargets : undefined,
       pkSource: isRevote ? "vote" : undefined,
     };
@@ -81,7 +82,7 @@ export class VotePhase extends GamePhase {
           tokenInvalidated = true;
           break;
         }
-        const targetSeat = await generateAIVote(currentState, aiPlayer);
+        const vote = await generateAIVote(currentState, aiPlayer);
         if (!isTokenValid(token)) {
           tokenInvalidated = true;
           break;
@@ -89,11 +90,13 @@ export class VotePhase extends GamePhase {
 
         setGameState((prevState) => ({
           ...prevState,
-          votes: { ...prevState.votes, [aiPlayer.playerId]: targetSeat },
+          votes: { ...prevState.votes, [aiPlayer.playerId]: vote.seat },
+          voteReasons: { ...(prevState.voteReasons || {}), [aiPlayer.playerId]: vote.reason },
         }));
         currentState = {
           ...currentState,
-          votes: { ...currentState.votes, [aiPlayer.playerId]: targetSeat },
+          votes: { ...currentState.votes, [aiPlayer.playerId]: vote.seat },
+          voteReasons: { ...(currentState.voteReasons || {}), [aiPlayer.playerId]: vote.reason },
         };
       }
     } finally {

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,6 +21,7 @@ import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { useCredits } from "@/hooks/useCredits";
 
 type SponsorCardProps = {
+  sponsorId: string;
   href: string;
   className: string;
   rotate: string;
@@ -33,7 +34,21 @@ type SponsorCardProps = {
   children?: React.ReactNode;
 };
 
+// Track sponsor click
+async function trackSponsorClick(sponsorId: string) {
+  try {
+    await fetch("/api/sponsor/click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sponsorId, ref: "homepage" }),
+    });
+  } catch {
+    // Silently fail - don't block navigation
+  }
+}
+
 function SponsorCard({
+  sponsorId,
   href,
   className,
   rotate,
@@ -46,9 +61,17 @@ function SponsorCard({
   children,
 }: SponsorCardProps) {
   const ariaLabel = [label, name, note].filter(Boolean).join(" · ");
+  
+  const handleClick = () => {
+    void trackSponsorClick(sponsorId);
+  };
+
+  // Add ref parameter to href for tracking on sponsor's side
+  const hrefWithRef = href.includes("?") ? `${href}&ref=wolfcha` : `${href}?ref=wolfcha`;
+
   return (
     <motion.a
-      href={href}
+      href={hrefWithRef}
       target="_blank"
       rel="noopener noreferrer"
       initial={{ opacity: 0 }}
@@ -58,6 +81,7 @@ function SponsorCard({
       style={{ "--card-rotate": rotate } as React.CSSProperties}
       aria-label={ariaLabel || undefined}
       title={ariaLabel || undefined}
+      onClick={handleClick}
     >
       <span className="wc-sponsor-card__border" aria-hidden="true" />
       <div className="wc-sponsor-card__content">
@@ -127,7 +151,7 @@ function buildDefaultRoles(playerCount: number): Role[] {
         "Seer",
         "Witch",
         "Hunter",
-        "Villager",
+        "Guard",
         "Villager",
         "Villager",
         "Villager",
@@ -137,7 +161,7 @@ function buildDefaultRoles(playerCount: number): Role[] {
 
 function getRoleCountConfig(playerCount: number) {
   const wolfCount = playerCount >= 11 ? 4 : 3;
-  const guardCount = playerCount >= 11 ? 1 : 0;
+  const guardCount = playerCount >= 10 ? 1 : 0;
   const seerCount = 1;
   const witchCount = 1;
   const hunterCount = 1;
@@ -202,6 +226,7 @@ export function WelcomeScreen({
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
   const [githubStars, setGithubStars] = useState<number | null>(null);
@@ -520,10 +545,95 @@ export function WelcomeScreen({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>快捷操作</DialogTitle>
+            <DialogDescription>在这里快速进入设置、教学与账号信息。</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsSponsorOpen(true);
+              }}
+            >
+              <Handshake size={16} />
+              成为赞助商
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsSetupOpen(true);
+              }}
+            >
+              <GearSix size={16} />
+              设置
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                setIsTutorialOpen(true);
+              }}
+            >
+              玩法教学
+            </Button>
+            {user ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsUserProfileOpen(true);
+                }}
+              >
+                <UserCircle size={16} />
+                账号信息
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="justify-start"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsAuthOpen(true);
+                }}
+              >
+                <UserCircle size={16} />
+                登录/注册
+              </Button>
+            )}
+            <Button asChild variant="outline" className="justify-start">
+              <a
+                href="https://github.com/oil-oil/wolfcha"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <GithubLogo size={16} />
+                GitHub 项目
+              </a>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Scattered sponsor cards */}
       <div className="wc-sponsor-cards" aria-label={t("welcome.sponsor.showcaseLabel")}>
         {/* Sponsor card - OpenCreator (左侧) */}
         <SponsorCard
+          sponsorId="opencreator"
           href="https://opencreator.io/"
           className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--left-center wc-sponsor-card--featured"
           rotate="-6deg"
@@ -536,6 +646,7 @@ export function WelcomeScreen({
 
         {/* Sponsor card - Minimax (右上) */}
         <SponsorCard
+          sponsorId="minimax"
           href="https://minimaxi.com/"
           className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-top"
           rotate="5deg"
@@ -550,82 +661,93 @@ export function WelcomeScreen({
       <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
         <LocaleSwitcher className="hidden sm:block" />
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setIsSponsorOpen(true)}
-          className="h-9 text-sm gap-2"
-        >
-          <Handshake size={16} />
-          {t("welcome.sponsor.action")}
-        </Button>
-
-        <a
-          href="https://github.com/oil-oil/wolfcha"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
-          title={t("welcome.github.title")}
-        >
-          <GithubLogo size={16} className="group-hover:scale-110 transition-transform" />
-          <span className="hidden lg:inline">GitHub</span>
-          <span className="flex items-center gap-1 text-[var(--color-gold)]">
-            <Star size={13} weight="fill" className="group-hover:scale-110 transition-transform" />
-            <span className="font-serif text-sm font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
-              {githubStars !== null ? githubStars.toLocaleString() : '···'}
-            </span>
-          </span>
-        </a>
-
-        {user ? (
-          <button
-            type="button"
-            onClick={() => setIsUserProfileOpen(true)}
-            className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-            title={t("welcome.account.viewInfo")}
-          >
-            <UserCircle size={16} />
-            <span className="truncate max-w-[160px]">{user.email ?? t("welcome.account.loggedIn")}</span>
-            <span className="opacity-70">
-              {creditsLoading ? "..." : t("welcome.account.remaining", { count: credits ?? 0 })}
-            </span>
-          </button>
-        ) : (
+        <div className="hidden sm:flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsAuthOpen(true)}
+            onClick={() => setIsSponsorOpen(true)}
             className="h-9 text-sm gap-2"
           >
-            <UserCircle size={16} />
-            {t("welcome.auth.signIn")}
+            <Handshake size={16} />
+            {t("welcome.sponsor.action")}
           </Button>
-        )}
 
-        {user && (
+          <a
+            href="https://github.com/oil-oil/wolfcha"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
+            title={t("welcome.github.title")}
+          >
+            <GithubLogo size={16} className="group-hover:scale-110 transition-transform" />
+            <span className="hidden lg:inline">GitHub</span>
+            <span className="flex items-center gap-1 text-[var(--color-gold)]">
+              <Star size={13} weight="fill" className="group-hover:scale-110 transition-transform" />
+              <span className="font-serif text-sm font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+                {githubStars !== null ? githubStars.toLocaleString() : '···'}
+              </span>
+            </span>
+          </a>
+
+          {user ? (
+            <button
+              type="button"
+              onClick={() => setIsUserProfileOpen(true)}
+              className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+              title={t("welcome.account.viewInfo")}
+            >
+              <UserCircle size={16} />
+              <span className="truncate max-w-[160px]">{user.email ?? t("welcome.account.loggedIn")}</span>
+              <span className="opacity-70">
+                {creditsLoading ? "..." : t("welcome.account.remaining", { count: credits ?? 0 })}
+              </span>
+            </button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsAuthOpen(true)}
+              className="h-9 text-sm gap-2"
+            >
+              <UserCircle size={16} />
+              {t("welcome.auth.signIn")}
+            </Button>
+          )}
+
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsUserProfileOpen(true)}
-            className="h-9 text-sm gap-2 md:hidden"
+            onClick={() => setIsSetupOpen(true)}
+            className="h-9 text-sm gap-2"
           >
-            <UserCircle size={16} />
-            {t("welcome.account.info")}
+            <GearSix size={16} />
+            {t("welcome.settings")}
           </Button>
-        )}
+          <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
+            {t("welcome.tutorial")}
+          </Button>
+        </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setIsSetupOpen(true)}
-          className="h-9 text-sm gap-2"
-        >
-          <GearSix size={16} />
-          {t("welcome.settings")}
-        </Button>
-        <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
-          {t("welcome.tutorial")}
-        </Button>
+        <div className="flex sm:hidden items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsSponsorOpen(true)}
+            className="h-9 text-sm gap-2"
+          >
+            <Handshake size={16} />
+            {t("welcome.sponsor.action")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="h-9 w-9 px-0"
+            aria-label="更多操作"
+          >
+            <DotsThreeOutlineVertical size={18} />
+          </Button>
+        </div>
       </div>
 
       <motion.div
@@ -637,8 +759,34 @@ export function WelcomeScreen({
         <div ref={paperRef} className="wc-contract-paper">
           <div className="wc-contract-borders" aria-hidden="true" />
 
+          {/* Mobile: inline sponsor stamps at top of paper */}
+          <div className="wc-paper-sponsors sm:hidden">
+            <a
+              href="https://opencreator.io/?ref=wolfcha"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="wc-paper-stamp"
+              style={{ "--stamp-rotate": "-8deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("opencreator")}
+            >
+              <img src="/sponsor/opencreator.png" alt="OpenCreator" className="wc-paper-stamp__logo" />
+              <span className="wc-paper-stamp__name">OpenCreator</span>
+            </a>
+            <a
+              href="https://minimaxi.com/?ref=wolfcha"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="wc-paper-stamp"
+              style={{ "--stamp-rotate": "6deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("minimax")}
+            >
+              <img src="/sponsor/minimax.png" alt="Minimax" className="wc-paper-stamp__logo" />
+              <span className="wc-paper-stamp__name">Minimax</span>
+            </a>
+          </div>
+
           <div className="mt-2 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center text-[var(--color-wolf)] opacity-90">
+            <div className="mx-auto mb-4 h-12 w-12 items-center justify-center text-[var(--color-wolf)] opacity-90 hidden sm:flex">
               <PawPrint weight="fill" size={42} />
             </div>
             <div className="wc-contract-title">WOLFCHA</div>

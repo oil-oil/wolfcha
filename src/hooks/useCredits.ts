@@ -25,10 +25,15 @@ export function useCredits() {
       .eq("id", user.id)
       .single();
 
-    if (!error && data) {
-      setCredits(data.credits);
-      setReferralCode(data.referral_code);
-      setTotalReferrals(data.total_referrals);
+    const creditsRow = data as {
+      credits: number;
+      referral_code: string;
+      total_referrals: number;
+    } | null;
+    if (!error && creditsRow) {
+      setCredits(creditsRow.credits);
+      setReferralCode(creditsRow.referral_code);
+      setTotalReferrals(creditsRow.total_referrals);
     }
 
     setLoading(false);

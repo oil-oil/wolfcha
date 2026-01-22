@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type Alignment,
   GENERATOR_MODEL,
+  SUMMARY_MODEL,
   AVAILABLE_MODELS,
   type ModelRef,
 } from "@/types/game";
@@ -116,6 +117,8 @@ export function createInitialGameState(): GameState {
       revoteCount: 0,
     },
     votes: {},
+    voteReasons: {},
+    lastVoteReasons: {},
     voteHistory: {},
     dailySummaries: {},
     nightActions: {},
@@ -139,7 +142,7 @@ export function getRoleConfiguration(playerCount: number): Role[] {
       "Seer",
       "Witch",
       "Hunter",
-      "Villager",
+      "Guard",
       "Villager",
       "Villager",
       "Villager",
@@ -396,6 +399,7 @@ export async function generateDailySummary(
 ): Promise<string[]> {
   const { t } = getI18n();
   const startTime = Date.now();
+  const summaryModel = SUMMARY_MODEL;
 
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
@@ -410,7 +414,7 @@ export async function generateDailySummary(
   const transcript = dayMessages
     .map((m) => `${m.playerName}: ${m.content}`)
     .join("\n")
-    .slice(0, 12000);
+    .slice(0, 15000);
 
   const system = t("gameMaster.summary.system");
   const user = t("gameMaster.summary.user", { day: state.day, transcript });
@@ -421,10 +425,10 @@ export async function generateDailySummary(
   ];
 
   const result = await generateCompletion({
-    model: GENERATOR_MODEL,
+    model: summaryModel,
     messages,
     temperature: GAME_TEMPERATURE.SUMMARY,
-    max_tokens: 220,
+    max_tokens: 1000,
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -432,8 +436,8 @@ export async function generateDailySummary(
         schema: {
           type: "array",
           items: { type: "string" },
-          minItems: 1,
-          maxItems: 8,
+          minItems: 5,
+          maxItems: 10,
         },
         strict: true,
       },
@@ -445,7 +449,7 @@ export async function generateDailySummary(
   await aiLogger.log({
     type: "daily_summary",
     request: {
-      model: GENERATOR_MODEL,
+      model: summaryModel,
       messages,
     },
     response: { content: cleanedDaily, duration: Date.now() - startTime },
@@ -460,7 +464,7 @@ export async function generateDailySummary(
           .filter((x): x is string => typeof x === "string")
           .map((s) => s.trim())
           .filter(Boolean)
-          .slice(0, 8);
+          .slice(0, 10);
         if (cleaned.length > 0) return cleaned;
       }
     }
@@ -630,7 +634,7 @@ export async function generateAISpeechSegments(
 export async function generateAIVote(
   state: GameState,
   player: Player
-): Promise<number> {
+): Promise<{ seat: number; reason: string }> {
   const prompt = resolvePhasePrompt("DAY_VOTE", state, player);
   const eligibleSeats = state.pkSource === "vote" && state.pkTargets && state.pkTargets.length > 0
     ? new Set(state.pkTargets)
@@ -647,19 +651,64 @@ export async function generateAIVote(
       model: player.agentProfile!.modelRef.model,
       messages,
       temperature: GAME_TEMPERATURE.ACTION,
-      max_tokens: 32,
+      max_tokens: 120,
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "vote_seat",
-          schema: { type: "string" },
+          name: "vote_with_reason",
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              seat: { type: "integer", minimum: 1 },
+              reason: { type: "string" },
+            },
+            required: ["seat", "reason"],
+          },
           strict: true,
         },
       },
     });
 
-    const cleanedVote = stripMarkdownCodeFences(result.content);
+    const rawContent = result.content;
+    const cleanedVote = stripMarkdownCodeFences(rawContent);
+    const cleaned = cleanedVote.trim();
+    
+    let parsedResult: { seat: number; reason: string } | null = null;
+    
+    try {
+      const parsed = JSON.parse(cleaned) as { seat?: number; reason?: string };
+      const seat = typeof parsed.seat === "number" ? parsed.seat - 1 : NaN;
+      const validSeats = alivePlayers.map((p) => p.seat);
+      if (Number.isFinite(seat) && validSeats.includes(seat)) {
+        const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
+        parsedResult = { seat, reason: reason || "未提供理由" };
+      }
+    } catch {
+      // Fallback to regex parsing below
+    }
 
+    if (!parsedResult) {
+      const match = cleaned.match(/\d+/);
+      if (match) {
+        const seat = parseInt(match[0], 10) - 1;
+        const validSeats = alivePlayers.map((p) => p.seat);
+        if (validSeats.includes(seat)) {
+          parsedResult = { seat, reason: "解析失败-仅座位" };
+        }
+      }
+    }
+
+    if (!parsedResult) {
+      if (alivePlayers.length === 0) {
+        parsedResult = { seat: player.seat, reason: "无可选目标" };
+      } else {
+        const fallback = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+        parsedResult = { seat: fallback, reason: "随机选择" };
+      }
+    }
+
+    // Log with both raw and parsed data
     await aiLogger.log({
       type: "vote",
       request: { 
@@ -667,11 +716,20 @@ export async function generateAIVote(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: cleanedVote, duration: Date.now() - startTime },
+      response: { 
+        content: cleanedVote, 
+        raw: rawContent,
+        parsed: parsedResult,
+        duration: Date.now() - startTime 
+      },
     });
 
-    result = { content: cleanedVote };
+    return parsedResult;
   } catch (error) {
+    const fallbackResult = alivePlayers.length === 0
+      ? { seat: player.seat, reason: "无可选目标" }
+      : { seat: alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat, reason: "随机选择" };
+    
     await aiLogger.log({
       type: "vote",
       request: {
@@ -679,25 +737,16 @@ export async function generateAIVote(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { content: "", duration: Date.now() - startTime },
+      response: { 
+        content: "", 
+        parsed: fallbackResult,
+        duration: Date.now() - startTime 
+      },
       error: String(error),
     });
 
-    if (alivePlayers.length === 0) return player.seat;
-    return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    return fallbackResult;
   }
-
-  const match = result.content.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  if (alivePlayers.length === 0) return player.seat;
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
 }
 
 export async function generateAIBadgeVote(
@@ -801,7 +850,22 @@ export async function generateSeerAction(
     max_tokens: 16,
   });
 
-  const cleanedSeer = stripMarkdownCodeFences(result.content);
+  const rawContent = result.content;
+  const cleanedSeer = stripMarkdownCodeFences(rawContent);
+
+  const match = cleanedSeer.match(/\d+/);
+  let parsedSeat: number;
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      parsedSeat = seat;
+    } else {
+      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  } else {
+    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
 
   await aiLogger.log({
     type: "seer_action",
@@ -810,19 +874,15 @@ export async function generateSeerAction(
       messages,
       player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
     },
-    response: { content: cleanedSeer, duration: Date.now() - startTime },
+    response: { 
+      content: cleanedSeer, 
+      raw: rawContent,
+      parsed: { targetSeat: parsedSeat },
+      duration: Date.now() - startTime 
+    },
   });
 
-  const match = cleanedSeer.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedSeat;
 }
 
 export async function generateWolfAction(
@@ -844,7 +904,22 @@ export async function generateWolfAction(
     max_tokens: 16,
   });
 
-  const cleanedWolf = stripMarkdownCodeFences(result.content);
+  const rawContent = result.content;
+  const cleanedWolf = stripMarkdownCodeFences(rawContent);
+
+  const match = cleanedWolf.match(/\d+/);
+  let parsedSeat: number;
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      parsedSeat = seat;
+    } else {
+      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  } else {
+    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
 
   await aiLogger.log({
     type: "wolf_action",
@@ -853,19 +928,15 @@ export async function generateWolfAction(
       messages,
       player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
     },
-    response: { content: cleanedWolf, duration: Date.now() - startTime },
+    response: { 
+      content: cleanedWolf, 
+      raw: rawContent,
+      parsed: { targetSeat: parsedSeat },
+      duration: Date.now() - startTime 
+    },
   });
 
-  const match = cleanedWolf.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedSeat;
 }
 
 export type WitchAction =

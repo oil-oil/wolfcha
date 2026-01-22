@@ -129,9 +129,37 @@ const createGenshinPersona = (voiceId?: string): Persona => {
   };
 };
 
+ const shuffleArray = <T,>(array: T[]): T[] => {
+   const shuffled = [...array];
+   for (let i = shuffled.length - 1; i > 0; i -= 1) {
+     const j = Math.floor(Math.random() * (i + 1));
+     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+   }
+   return shuffled;
+ };
+
+ const dedupeModelRefs = (refs: ModelRef[]): ModelRef[] => {
+   const out: ModelRef[] = [];
+   const seen = new Set<string>();
+   refs.forEach((ref) => {
+     const key = `${ref.provider}:${ref.model}`;
+     if (seen.has(key)) return;
+     seen.add(key);
+     out.push(ref);
+   });
+   return out;
+ };
+
 export const buildGenshinModelRefs = (count: number): ModelRef[] => {
-  const pool = AVAILABLE_MODELS.length > 0 ? AVAILABLE_MODELS : [{ provider: "openrouter" as const, model: GENERATOR_MODEL }];
-  return Array.from({ length: count }, (_, index) => pool[index % pool.length]);
+  const basePool = AVAILABLE_MODELS.length > 0 ? AVAILABLE_MODELS : [{ provider: "openrouter" as const, model: GENERATOR_MODEL }];
+  const pool = dedupeModelRefs(basePool);
+  if (pool.length === 0 || count <= 0) return [];
+
+  if (count <= pool.length) {
+    return shuffleArray(pool).slice(0, count);
+  }
+
+  return Array.from({ length: count }, () => pool[Math.floor(Math.random() * pool.length)]);
 };
 
 export const generateGenshinModeCharacters = async (
