@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,14 @@ export async function POST(request: Request) {
 
   const userAgent = request.headers.get("user-agent") || null;
 
-  const { error } = await supabaseAdmin.from("sponsor_clicks").insert({
+  const insertPayload: Database["public"]["Tables"]["sponsor_clicks"]["Insert"] = {
     sponsor_id: sponsorId,
     ref: ref || null,
     user_agent: userAgent,
-  });
+  };
+  const { error } = await supabaseAdmin
+    .from("sponsor_clicks")
+    .insert(insertPayload as never);
 
   if (error) {
     console.error("Failed to track sponsor click:", error);

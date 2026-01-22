@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -35,14 +36,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to read credits" }, { status: 500 });
   }
 
-  if (!data || data.credits <= 0) {
+  const creditsRow = data as { credits: number } | null;
+  if (!creditsRow || creditsRow.credits <= 0) {
     return NextResponse.json({ error: "Insufficient credits" }, { status: 400 });
   }
 
-  const nextCredits = data.credits - 1;
+  const nextCredits = creditsRow.credits - 1;
+  const updatePayload: Partial<Database["public"]["Tables"]["user_credits"]["Row"]> = {
+    credits: nextCredits,
+    updated_at: new Date().toISOString(),
+  };
   const { error: updateError } = await supabaseAdmin
     .from("user_credits")
-    .update({ credits: nextCredits, updated_at: new Date().toISOString() })
+    .update(updatePayload as never)
     .eq("id", user.id);
 
   if (updateError) {
