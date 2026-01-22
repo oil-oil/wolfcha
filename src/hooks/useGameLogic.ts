@@ -25,7 +25,7 @@ import { gameStateAtom, isValidTransition } from "@/store/game-machine";
 function getRandomModelRef(): ModelRef {
   if (AVAILABLE_MODELS.length === 0) {
     // Fallback to GENERATOR_MODEL if no models available
-    return { provider: "openrouter" as const, model: GENERATOR_MODEL };
+    return { provider: "zenmux" as const, model: GENERATOR_MODEL };
   }
   const randomIndex = Math.floor(Math.random() * AVAILABLE_MODELS.length);
   return AVAILABLE_MODELS[randomIndex];
@@ -977,10 +977,8 @@ export function useGameLogic() {
       isAwaitingRoleRevealRef.current = true;
     } catch (error) {
       const msg = String(error);
-      if (msg.includes("OpenRouter API error: 401")) {
-        toast.error("OpenRouter 401 Unauthorized", {
-          description: "常见原因：1) 改了 .env.local 但没重启 next dev；2) key 带了引号/空格/换行；3) key 已失效。",
-        });
+      if (msg.includes("ZenMux API error: 401") || msg.includes(" 401")) {
+        toast.error("ZenMux 401 Unauthorized");
       } else {
         toast.error("请求失败", { description: msg });
       }

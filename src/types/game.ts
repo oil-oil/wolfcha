@@ -46,7 +46,7 @@ export type Alignment = "village" | "wolf";
  }
 
 export interface ModelRef {
-  provider: "openrouter";
+  provider: "zenmux";
   model: string;
 }
 
@@ -188,17 +188,18 @@ export interface GameState {
 }
 
 export const AVAILABLE_MODELS: ModelRef[] = [
-  { provider: "openrouter", model: "google/gemini-3-flash-preview" },
-  { provider: "openrouter", model: "deepseek/deepseek-v3.2" },
-  // { provider: "openrouter", model: "anthropic/claude-haiku-4.5" },
-  // { provider: "openrouter", model: "minimax/minimax-m2.1" },
-  { provider: "openrouter", model: "qwen/qwen3-235b-a22b-2507" },
-  { provider: "openrouter", model: "moonshotai/kimi-k2-0905" },
-  // { provider: "openrouter", model: "qwen/qwen3-max" },
-   { provider: "openrouter", model: "bytedance-seed/seed-1.6" },
-  // { provider: "openrouter", model: "google/gemini-2.5-flash-lite-preview-09-2025" },
-  // {provider:"openrouter",model:"openai/gpt-5.2-chat"},
-  // {provider:"openrouter",model:"anthropic/claude-sonnet-4.5"}
+  // { provider: "zenmux", model: "google/gemini-3-flash-preview" },
+  // { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
+  { provider: "zenmux", model: "z-ai/glm-4.6v-flash" },
+  // { provider: "zenmux", model: "anthropic/claude-haiku-4.5" },
+  // { provider: "zenmux", model: "minimax/minimax-m2.1" },
+  // { provider: "zenmux", model: "qwen/qwen3-235b-a22b-2507" },
+  // { provider: "zenmux", model: "moonshotai/kimi-k2-0905" },
+  // { provider: "zenmux", model: "qwen/qwen3-max" },
+  // { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
+  // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
+  // { provider: "zenmux", model: "openai/gpt-5.2-chat" },
+  // { provider: "zenmux", model: "anthropic/claude-sonnet-4.5" }
 ];
 
-export const GENERATOR_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025";
+export const GENERATOR_MODEL = "google/gemini-2.5-flash-lite";

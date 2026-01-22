@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { generateCompletion, generateCompletionStream, stripMarkdownCodeFences, type OpenRouterMessage } from "./openrouter";
+import { generateCompletion, generateCompletionStream, stripMarkdownCodeFences, type LLMMessage } from "./llm";
 import {
   type GameState,
   type Player,
@@ -30,7 +30,7 @@ function shuffleArray<T>(array: T[]): T[] {
 function getRandomModelRef(): ModelRef {
   if (AVAILABLE_MODELS.length === 0) {
     // Fallback to GENERATOR_MODEL if no models available
-    return { provider: "openrouter" as const, model: GENERATOR_MODEL };
+    return { provider: "zenmux" as const, model: GENERATOR_MODEL };
   }
   const randomIndex = Math.floor(Math.random() * AVAILABLE_MODELS.length);
   return AVAILABLE_MODELS[randomIndex];
@@ -72,7 +72,7 @@ function resolvePhasePrompt(
 function buildMessagesForPrompt(
   prompt: PromptResult,
   useCache: boolean = true
-): { messages: OpenRouterMessage[]; systemMessage: OpenRouterMessage } {
+): { messages: LLMMessage[]; systemMessage: LLMMessage } {
   const systemMessage = buildCachedSystemMessageFromParts(
     prompt.systemParts,
     prompt.system,
@@ -409,7 +409,7 @@ export async function generateDailySummary(
 
   const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 数组：`;
 
-  const messages: OpenRouterMessage[] = [
+  const messages: LLMMessage[] = [
     { role: "system", content: system },
     { role: "user", content: user },
   ];

@@ -1,4 +1,4 @@
-import { generateJSON } from "./openrouter";
+import { generateJSON } from "./llm";
 import { AVAILABLE_MODELS, GENERATOR_MODEL, type GameScenario, type ModelRef, type Persona } from "@/types/game";
 import { aiLogger } from "./ai-logger";
 import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
@@ -148,7 +148,7 @@ const createGenshinPersona = (voiceId?: string): Persona => {
 };
 
 export const buildGenshinModelRefs = (count: number): ModelRef[] => {
-  const pool = AVAILABLE_MODELS.length > 0 ? AVAILABLE_MODELS : [{ provider: "openrouter" as const, model: GENERATOR_MODEL }];
+  const pool = AVAILABLE_MODELS.length > 0 ? AVAILABLE_MODELS : [{ provider: "zenmux" as const, model: GENERATOR_MODEL }];
   return Array.from({ length: count }, (_, index) => pool[index % pool.length]);
 };
 

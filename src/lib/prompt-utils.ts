@@ -1,6 +1,6 @@
 import type { DifficultyLevel, GameState, Player } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
-import type { OpenRouterMessage } from "./openrouter";
+import type { LLMMessage } from "./llm";
 
 /**
  * Prompt helper utilities used by Phase prompts.
@@ -403,7 +403,7 @@ ${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}`;
  * @param dynamicContent - Dynamic content that changes per request (game state, player-specific info)
  * @param useCache - Whether to enable caching (default: true)
  * @param ttl - Cache TTL: "5m" (default) or "1h"
- * @returns OpenRouterMessage with cache_control breakpoints
+ * @returns LLMMessage with cache_control breakpoints
  */
 export function buildSystemTextFromParts(parts: SystemPromptPart[]): string {
   return parts
@@ -417,7 +417,7 @@ export function buildCachedSystemMessageFromParts(
   parts: SystemPromptPart[] | undefined,
   fallbackSystem: string,
   useCache: boolean = true
-): OpenRouterMessage {
+): LLMMessage {
   if (!parts || parts.length === 0 || !useCache) {
     return { role: "system", content: fallbackSystem };
   }

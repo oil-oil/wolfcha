@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.ZENMUX_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json(
-      { error: "OPENROUTER_API_KEY not configured on server" },
+      { error: "ZENMUX_API_KEY not configured on server" },
       { status: 500 }
     );
   }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       requestBody.response_format = response_format;
     }
 
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(ZENMUX_API_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json(
-        { error: `OpenRouter API error: ${response.status} - ${errorText}` },
+        { error: `ZenMux API error: ${response.status} - ${errorText}` },
         { status: response.status }
       );
     }
