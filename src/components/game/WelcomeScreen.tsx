@@ -238,6 +238,11 @@ export function WelcomeScreen({
   const [githubStars, setGithubStars] = useState<number | null>(null);
 
   // 调试面板状态
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [isDevModeEnabled, setIsDevModeEnabled] = useState(false);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [devTab, setDevTab] = useState<"preset" | "roles">("preset");
@@ -897,7 +902,7 @@ export function WelcomeScreen({
               <div className="relative mt-2">
                 <input
                   type="text"
-                  value={humanName}
+                  value={mounted ? humanName : ""}
                   onChange={(e) => setHumanName(e.target.value)}
                   placeholder="Signature Here..."
                   className="wc-signature-input"
@@ -906,7 +911,7 @@ export function WelcomeScreen({
                   disabled={isLoading || isTransitioning}
                 />
                 <AnimatePresence>
-                  {!!humanName.trim() && (
+                  {mounted && !!humanName.trim() && (
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
