@@ -50,6 +50,11 @@ const writeLogs = async (logs: unknown[]) => {
 };
 
 export async function POST(request: NextRequest) {
+  // Skip logging in production to avoid filesystem issues on Vercel
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ success: true, skipped: true });
+  }
+
   try {
     const logEntry = await request.json();
 
@@ -76,6 +81,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  // Skip logging in production to avoid filesystem issues on Vercel
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ logs: [] });
+  }
+
   try {
     const logs = await readLogs();
     return NextResponse.json({ logs });
@@ -91,6 +101,11 @@ export async function GET() {
 }
 
 export async function DELETE() {
+  // Skip logging in production to avoid filesystem issues on Vercel
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ success: true, skipped: true });
+  }
+
   try {
     await writeLogs([]);
     return NextResponse.json({ success: true });
