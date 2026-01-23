@@ -66,6 +66,7 @@ const ALL_MODELS: ModelRef[] = [
    onChangePassword: () => void;
    onShareInvite: () => void;
   onSignOut: () => void | Promise<void>;
+  onCustomKeyEnabledChange?: (value: boolean) => void;
  }
  
  export function UserProfileModal({
@@ -78,6 +79,7 @@ const ALL_MODELS: ModelRef[] = [
    onChangePassword,
    onShareInvite,
    onSignOut,
+  onCustomKeyEnabledChange,
  }: UserProfileModalProps) {
   const [zenmuxKey, setZenmuxKeyState] = useState("");
   const [dashscopeKey, setDashscopeKeyState] = useState("");
@@ -106,9 +108,7 @@ const ALL_MODELS: ModelRef[] = [
       setMinimaxKeyState(nextMinimaxKey);
       setMinimaxGroupIdState(nextMinimaxGroupId);
       setSelectedModelsState(nextSelectedModels);
-      setIsCustomKeyEnabled(
-        storedCustomEnabled || Boolean(nextZenmuxKey || nextDashscopeKey || nextMinimaxKey || nextMinimaxGroupId)
-      );
+      setIsCustomKeyEnabled(storedCustomEnabled);
     }
     return () => {
       mounted = false;
@@ -157,6 +157,7 @@ const ALL_MODELS: ModelRef[] = [
     setMinimaxGroupIdState("");
     setSelectedModelsState([]);
     setIsCustomKeyEnabled(false);
+    onCustomKeyEnabledChange?.(false);
     toast("已清除 API Key");
   };
 
@@ -242,6 +243,7 @@ const ALL_MODELS: ModelRef[] = [
                         onCheckedChange={(value) => {
                           setIsCustomKeyEnabled(value);
                           setCustomKeyEnabled(value);
+                          onCustomKeyEnabledChange?.(value);
                         }}
                       />
                     </div>
@@ -252,7 +254,9 @@ const ALL_MODELS: ModelRef[] = [
                           <Label htmlFor="zenmux-key" className="text-xs">Zenmux API Key</Label>
                           <Input
                             id="zenmux-key"
+                            name="wolfcha-zenmux-api-key"
                             type="password"
+                            autoComplete="new-password"
                             placeholder="请输入 Zenmux API Key"
                             value={zenmuxKey}
                             onChange={(e) => setZenmuxKeyState(e.target.value)}
@@ -277,7 +281,9 @@ const ALL_MODELS: ModelRef[] = [
                           <Label htmlFor="dashscope-key" className="text-xs">百炼 API Key</Label>
                           <Input
                             id="dashscope-key"
+                            name="wolfcha-dashscope-api-key"
                             type="password"
+                            autoComplete="new-password"
                             placeholder="可选：请输入百炼（DashScope）API Key"
                             value={dashscopeKey}
                             onChange={(e) => setDashscopeKeyState(e.target.value)}
@@ -304,7 +310,9 @@ const ALL_MODELS: ModelRef[] = [
                           <Label htmlFor="minimax-key" className="text-xs">Minimax API Key</Label>
                           <Input
                             id="minimax-key"
+                            name="wolfcha-minimax-api-key"
                             type="password"
+                            autoComplete="new-password"
                             placeholder="可选：请输入 Minimax API Key"
                             value={minimaxKey}
                             onChange={(e) => setMinimaxKeyState(e.target.value)}
@@ -314,7 +322,9 @@ const ALL_MODELS: ModelRef[] = [
                           <Label htmlFor="minimax-group" className="text-xs">Minimax Group ID</Label>
                           <Input
                             id="minimax-group"
+                            name="wolfcha-minimax-group-id"
                             type="password"
+                            autoComplete="new-password"
                             placeholder="可选：请输入 Minimax Group ID"
                             value={minimaxGroupId}
                             onChange={(e) => setMinimaxGroupIdState(e.target.value)}

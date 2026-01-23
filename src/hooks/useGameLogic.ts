@@ -685,10 +685,7 @@ export function useGameLogic() {
   // ============================================
   const isResolvingVotesRef = useRef(false);
   useEffect(() => {
-    if (gameState.phase !== "DAY_VOTE") {
-      isResolvingVotesRef.current = false;
-      return;
-    }
+    if (gameState.phase !== "DAY_VOTE") return;
     if (isResolvingVotesRef.current) return;
     if (isWaitingForAI) return;
 

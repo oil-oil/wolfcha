@@ -238,6 +238,18 @@ export function WelcomeScreen({
   const [playerCount, setPlayerCount] = useState(10);
   const [githubStars, setGithubStars] = useState<number | null>(null);
 
+  const [customKeyEnabled, setCustomKeyEnabled] = useState(() => isCustomKeyEnabled());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "wolfcha_custom_key_enabled") return;
+      setCustomKeyEnabled(isCustomKeyEnabled());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // 调试面板状态
   const [isDevModeEnabled, setIsDevModeEnabled] = useState(false);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
@@ -419,7 +431,7 @@ export function WelcomeScreen({
       return;
     }
 
-    const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
+    const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
     if (!hasUserKey && credits !== null && credits <= 0) {
       setIsShareOpen(true);
       toast("额度不足", { description: "分享邀请可获得更多额度。" });
@@ -500,6 +512,7 @@ export function WelcomeScreen({
         onChangePassword={() => setIsAccountOpen(true)}
         onShareInvite={() => setIsShareOpen(true)}
         onSignOut={signOut}
+        onCustomKeyEnabledChange={setCustomKeyEnabled}
       />
       <ResetPasswordModal 
         open={isPasswordRecovery} 
@@ -757,7 +770,9 @@ export function WelcomeScreen({
             >
               <UserCircle size={16} />
               <span className="truncate max-w-[160px]">{user.email ?? "已登录"}</span>
-              <span className="opacity-70">剩余 {creditsLoading ? "..." : (credits ?? 0)} 局</span>
+              {!customKeyEnabled && (
+                <span className="opacity-70">剩余 {creditsLoading ? "..." : (credits ?? 0)} 局</span>
+              )}
             </button>
           ) : (
             <Button
