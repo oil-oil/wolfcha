@@ -183,9 +183,19 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
     voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
   );
 
+  // Build a map of playerId -> alive status for quick lookup
+  const playerAliveMap = new Map<string, boolean>();
+  state.players.forEach((p) => {
+    playerAliveMap.set(p.playerId, p.alive);
+  });
+
   const transcript = slice
     .filter((m) => !m.isSystem)
-    .map((m) => `${m.playerName}: ${m.content}`)
+    .map((m) => {
+      const isAlive = playerAliveMap.get(m.playerId) ?? true;
+      const statusLabel = isAlive ? "" : "（已出局）";
+      return `${m.playerName}${statusLabel}: ${m.content}`;
+    })
     .join("\n");
 
   if (!transcript) return "";
@@ -284,7 +294,7 @@ export const buildGameContext = (
   let context = `【当前局势】
 第${state.day}天 ${state.phase.includes("NIGHT") ? "夜晚" : "白天"}
 有效座位号范围: 1号-${totalSeats}号（共${totalSeats}人），严禁提及范围外座位号
-存活玩家:
+存活玩家（只能讨论和分析这些玩家）:
 ${playerList}`;
 
   // Always include sheriff info as a stable field (do not rely on truncated announcements).
@@ -313,7 +323,7 @@ ${playerList}`;
   }
 
   if (deadPlayers.length > 0) {
-    context += `\n\n【出局玩家】\n${deadPlayers
+    context += `\n\n【出局玩家】（已出局，不应再讨论或分析）\n${deadPlayers
       .map((p) => `${p.seat + 1}号 ${p.displayName}`)
       .join("\n")}`;
 
@@ -379,6 +389,7 @@ ${playerList}`;
         .sort(([, votersA], [, votersB]) => votersB.length - votersA.length)
         .forEach(([target, voters]) => {
           const targetPlayer = state.players.find(p => p.seat === Number(target));
+          const targetAliveLabel = targetPlayer && !targetPlayer.alive ? "（已出局）" : "";
           const voterNumbers = voters.map(s => `${s + 1}号`).join('、');
           const weightedVotes = voters.reduce((sum, seat) => {
             const voter = state.players.find((p) => p.seat === seat);
@@ -388,7 +399,7 @@ ${playerList}`;
           const voteLabel = Number.isInteger(weightedVotes)
             ? `${weightedVotes}`
             : weightedVotes.toFixed(1);
-          context += `\n  ${Number(target) + 1}号${targetPlayer?.displayName}(共${voteLabel}票): ${voterNumbers}`;
+          context += `\n  ${Number(target) + 1}号${targetPlayer?.displayName}${targetAliveLabel}(共${voteLabel}票): ${voterNumbers}`;
         });
     });
   }
