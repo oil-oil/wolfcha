@@ -207,7 +207,7 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "qwen-plus-2025-12-01" },
   { provider: "dashscope", model: "Moonshot-Kimi-K2-Instruct" },
   { provider: "dashscope", model: "qwen3-vl-235b-a22b-instruct" },
-  
+  { provider: "dashscope", model: "qwen3-max" },
 
   { provider: "zenmux", model: "google/gemini-3-flash-preview" },
   // { provider: "openrouter", model: "minimax/minimax-m2.1" },
