@@ -169,6 +169,7 @@ export interface GameState {
   >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list
   dailySummaryFacts: Record<number, DailySummaryFact[]>; // day -> structured facts
+  dailySummaryVoteData?: Record<number, DailySummaryVoteData>;
   nightActions: {
     guardTarget?: number;        // 守卫保护的目标
     lastGuardTarget?: number;    // 上一晚守卫保护的目标（不能连续保护同一人）
@@ -200,6 +201,12 @@ export interface DailySummaryFact {
   targetName?: string;
   type?: "vote" | "claim" | "suspicion" | "defense" | "alignment" | "death" | "switch" | "other";
   evidence?: string;
+}
+
+/** Structured vote data extracted from [VOTE_RESULT] to preserve "who voted for whom" for later days. */
+export interface DailySummaryVoteData {
+  sheriff_election?: { winner: number; votes: Record<string, number[]> };
+  execution_vote?: { eliminated: number; votes: Record<string, number[]> };
 }
 
 // Default models used when custom key is not enabled
@@ -238,4 +245,4 @@ export const ALL_MODELS: ModelRef[] = [
 ];
 
 export const GENERATOR_MODEL = "google/gemini-2.5-flash-lite";
-export const SUMMARY_MODEL = "google/gemini-3-flash-preview";
+export const SUMMARY_MODEL = "google/gemini-2.5-flash-lite";

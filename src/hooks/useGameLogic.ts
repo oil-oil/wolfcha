@@ -357,6 +357,10 @@ export function useGameLogic() {
           ...state,
           dailySummaries: { ...state.dailySummaries, [state.day]: summary.bullets },
           dailySummaryFacts: { ...state.dailySummaryFacts, [state.day]: summary.facts },
+          dailySummaryVoteData: {
+            ...(state.dailySummaryVoteData ?? {}),
+            ...(summary.voteData ? { [state.day]: summary.voteData } : {}),
+          },
         };
       } catch {
         return state;
@@ -539,23 +543,6 @@ export function useGameLogic() {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
 
-    // 后台生成每日总结（覆盖草稿）
-    void maybeGenerateDailySummary(state, { force: true })
-      .then((summarized) => {
-        setGameState((prev) => {
-          if (prev.gameId !== summarized.gameId) return prev;
-          return {
-            ...prev,
-            dailySummaries: summarized.dailySummaries,
-            dailySummaryFacts: summarized.dailySummaryFacts,
-          };
-        });
-      })
-      .catch(() => {});
-
-    await delay(350);
-    if (!isTokenValid(token)) return;
-
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
     // Preserve seerHistory across nights
     const seerHistory = state.nightActions.seerHistory;
@@ -580,7 +567,19 @@ export function useGameLogic() {
     await delay(250);
     if (!isTokenValid(token)) return;
 
-    await runNightPhaseAction(nextState, token, "START_NIGHT");
+    setDialogue("主持人", SYSTEM_MESSAGES.summarizingDay, false);
+
+    const summarized = await maybeGenerateDailySummary(state, { force: true });
+    if (!isTokenValid(token)) return;
+
+    const mergedState = {
+      ...nextState,
+      dailySummaries: summarized.dailySummaries,
+      dailySummaryFacts: summarized.dailySummaryFacts,
+      dailySummaryVoteData: summarized.dailySummaryVoteData ?? nextState.dailySummaryVoteData,
+    };
+
+    await runNightPhaseAction(mergedState, token, "START_NIGHT");
   }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
@@ -1484,6 +1483,7 @@ export function useGameLogic() {
                 ...prev,
                 dailySummaries: summarized.dailySummaries,
                 dailySummaryFacts: summarized.dailySummaryFacts,
+                dailySummaryVoteData: summarized.dailySummaryVoteData ?? prev.dailySummaryVoteData,
               };
             });
           })
