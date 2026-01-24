@@ -355,6 +355,14 @@ ${lastReason ? `【你上一轮投票理由】\n${lastReason}` : "【你上一�
 
     runtime.setGameState(currentState);
 
+    const executed =
+      result ? currentState.players.find((p) => p.seat === result.seat) : null;
+    if (result && executed?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+      // Defer win check until after hunter shoot resolves.
+      await runtime.onVoteComplete(currentState, result);
+      return;
+    }
+
     const winner = checkWinCondition(currentState);
     if (winner) {
       await runtime.onGameEnd(currentState, winner);

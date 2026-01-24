@@ -9,6 +9,7 @@ import {
   type ChatMessage,
   type Alignment,
   type DailySummaryFact,
+  type DailySummaryVoteData,
   GENERATOR_MODEL,
   SUMMARY_MODEL,
   AVAILABLE_MODELS,
@@ -120,6 +121,7 @@ export function createInitialGameState(): GameState {
     voteHistory: {},
     dailySummaries: {},
     dailySummaryFacts: {},
+    dailySummaryVoteData: {},
     nightActions: {},
     roleAbilities: {
       witchHealUsed: false,
@@ -421,9 +423,47 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
   return { seat: maxSeat, count: maxVotes };
 }
 
+/** Extract structured vote_data from [VOTE_RESULT] in day messages. Preserves "who voted for whom" so it is not lost when context is trimmed. */
+function extractVoteDataFromDayMessages(
+  dayMessages: ChatMessage[],
+  state: GameState
+): DailySummaryVoteData | undefined {
+  let sheriff: { winner: number; votes: Record<string, number[]> } | undefined;
+  let execution: { eliminated: number; votes: Record<string, number[]> } | undefined;
+
+  for (const m of dayMessages) {
+    if (!m.isSystem || !m.content.startsWith("[VOTE_RESULT]")) continue;
+    try {
+      const json = m.content.slice("[VOTE_RESULT]".length);
+      const data = JSON.parse(json) as { title?: string; results?: Array<{ targetSeat: number; voterSeats?: number[] }> };
+      const results = data.results ?? [];
+      const votes: Record<string, number[]> = {};
+      for (const r of results) {
+        const k = String(r.targetSeat);
+        votes[k] = Array.isArray(r.voterSeats) ? r.voterSeats : [];
+      }
+      if (data.title === "警长竞选投票详情" && Object.keys(votes).length > 0) {
+        const winner = state.badge.holderSeat ?? -1;
+        sheriff = { winner, votes };
+      } else if (data.title === "投票详情" && Object.keys(votes).length > 0) {
+        const eliminated = state.dayHistory?.[state.day]?.executed?.seat ?? -1;
+        execution = { eliminated, votes };
+      }
+    } catch {
+      // skip malformed [VOTE_RESULT]
+    }
+  }
+
+  if (!sheriff && !execution) return undefined;
+  const out: DailySummaryVoteData = {};
+  if (sheriff != null && sheriff.winner >= 0) out.sheriff_election = sheriff;
+  if (execution != null && execution.eliminated >= 0) out.execution_vote = execution;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function generateDailySummary(
   state: GameState
-): Promise<{ bullets: string[]; facts: DailySummaryFact[] }> {
+): Promise<{ bullets: string[]; facts: DailySummaryFact[]; voteData?: DailySummaryVoteData }> {
   const startTime = Date.now();
   const summaryModel = SUMMARY_MODEL;
 
@@ -436,6 +476,7 @@ export async function generateDailySummary(
   })();
 
   const dayMessages = state.messages.slice(dayStartIndex);
+  const voteData = extractVoteDataFromDayMessages(dayMessages, state);
 
   const transcript = dayMessages
     .map((m) => {
@@ -449,7 +490,32 @@ export async function generateDailySummary(
     .join("\n")
     .slice(0, 15000);
 
-  const system = `你是狼人杀的记录员。\n\n把给定的记录压缩为几条【关键事实】，作为后续玩家长期记忆。\n\n要求：\n- 只总结给定记录中出现过的信息，不要猜测/补全\n- 每条 15-50 字，尽量详细但保持简洁\n- 必须包含“投票逻辑/理由线索”（谁投谁 + 简短理由/依据）\n- 优先保留：公投出局/遗言、关键站边/指控、明确归票/改票、夜晚死亡信息（如果在记录里）\n- 记录重要发言要点（如跳身份、关键推理、指控对象）\n- 若出现自相矛盾或与发言相反的投票，必须记录\n- 保留玩家之间的互动关系（如谁支持谁、谁质疑谁）\n- 提到玩家时必须包含座位号（如“2号”“10号”）\n- 若为系统事件，可将 speakerSeat 留空\n\n输出格式：返回 JSON 对象，例如：\n{\n  "facts": [\n    {\n      "fact": "第1天: 2号被放逐，遗言踩10号",\n      "type": "death",\n      "speakerSeat": 2,\n      "targetSeat": 10\n    },\n    {\n      "fact": "9号投1号，理由是对跳预言家",\n      "type": "vote",\n      "speakerSeat": 9,\n      "targetSeat": 1\n    }\n  ]\n}`;
+  const system = `你是狼人杀的客观记录员。
+
+任务：把给定的记录压缩为一段连贯的【事实摘要】，作为后续玩家长期记忆。
+
+【核心原则】
+- 客观记录"谁说了什么、谁做了什么"，禁止对发言做评价或判断
+- 不要使用"逻辑缺失""带节奏""可疑""不合理"等评价性词汇
+- 保留原始发言的要点和立场，而非你对发言的看法
+
+【必须记录的内容】
+1. 死亡信息：谁在夜晚/投票中出局
+2. 身份声明：谁跳了什么身份、报了什么验人结果、谁认下
+3. 发言立场：每个玩家的核心观点/表态（用原话或简述，不加评价）
+4. 站边关系：谁表态支持谁、谁表态质疑谁（客观记录，不含判断）
+5. 遗言内容：出局玩家遗言的完整要点
+（警长竞选和公投的票型由系统单独记录，叙述中简要提及结果即可，如「X号当选警长」「X号被放逐」）
+
+【格式要求】
+- 提到玩家必须包含座位号（如"2号""10号"）
+- 使用连贯段落叙述，可分多段
+- 尽量保留细节，不要过度压缩
+- 字数不限，信息完整优先
+
+输出格式：返回 JSON 对象：
+{ "summary": "第X天摘要的连贯文本..." }`;
+
 
   const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 对象：`;
 
@@ -482,89 +548,35 @@ export async function generateDailySummary(
     },
   });
 
-  const facts: DailySummaryFact[] = [];
-  const bullets: string[] = [];
-
+  // Parse the new { "summary": "..." } format
+  let summaryText = "";
+  
   try {
     const objectMatch = cleanedDaily.match(/\{[\s\S]*\}/);
     if (objectMatch) {
-      const obj = JSON.parse(objectMatch[0]) as { facts?: DailySummaryFact[] };
-      if (Array.isArray(obj.facts)) {
-        obj.facts.forEach((item) => {
-          if (!item || typeof item !== "object") return;
-          const factText =
-            typeof (item as DailySummaryFact).fact === "string"
-              ? (item as DailySummaryFact).fact.trim()
-              : "";
-          if (!factText) return;
-          facts.push({
-            fact: factText,
-            day: state.day,
-            speakerSeat:
-              typeof (item as DailySummaryFact).speakerSeat === "number"
-                ? (item as DailySummaryFact).speakerSeat
-                : (item as DailySummaryFact).speakerSeat ?? null,
-            speakerName:
-              typeof (item as DailySummaryFact).speakerName === "string"
-                ? (item as DailySummaryFact).speakerName
-                : undefined,
-            targetSeat:
-              typeof (item as DailySummaryFact).targetSeat === "number"
-                ? (item as DailySummaryFact).targetSeat
-                : (item as DailySummaryFact).targetSeat ?? null,
-            targetName:
-              typeof (item as DailySummaryFact).targetName === "string"
-                ? (item as DailySummaryFact).targetName
-                : undefined,
-            type:
-              typeof (item as DailySummaryFact).type === "string"
-                ? (item as DailySummaryFact).type
-                : undefined,
-            evidence:
-              typeof (item as DailySummaryFact).evidence === "string"
-                ? (item as DailySummaryFact).evidence
-                : undefined,
-          });
-        });
+      const obj = JSON.parse(objectMatch[0]) as { summary?: string };
+      if (typeof obj.summary === "string" && obj.summary.trim()) {
+        summaryText = obj.summary.trim();
       }
     }
   } catch {
     // ignore parse errors
   }
 
-  if (facts.length > 0) {
-    const cleanedFacts = facts
-      .map((f) => f.fact.trim())
-      .filter(Boolean)
-      .slice(0, 10);
-    return { bullets: cleanedFacts, facts: facts.slice(0, 12) };
+  // If we got a summary, return it as a single bullet (preserving full text) and structured vote_data
+  if (summaryText) {
+    return { bullets: [summaryText], facts: [], voteData };
   }
 
-  try {
-    const jsonMatch = cleanedDaily.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const arr = JSON.parse(jsonMatch[0]) as unknown;
-      if (Array.isArray(arr)) {
-        const cleaned = arr
-          .filter((x): x is string => typeof x === "string")
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .slice(0, 10);
-        if (cleaned.length > 0) return { bullets: cleaned, facts: [] };
-      }
-    }
-  } catch {
-    // ignore
-  }
-
+  // Fallback: use raw content
   const fallback = result.content
-    .split(/\n+/)
-    .map((s) => s.replace(/^[-*\d.\s]+/, "").trim())
-    .filter(Boolean)
-    .slice(0, 6);
+    .replace(/```json\s*|\s*```/g, "")
+    .replace(/^\s*\{[\s\S]*?"summary"\s*:\s*"/, "")
+    .replace(/"\s*\}\s*$/, "")
+    .trim();
 
-  const fallbackBullets = fallback.length > 0 ? fallback : [result.content.trim()].filter(Boolean);
-  return { bullets: fallbackBullets, facts: [] };
+  const fallbackBullets = fallback ? [fallback] : [result.content.trim()].filter(Boolean);
+  return { bullets: fallbackBullets, facts: [], voteData };
 }
 
 export async function* generateAISpeechStream(

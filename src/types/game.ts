@@ -169,6 +169,7 @@ export interface GameState {
   >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list
   dailySummaryFacts: Record<number, DailySummaryFact[]>; // day -> structured facts
+  dailySummaryVoteData?: Record<number, DailySummaryVoteData>;
   nightActions: {
     guardTarget?: number;        // 守卫保护的目标
     lastGuardTarget?: number;    // 上一晚守卫保护的目标（不能连续保护同一人）
@@ -202,6 +203,12 @@ export interface DailySummaryFact {
   evidence?: string;
 }
 
+/** Structured vote data extracted from [VOTE_RESULT] to preserve "who voted for whom" for later days. */
+export interface DailySummaryVoteData {
+  sheriff_election?: { winner: number; votes: Record<string, number[]> };
+  execution_vote?: { eliminated: number; votes: Record<string, number[]> };
+}
+
 export const AVAILABLE_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
   { provider: "dashscope", model: "deepseek-v3.2" },
@@ -214,11 +221,11 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: "moonshotai/kimi-k2-0905" },
   // { provider: "zenmux", model: "z-ai/glm-4.7-flashx" },
   // { provider: "zenmux", model: "qwen/qwen3-max" },
-  { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
+  // { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
   // { provider: "zenmux", model: "google/gemini-2.5-flash-lite-preview-09-2025" },
   // {provider:"zenmux",model:"openai/gpt-5.2-chat"},
   // {provider:"zenmux",model:"anthropic/claude-sonnet-4.5"}
 ];
 
 export const GENERATOR_MODEL = "google/gemini-2.5-flash-lite";
-export const SUMMARY_MODEL = "google/gemini-3-flash-preview";
+export const SUMMARY_MODEL = "google/gemini-2.5-flash-lite";

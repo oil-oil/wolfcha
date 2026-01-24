@@ -1,6 +1,7 @@
 export const SYSTEM_MESSAGES = {
   gameStart: "人到齐了，开始吧。",
   nightFall: (day: number) => `第 ${day} 夜，天黑请闭眼`,
+  summarizingDay: "整理今日要点…",
   dayBreak: "天亮了，请睁眼",
   guardActionStart: "守卫请睁眼",
   wolfActionStart: "狼人请睁眼",
