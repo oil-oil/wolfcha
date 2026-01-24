@@ -217,7 +217,6 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "qwen3-max" },
 
   { provider: "zenmux", model: "google/gemini-3-flash-preview" },
-  { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
 ];
 
 // All available models for custom key users (includes commented ones from AVAILABLE_MODELS)
