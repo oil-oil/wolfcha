@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { UserCircle, Key, SignOut, ShareNetwork, Copy, CaretDown, Check, ArrowRight } from "@phosphor-icons/react";
+import { UserCircle, Key, SignOut, ShareNetwork, Copy, CaretDown, Check, ArrowRight, Eye, EyeSlash } from "@phosphor-icons/react";
  import {
    Dialog,
    DialogContent,
@@ -72,6 +72,10 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
   const [dashscopeKey, setDashscopeKeyState] = useState("");
   const [minimaxKey, setMinimaxKeyState] = useState("");
   const [minimaxGroupId, setMinimaxGroupIdState] = useState("");
+  const [showZenmuxKey, setShowZenmuxKey] = useState(false);
+  const [showDashscopeKey, setShowDashscopeKey] = useState(false);
+  const [showMinimaxKey, setShowMinimaxKey] = useState(false);
+  const [showMinimaxGroupId, setShowMinimaxGroupId] = useState(false);
   const [isCustomKeyEnabled, setIsCustomKeyEnabled] = useState(false);
   const [selectedModels, setSelectedModelsState] = useState<string[]>([]);
   const [generatorModel, setGeneratorModelState] = useState("");
@@ -294,9 +298,12 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       });
       setValidatedKeys((prev) => ({ ...prev, zenmux: zenmuxKey.trim() }));
       setValidatedZenmuxKey(zenmuxKey.trim());
-    } catch {
+    } catch (error) {
       setValidatedKeys((prev) => ({ ...prev, zenmux: "" }));
       if (zenmuxKey.trim() === getValidatedZenmuxKey()) setValidatedZenmuxKey("");
+      toast("验证失败", {
+        description: "请检查当前API Key 是否填写错误或是否有充足额度。",
+      });
     } finally {
       setIsValidatingZenmux(false);
     }
@@ -313,9 +320,12 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       });
       setValidatedKeys((prev) => ({ ...prev, dashscope: dashscopeKey.trim() }));
       setValidatedDashscopeKey(dashscopeKey.trim());
-    } catch {
+    } catch (error) {
       setValidatedKeys((prev) => ({ ...prev, dashscope: "" }));
       if (dashscopeKey.trim() === getValidatedDashscopeKey()) setValidatedDashscopeKey("");
+      toast("验证失败", {
+        description: "请检查当前API Key 是否填写错误或是否有充足额度。",
+      });
     } finally {
       setIsValidatingDashscope(false);
     }
@@ -443,7 +453,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                         <Input
                           id="zenmux-key"
                           name="wolfcha-zenmux-api-key"
-                          type="password"
+                          type={showZenmuxKey ? "text" : "password"}
                           autoComplete="new-password"
                           placeholder="请输入 Zenmux API Key"
                           value={zenmuxKey}
@@ -453,6 +463,15 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           }}
                           className="flex-1"
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowZenmuxKey((v) => !v)}
+                          aria-label={showZenmuxKey ? "隐藏 Zenmux API Key" : "显示 Zenmux API Key"}
+                        >
+                          {showZenmuxKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleValidateZenmux} disabled={isValidatingZenmux || !zenmuxKey.trim() || (!!validatedKeys.zenmux && validatedKeys.zenmux === zenmuxKey.trim())}>
                           {isValidatingZenmux ? "验证中" : validatedKeys.zenmux && validatedKeys.zenmux === zenmuxKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : "验证"}
                         </Button>
@@ -474,7 +493,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                         <Input
                           id="dashscope-key"
                           name="wolfcha-dashscope-api-key"
-                          type="password"
+                          type={showDashscopeKey ? "text" : "password"}
                           autoComplete="new-password"
                           placeholder="可选：百炼（DeepSeek / Qwen / Kimi）"
                           value={dashscopeKey}
@@ -484,6 +503,15 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           }}
                           className="flex-1"
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowDashscopeKey((v) => !v)}
+                          aria-label={showDashscopeKey ? "隐藏百炼 API Key" : "显示百炼 API Key"}
+                        >
+                          {showDashscopeKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                        </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleValidateDashscope} disabled={isValidatingDashscope || !dashscopeKey.trim() || (!!validatedKeys.dashscope && validatedKeys.dashscope === dashscopeKey.trim())}>
                           {isValidatingDashscope ? "验证中" : validatedKeys.dashscope && validatedKeys.dashscope === dashscopeKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : "验证"}
                         </Button>
@@ -592,27 +620,51 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
                         <Label htmlFor="minimax-key" className="text-xs">Minimax API Key</Label>
-                        <Input
-                          id="minimax-key"
-                          name="wolfcha-minimax-api-key"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="可选"
-                          value={minimaxKey}
-                          onChange={(e) => setMinimaxKeyState(e.target.value)}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            id="minimax-key"
+                            name="wolfcha-minimax-api-key"
+                            type={showMinimaxKey ? "text" : "password"}
+                            autoComplete="new-password"
+                            placeholder="可选"
+                            value={minimaxKey}
+                            onChange={(e) => setMinimaxKeyState(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowMinimaxKey((v) => !v)}
+                            aria-label={showMinimaxKey ? "隐藏 Minimax API Key" : "显示 Minimax API Key"}
+                          >
+                            {showMinimaxKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="minimax-group" className="text-xs">Minimax Group ID</Label>
-                        <Input
-                          id="minimax-group"
-                          name="wolfcha-minimax-group-id"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="可选"
-                          value={minimaxGroupId}
-                          onChange={(e) => setMinimaxGroupIdState(e.target.value)}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            id="minimax-group"
+                            name="wolfcha-minimax-group-id"
+                            type={showMinimaxGroupId ? "text" : "password"}
+                            autoComplete="new-password"
+                            placeholder="可选"
+                            value={minimaxGroupId}
+                            onChange={(e) => setMinimaxGroupIdState(e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowMinimaxGroupId((v) => !v)}
+                            aria-label={showMinimaxGroupId ? "隐藏 Minimax Group ID" : "显示 Minimax Group ID"}
+                          >
+                            {showMinimaxGroupId ? <EyeSlash size={16} /> : <Eye size={16} />}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </section>

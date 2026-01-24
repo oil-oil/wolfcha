@@ -7,6 +7,12 @@ import type { ApiKeySource, LLMMessage } from "./llm";
 import { resolveApiKeySource } from "./llm";
 import { generateUUID } from "./utils";
 
+const LOCAL_LOGS_STORAGE_KEY = "wolfcha_ai_logs";
+
+function canUseStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
 export interface AILogEntry {
   id: string;
   timestamp: number;
@@ -35,8 +41,47 @@ export interface AILogEntry {
 }
 
 class AILogger {
+  private localCache: AILogEntry[] | null = null;
+
   private shouldPrint(): boolean {
     return process.env.NODE_ENV !== "production";
+  }
+
+  private loadLocalLogs(): AILogEntry[] {
+    if (!canUseStorage()) return [];
+    if (this.localCache) return this.localCache;
+    try {
+      const raw = window.localStorage.getItem(LOCAL_LOGS_STORAGE_KEY);
+      if (!raw) {
+        this.localCache = [];
+        return this.localCache;
+      }
+      const parsed = JSON.parse(raw);
+      this.localCache = Array.isArray(parsed) ? (parsed as AILogEntry[]) : [];
+      return this.localCache;
+    } catch {
+      this.localCache = [];
+      return this.localCache;
+    }
+  }
+
+  private persistLocalLogs(logs: AILogEntry[]) {
+    if (!canUseStorage()) return;
+    try {
+      window.localStorage.setItem(LOCAL_LOGS_STORAGE_KEY, JSON.stringify(logs));
+    } catch {
+      // ignore
+    }
+  }
+
+  private appendLocal(entry: AILogEntry) {
+    if (!canUseStorage()) return;
+    const logs = this.loadLocalLogs();
+    logs.push(entry);
+    const MAX = 800;
+    const trimmed = logs.length > MAX ? logs.slice(logs.length - MAX) : logs;
+    this.localCache = trimmed;
+    this.persistLocalLogs(trimmed);
   }
 
   async log(entry: Omit<AILogEntry, "id" | "timestamp">) {
@@ -55,6 +100,7 @@ class AILogger {
     };
 
     this.printToConsole(fullEntry);
+    this.appendLocal(fullEntry);
     await this.saveToServer(fullEntry);
 
     return fullEntry;
@@ -122,16 +168,26 @@ class AILogger {
     try {
       const res = await fetch("/api/ai-log");
       const data = await res.json();
-      return data.logs || [];
+      const serverLogs = Array.isArray(data?.logs) ? (data.logs as AILogEntry[]) : [];
+      if (serverLogs.length > 0) return serverLogs;
+      return this.loadLocalLogs();
     } catch (e) {
       if (this.shouldPrint()) {
         console.error("Failed to get AI logs:", e);
       }
-      return [];
+      return this.loadLocalLogs();
     }
   }
 
   async clearLogs() {
+    if (canUseStorage()) {
+      try {
+        window.localStorage.removeItem(LOCAL_LOGS_STORAGE_KEY);
+      } catch {
+        // ignore
+      }
+    }
+    this.localCache = [];
     try {
       await fetch("/api/ai-log", { method: "DELETE" });
     } catch (e) {
