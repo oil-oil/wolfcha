@@ -221,7 +221,7 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: "moonshotai/kimi-k2-0905" },
   // { provider: "zenmux", model: "z-ai/glm-4.7-flashx" },
   // { provider: "zenmux", model: "qwen/qwen3-max" },
-  { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
+  // { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
   // { provider: "zenmux", model: "google/gemini-2.5-flash-lite-preview-09-2025" },
   // {provider:"zenmux",model:"openai/gpt-5.2-chat"},
   // {provider:"zenmux",model:"anthropic/claude-sonnet-4.5"}
