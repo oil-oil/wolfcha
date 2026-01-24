@@ -65,6 +65,69 @@ export const getWinCondition = (role: string) => {
   }
 };
 
+/**
+ * Role-specific strategy tips (know-how) to help AI make better decisions
+ * These tips are tailored to each role to prevent homogenization
+ */
+export const getRoleKnowHow = (role: string): string => {
+  switch (role) {
+    case "Werewolf":
+      return `<role_tips>
+- 刀人优先级：预言家 > 女巫 > 猎人 > 守卫 > 有威胁的村民
+- 悍跳时机：真预言家暴露后可考虑悍跳，分散好人火力
+- 站边技巧：适度踩队友制造分歧，但关键投票要保队友
+- 发言策略：不要过于沉默也不要太激进，保持自然节奏
+- 投票陷阱：避免多狼抱团投票暴露狼坑，可以分散投票
+- 躲刀意识：如果你状态好，可以让队友先被关注
+</role_tips>`;
+    case "Seer":
+      return `<role_tips>
+- 跳身份时机：首验狼可考虑首天跳带节奏；首验好人可先观察
+- 报验顺序：先报狼后报好人，信息价值更高
+- 首验策略：可验边缘位或发言有问题的人，避免验明显好人
+- 应对对跳：要求对方先报验，观察对方查验逻辑是否合理
+- 自保意识：你是狼人首刀目标，注意暗示守卫保护
+- 遗言准备：如果感觉要死，提前想好遗言报验内容
+</role_tips>`;
+    case "Witch":
+      return `<role_tips>
+- 首夜用药：通常建议首夜不救，除非被刀的是明确的神职
+- 解药原则：救确定的好人或关键神职，不要救身份不明的人
+- 毒药时机：留给确认的狼人，不要冲动毒人
+- 信息隐藏：不要轻易暴露你的用药情况，这是重要信息
+- 自救规则：记住你不能自救，被刀就是死
+- 站边价值：你知道谁被刀了，这是判断狼人的重要线索
+</role_tips>`;
+    case "Hunter":
+      return `<role_tips>
+- 开枪时机：死亡时可开枪，优先带走确认的狼人
+- 诈身份：可以适当诈身份试探，但不要太早暴露
+- 被毒规则：被女巫毒死无法开枪，注意这个限制
+- 遗言价值：如果被投票出局，遗言后可以开枪
+- 威慑作用：狼人知道你是猎人会有顾虑，可以利用这点
+- 保命意识：你的开枪权很有价值，尽量活到关键时刻
+</role_tips>`;
+    case "Guard":
+      return `<role_tips>
+- 保护优先级：预言家 > 女巫 > 其他神职 > 关键好人
+- 连续保护：不能连续两晚保护同一人，注意规划
+- 读刀意识：根据场上局势判断狼人今晚会刀谁
+- 空刀判断：如果你保护的人没死，狼人可能刀了别人
+- 信息隐藏：不要轻易暴露你保护过谁，这是重要信息
+- 配合预言家：如果预言家跳了，优先考虑保护
+</role_tips>`;
+    default: // Villager
+      return `<role_tips>
+- 听牌技巧：认真听每个人的发言，找矛盾和破绽
+- 站边时机：有足够信息后再站边，不要盲目跟风
+- 归票配合：配合神职的归票指令，形成票型优势
+- 发言价值：作为村民也要积极发言，提供你的判断
+- 投票谨慎：不要轻易投票给没有证据的人
+- 认清局势：理解当前是几狼几好人的局面
+</role_tips>`;
+  }
+};
+
 export const buildDifficultySpeechHint = (difficulty: DifficultyLevel): string => {
   switch (difficulty) {
     case "easy":
@@ -146,20 +209,54 @@ export const buildDailySummariesSection = (state: GameState): string => {
 
   const lines: string[] = [];
   for (const [day, entry] of Array.from(merged.entries()).sort((a, b) => a[0] - b[0])) {
-    const factTexts = (entry.facts || [])
-      .map((f) => (typeof f.fact === "string" ? f.fact.trim() : ""))
-      .filter(Boolean);
+    const facts = entry.facts || [];
     const bulletTexts = (entry.bullets || [])
       .filter((x): x is string => typeof x === "string")
       .map((s) => s.trim())
       .filter(Boolean);
-    const cleaned = (factTexts.length > 0 ? factTexts : bulletTexts).slice(0, 8);
-    if (cleaned.length === 0) continue;
-    lines.push(`第${day}天: ${cleaned.join("；")}`);
+
+    // Group facts by type for better structure
+    const deaths = facts.filter((f) => f.type === "death").map((f) => f.fact.trim()).filter(Boolean);
+    const claims = facts.filter((f) => f.type === "claim").map((f) => f.fact.trim()).filter(Boolean);
+    const votes = facts.filter((f) => f.type === "vote").map((f) => f.fact.trim()).filter(Boolean);
+    const alignments = facts.filter((f) => f.type === "alignment" || f.type === "suspicion" || f.type === "defense")
+      .map((f) => f.fact.trim()).filter(Boolean);
+    const others = facts.filter((f) => !["death", "claim", "vote", "alignment", "suspicion", "defense"].includes(f.type || ""))
+      .map((f) => f.fact.trim()).filter(Boolean);
+
+    // Build YAML-style output for this day
+    let dayContent = `day_${day}:`;
+    
+    if (deaths.length > 0) {
+      dayContent += `\n  deaths: [${deaths.slice(0, 2).join("; ")}]`;
+    }
+    if (claims.length > 0) {
+      dayContent += `\n  claims: [${claims.slice(0, 3).join("; ")}]`;
+    }
+    if (votes.length > 0) {
+      dayContent += `\n  key_votes: [${votes.slice(0, 3).join("; ")}]`;
+    }
+    if (alignments.length > 0) {
+      dayContent += `\n  alignments: [${alignments.slice(0, 3).join("; ")}]`;
+    }
+    
+    // If no structured facts, use bullet points
+    if (deaths.length === 0 && claims.length === 0 && votes.length === 0 && alignments.length === 0) {
+      const allFacts = [...others, ...bulletTexts].slice(0, 5);
+      if (allFacts.length > 0) {
+        dayContent += `\n  facts: [${allFacts.join("; ")}]`;
+      }
+    } else if (others.length > 0) {
+      dayContent += `\n  other: [${others.slice(0, 2).join("; ")}]`;
+    }
+
+    if (dayContent !== `day_${day}:`) {
+      lines.push(dayContent);
+    }
   }
 
   if (lines.length === 0) return "";
-  return `【历史关键信息】\n${lines.join("\n")}`;
+  return `<history>\n${lines.join("\n")}\n</history>`;
 };
 
 export const getDayStartIndex = (state: GameState): number => {
@@ -178,6 +275,40 @@ export const getVoteStartIndex = (state: GameState): number => {
   return state.messages.length;
 };
 
+/**
+ * Check if today's transcript is long enough to warrant a mid-day summary
+ * Returns the transcript length and whether summary is needed
+ */
+export const checkNeedsMidDaySummary = (state: GameState, threshold: number = 6000): {
+  transcriptLength: number;
+  needsSummary: boolean;
+  hasSummary: boolean;
+} => {
+  const dayStartIndex = getDayStartIndex(state);
+  const voteStartIndex = getVoteStartIndex(state);
+
+  const slice = state.messages.slice(
+    dayStartIndex,
+    voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
+  );
+
+  const transcript = slice
+    .filter((m) => !m.isSystem)
+    .map((m) => m.content)
+    .join("\n");
+
+  const hasSummary = !!(
+    (state.dailySummaryFacts?.[state.day]?.length ?? 0) > 0 ||
+    (state.dailySummaries?.[state.day]?.length ?? 0) > 0
+  );
+
+  return {
+    transcriptLength: transcript.length,
+    needsSummary: transcript.length > threshold && !hasSummary,
+    hasSummary,
+  };
+};
+
 export const buildTodayTranscript = (state: GameState, maxChars: number): string => {
   const dayStartIndex = getDayStartIndex(state);
   const voteStartIndex = getVoteStartIndex(state);
@@ -193,14 +324,22 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
     playerAliveMap.set(p.playerId, p.alive);
   });
 
-  const transcript = slice
-    .filter((m) => !m.isSystem)
-    .map((m) => {
-      const isAlive = playerAliveMap.get(m.playerId) ?? true;
-      const statusLabel = isAlive ? "" : "（已出局）";
-      return `${m.playerName}${statusLabel}: ${m.content}`;
-    })
-    .join("\n");
+  // Separate last words from regular speech for priority handling
+  const regularMessages = slice.filter((m) => !m.isSystem && !m.isLastWords);
+  const lastWordsMessages = slice.filter((m) => !m.isSystem && m.isLastWords);
+
+  const formatMessage = (m: typeof slice[0]) => {
+    const isAlive = playerAliveMap.get(m.playerId) ?? true;
+    const statusLabel = isAlive ? "" : "（已出局）";
+    const lastWordsLabel = m.isLastWords ? "【遗言】" : "";
+    return `${lastWordsLabel}${m.playerName}${statusLabel}: ${m.content}`;
+  };
+
+  // Last words are always preserved (they're important)
+  const lastWordsText = lastWordsMessages.map(formatMessage).join("\n");
+  const regularText = regularMessages.map(formatMessage).join("\n");
+  
+  const transcript = [lastWordsText, regularText].filter(Boolean).join("\n");
 
   if (!transcript) return "";
   if (transcript.length <= maxChars) return transcript;
@@ -211,24 +350,39 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
     summaryFacts && summaryFacts.length > 0
       ? summaryFacts.map((f) => f.fact).filter(Boolean)
       : summaryBullets || [];
+  
   if (summaryItems.length > 0) {
-    // 使用更多摘要条目（最多8条），保留更多信息
+    // Use more summary items (up to 8), preserve more info
     const summaryText = summaryItems
       .map((s) => String(s).trim())
       .filter(Boolean)
       .slice(0, 8)
       .join("；");
-    const header = `【早段摘要】${summaryText}\n【最近发言】\n`;
-    // 保留更多最近发言（至少保留60%的空间给最近发言）
-    const minRecentChars = Math.floor(maxChars * 0.6);
-    const headerLength = header.length;
-    const tailLimit = Math.max(minRecentChars, maxChars - headerLength);
-    const tail = tailLimit > 0 ? transcript.slice(-tailLimit) : "";
-    return `${header}${tail}`.trim();
+    const header = `<early_summary>${summaryText}</early_summary>\n<recent_speech>\n`;
+    const footer = `\n</recent_speech>`;
+    
+    // Reserve space for last words (always include)
+    const lastWordsReserve = lastWordsText ? lastWordsText.length + 50 : 0;
+    const availableForRecent = maxChars - header.length - footer.length - lastWordsReserve;
+    
+    // Get recent regular messages
+    const recentRegular = availableForRecent > 0 ? regularText.slice(-availableForRecent) : "";
+    
+    // Combine: summary + last words + recent regular
+    const lastWordsPart = lastWordsText ? `<last_words>\n${lastWordsText}\n</last_words>\n` : "";
+    return `${header}${lastWordsPart}${recentRegular}${footer}`.trim();
   }
 
-  // 如果没有摘要，使用滑动窗口策略：保留最后的内容
-  return transcript.slice(-maxChars);
+  // No summary: prioritize last words, then use sliding window for regular
+  if (lastWordsText) {
+    const lastWordsPart = `<last_words>\n${lastWordsText}\n</last_words>\n`;
+    const availableForRecent = maxChars - lastWordsPart.length;
+    const recentRegular = availableForRecent > 0 ? regularText.slice(-availableForRecent) : "";
+    return `${lastWordsPart}<recent_speech>\n${recentRegular}\n</recent_speech>`.trim();
+  }
+
+  // No last words, just sliding window
+  return `<today_speech>\n${transcript.slice(-maxChars)}\n</today_speech>`;
 };
 
 export const buildPlayerTodaySpeech = (state: GameState, player: Player, maxChars: number): string => {
@@ -270,32 +424,43 @@ export const buildGameContext = (
 ): string => {
   const alivePlayers = state.players.filter((p) => p.alive);
   const deadPlayers = state.players.filter((p) => !p.alive);
-  const playerList = alivePlayers
-    .map((p) => `${p.seat + 1}号 ${p.displayName}${p.playerId === player.playerId ? " (你)" : ""}`)
-    .join("\n");
-
   const totalSeats = state.players.length;
 
-  let context = `【当前局势】
-第${state.day}天 ${state.phase.includes("NIGHT") ? "夜晚" : "白天"}
-有效座位号范围: 1号-${totalSeats}号（共${totalSeats}人），严禁提及范围外座位号
-存活玩家（只能讨论和分析这些玩家）:
-${playerList}`;
-
-  // Always include sheriff info as a stable field (do not rely on truncated announcements).
-  const sheriffSeat = state.badge.holderSeat;
-  if (sheriffSeat === null) {
-    context += `\n\n【当前警长】无`;
-  } else {
-    const sheriffPlayer = state.players.find((p) => p.seat === sheriffSeat) || null;
-    if (sheriffPlayer) {
-      context += `\n\n【当前警长】${sheriffSeat + 1}号 ${sheriffPlayer.displayName}${sheriffPlayer.alive ? "" : "（已出局）"}`;
-    } else {
-      context += `\n\n【当前警长】${sheriffSeat + 1}号（未知）`;
+  // Build YAML-formatted game state
+  const aliveSeats = alivePlayers.map((p) => p.seat + 1);
+  const deadInfo = deadPlayers.map((p) => {
+    // Find death info
+    let cause = "unknown";
+    let deathDay = 0;
+    for (const [day, history] of Object.entries(state.nightHistory || {})) {
+      if (history.wolfTarget === p.seat) { cause = "狼杀"; deathDay = Number(day); }
+      if (history.witchPoison === p.seat) { cause = "毒杀"; deathDay = Number(day); }
     }
-  }
+    for (const [day, history] of Object.entries(state.dayHistory || {})) {
+      if (history.executed?.seat === p.seat) { cause = "投票"; deathDay = Number(day); }
+    }
+    return `{seat: ${p.seat + 1}, name: ${p.displayName}, day: ${deathDay}, cause: ${cause}}`;
+  });
 
-  context += `\n\n${buildAliveCountsSection(state)}`;
+  const sheriffSeat = state.badge.holderSeat;
+  const sheriffInfo = sheriffSeat !== null ? sheriffSeat + 1 : "无";
+
+  let context = `<game_state>
+day: ${state.day}
+phase: ${state.phase.includes("NIGHT") ? "夜晚" : "白天"}
+you: {seat: ${player.seat + 1}, name: ${player.displayName}}
+total_seats: ${totalSeats}
+alive: [${aliveSeats.join(", ")}]
+dead: [${deadInfo.join(", ")}]
+sheriff: ${sheriffInfo}
+alive_count: ${alivePlayers.length}
+</game_state>`;
+
+  // Add alive players list for reference
+  const playerList = alivePlayers
+    .map((p) => `  - ${p.seat + 1}号 ${p.displayName}${p.playerId === player.playerId ? " (你)" : ""}`)
+    .join("\n");
+  context += `\n\n<alive_players>\n${playerList}\n</alive_players>`;
 
   const summarySection = buildDailySummariesSection(state);
   if (summarySection) {
@@ -304,142 +469,164 @@ ${playerList}`;
 
   const systemAnnouncements = buildSystemAnnouncementsSinceDawn(state, 8);
   if (systemAnnouncements) {
-    context += `\n\n【系统公告】\n${systemAnnouncements}`;
+    context += `\n\n<announcements>\n${systemAnnouncements}\n</announcements>`;
   }
 
   if (deadPlayers.length > 0) {
-    context += `\n\n【出局玩家】（严禁讨论、分析或提及以下玩家！）\n${deadPlayers
-      .map((p) => `${p.seat + 1}号 ${p.displayName}`)
-      .join("\n")}`;
-
-    const currentDayDeaths = [];
-
+    // Build today's deaths info
+    const currentDayDeaths: string[] = [];
     const nightHistory = state.nightHistory?.[state.day];
     if (nightHistory?.wolfTarget !== undefined) {
-      const player = state.players.find(p => p.seat === nightHistory.wolfTarget);
-      if (player && !player.alive) {
-        currentDayDeaths.push(`${player.seat + 1}号 ${player.displayName} 被狼人杀死`);
+      const p = state.players.find(p => p.seat === nightHistory.wolfTarget);
+      if (p && !p.alive) {
+        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 狼杀}`);
       }
     }
-
     if (nightHistory?.witchPoison !== undefined) {
-      const player = state.players.find(p => p.seat === nightHistory.witchPoison);
-      if (player && !player.alive) {
-        currentDayDeaths.push(`${player.seat + 1}号 ${player.displayName} 被女巫毒死`);
+      const p = state.players.find(p => p.seat === nightHistory.witchPoison);
+      if (p && !p.alive) {
+        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 毒杀}`);
       }
     }
-
     if (nightHistory?.deaths && Array.isArray(nightHistory.deaths)) {
       nightHistory.deaths.forEach(death => {
         if (death && typeof death.seat === 'number') {
-          const player = state.players.find(p => p.seat === death.seat);
-          if (player && !player.alive) {
-            currentDayDeaths.push(`${player.seat + 1}号 ${player.displayName} 被${death.reason === 'wolf' ? '狼人杀死' : death.reason === 'poison' ? '女巫毒死' : '杀死'}`);
+          const p = state.players.find(p => p.seat === death.seat);
+          if (p && !p.alive) {
+            const cause = death.reason === 'wolf' ? '狼杀' : death.reason === 'poison' ? '毒杀' : '死亡';
+            currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${cause}}`);
           }
         }
       });
     }
-
     const dayHistory = state.dayHistory?.[state.day];
     if (dayHistory?.executed && typeof dayHistory.executed.seat === 'number') {
       const executedSeat = dayHistory.executed.seat;
-      const player = state.players.find(p => p.seat === executedSeat);
-      if (player) {
-        currentDayDeaths.push(`${player.seat + 1}号 ${player.displayName} 被投票处决`);
+      const p = state.players.find(p => p.seat === executedSeat);
+      if (p) {
+        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 投票}`);
       }
     }
 
     if (currentDayDeaths.length > 0) {
-      context += `\n\n【今日死亡】\n${currentDayDeaths.join("\n")}`;
+      context += `\n\n<today_deaths>\n${currentDayDeaths.join("\n")}\n</today_deaths>`;
     }
+
+    // Dead players warning
+    context += `\n\n<banned_discussion>严禁讨论已出局玩家: [${deadPlayers.map((p) => p.seat + 1).join(", ")}]</banned_discussion>`;
   }
 
   if (state.voteHistory && Object.keys(state.voteHistory).length > 0) {
-    context += `\n\n【历史投票】`;
+    context += `\n\n<votes>`;
     const sheriffSeat = state.badge.holderSeat;
     const sheriffPlayer =
       sheriffSeat !== null ? state.players.find((p) => p.seat === sheriffSeat) : null;
     const sheriffPlayerId = sheriffPlayer?.playerId;
-    Object.entries(state.voteHistory).forEach(([day, votes]) => {
-      context += `\n第${day}天投票:`;
-      const voteGroups: Record<number, number[]> = {};
-      Object.entries(votes).forEach(([voterId, targetSeat]) => {
-        const voter = state.players.find(p => p.playerId === voterId);
-        if (voter) {
-          if (!voteGroups[targetSeat]) voteGroups[targetSeat] = [];
-          voteGroups[targetSeat].push(voter.seat);
+    const currentDay = state.day;
+    
+    Object.entries(state.voteHistory)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .forEach(([day, votes]) => {
+        const dayNum = Number(day);
+        const isRecent = currentDay - dayNum <= 1; // Recent 2 days show details
+        
+        const voteGroups: Record<number, number[]> = {};
+        Object.entries(votes).forEach(([voterId, targetSeat]) => {
+          const voter = state.players.find(p => p.playerId === voterId);
+          if (voter) {
+            if (!voteGroups[targetSeat]) voteGroups[targetSeat] = [];
+            voteGroups[targetSeat].push(voter.seat);
+          }
+        });
+        
+        // Sort by vote count descending
+        const sortedTargets = Object.entries(voteGroups)
+          .map(([target, voters]) => {
+            const weightedVotes = voters.reduce((sum, seat) => {
+              const voter = state.players.find((p) => p.seat === seat);
+              if (!voter) return sum;
+              return sum + (voter.playerId === sheriffPlayerId ? 1.5 : 1);
+            }, 0);
+            return { target: Number(target), voters, weightedVotes };
+          })
+          .sort((a, b) => b.weightedVotes - a.weightedVotes);
+        
+        if (isRecent) {
+          // Recent days: show full details in YAML format
+          context += `\nday_${day}:`;
+          sortedTargets.forEach(({ target, voters, weightedVotes }) => {
+            const targetPlayer = state.players.find(p => p.seat === target);
+            const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
+            const voterList = voters.map(s => s + 1).join(',');
+            context += `\n  ${target + 1}号${targetPlayer?.displayName || ''}: {票数: ${voteLabel}, 投票者: [${voterList}]}`;
+          });
+        } else {
+          // Older days: compressed summary
+          const dayHistory = state.dayHistory?.[dayNum];
+          if (dayHistory?.executed) {
+            const executedSeat = dayHistory.executed.seat;
+            const executedPlayer = state.players.find(p => p.seat === executedSeat);
+            const topVoter = sortedTargets[0]?.voters[0];
+            const leaderSeat = topVoter !== undefined ? topVoter + 1 : null;
+            context += `\nday_${day}: {出局: ${executedSeat + 1}号${executedPlayer?.displayName || ''}, 票数: ${dayHistory.executed.votes}${leaderSeat ? `, 主归: ${leaderSeat}号` : ''}}`;
+          } else if (dayHistory?.voteTie) {
+            context += `\nday_${day}: {结果: 平票}`;
+          }
         }
       });
-      Object.entries(voteGroups)
-        .sort(([, votersA], [, votersB]) => votersB.length - votersA.length)
-        .forEach(([target, voters]) => {
-          const targetPlayer = state.players.find(p => p.seat === Number(target));
-          const targetAliveLabel = targetPlayer && !targetPlayer.alive ? "（已出局）" : "";
-          const voterNumbers = voters.map(s => `${s + 1}号`).join('、');
-          const weightedVotes = voters.reduce((sum, seat) => {
-            const voter = state.players.find((p) => p.seat === seat);
-            if (!voter) return sum;
-            return sum + (voter.playerId === sheriffPlayerId ? 1.5 : 1);
-          }, 0);
-          const voteLabel = Number.isInteger(weightedVotes)
-            ? `${weightedVotes}`
-            : weightedVotes.toFixed(1);
-          context += `\n  ${Number(target) + 1}号${targetPlayer?.displayName}${targetAliveLabel}(共${voteLabel}票): ${voterNumbers}`;
-        });
-    });
+    context += `\n</votes>`;
   }
 
+  // Role-specific private information
   if (player.role === "Seer") {
     const history = state.nightActions.seerHistory || [];
     if (history.length > 0) {
-      context += `\n\n【查验记录】`;
-      for (const record of history) {
+      const checks = history.map((record) => {
         const target = state.players.find((p) => p.seat === record.targetSeat);
-        context += `\n第${record.day}夜: ${record.targetSeat + 1}号 ${target?.displayName} - ${record.isWolf ? "狼人" : "好人"}`;
-      }
+        return `  - {day: ${record.day}, target: ${record.targetSeat + 1}号${target?.displayName || ''}, result: ${record.isWolf ? "狼人" : "好人"}}`;
+      });
+      context += `\n\n<your_checks>\n${checks.join("\n")}\n</your_checks>`;
     }
   }
 
   if (player.role === "Witch") {
-    context += `\n\n【药水状态】`;
-    context += `\n解药: ${state.roleAbilities.witchHealUsed ? "已使用" : "可用"}`;
-    context += `\n毒药: ${state.roleAbilities.witchPoisonUsed ? "已使用" : "可用"}`;
-
+    const potionStatus = `heal: ${state.roleAbilities.witchHealUsed ? "已用" : "可用"}, poison: ${state.roleAbilities.witchPoisonUsed ? "已用" : "可用"}`;
     const witchActions: string[] = [];
     if (state.nightHistory) {
       Object.entries(state.nightHistory).forEach(([day, history]) => {
         if (history.witchSave && history.wolfTarget !== undefined) {
           const savedPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (savedPlayer) {
-            witchActions.push(`第${day}夜: 你用解药救了 ${history.wolfTarget + 1}号 ${savedPlayer.displayName}`);
+            witchActions.push(`  - {day: ${day}, action: 救, target: ${history.wolfTarget + 1}号${savedPlayer.displayName}}`);
           }
         }
         if (history.witchPoison !== undefined) {
           const poisonedPlayer = state.players.find(p => p.seat === history.witchPoison);
           if (poisonedPlayer) {
-            witchActions.push(`第${day}夜: 你用毒药毒了 ${history.witchPoison + 1}号 ${poisonedPlayer.displayName}`);
+            witchActions.push(`  - {day: ${day}, action: 毒, target: ${history.witchPoison + 1}号${poisonedPlayer.displayName}}`);
           }
         }
       });
     }
+    context += `\n\n<your_potions>\nstatus: {${potionStatus}}`;
     if (witchActions.length > 0) {
-      context += `\n\n【你的用药记录】\n${witchActions.join("\n")}`;
+      context += `\nhistory:\n${witchActions.join("\n")}`;
     }
+    context += `\n</your_potions>`;
   }
 
   if (player.role === "Guard" && state.nightActions.lastGuardTarget !== undefined) {
     const lastTarget = state.players.find((p) => p.seat === state.nightActions.lastGuardTarget);
-    context += `\n\n【上晚保护】${state.nightActions.lastGuardTarget + 1}号 ${lastTarget?.displayName}（今晚不能连续保护）`;
+    context += `\n\n<your_guard>\nlast_protected: ${state.nightActions.lastGuardTarget + 1}号${lastTarget?.displayName || ''}\nnote: 今晚不能连续保护此人\n</your_guard>`;
   }
 
   if (player.role === "Werewolf") {
     const teammates = state.players.filter(
       (p) => p.role === "Werewolf" && p.alive && p.playerId !== player.playerId
     );
-    if (teammates.length > 0) {
-      context += `\n\n【狼队友】
-${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}`;
-    }
+    const allWolves = state.players.filter((p) => p.role === "Werewolf");
+    const aliveWolves = allWolves.filter((p) => p.alive);
+    context += `\n\n<wolf_team>\nalive_teammates: [${teammates.map((t) => `${t.seat + 1}号${t.displayName}`).join(", ")}]\nwolf_count: {total: ${allWolves.length}, alive: ${aliveWolves.length}}\n</wolf_team>`;
   }
 
   const showCurrentVotes = state.phase === "DAY_VOTE" || state.phase === "DAY_RESOLVE";
@@ -448,10 +635,10 @@ ${teammates.map((t) => `${t.seat + 1}号 ${t.displayName}`).join(", ")}`;
     const voteLines = voteEntries
       .map(([voterId, targetSeat]) => {
         const voter = state.players.find((p) => p.playerId === voterId);
-        return `${voter ? `${voter.seat + 1}号${voter.displayName}` : "未知"} -> ${targetSeat + 1}号`;
+        return `  - {voter: ${voter ? voter.seat + 1 : '?'}, target: ${targetSeat + 1}}`;
       })
       .join("\n");
-    context += `\n\n【当前投票】\n${voteLines}`;
+    context += `\n\n<current_votes>\n${voteLines}\n</current_votes>`;
   }
 
   return context;

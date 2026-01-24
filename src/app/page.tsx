@@ -45,7 +45,7 @@ import { TutorialOverlay, type TutorialPayload } from "@/components/game/Tutoria
 import { DevConsole, DevModeButton } from "@/components/DevTools";
 import { SettingsModal } from "@/components/game/SettingsModal";
 
-import { buildSimpleAvatarUrl } from "@/lib/avatar-config";
+import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { resolveVoiceId } from "@/lib/voice-constants";
 import { useSettings } from "@/hooks/useSettings";
@@ -65,7 +65,15 @@ const REFERRAL_STORAGE_KEY = "wolfcha_referral";
 const WC_EYE_FEATHER_VAR = "--wc-eye-feather";
 const WC_LID_VAR = "--wc-lid";
 
-const dicebearUrl = (seed: string) => buildSimpleAvatarUrl(seed);
+const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) => {
+  const isModelAvatar = isGenshinMode && !player.isHuman;
+  if (isModelAvatar) {
+    return getModelLogoUrl(player.agentProfile?.modelRef);
+  }
+  return buildSimpleAvatarUrl(player.playerId, {
+    gender: player.agentProfile?.persona?.gender,
+  });
+};
 
 const getRoleLabel = (role?: Role | null) => {
   switch (role) {
@@ -916,7 +924,7 @@ export default function Home() {
       ? {
           seat: target.seat,
           name: target.displayName,
-          avatarUrl: dicebearUrl(target.displayName),
+          avatarUrl: getPlayerAvatarUrl(target, gameState.isGenshinMode ?? false),
         }
       : undefined;
     setNightActionOverlay({ type, id: Date.now(), target: targetPayload });
