@@ -112,6 +112,7 @@ export interface ChatMessage {
   phase?: Phase;
   isSystem?: boolean;
   isStreaming?: boolean;
+  isLastWords?: boolean;  // Flag for last words (遗言) messages
 }
 
 export interface GameState {
@@ -206,7 +207,6 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen-plus-2025-12-01" },
   { provider: "dashscope", model: "Moonshot-Kimi-K2-Instruct" },
-  { provider: "dashscope", model: "qwen3-vl-235b-a22b-instruct" },
   { provider: "dashscope", model: "qwen3-max" },
 
   { provider: "zenmux", model: "google/gemini-3-flash-preview" },

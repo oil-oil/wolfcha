@@ -8,6 +8,7 @@ import {
   buildPlayerTodaySpeech,
   getRoleText,
   getWinCondition,
+  getRoleKnowHow,
   buildSystemTextFromParts,
 } from "@/lib/prompt-utils";
 import {
@@ -121,19 +122,16 @@ export class VotePhase extends GamePhase {
     const todayTranscript = buildTodayTranscript(state, 9000);
     const selfSpeech = buildPlayerTodaySpeech(state, player, 1200);
 
-    const seerHistory = state.nightActions.seerHistory || [];
-    const roleHints =
-      player.role === "Werewolf"
-        ? "提示：避免投狼队友，但也别太明显保人"
-        : player.role === "Seer" && seerHistory.length > 0
-          ? "提示：根据查验结果决定"
-          : "";
+    // Get role-specific strategy tips
+    const roleKnowHow = getRoleKnowHow(player.role);
 
     const cacheableContent = `【身份】
 你是 ${player.seat + 1}号「${player.displayName}」
 身份: ${getRoleText(player.role)}
 
 ${getWinCondition(player.role)}
+
+${roleKnowHow}
 
 ${difficultyHint}`;
     const dynamicContent = `【任务】
@@ -147,8 +145,6 @@ ${difficultyHint}`;
 - 只能基于存活玩家的行为进行判断
 
 可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
-
-${roleHints}
 `;
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },

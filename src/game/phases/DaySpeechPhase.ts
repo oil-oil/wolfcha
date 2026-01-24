@@ -9,6 +9,7 @@ import {
   buildTodayTranscript,
   getRoleText,
   getWinCondition,
+  getRoleKnowHow,
   buildSystemTextFromParts,
   getDayStartIndex,
 } from "@/lib/prompt-utils";
@@ -144,12 +145,8 @@ ${hasCandidateList
         ? "【PK要求】指出对手不适合或你更合适的原因，并给出带队承诺或本轮关注点。"
         : "";
 
-    const roleHints =
-      player.role === "Werewolf"
-        ? "你是狼人，要伪装成好人，可以适当甩锅但不要太刻意"
-        : player.role === "Seer"
-          ? "你是预言家，可以选择跳身份或先潜水观察"
-          : "";
+    // Get role-specific strategy tips
+    const roleKnowHow = getRoleKnowHow(player.role);
 
     const baseCacheable = `【身份】
 你是 ${player.seat + 1}号「${player.displayName}」
@@ -159,6 +156,8 @@ ${hasCandidateList
 这是一个线上狼人杀游戏，玩家通过打字交流。
 
 ${getWinCondition(player.role)}
+
+${roleKnowHow}
 
 ${persona}
 
@@ -204,7 +203,6 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
 - 仅允许提及有效座位号：1号-${totalSeats}号（严禁出现@12、12号等超出范围的编号）。
 - 严禁出现剧本括号动作（如：*推眼镜*），只输出语音/文字内容。
 - 分成 2-5 条自然的消息气泡，长短不一，模拟打字节奏。
-${roleHints ? `- ${roleHints}` : ""}
 
 【输出格式】
 返回 JSON 字符串数组，每个元素是一条消息气泡。

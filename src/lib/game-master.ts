@@ -287,12 +287,16 @@ export function addSystemMessage(
 export function addPlayerMessage(
   state: GameState,
   playerId: string,
-  content: string
+  content: string,
+  options?: { isLastWords?: boolean }
 ): GameState {
   const player = state.players.find((p) => p.playerId === playerId);
   if (!player) return state;
 
   if (content.trim().length === 0) return state;
+
+  // Auto-detect last words phase or use explicit flag
+  const isLastWords = options?.isLastWords ?? state.phase === "DAY_LAST_WORDS";
 
   const message: ChatMessage = {
     id: uuidv4(),
@@ -302,6 +306,7 @@ export function addPlayerMessage(
     timestamp: Date.now(),
     day: state.day,
     phase: state.phase,
+    ...(isLastWords && { isLastWords: true }),
   };
 
   return {
