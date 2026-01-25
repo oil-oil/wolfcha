@@ -178,6 +178,11 @@ export function setSelectedModels(models: string[]) {
 const DEPRECATED_GENERATOR_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025";
 
 export function getGeneratorModel(): string {
+  // When custom key is disabled, always use GENERATOR_MODEL directly
+  // (independent of AI player models in AVAILABLE_MODELS)
+  if (!isCustomKeyEnabled()) {
+    return GENERATOR_MODEL;
+  }
   const stored = readStorage(GENERATOR_MODEL_STORAGE);
   if (stored === DEPRECATED_GENERATOR_MODEL) {
     writeStorage(GENERATOR_MODEL_STORAGE, GENERATOR_MODEL);
@@ -191,6 +196,11 @@ export function setGeneratorModel(model: string) {
 }
 
 export function getSummaryModel(): string {
+  // When custom key is disabled, always use SUMMARY_MODEL directly
+  // (independent of AI player models in AVAILABLE_MODELS)
+  if (!isCustomKeyEnabled()) {
+    return SUMMARY_MODEL;
+  }
   const stored = readStorage(SUMMARY_MODEL_STORAGE);
   if (stored === DEPRECATED_GENERATOR_MODEL) {
     writeStorage(SUMMARY_MODEL_STORAGE, SUMMARY_MODEL);
