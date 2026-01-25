@@ -189,11 +189,9 @@ const createGenshinPersona = (voiceId?: string): Persona => {
   return {
     styleLabel: "neutral",
     voiceRules: ["concise"],
-    riskBias: "balanced",
     mbti: "NA",
     gender: "nonbinary",
     age: 0,
-    backgroundStory: "",
     voiceId,
   };
 };
@@ -347,11 +345,9 @@ const isValidPersona = (p: any): p is Persona => {
   if (!p || typeof p !== "object") return false;
   if (typeof p.styleLabel !== "string") return false;
   if (!Array.isArray(p.voiceRules) || p.voiceRules.filter((x: any) => typeof x === "string" && x.trim()).length === 0) return false;
-  if (p.riskBias !== "safe" && p.riskBias !== "balanced" && p.riskBias !== "aggressive") return false;
   if (!isValidMbti(p.mbti)) return false;
   if (!isValidGender(p.gender)) return false;
   if (typeof p.age !== "number" || !Number.isFinite(p.age) || p.age < 16 || p.age > 70) return false;
-  if (typeof p.backgroundStory !== "string" || !p.backgroundStory.trim()) return false;
   if (p.relationships !== undefined) {
     if (!Array.isArray(p.relationships)) return false;
     if (p.relationships.some((x: any) => typeof x !== "string")) return false;
@@ -405,7 +401,7 @@ const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfil
     .join("\n");
 
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "riskBias": "safe"|"balanced"|"aggressive", "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age}, "backgroundStory": string } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
   return `你是狼人杀游戏的角色设计师。
@@ -424,9 +420,7 @@ ${roster}
 - 这是狼人杀游戏，角色需要能正常讨论、分析、投票
 - 角色发言需聚焦局内，不要引导编剧情节或场外聊天
 - voiceRules 需体现具体说话特征
-- backgroundStory 是简单职业描述，10-20字，如"暴躁的卡车司机"、"刚睡醒的宅男"
 - styleLabel 用简短标签概括性格或表达方式
-- riskBias 根据性格选择（safe/balanced/aggressive）
 
 【输出要求】
 1. 必须输出 JSON：{ "characters": [...] }
@@ -489,7 +483,7 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
     .join("\n");
 
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "riskBias": "safe" | "balanced" | "aggressive", "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age}, "backgroundStory": string } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
   return `你是一个严格的 JSON 修复器。
@@ -500,8 +494,7 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
 【必须严格满足】
 1. characters 顺序必须与基础档案一致
 2. persona.gender/age/mbti 必须与对应档案一致
-3. backgroundStory 必须是 1 句话
-4. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板
+3. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板
 
 【场景】
 ${scenario.title}
@@ -607,7 +600,6 @@ export async function generateCharacters(
         persona: {
           ...c.persona,
           voiceId,
-          backgroundStory: profile.basicInfo,
           relationships: undefined,
         },
       };

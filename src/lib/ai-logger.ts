@@ -16,7 +16,15 @@ function canUseStorage(): boolean {
 export interface AILogEntry {
   id: string;
   timestamp: number;
-  type: "speech" | "vote" | "badge_vote" | "badge_transfer" | "seer_action" | "wolf_action" | "guard_action" | "witch_action" | "hunter_shoot" | "character_generation" | "daily_summary" | "wolf_chat";
+  type: "speech" | "vote" 
+   | "badge_signup"
+   | "badge_vote" 
+   | "badge_transfer" 
+   | "seer_action" 
+   | "wolf_action" 
+   | "guard_action" 
+   | "witch_action" 
+   | "hunter_shoot" | "character_generation" | "daily_summary" | "wolf_chat";
   request: {
     model: string;
     messages: LLMMessage[];

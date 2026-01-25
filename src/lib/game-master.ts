@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { generateCompletion, generateCompletionStream, stripMarkdownCodeFences, type LLMMessage } from "./llm";
+import { generateCompletion, generateCompletionBatch, generateCompletionStream, stripMarkdownCodeFences, type LLMMessage } from "./llm";
 import type { ChatCompletionResponse } from "./llm";
 import {
   type GameState,
@@ -69,7 +69,10 @@ function resolvePhasePrompt(
   player: Player,
   extras?: Record<string, unknown>
 ) {
-  const prompt = phaseManager.getPrompt(phase, { state, extras }, player);
+  // Override state.phase to ensure correct prompt is returned
+  // This is needed when calling prompts for a phase different from state.phase
+  const overriddenState = state.phase === phase ? state : { ...state, phase };
+  const prompt = phaseManager.getPrompt(phase, { state: overriddenState, extras }, player);
   if (!prompt) {
     throw new Error(`[wolfcha] Missing phase prompt for ${phase}`);
   }
@@ -507,7 +510,6 @@ export async function generateDailySummary(
 2. 身份声明：谁跳了什么身份、报了什么验人结果、谁认下
 3. 发言立场：每个玩家的核心观点/表态（用原话或简述，不加评价）
 4. 站边关系：谁表态支持谁、谁表态质疑谁（客观记录，不含判断）
-5. 遗言内容：出局玩家遗言的完整要点
 （警长竞选和公投的票型由系统单独记录，叙述中简要提及结果即可，如「X号当选警长」「X号被放逐」）
 
 【格式要求】
@@ -906,6 +908,78 @@ export async function generateAIVote(
 
 /** Sentinel for abstain when AI fails to vote or parse. Counting logic skips -1 via aliveBySeat.has(seat). */
 export const BADGE_VOTE_ABSTAIN = -1;
+
+export async function generateAIBadgeSignupBatch(
+  state: GameState,
+  players: Player[]
+): Promise<Record<string, boolean>> {
+  if (!players || players.length === 0) return {};
+
+  const startTime = Date.now();
+  const prompts = players.map((player) => resolvePhasePrompt("DAY_BADGE_SIGNUP", state, player));
+  const messageBundles = prompts.map((prompt) => buildMessagesForPrompt(prompt));
+  const requests = players.map((player, idx) => ({
+    model: player.agentProfile!.modelRef.model,
+    messages: messageBundles[idx].messages,
+    temperature: GAME_TEMPERATURE.ACTION,
+  }));
+
+  const results = await generateCompletionBatch(requests);
+  const parsedByPlayer: Record<string, boolean> = {};
+  const duration = Date.now() - startTime;
+
+  // Process results and collect log entries
+  const logEntries: Parameters<typeof aiLogger.log>[0][] = [];
+
+  for (let idx = 0; idx < players.length; idx++) {
+    const player = players[idx];
+    const result = results[idx];
+    let cleaned = "";
+    let parsed: boolean | null = null;
+    let error: string | undefined;
+
+    if (result?.ok) {
+      cleaned = stripMarkdownCodeFences(result.content).trim();
+      if (/^[01]$/.test(cleaned)) {
+        parsed = cleaned === "1";
+      } else {
+        const lower = cleaned.toLowerCase();
+        if (/(yes|true|报名|上警|参加|竞选)/i.test(lower)) parsed = true;
+        if (/(no|false|不报名|不上警|放弃)/i.test(lower)) parsed = false;
+      }
+    } else {
+      error = result?.error || "Unknown error";
+    }
+
+    if (parsed === null) parsed = false;
+    parsedByPlayer[player.playerId] = parsed;
+
+    logEntries.push({
+      type: "badge_signup",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages: messageBundles[idx].messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: cleaned,
+        raw: result?.ok ? result.content : "",
+        rawResponse: result?.ok ? JSON.stringify(result.raw, null, 2) : undefined,
+        finishReason: result?.ok ? result.raw?.choices?.[0]?.finish_reason : undefined,
+        parsed,
+        duration,
+      },
+      ...(error ? { error } : {}),
+    });
+  }
+
+  // Log all entries sequentially to avoid concurrent file writes
+  for (const entry of logEntries) {
+    await aiLogger.log(entry);
+  }
+
+  return parsedByPlayer;
+}
 
 export async function generateAIBadgeVote(
   state: GameState,

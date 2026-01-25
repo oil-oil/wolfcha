@@ -182,8 +182,7 @@ export const buildPersonaSection = (player: Player, isGenshinMode: boolean = fal
 
   return `【角色设定】
 性格: ${persona.styleLabel}
-说话习惯: ${persona.voiceRules.join("、")}
-风格: ${persona.riskBias === "aggressive" ? "激进型，喜欢主动质疑" : persona.riskBias === "safe" ? "保守型，喜欢观察" : "平衡型"}`;
+说话习惯: ${persona.voiceRules.join("、")}`;
 };
 
 export const buildAliveCountsSection = (state: GameState): string => {
@@ -300,7 +299,11 @@ export const checkNeedsMidDaySummary = (state: GameState, threshold: number = 60
   };
 };
 
-export const buildTodayTranscript = (state: GameState, maxChars: number): string => {
+export const buildTodayTranscript = (
+  state: GameState,
+  maxChars: number,
+  options?: { includeDeadSpeech?: boolean }
+): string => {
   const dayStartIndex = getDayStartIndex(state);
   const voteStartIndex = getVoteStartIndex(state);
 
@@ -314,10 +317,19 @@ export const buildTodayTranscript = (state: GameState, maxChars: number): string
   state.players.forEach((p) => {
     playerAliveMap.set(p.playerId, p.alive);
   });
+  const includeDeadSpeech = options?.includeDeadSpeech === true;
 
   // Separate last words from regular speech for priority handling
-  const regularMessages = slice.filter((m) => !m.isSystem && !m.isLastWords);
-  const lastWordsMessages = slice.filter((m) => !m.isSystem && m.isLastWords);
+  const regularMessages = slice.filter((m) => {
+    if (m.isSystem || m.isLastWords) return false;
+    const isAlive = playerAliveMap.get(m.playerId) ?? true;
+    return includeDeadSpeech || isAlive;
+  });
+  const lastWordsMessages = slice.filter((m) => {
+    if (m.isSystem || !m.isLastWords) return false;
+    const isAlive = playerAliveMap.get(m.playerId) ?? true;
+    return includeDeadSpeech || isAlive;
+  });
 
   const formatMessage = (m: typeof slice[0]) => {
     const isAlive = playerAliveMap.get(m.playerId) ?? true;

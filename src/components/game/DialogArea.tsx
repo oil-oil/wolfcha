@@ -717,6 +717,10 @@ export function DialogArea({
   const showBadgeSignup = phase === "DAY_BADGE_SIGNUP"
     && humanPlayer?.alive
     && typeof gameState.badge.signup?.[humanPlayer.playerId] !== "boolean";
+  const showBadgeSignupWaiting = phase === "DAY_BADGE_SIGNUP"
+    && isWaitingForAI
+    && humanPlayer?.alive
+    && typeof gameState.badge.signup?.[humanPlayer.playerId] === "boolean";
   const showBadgeTransferOption = phase === "BADGE_TRANSFER"
     && humanPlayer
     && gameState.badge.holderSeat === humanPlayer.seat
@@ -758,6 +762,7 @@ export function DialogArea({
 
   const shouldShowDialogPanel = showGameEnd
     || showBadgeSignup
+    || showBadgeSignupWaiting
     || showBadgeTransferOption
     || showActionConfirm
     || showWitchPanel
@@ -949,6 +954,20 @@ export function DialogArea({
                       我要竞选
                       <CaretRight size={14} weight="bold" />
                     </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Badge signup waiting hint */}
+              {showBadgeSignupWaiting && (
+                <motion.div
+                  key="badge-signup-waiting"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
+                    正在统计参与警徽竞选的人数...
                   </div>
                 </motion.div>
               )}

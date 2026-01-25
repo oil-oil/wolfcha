@@ -49,14 +49,6 @@ const getRoleName = (role: string) => {
   }
 };
 
-const getStrategyLabel = (strategy: string) => {
-  switch (strategy) {
-    case "aggressive": return "激进";
-    case "safe": return "保守";
-    default: return "平衡";
-  }
-};
-
 export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGenshinMode = false }: PlayerDetailModalProps) {
   const [renderPlayer, setRenderPlayer] = useState<Player | null>(player);
 
@@ -191,17 +183,6 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                           {persona.logicStyle}
                         </span>
                       )}
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 font-medium">
-                        {getStrategyLabel(persona.riskBias)}
-                      </span>
-                    </div>
-
-                    {/* 背景故事 */}
-                    <div>
-                      <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">背景</h4>
-                      <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-                        {persona.backgroundStory}
-                      </p>
                     </div>
 
                     {/* 说话风格 */}

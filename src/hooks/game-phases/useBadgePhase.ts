@@ -8,11 +8,12 @@ import {
   transitionPhase,
   addSystemMessage,
   generateAIBadgeVote,
+  generateAIBadgeSignupBatch,
   generateBadgeTransfer,
   BADGE_VOTE_ABSTAIN,
 } from "@/lib/game-master";
 import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/game-texts";
-import { DELAY_CONFIG, GAME_CONFIG, BADGE_SIGNUP_PROBABILITY } from "@/lib/game-constants";
+import { DELAY_CONFIG, GAME_CONFIG } from "@/lib/game-constants";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 
@@ -67,6 +68,8 @@ export function useBadgePhase(
   // 用于在 AI 投票循环中获取最新状态
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
+  // Prevent concurrent AI signup runs
+  const aiSignupPromiseRef = useRef<Promise<GameState> | null>(null);
 
   /** 生成警长投票详情 */
   const generateBadgeVoteDetails = useCallback((
@@ -244,6 +247,70 @@ export function useBadgePhase(
     await onBadgeElectionComplete(nextState);
   }, [setGameState, setDialogue, generateBadgeVoteDetails, onBadgeElectionComplete]);
 
+  /** AI 报名决策（在用户决定后同时进行） */
+  const resolveAIBadgeSignup = useCallback(async (state: GameState): Promise<GameState> => {
+    if (aiSignupPromiseRef.current) {
+      const resolved = await aiSignupPromiseRef.current;
+      const fallback = gameStateRef.current ?? state;
+      const base = resolved ?? fallback;
+      return {
+        ...base,
+        badge: {
+          ...base.badge,
+          signup: { ...base.badge.signup, ...state.badge.signup },
+        },
+      };
+    }
+
+    const task = (async (): Promise<GameState> => {
+      const baseState = gameStateRef.current ?? state;
+      const alivePlayers = baseState.players.filter((p) => p.alive);
+      const aiPlayers = alivePlayers.filter((p) => !p.isHuman);
+      const pendingAI = aiPlayers.filter(
+        (p) => typeof baseState.badge.signup?.[p.playerId] !== "boolean"
+      );
+      // If all AI have signed up, merge baseState (with AI signups) and state (with human signup)
+      if (pendingAI.length === 0) {
+        return {
+          ...baseState,
+          badge: {
+            ...baseState.badge,
+            signup: { ...baseState.badge.signup, ...state.badge.signup },
+          },
+        };
+      }
+
+      setIsWaitingForAI(true);
+      try {
+        const results = await generateAIBadgeSignupBatch(baseState, pendingAI);
+        const latestState = gameStateRef.current ?? baseState;
+        const mergedSignup = {
+          ...latestState.badge.signup,
+          ...baseState.badge.signup,
+          ...results,
+        };
+        const nextState: GameState = {
+          ...latestState,
+          badge: {
+            ...latestState.badge,
+            signup: mergedSignup,
+          },
+        };
+        setGameState(nextState);
+        return nextState;
+      } finally {
+        setIsWaitingForAI(false);
+      }
+    })();
+
+    aiSignupPromiseRef.current = task;
+    try {
+      return await task;
+    } finally {
+      aiSignupPromiseRef.current = null;
+    }
+  }, [setGameState, setIsWaitingForAI]);
+
   /** 开始警长竞选报名 */
   const startBadgeSignupPhase = useCallback(async (state: GameState) => {
     let currentState = transitionPhase(state, "DAY_BADGE_SIGNUP");
@@ -262,34 +329,16 @@ export function useBadgePhase(
     setGameState(currentState);
     clearDialogue();
 
-    // AI 玩家报名决策
     const alivePlayers = currentState.players.filter((p) => p.alive);
-    const aiPlayers = alivePlayers.filter((p) => !p.isHuman);
-    for (const ai of aiPlayers) {
-      const bias = ai.agentProfile?.persona?.riskBias;
-      const roll = Math.random();
-      const wants = bias === "aggressive"
-        ? roll < BADGE_SIGNUP_PROBABILITY.AGGRESSIVE
-        : bias === "safe"
-          ? roll < BADGE_SIGNUP_PROBABILITY.SAFE
-          : roll < BADGE_SIGNUP_PROBABILITY.BALANCED;
-
-      currentState = {
-        ...currentState,
-        badge: {
-          ...currentState.badge,
-          signup: { ...currentState.badge.signup, [ai.playerId]: wants },
-        },
-      };
-      setGameState(currentState);
-    }
-
-    // 检查人类是否需要报名
     const human = alivePlayers.find((p) => p.isHuman);
     if (!human) {
-      await maybeStartBadgeSpeechAfterSignupRef.current(currentState);
+      const nextState = await resolveAIBadgeSignup(currentState);
+      await maybeStartBadgeSpeechAfterSignupRef.current(nextState);
+      return;
     }
-  }, [setGameState, clearDialogue]);
+
+    void resolveAIBadgeSignup(currentState);
+  }, [setGameState, clearDialogue, resolveAIBadgeSignup]);
 
   /** 报名结束后检查是否开始发言 */
   const maybeStartBadgeSpeechAfterSignup = useCallback(async (state: GameState) => {
@@ -324,7 +373,7 @@ export function useBadgePhase(
     if (!human?.alive) return;
     if (typeof gameState.badge.signup?.[human.playerId] === "boolean") return;
 
-    const nextState: GameState = {
+    let nextState: GameState = {
       ...gameState,
       badge: {
         ...gameState.badge,
@@ -332,8 +381,9 @@ export function useBadgePhase(
       },
     };
     setGameState(nextState);
+    nextState = await resolveAIBadgeSignup(nextState);
     await maybeStartBadgeSpeechAfterSignup(nextState);
-  }, [gameState, setGameState]);
+  }, [gameState, setGameState, resolveAIBadgeSignup, maybeStartBadgeSpeechAfterSignup]);
 
   /** 开始警长竞选发言 */
   const startBadgeSpeechPhase = useCallback(async (state: GameState) => {

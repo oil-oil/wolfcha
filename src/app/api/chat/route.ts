@@ -107,9 +107,186 @@ function stripCacheControl(messages: unknown[]): unknown[] {
   });
 }
 
+type ChatRequestPayload = {
+  model: string;
+  messages: unknown[];
+  temperature?: number;
+  max_tokens?: number;
+  stream?: boolean;
+  reasoning?: { enabled: boolean };
+  response_format?: unknown;
+  provider?: Provider;
+};
+
+async function runBatchItem(
+  payload: ChatRequestPayload,
+  headerApiKey: string | null,
+  headerDashscopeKey: string | null
+): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string; details?: unknown }> {
+  const {
+    model,
+    messages,
+    temperature,
+    max_tokens,
+    stream,
+    reasoning,
+    response_format,
+    provider,
+  } = payload;
+
+  if (stream) {
+    return { ok: false, status: 400, error: "Batch request does not support stream=true" };
+  }
+
+  const modelProvider: Provider | null =
+    provider === "dashscope" || provider === "zenmux" ? provider : getProviderForModel(model);
+  if (!modelProvider) {
+    return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
+  }
+
+  const isDefaultModel = AVAILABLE_MODELS.some((ref) => ref.model === model);
+  if (!isDefaultModel) {
+    if (modelProvider === "zenmux" && !headerApiKey) {
+      return { ok: false, status: 401, error: "此模型需要您提供 Zenmux API Key" };
+    }
+    if (modelProvider === "dashscope" && !headerDashscopeKey) {
+      return { ok: false, status: 401, error: "此模型需要您提供百炼 API Key" };
+    }
+  }
+
+  const normalizedTemperature =
+    typeof temperature === "number" && Number.isFinite(temperature) ? temperature : 0.7;
+  const cappedTemperature = (() => {
+    const lower = typeof model === "string" ? model.toLowerCase() : "";
+    const needZeroOne =
+      modelProvider === "zenmux" ||
+      lower.startsWith("moonshotai/") ||
+      lower.includes("kimi");
+    if (needZeroOne) {
+      return Math.min(Math.max(0, normalizedTemperature), 1);
+    }
+    return Math.max(0, normalizedTemperature);
+  })();
+
+  let processedMessages: unknown[] = messages;
+  if (!supportsMultipartContent(model)) {
+    processedMessages = flattenMultipartContent(processedMessages);
+  } else if (modelProvider === "dashscope") {
+    processedMessages = stripCacheControl(processedMessages);
+  } else if (!supportsExplicitCaching(model)) {
+    processedMessages = stripCacheControl(processedMessages);
+  }
+
+  if (modelProvider === "dashscope") {
+    const dashscopeApiKey = headerDashscopeKey || process.env.DASHSCOPE_API_KEY;
+    if (!dashscopeApiKey) {
+      return { ok: false, status: 500, error: "DASHSCOPE_API_KEY not configured on server" };
+    }
+
+    const normalizedModel = normalizeDashscopeModelName(model);
+    const requestBody: Record<string, unknown> = {
+      model: normalizedModel,
+      messages: processedMessages,
+      temperature: cappedTemperature,
+    };
+
+    if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+      requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+    }
+
+    if (response_format) {
+      requestBody.response_format = response_format;
+    }
+
+    const response = await fetch(DASHSCOPE_CHAT_COMPLETIONS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${dashscopeApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let parsed: unknown = undefined;
+      try {
+        parsed = JSON.parse(errorText);
+      } catch {
+        // ignore
+      }
+      return {
+        ok: false,
+        status: response.status,
+        error: `DashScope API error: ${response.status}`,
+        details: parsed ?? errorText,
+      };
+    }
+
+    const result = await response.json();
+    return { ok: true, data: result };
+  }
+
+  const apiKey = headerApiKey || process.env.ZENMUX_API_KEY;
+  if (!apiKey) {
+    return { ok: false, status: 500, error: "ZENMUX_API_KEY not configured on server" };
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: processedMessages,
+    temperature: cappedTemperature,
+  };
+
+  if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+    requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+  }
+
+  const isGoogleModel = model?.toLowerCase().startsWith("google/");
+  if (isGoogleModel) {
+    requestBody.reasoning = { enabled: false };
+  } else if (reasoning) {
+    requestBody.reasoning = reasoning;
+  }
+
+  if (response_format && supportsResponseFormat(model)) {
+    requestBody.response_format = response_format;
+  }
+
+  const response = await fetch(ZENMUX_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return {
+      ok: false,
+      status: response.status,
+      error: `ZenMux API error: ${response.status} - ${errorText}`,
+    };
+  }
+
+  const result = await response.json();
+  return { ok: true, data: result };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    if (Array.isArray(body?.requests)) {
+      const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim() || null;
+      const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
+      const requests = body.requests as ChatRequestPayload[];
+      const results = await Promise.all(
+        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey))
+      );
+      return NextResponse.json({ results });
+    }
     const {
       model,
       messages,

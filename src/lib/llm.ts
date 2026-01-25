@@ -74,6 +74,10 @@ export interface GenerateOptions {
   response_format?: ResponseFormat;
 }
 
+export type BatchCompletionResult =
+  | { ok: true; content: string; reasoning_details?: unknown; raw: ChatCompletionResponse }
+  | { ok: false; error: string; status?: number };
+
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
 function parseRetryAfterMs(response: Response): number | null {
@@ -228,6 +232,65 @@ export async function generateCompletion(
     reasoning_details: assistantMessage.reasoning_details,
     raw: result,
   };
+}
+
+export async function generateCompletionBatch(
+  requests: GenerateOptions[]
+): Promise<BatchCompletionResult[]> {
+  if (!Array.isArray(requests) || requests.length === 0) return [];
+
+  const customEnabled = isCustomKeyEnabled();
+  const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
+  const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (headerApiKey) {
+    headers["X-Zenmux-Api-Key"] = headerApiKey;
+  }
+  if (dashscopeApiKey) {
+    headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
+  }
+
+  const response = await fetchWithRetry(
+    "/api/chat",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ requests }),
+    },
+    3
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(formatApiError(response.status, errorText));
+  }
+
+  const data = await response.json();
+  const results = Array.isArray(data?.results) ? data.results : [];
+
+  return results.map((item: any) => {
+    if (!item || item.ok !== true) {
+      return {
+        ok: false,
+        error: String(item?.error || "Unknown error"),
+        status: typeof item?.status === "number" ? item.status : undefined,
+      };
+    }
+    const raw = item.data as ChatCompletionResponse;
+    const choice = raw?.choices?.[0];
+    const assistantMessage = choice?.message;
+    if (!assistantMessage) {
+      return { ok: false, error: "No response from model" };
+    }
+    return {
+      ok: true,
+      content: assistantMessage.content,
+      reasoning_details: assistantMessage.reasoning_details,
+      raw,
+    };
+  });
 }
 
 export async function* generateCompletionStream(

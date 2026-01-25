@@ -53,11 +53,9 @@ export interface ModelRef {
 export interface Persona {
   styleLabel: string;
   voiceRules: string[];
-  riskBias: "safe" | "balanced" | "aggressive";
   mbti: string;
   gender: "male" | "female" | "nonbinary";
   age: number;
-  backgroundStory: string;
   voiceId?: string;
   relationships?: string[];
   logicStyle?: string;
