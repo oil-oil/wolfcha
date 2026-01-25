@@ -747,6 +747,7 @@ export function WelcomeScreen({
 
       <div className="wc-welcome-actions absolute top-5 right-5 z-20 flex items-center gap-2">
         <div className="hidden sm:flex items-center gap-2">
+          <LocaleSwitcher className="shrink-0" />
           <a
             href="https://github.com/oil-oil/wolfcha"
             target="_blank"
@@ -831,6 +832,7 @@ export function WelcomeScreen({
         </div>
 
         <div className="flex sm:hidden items-center gap-2">
+          <LocaleSwitcher className="shrink-0" />
           <Button
             type="button"
             variant="outline"

@@ -893,8 +893,7 @@ export function DialogArea({
         {/* 对话气泡 - 简化结构，移除嵌套 */}
         <div
           className={cn(
-            "wc-panel wc-panel--strong rounded-xl p-5 relative transition-opacity",
-            showDialogueBlock ? "h-[160px] overflow-hidden" : "min-h-[160px]",
+            "wc-panel wc-panel--strong rounded-xl p-5 relative transition-opacity min-h-[160px]",
             shouldShowDialogPanel
               ? "opacity-100"
               : "opacity-0 pointer-events-none bg-transparent border-transparent shadow-none"
@@ -1322,7 +1321,7 @@ export function DialogArea({
                     )}
                     
                     {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}
-                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
+                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 pr-1 whitespace-pre-wrap break-words">
                       {renderPlayerMentions(
                         waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText,
                         gameState.players,

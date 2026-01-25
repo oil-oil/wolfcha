@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AppLocale } from "./config";
-import { getLocale, loadLocaleFromStorage, setLocale, subscribeLocale } from "./locale-store";
+import { defaultLocale, type AppLocale } from "./config";
+import { loadLocaleFromStorage, setLocale, subscribeLocale } from "./locale-store";
 
 export function useAppLocale() {
-  const [locale, setLocaleState] = useState<AppLocale>(() => getLocale());
+  const [locale, setLocaleState] = useState<AppLocale>(defaultLocale);
 
   useEffect(() => {
     const stored = loadLocaleFromStorage();

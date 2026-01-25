@@ -365,37 +365,13 @@ const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfil
     .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return `你是狼人杀游戏的角色设计师。
-
-【场景】
-${scenario.title} - ${scenario.description}
-
-【全员档案】
-${roster}
-
-【任务】
-为每个角色补全 persona，让他们在狼人杀游戏中有自然且有辨识度的说话风格。
-请自由发挥，确保每个人的性格、说话习惯和表达节奏都有明显差异，但整体像真实玩家而不是戏剧角色。
-
-【重要约束】
-- 这是狼人杀游戏，角色需要能正常讨论、分析、投票
-- 角色发言需聚焦局内，不要引导编剧情节或场外聊天
-- voiceRules 需体现具体说话特征
-- styleLabel 用简短标签概括性格或表达方式
-
-【输出要求】
-1. 必须输出 JSON：{ "characters": [...] }
-2. 必须恰好 ${allProfiles.length} 个角色，顺序与档案一致
-3. persona.gender/age/mbti 必须与档案完全一致
-
-【输出结构】
-{
-  "characters": [
-${schema}
-  ]
-}
-
-现在输出：`;
+  return t("characterGenerator.fullPersonasPrompt", {
+    title: scenario.title,
+    description: scenario.description,
+    roster,
+    count: allProfiles.length,
+    schema,
+  });
 };
 
 const buildRepairBaseProfilesPrompt = (count: number, scenario: GameScenario, raw: unknown) => {
@@ -441,34 +417,14 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
     .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return `你是一个严格的 JSON 修复器。
-
-【目标】
-把输入修复成严格 JSON 对象，结构为 { "characters": [...] }，并确保 characters 恰好 ${allProfiles.length} 个。
-
-【必须严格满足】
-1. characters 顺序必须与基础档案一致
-2. persona.gender/age/mbti 必须与对应档案一致
-3. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板
-
-【场景】
-${scenario.title}
-${scenario.description}
-
-【全员基础档案】
-${roster}
-
-【输入】
-${rawStr}
-
-【输出】
-{
-  "characters": [
-${schema}
-  ]
-}
-
-注意：只输出 JSON，不要解释。`;
+  return t("characterGenerator.repairFullPersonasPrompt", {
+    title: scenario.title,
+    description: scenario.description,
+    roster,
+    raw: rawStr,
+    count: allProfiles.length,
+    schema,
+  });
 };
 
 export async function generateCharacters(

@@ -52,17 +52,17 @@ export const getRoleKnowHow = (role: string): string => {
   const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return t("promptUtils.roleKnowHow.werewolf");
+      return t.raw("promptUtils.roleKnowHow.werewolf");
     case "Seer":
-      return t("promptUtils.roleKnowHow.seer");
+      return t.raw("promptUtils.roleKnowHow.seer");
     case "Witch":
-      return t("promptUtils.roleKnowHow.witch");
+      return t.raw("promptUtils.roleKnowHow.witch");
     case "Hunter":
-      return t("promptUtils.roleKnowHow.hunter");
+      return t.raw("promptUtils.roleKnowHow.hunter");
     case "Guard":
-      return t("promptUtils.roleKnowHow.guard");
+      return t.raw("promptUtils.roleKnowHow.guard");
     default:
-      return t("promptUtils.roleKnowHow.villager");
+      return t.raw("promptUtils.roleKnowHow.villager");
   }
 };
 

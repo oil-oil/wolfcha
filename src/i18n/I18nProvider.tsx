@@ -4,14 +4,14 @@ import { NextIntlClientProvider } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { defaultLocale, localeToHtmlLang, type AppLocale } from "./config";
 import { getMessages } from "./messages";
-import { getLocale, loadLocaleFromStorage, setLocale as setLocaleStore, subscribeLocale } from "./locale-store";
+import { loadLocaleFromStorage, setLocale as setLocaleStore, subscribeLocale } from "./locale-store";
 
 type I18nProviderProps = {
   children: React.ReactNode;
 };
 
 export function I18nProvider({ children }: I18nProviderProps) {
-  const [locale, setLocale] = useState<AppLocale>(() => getLocale() ?? defaultLocale);
+  const [locale, setLocale] = useState<AppLocale>(defaultLocale);
 
   useEffect(() => {
     const stored = loadLocaleFromStorage();

@@ -65,7 +65,7 @@ export function LocaleSwitcher({ className = "" }: LocaleSwitcherProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex h-9 items-center justify-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-1"
+        className="flex h-7 items-center justify-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2 text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-1"
         aria-label={t("locale.label")}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
