@@ -3,9 +3,21 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { useCallback, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GameState } from "@/types/game";
+import { aiLogger } from "@/lib/ai-logger";
+import { useTranslations } from "next-intl";
+
+interface SoundSettingsSectionProps {
+  bgmVolume: number;
+  isSoundEnabled: boolean;
+  isAiVoiceEnabled: boolean;
+  isAutoAdvanceDialogueEnabled?: boolean;
+  onBgmVolumeChange: (value: number) => void;
+  onSoundEnabledChange: (value: boolean) => void;
+  onAiVoiceEnabledChange: (value: boolean) => void;
+  onAutoAdvanceDialogueEnabledChange?: (value: boolean) => void;
+}
 
 interface SettingsModalProps {
   open: boolean;
@@ -13,10 +25,77 @@ interface SettingsModalProps {
   bgmVolume: number;
   isSoundEnabled: boolean;
   isAiVoiceEnabled: boolean;
+  isAutoAdvanceDialogueEnabled: boolean;
   gameState: GameState;
   onBgmVolumeChange: (value: number) => void;
   onSoundEnabledChange: (value: boolean) => void;
   onAiVoiceEnabledChange: (value: boolean) => void;
+  onAutoAdvanceDialogueEnabledChange: (value: boolean) => void;
+}
+
+export function SoundSettingsSection({
+  bgmVolume,
+  isSoundEnabled,
+  isAiVoiceEnabled,
+  isAutoAdvanceDialogueEnabled = false,
+  onBgmVolumeChange,
+  onSoundEnabledChange,
+  onAiVoiceEnabledChange,
+  onAutoAdvanceDialogueEnabledChange,
+}: SoundSettingsSectionProps) {
+  const volumePercent = Math.round(bgmVolume * 100);
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-sm text-[var(--text-primary)]">
+          <span>背景音量</span>
+          <span className="text-[var(--text-secondary)]">{volumePercent}%</span>
+        </div>
+        <Slider
+          min={0}
+          max={100}
+          step={1}
+          value={volumePercent}
+          onValueChange={(value) => onBgmVolumeChange(value / 100)}
+          disabled={!isSoundEnabled}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm font-medium text-[var(--text-primary)]">总开关</div>
+          <div className="text-xs text-[var(--text-muted)]">关闭后将静音所有音效</div>
+        </div>
+        <Switch checked={isSoundEnabled} onCheckedChange={onSoundEnabledChange} />
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm font-medium text-[var(--text-primary)]">角色配音</div>
+          <div className="text-xs text-[var(--text-muted)]">控制 AI 角色语音播放</div>
+        </div>
+        <Switch
+          checked={isAiVoiceEnabled}
+          onCheckedChange={onAiVoiceEnabledChange}
+          disabled={!isSoundEnabled}
+        />
+      </div>
+
+      {onAutoAdvanceDialogueEnabledChange && (
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">自动播放对话</div>
+            <div className="text-xs text-[var(--text-muted)]">开启后将自动推进对话，无需按回车</div>
+          </div>
+          <Switch
+            checked={isAutoAdvanceDialogueEnabled}
+            onCheckedChange={onAutoAdvanceDialogueEnabledChange}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SettingsModal({
@@ -25,18 +104,37 @@ export function SettingsModal({
   bgmVolume,
   isSoundEnabled,
   isAiVoiceEnabled,
+  isAutoAdvanceDialogueEnabled,
   gameState,
   onBgmVolumeChange,
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
+  onAutoAdvanceDialogueEnabledChange,
 }: SettingsModalProps) {
   const t = useTranslations();
-  const volumePercent = Math.round(bgmVolume * 100);
-
   const [view, setView] = useState<"settings" | "about">("settings");
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
+  const [aiLogs, setAiLogs] = useState<unknown[]>([]);
 
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const logs = await aiLogger.getLogs();
+        if (!cancelled) setAiLogs(logs as unknown[]);
+      } catch {
+        if (!cancelled) setAiLogs([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const logJsonText = useMemo(() => {
     const exportedAt = new Date().toISOString();
@@ -58,12 +156,14 @@ export function SettingsModal({
         bgmVolume,
         isSoundEnabled,
         isAiVoiceEnabled,
+        isAutoAdvanceDialogueEnabled,
       },
+      aiLogs,
       gameState,
     };
 
     return JSON.stringify(payload, null, 2);
-  }, [appVersion, bgmVolume, gameState, isAiVoiceEnabled, isSoundEnabled]);
+  }, [aiLogs, appVersion, bgmVolume, gameState, isAiVoiceEnabled, isAutoAdvanceDialogueEnabled, isSoundEnabled]);
 
   const handleCopyLog = useCallback(async () => {
     try {
@@ -158,50 +258,16 @@ export function SettingsModal({
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="space-y-5">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm text-[var(--text-primary)]">
-                  <span>{t("settings.audio.bgmVolume")}</span>
-                  <span className="text-[var(--text-secondary)]">{volumePercent}%</span>
-                </div>
-                <Slider
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={volumePercent}
-                  onValueChange={(value) => onBgmVolumeChange(value / 100)}
-                  disabled={!isSoundEnabled}
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.audio.masterSwitch")}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    {t("settings.audio.masterDescription")}
-                  </div>
-                </div>
-                <Switch checked={isSoundEnabled} onCheckedChange={onSoundEnabledChange} />
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.audio.aiVoice")}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    {t("settings.audio.aiVoiceDescription")}
-                  </div>
-                </div>
-                <Switch
-                  checked={isAiVoiceEnabled}
-                  onCheckedChange={onAiVoiceEnabledChange}
-                  disabled={!isSoundEnabled}
-                />
-              </div>
-            </div>
+            <SoundSettingsSection
+              bgmVolume={bgmVolume}
+              isSoundEnabled={isSoundEnabled}
+              isAiVoiceEnabled={isAiVoiceEnabled}
+              isAutoAdvanceDialogueEnabled={isAutoAdvanceDialogueEnabled}
+              onBgmVolumeChange={onBgmVolumeChange}
+              onSoundEnabledChange={onSoundEnabledChange}
+              onAiVoiceEnabledChange={onAiVoiceEnabledChange}
+              onAutoAdvanceDialogueEnabledChange={onAutoAdvanceDialogueEnabledChange}
+            />
 
             <div className="rounded-lg border-2 border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 space-y-3">
               <div>

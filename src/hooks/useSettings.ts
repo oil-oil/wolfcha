@@ -9,13 +9,15 @@ export interface AudioSettings {
   isSoundEnabled: boolean;
   isAiVoiceEnabled: boolean;
   isGenshinMode: boolean;
+  isAutoAdvanceDialogueEnabled: boolean;
 }
 
 const defaultSettings: AudioSettings = {
   bgmVolume: 0.35,
   isSoundEnabled: true,
-  isAiVoiceEnabled: true,
+  isAiVoiceEnabled: false,
   isGenshinMode: false,
+  isAutoAdvanceDialogueEnabled: false,
 };
 
 const clampVolume = (value: number) => Math.min(1, Math.max(0, value));
@@ -27,10 +29,13 @@ const normalizeSettings = (value: Partial<AudioSettings>): AudioSettings => {
     ),
     isSoundEnabled:
       typeof value.isSoundEnabled === "boolean" ? value.isSoundEnabled : defaultSettings.isSoundEnabled,
-    isAiVoiceEnabled:
-      typeof value.isAiVoiceEnabled === "boolean" ? value.isAiVoiceEnabled : defaultSettings.isAiVoiceEnabled,
+    isAiVoiceEnabled: defaultSettings.isAiVoiceEnabled,
     isGenshinMode:
       typeof value.isGenshinMode === "boolean" ? value.isGenshinMode : defaultSettings.isGenshinMode,
+    isAutoAdvanceDialogueEnabled:
+      typeof value.isAutoAdvanceDialogueEnabled === "boolean"
+        ? value.isAutoAdvanceDialogueEnabled
+        : defaultSettings.isAutoAdvanceDialogueEnabled,
   };
 };
 
@@ -57,7 +62,13 @@ export function useSettings() {
 
   useEffect(() => {
     if (!isLoaded) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    const persisted: Partial<AudioSettings> = {
+      bgmVolume: settings.bgmVolume,
+      isSoundEnabled: settings.isSoundEnabled,
+      isGenshinMode: settings.isGenshinMode,
+      isAutoAdvanceDialogueEnabled: settings.isAutoAdvanceDialogueEnabled,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
   }, [settings, isLoaded]);
 
   const setBgmVolume = useCallback((value: number) => {
@@ -72,6 +83,10 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, isAiVoiceEnabled: value }));
   }, []);
 
+  const setAutoAdvanceDialogueEnabled = useCallback((value: boolean) => {
+    setSettings((prev) => ({ ...prev, isAutoAdvanceDialogueEnabled: value }));
+  }, []);
+
   const setGenshinMode = useCallback((value: boolean) => {
     setSettings((prev) => ({ ...prev, isGenshinMode: value }));
   }, []);
@@ -83,5 +98,6 @@ export function useSettings() {
     setSoundEnabled,
     setAiVoiceEnabled,
     setGenshinMode,
+    setAutoAdvanceDialogueEnabled,
   };
 }

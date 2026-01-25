@@ -21,8 +21,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing text or voiceId" }, { status: 400 });
     }
 
-    const apiKey = process.env.MINIMAX_API_KEY;
-    const groupId = process.env.MINIMAX_GROUP_ID;
+    const headerApiKey = req.headers.get("x-minimax-api-key")?.trim();
+    const headerGroupId = req.headers.get("x-minimax-group-id")?.trim();
+    const apiKey = headerApiKey || process.env.MINIMAX_API_KEY;
+    const groupId = headerGroupId || process.env.MINIMAX_GROUP_ID;
 
     if (!apiKey || !groupId) {
       console.error("Missing MiniMax credentials");

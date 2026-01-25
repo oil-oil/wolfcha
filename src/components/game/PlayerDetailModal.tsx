@@ -39,6 +39,17 @@ const getRoleIcon = (role: string, size: number = 20) => {
   }
 };
 
+const getRoleName = (role: string) => {
+  switch (role) {
+    case "Werewolf": return "狼人";
+    case "Seer": return "预言家";
+    case "Witch": return "女巫";
+    case "Hunter": return "猎人";
+    case "Guard": return "守卫";
+    default: return "村民";
+  }
+};
+
 export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGenshinMode = false }: PlayerDetailModalProps) {
   const t = useTranslations();
   const [renderPlayer, setRenderPlayer] = useState<Player | null>(player);
@@ -150,7 +161,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                 <h2 className="text-xl font-black text-[var(--text-primary)]">{renderPlayer.displayName}</h2>
                 {showModelTag && (
                   <div className="mt-1 text-xs font-semibold text-[var(--text-muted)]">
-                    模型：{modelLabel}
+                    {t("playerDetail.model", { model: modelLabel })}
                   </div>
                 )}
                 
@@ -198,19 +209,6 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                           {persona.logicStyle}
                         </span>
                       )}
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 font-medium">
-                        {getStrategyLabel(persona.riskBias)}
-                      </span>
-                    </div>
-
-                    {/* 背景故事 */}
-                    <div>
-                      <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-                        {t("playerDetail.background")}
-                      </h4>
-                      <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-                        {persona.backgroundStory}
-                      </p>
                     </div>
 
                     {/* 说话风格 */}

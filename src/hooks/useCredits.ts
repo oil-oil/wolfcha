@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 
 const REFERRAL_STORAGE_KEY = "wolfcha_referral";
 
@@ -14,6 +15,8 @@ export function useCredits() {
   const [totalReferrals, setTotalReferrals] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [dailyBonusClaimed, setDailyBonusClaimed] = useState<boolean | null>(null);
+  const dailyBonusClaimedRef = useRef(false);
 
   const fetchCredits = useCallback(async () => {
     if (!user) return;
@@ -42,10 +45,15 @@ export function useCredits() {
   const consumeCredit = useCallback(async (): Promise<boolean> => {
     if (!session) return false;
 
+    const customEnabled = isCustomKeyEnabled();
+    const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
+    const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
     const res = await fetch("/api/credits/consume", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${session.access_token}`,
+        ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
+        ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
       },
     });
 
@@ -62,6 +70,33 @@ export function useCredits() {
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false);
+  }, []);
+
+  const claimDailyBonus = useCallback(async (accessToken: string): Promise<void> => {
+    if (dailyBonusClaimedRef.current) return;
+    dailyBonusClaimedRef.current = true;
+
+    try {
+      const res = await fetch("/api/credits/daily-bonus", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const payload = await res.json() as {
+        credits: number;
+        bonusClaimed: boolean;
+        bonusAmount?: number;
+      };
+
+      setCredits(payload.credits);
+      setDailyBonusClaimed(payload.bonusClaimed);
+    } catch {
+      // Silently fail - daily bonus is not critical
+    }
   }, []);
 
   useEffect(() => {
@@ -93,6 +128,9 @@ export function useCredits() {
             });
             localStorage.removeItem(REFERRAL_STORAGE_KEY);
           }
+
+          // 自动领取每日签到奖励
+          void claimDailyBonus(session.access_token);
         }
       }
     );
@@ -122,5 +160,6 @@ export function useCredits() {
     signOut,
     isPasswordRecovery,
     clearPasswordRecovery,
+    dailyBonusClaimed,
   };
 }

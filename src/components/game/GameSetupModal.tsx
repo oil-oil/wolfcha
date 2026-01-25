@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -10,8 +11,21 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type { DifficultyLevel } from "@/types/game";
-import { useMemo } from "react";
+import { SoundSettingsSection } from "@/components/game/SettingsModal";
 import { useTranslations } from "next-intl";
+
+interface DifficultyOption {
+  value: DifficultyLevel;
+  label: string;
+  description: string;
+}
+
+interface PlayerCountOption {
+  value: number;
+  label: string;
+  description: string;
+  roles: string;
+}
 
 interface GameSetupModalProps {
   open: boolean;
@@ -22,10 +36,27 @@ interface GameSetupModalProps {
   onPlayerCountChange: (value: number) => void;
   isGenshinMode: boolean;
   onGenshinModeChange: (value: boolean) => void;
+  bgmVolume: number;
+  isSoundEnabled: boolean;
+  isAiVoiceEnabled: boolean;
+  onBgmVolumeChange: (value: number) => void;
+  onSoundEnabledChange: (value: boolean) => void;
+  onAiVoiceEnabledChange: (value: boolean) => void;
 }
 
-type DifficultyOption = { value: DifficultyLevel; label: string; description: string };
-type PlayerCountOption = { value: number; label: string; description: string; roles: string };
+const DIFFICULTY_OPTIONS: Array<{ value: DifficultyLevel; label: string; description: string }> = [
+  { value: "easy", label: "新手局", description: "轻松氛围，适合初次体验" },
+  { value: "normal", label: "标准局", description: "均衡推理，逻辑与表演平衡" },
+  { value: "hard", label: "高阶局", description: "深度对抗，推理更复杂" },
+];
+
+const PLAYER_COUNT_OPTIONS: Array<{ value: number; label: string; description: string; roles: string }> = [
+  { value: 8, label: "8人局", description: "3狼 3神 2民", roles: "神职：预言家、女巫、猎人" },
+  { value: 9, label: "9人局", description: "3狼 3神 3民", roles: "神职：预言家、女巫、猎人" },
+  { value: 10, label: "10人局", description: "3狼 4神 3民", roles: "神职：预言家、女巫、猎人、守卫" },
+  { value: 11, label: "11人局", description: "4狼 4神 3民", roles: "神职：预言家、女巫、猎人、守卫" },
+  { value: 12, label: "12人局", description: "4狼 4神 4民", roles: "神职：预言家、女巫、猎人、守卫" },
+];
 
 export function GameSetupModal({
   open,
@@ -36,6 +67,12 @@ export function GameSetupModal({
   onPlayerCountChange,
   isGenshinMode,
   onGenshinModeChange,
+  bgmVolume,
+  isSoundEnabled,
+  isAiVoiceEnabled,
+  onBgmVolumeChange,
+  onSoundEnabledChange,
+  onAiVoiceEnabledChange,
 }: GameSetupModalProps) {
   const t = useTranslations();
   const difficultyOptions = useMemo<DifficultyOption[]>(() => ([
@@ -150,6 +187,18 @@ export function GameSetupModal({
             </div>
             </div>
             <Switch className="shrink-0 mt-1" checked={isGenshinMode} onCheckedChange={onGenshinModeChange} />
+          </div>
+
+          <div className="border-t border-[var(--border-color)] pt-4">
+            <div className="text-sm font-medium text-[var(--text-primary)] mb-3">声音</div>
+            <SoundSettingsSection
+              bgmVolume={bgmVolume}
+              isSoundEnabled={isSoundEnabled}
+              isAiVoiceEnabled={isAiVoiceEnabled}
+              onBgmVolumeChange={onBgmVolumeChange}
+              onSoundEnabledChange={onSoundEnabledChange}
+              onAiVoiceEnabledChange={onAiVoiceEnabledChange}
+            />
           </div>
         </div>
       </DialogContent>

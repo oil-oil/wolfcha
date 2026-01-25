@@ -27,6 +27,7 @@ export class PhaseManager {
       DAY_LAST_WORDS: daySpeechPhase,
       DAY_BADGE_SPEECH: daySpeechPhase,
       DAY_PK_SPEECH: daySpeechPhase,
+      DAY_BADGE_SIGNUP: badgePhase,
       DAY_BADGE_ELECTION: badgePhase,
       BADGE_TRANSFER: badgePhase,
       HUNTER_SHOOT: hunterPhase,

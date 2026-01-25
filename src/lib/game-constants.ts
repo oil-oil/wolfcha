@@ -47,13 +47,6 @@ export const ROLE_CONFIG = {
   ] as const,
 } as const;
 
-/** 警长竞选报名概率配置 */
-export const BADGE_SIGNUP_PROBABILITY = {
-  AGGRESSIVE: 0.55,
-  BALANCED: 0.35,
-  SAFE: 0.18,
-} as const;
-
 /** 阶段分类 */
 export const PHASE_CATEGORIES = {
   NIGHT_PHASES: [

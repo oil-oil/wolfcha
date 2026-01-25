@@ -1,5 +1,6 @@
-import { generateJSON } from "./openrouter";
-import { AVAILABLE_MODELS, GENERATOR_MODEL, type GameScenario, type ModelRef, type Persona } from "@/types/game";
+import { generateJSON } from "./llm";
+import { AVAILABLE_MODELS, ALL_MODELS, GENERATOR_MODEL, type GameScenario, type ModelRef, type Persona } from "@/types/game";
+import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
 import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
@@ -27,6 +28,57 @@ const MODEL_DISPLAY_NAME_MAP: Array<{ match: RegExp; label: string }> = [
   { match: /openai|gpt/i, label: "OpenAI" },
   { match: /kimi|moonshot/i, label: "Kimi" },
 ];
+
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+export const sampleModelRefs = (count: number): ModelRef[] => {
+  // Default pool when custom key is not enabled
+  const defaultPool =
+    AVAILABLE_MODELS.length > 0
+      ? AVAILABLE_MODELS
+      : [{ provider: "zenmux" as const, model: GENERATOR_MODEL }];
+
+  const pool = (() => {
+    if (!isCustomKeyEnabled()) return defaultPool;
+
+    // When custom key is enabled, use ALL_MODELS as the full available pool
+    const fullPool = ALL_MODELS.length > 0 ? ALL_MODELS : defaultPool;
+
+    const allowedProviders = new Set<ModelRef["provider"]>();
+    if (hasZenmuxKey()) allowedProviders.add("zenmux");
+    if (hasDashscopeKey()) allowedProviders.add("dashscope");
+    if (allowedProviders.size === 0) return defaultPool;
+
+    // Filter by allowed providers
+    const allowedPool = fullPool.filter((ref) => allowedProviders.has(ref.provider));
+    if (allowedPool.length === 0) return defaultPool;
+
+    // Filter by user's selected models
+    const selectedModels = getSelectedModels();
+    if (selectedModels.length === 0) return allowedPool;
+    const selectedPool = allowedPool.filter((ref) => selectedModels.includes(ref.model));
+    return selectedPool.length > 0 ? selectedPool : allowedPool;
+  })();
+
+  if (!Number.isFinite(count) || count <= 0) return [];
+
+  if (count <= pool.length) {
+    return shuffleArray(pool).slice(0, count);
+  }
+
+  const out = shuffleArray(pool);
+  while (out.length < count) {
+    out.push(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  return out;
+};
 
 const getModelDisplayName = (modelRef: ModelRef): string => {
   const raw = modelRef.model ?? "";
@@ -78,10 +130,9 @@ const resolveNicknameMap = async (requirements: Array<{ model: string; count: nu
     try {
       const prompt = buildNicknamePrompt(missing);
       const raw = await generateJSON<unknown>({
-        model: GENERATOR_MODEL,
+        model: getGeneratorModel(),
         messages: [{ role: "user", content: prompt }],
         temperature: AI_TEMPERATURE.BALANCED,
-        max_tokens: 800,
       });
       const normalized = normalizeNicknameResponse(raw);
       missing.forEach((req) => {
@@ -120,46 +171,15 @@ const createGenshinPersona = (voiceId?: string): Persona => {
   return {
     styleLabel: "neutral",
     voiceRules: ["concise"],
-    riskBias: "balanced",
     mbti: "NA",
     gender: "nonbinary",
     age: 0,
-    backgroundStory: "",
     voiceId,
   };
 };
 
- const shuffleArray = <T,>(array: T[]): T[] => {
-   const shuffled = [...array];
-   for (let i = shuffled.length - 1; i > 0; i -= 1) {
-     const j = Math.floor(Math.random() * (i + 1));
-     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-   }
-   return shuffled;
- };
-
- const dedupeModelRefs = (refs: ModelRef[]): ModelRef[] => {
-   const out: ModelRef[] = [];
-   const seen = new Set<string>();
-   refs.forEach((ref) => {
-     const key = `${ref.provider}:${ref.model}`;
-     if (seen.has(key)) return;
-     seen.add(key);
-     out.push(ref);
-   });
-   return out;
- };
-
 export const buildGenshinModelRefs = (count: number): ModelRef[] => {
-  const basePool = AVAILABLE_MODELS.length > 0 ? AVAILABLE_MODELS : [{ provider: "openrouter" as const, model: GENERATOR_MODEL }];
-  const pool = dedupeModelRefs(basePool);
-  if (pool.length === 0 || count <= 0) return [];
-
-  if (count <= pool.length) {
-    return shuffleArray(pool).slice(0, count);
-  }
-
-  return Array.from({ length: count }, () => pool[Math.floor(Math.random() * pool.length)]);
+  return sampleModelRefs(count);
 };
 
 export const generateGenshinModeCharacters = async (
@@ -277,11 +297,9 @@ const isValidPersona = (p: any): p is Persona => {
   if (!p || typeof p !== "object") return false;
   if (typeof p.styleLabel !== "string") return false;
   if (!Array.isArray(p.voiceRules) || p.voiceRules.filter((x: any) => typeof x === "string" && x.trim()).length === 0) return false;
-  if (p.riskBias !== "safe" && p.riskBias !== "balanced" && p.riskBias !== "aggressive") return false;
   if (!isValidMbti(p.mbti)) return false;
   if (!isValidGender(p.gender)) return false;
   if (typeof p.age !== "number" || !Number.isFinite(p.age) || p.age < 16 || p.age > 70) return false;
-  if (typeof p.backgroundStory !== "string" || !p.backgroundStory.trim()) return false;
   if (p.relationships !== undefined) {
     if (!Array.isArray(p.relationships)) return false;
     if (p.relationships.some((x: any) => typeof x !== "string")) return false;
@@ -344,16 +362,40 @@ const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfil
     .join("\n");
 
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "riskBias": "safe"|"balanced"|"aggressive", "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age}, "backgroundStory": string } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return t("characterGenerator.fullPersonasPrompt", {
-    title: scenario.title,
-    description: scenario.description,
-    roster,
-    schema,
-    count: allProfiles.length,
-  });
+  return `你是狼人杀游戏的角色设计师。
+
+【场景】
+${scenario.title} - ${scenario.description}
+
+【全员档案】
+${roster}
+
+【任务】
+为每个角色补全 persona，让他们在狼人杀游戏中有自然且有辨识度的说话风格。
+请自由发挥，确保每个人的性格、说话习惯和表达节奏都有明显差异，但整体像真实玩家而不是戏剧角色。
+
+【重要约束】
+- 这是狼人杀游戏，角色需要能正常讨论、分析、投票
+- 角色发言需聚焦局内，不要引导编剧情节或场外聊天
+- voiceRules 需体现具体说话特征
+- styleLabel 用简短标签概括性格或表达方式
+
+【输出要求】
+1. 必须输出 JSON：{ "characters": [...] }
+2. 必须恰好 ${allProfiles.length} 个角色，顺序与档案一致
+3. persona.gender/age/mbti 必须与档案完全一致
+
+【输出结构】
+{
+  "characters": [
+${schema}
+  ]
+}
+
+现在输出：`;
 };
 
 const buildRepairBaseProfilesPrompt = (count: number, scenario: GameScenario, raw: unknown) => {
@@ -396,17 +438,37 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
     .join("\n");
 
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "riskBias": "safe" | "balanced" | "aggressive", "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age}, "backgroundStory": string } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return t("characterGenerator.repairFullPersonasPrompt", {
-    count: allProfiles.length,
-    title: scenario.title,
-    description: scenario.description,
-    roster,
-    raw: rawStr,
-    schema,
-  });
+  return `你是一个严格的 JSON 修复器。
+
+【目标】
+把输入修复成严格 JSON 对象，结构为 { "characters": [...] }，并确保 characters 恰好 ${allProfiles.length} 个。
+
+【必须严格满足】
+1. characters 顺序必须与基础档案一致
+2. persona.gender/age/mbti 必须与对应档案一致
+3. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板
+
+【场景】
+${scenario.title}
+${scenario.description}
+
+【全员基础档案】
+${roster}
+
+【输入】
+${rawStr}
+
+【输出】
+{
+  "characters": [
+${schema}
+  ]
+}
+
+注意：只输出 JSON，不要解释。`;
 };
 
 export async function generateCharacters(
@@ -423,7 +485,7 @@ export async function generateCharacters(
     const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
 
     const baseResult = await generateJSON<unknown>({
-      model: GENERATOR_MODEL,
+      model: getGeneratorModel(),
       messages: [{ role: "user", content: basePrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
       max_tokens: 1200,
@@ -435,7 +497,7 @@ export async function generateCharacters(
     if (!isValidBaseProfiles(baseProfiles, count)) {
       const baseRepairPrompt = buildRepairBaseProfilesPrompt(count, usedScenario, normalizedBase.raw);
       const baseRepaired = await generateJSON<unknown>({
-        model: GENERATOR_MODEL,
+        model: getGeneratorModel(),
         messages: [{ role: "user", content: baseRepairPrompt }],
         temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
         max_tokens: 1200,
@@ -453,7 +515,7 @@ export async function generateCharacters(
 
     const fullPrompt = buildFullPersonasPrompt(usedScenario, baseProfiles);
     const fullResult = await generateJSON<unknown>({
-      model: GENERATOR_MODEL,
+      model: getGeneratorModel(),
       messages: [{ role: "user", content: fullPrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
       max_tokens: 6000,
@@ -465,7 +527,7 @@ export async function generateCharacters(
     if (!alignedCharacters) {
       const repairPrompt = buildRepairFullPersonasPrompt(usedScenario, baseProfiles, normalized.raw);
       const repaired = await generateJSON<unknown>({
-        model: GENERATOR_MODEL,
+        model: getGeneratorModel(),
         messages: [{ role: "user", content: repairPrompt }],
         temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
         max_tokens: 6000,
@@ -493,7 +555,6 @@ export async function generateCharacters(
         persona: {
           ...c.persona,
           voiceId,
-          backgroundStory: profile.basicInfo,
           relationships: undefined,
         },
       };
@@ -505,7 +566,7 @@ export async function generateCharacters(
     await aiLogger.log({
       type: "character_generation",
       request: { 
-        model: GENERATOR_MODEL,
+        model: getGeneratorModel(),
         messages: [{ role: "user", content: fullPrompt }],
       },
       response: { 

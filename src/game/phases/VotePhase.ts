@@ -8,6 +8,7 @@ import {
   buildPlayerTodaySpeech,
   getRoleText,
   getWinCondition,
+  getRoleKnowHow,
   buildSystemTextFromParts,
 } from "@/lib/prompt-utils";
 import {
@@ -128,28 +129,30 @@ export class VotePhase extends GamePhase {
     const todayTranscript = buildTodayTranscript(state, 9000);
     const selfSpeech = buildPlayerTodaySpeech(state, player, 1200);
 
-    const roleHints =
-      player.role === "Werewolf"
-        ? t("prompts.vote.roleHint.werewolf")
-        : player.role === "Seer" && state.nightActions.seerResult
-          ? t("prompts.vote.roleHint.seer")
-          : "";
+    // Get role-specific strategy tips
+    const roleKnowHow = getRoleKnowHow(player.role);
 
-    const cacheableContent = t("prompts.vote.base", {
-      seat: player.seat + 1,
-      name: player.displayName,
-      role: getRoleText(player.role),
-      winCondition: getWinCondition(player.role),
-      difficultyHint,
-    });
-    const dynamicContent = t("prompts.vote.task", {
-      options: alivePlayers
-        .map((p) =>
-          t("prompts.vote.option", { seat: p.seat + 1, name: p.displayName })
-        )
-        .join(t("promptUtils.gameContext.listSeparator")),
-      roleHints,
-    });
+    const cacheableContent = `【身份】
+你是 ${player.seat + 1}号「${player.displayName}」
+身份: ${getRoleText(player.role)}
+
+${getWinCondition(player.role)}
+
+${roleKnowHow}
+
+${difficultyHint}`;
+    const dynamicContent = `【任务】
+投票环节，选择一名玩家处决，并说明理由。
+尽量与自己本日发言保持一致。
+理由要求：中文，10-25字，指出关键依据，不要角色扮演。
+
+【严禁事项】
+- 严禁投票给已出局玩家
+- 严禁在理由中提及任何已出局玩家
+- 只能基于存活玩家的行为进行判断
+
+可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
+`;
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
       { text: dynamicContent },
@@ -358,6 +361,14 @@ export class VotePhase extends GamePhase {
     }
 
     runtime.setGameState(currentState);
+
+    const executed =
+      result ? currentState.players.find((p) => p.seat === result.seat) : null;
+    if (result && executed?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+      // Defer win check until after hunter shoot resolves.
+      await runtime.onVoteComplete(currentState, result);
+      return;
+    }
 
     const winner = checkWinCondition(currentState);
     if (winner) {

@@ -17,14 +17,14 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-9 w-full items-center justify-between rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors focus-visible:outline-none focus-visible:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50",
-      className
-    )}
-    {...props}
-  >
-    {children}
+        "relative flex h-9 w-full items-center rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] pl-3 pr-9 py-2 text-sm text-[var(--text-primary)] transition-colors focus-visible:outline-none focus-visible:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50",
+        className
+      )}
+      {...props}
+    >
+    <span className="min-w-0 flex-1 truncate text-left">{children}</span>
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 opacity-70" />
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-70" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -101,31 +101,52 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
 type SelectItemProps = React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
   label?: string
   description?: React.ReactNode
+  icon?: string
 }
 
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   SelectItemProps
->(({ className, children, label, description, ...props }, ref) => (
+>(({ className, children, label, description, icon, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-default select-none items-start rounded-md py-2 pl-8 pr-2 text-sm outline-none focus:bg-[var(--color-accent-bg)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-default select-none gap-2 rounded-md py-2 pr-2 text-sm outline-none focus:bg-[var(--color-accent-bg)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      icon ? "items-center pl-2" : "items-start pl-8",
       className
     )}
     {...props}
   >
-    <span className="absolute left-2 top-2.5 flex h-3.5 w-3.5 items-center justify-center">
-      <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
-      </SelectPrimitive.ItemIndicator>
-    </span>
-    <div className="flex flex-col gap-1">
-      <SelectPrimitive.ItemText>{label ?? children}</SelectPrimitive.ItemText>
-      {description ? (
-        <div className="text-xs text-[var(--text-muted)]">{description}</div>
-      ) : null}
-    </div>
+    {icon ? (
+      <>
+        <img src={icon} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
+        <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+          <SelectPrimitive.ItemText>{label ?? children}</SelectPrimitive.ItemText>
+          {description ? (
+            <div className="text-xs text-[var(--text-muted)]">{description}</div>
+          ) : null}
+        </div>
+        <span className="w-5 shrink-0 flex items-center justify-end">
+          <SelectPrimitive.ItemIndicator>
+            <Check className="h-4 w-4" />
+          </SelectPrimitive.ItemIndicator>
+        </span>
+      </>
+    ) : (
+      <>
+        <span className="absolute left-2 top-2.5 flex h-3.5 w-3.5 items-center justify-center">
+          <SelectPrimitive.ItemIndicator>
+            <Check className="h-4 w-4" />
+          </SelectPrimitive.ItemIndicator>
+        </span>
+        <div className="flex flex-col gap-1">
+          <SelectPrimitive.ItemText>{label ?? children}</SelectPrimitive.ItemText>
+          {description ? (
+            <div className="text-xs text-[var(--text-muted)]">{description}</div>
+          ) : null}
+        </div>
+      </>
+    )}
   </SelectPrimitive.Item>
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName

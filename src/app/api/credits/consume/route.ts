@@ -26,6 +26,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const headerZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
+  const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
+  if (headerZenmuxKey || headerDashscopeKey) {
+    const { data } = await supabaseAdmin
+      .from("user_credits")
+      .select("credits")
+      .eq("id", user.id)
+      .single();
+    const creditsRow = data as { credits: number } | null;
+    return NextResponse.json({
+      success: true,
+      credits: creditsRow?.credits ?? 0,
+      bypassed: true,
+    });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("user_credits")
     .select("credits")

@@ -1,14 +1,13 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical, Users } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { TutorialModal } from "@/components/game/TutorialModal";
 import type { DevPreset, DifficultyLevel, Role, StartGameOptions } from "@/types/game";
 import { DevModeButton } from "@/components/DevTools";
 import { GameSetupModal } from "@/components/game/GameSetupModal";
@@ -19,6 +18,7 @@ import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { useCredits } from "@/hooks/useCredits";
+import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 
 type SponsorCardProps = {
   sponsorId: string;
@@ -67,7 +67,10 @@ function SponsorCard({
   };
 
   // Add ref parameter to href for tracking on sponsor's side
-  const hrefWithRef = href.includes("?") ? `${href}&ref=wolfcha` : `${href}?ref=wolfcha`;
+  // Special handling for OpenCreator: use promo parameter instead of ref
+  const hrefWithRef = sponsorId === "opencreator"
+    ? (href.includes("?") ? `${href}&promo=wolfcha` : `${href}?promo=wolfcha`)
+    : (href.includes("?") ? `${href}&ref=wolfcha` : `${href}?ref=wolfcha`);
 
   return (
     <motion.a
@@ -185,6 +188,12 @@ interface WelcomeScreenProps {
   isLoading: boolean;
   isGenshinMode: boolean;
   onGenshinModeChange: (value: boolean) => void;
+  bgmVolume: number;
+  isSoundEnabled: boolean;
+  isAiVoiceEnabled: boolean;
+  onBgmVolumeChange: (value: number) => void;
+  onSoundEnabledChange: (value: boolean) => void;
+  onAiVoiceEnabledChange: (value: boolean) => void;
 }
 
 export function WelcomeScreen({
@@ -195,6 +204,12 @@ export function WelcomeScreen({
   isLoading,
   isGenshinMode,
   onGenshinModeChange,
+  bgmVolume,
+  isSoundEnabled,
+  isAiVoiceEnabled,
+  onBgmVolumeChange,
+  onSoundEnabledChange,
+  onAiVoiceEnabledChange,
 }: WelcomeScreenProps) {
   const t = useTranslations();
   const sponsorEmail = "zhihuang.oiloil@gmail.com";
@@ -215,7 +230,6 @@ export function WelcomeScreen({
     isPasswordRecovery,
     clearPasswordRecovery,
   } = useCredits();
-  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const paperRef = useRef<HTMLDivElement | null>(null);
@@ -226,12 +240,31 @@ export function WelcomeScreen({
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
+  const [isGroupOpen, setIsGroupOpen] = useState(false);
+  const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
   const [githubStars, setGithubStars] = useState<number | null>(null);
 
+  const [customKeyEnabled, setCustomKeyEnabled] = useState(() => isCustomKeyEnabled());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "wolfcha_custom_key_enabled") return;
+      setCustomKeyEnabled(isCustomKeyEnabled());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // 调试面板状态
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [isDevModeEnabled, setIsDevModeEnabled] = useState(false);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [devTab, setDevTab] = useState<"preset" | "roles">("preset");
@@ -420,7 +453,8 @@ export function WelcomeScreen({
       return;
     }
 
-    if (credits !== null && credits <= 0) {
+    const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
+    if (!hasUserKey && credits !== null && credits <= 0) {
       setIsShareOpen(true);
       toast(t("welcome.toast.noCredits.title"), { description: t("welcome.toast.noCredits.description") });
       return;
@@ -439,6 +473,11 @@ export function WelcomeScreen({
       const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
       void onStart({ fixedRoles: roles, devPreset: preset, difficulty, playerCount });
     }, 800);
+
+    if (hasUserKey) {
+      isStartingRef.current = false;
+      return;
+    }
 
     void consumeCredit()
       .then((consumed) => {
@@ -467,7 +506,6 @@ export function WelcomeScreen({
       <div className="wc-contract-fog" aria-hidden="true" />
       <div className="wc-contract-vignette" aria-hidden="true" />
 
-      <TutorialModal open={isTutorialOpen} onOpenChange={setIsTutorialOpen} />
       <GameSetupModal
         open={isSetupOpen}
         onOpenChange={setIsSetupOpen}
@@ -477,6 +515,12 @@ export function WelcomeScreen({
         onPlayerCountChange={setPlayerCount}
         isGenshinMode={isGenshinMode}
         onGenshinModeChange={onGenshinModeChange}
+        bgmVolume={bgmVolume}
+        isSoundEnabled={isSoundEnabled}
+        isAiVoiceEnabled={isAiVoiceEnabled}
+        onBgmVolumeChange={onBgmVolumeChange}
+        onSoundEnabledChange={onSoundEnabledChange}
+        onAiVoiceEnabledChange={onAiVoiceEnabledChange}
       />
       <AuthModal open={isAuthOpen} onOpenChange={setIsAuthOpen} />
       <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />
@@ -490,6 +534,7 @@ export function WelcomeScreen({
         onChangePassword={() => setIsAccountOpen(true)}
         onShareInvite={() => setIsShareOpen(true)}
         onSignOut={signOut}
+        onCustomKeyEnabledChange={setCustomKeyEnabled}
       />
       <ResetPasswordModal 
         open={isPasswordRecovery} 
@@ -502,6 +547,33 @@ export function WelcomeScreen({
         referralCode={referralCode}
         totalReferrals={totalReferrals}
       />
+
+      <Dialog open={isGroupOpen} onOpenChange={setIsGroupOpen}>
+        <DialogContent className="max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users size={18} weight="duotone" />
+              {t("welcome.group.title")}
+            </DialogTitle>
+            <DialogDescription>{t("welcome.group.description")}</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 flex items-center justify-center">
+            {groupImgOk !== false && (
+              <img
+                src="/group.png"
+                alt={t("settings.about.group.alt")}
+                className="w-full max-w-[280px] max-h-[50vh] rounded-md border-2 border-[var(--border-color)] bg-white object-contain"
+                onLoad={() => setGroupImgOk(true)}
+                onError={() => setGroupImgOk(false)}
+              />
+            )}
+            {groupImgOk === false && (
+              <div className="text-xs text-[var(--text-muted)]">{t("settings.about.group.missing")}</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSponsorOpen} onOpenChange={setIsSponsorOpen}>
         <DialogContent className="max-w-[560px]">
@@ -548,8 +620,8 @@ export function WelcomeScreen({
       <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <DialogContent className="max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>快捷操作</DialogTitle>
-            <DialogDescription>在这里快速进入设置、教学与账号信息。</DialogDescription>
+            <DialogTitle>{t("welcome.mobileMenu.title")}</DialogTitle>
+            <DialogDescription>{t("welcome.mobileMenu.description")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Button
@@ -562,7 +634,7 @@ export function WelcomeScreen({
               }}
             >
               <Handshake size={16} />
-              成为赞助商
+              {t("welcome.sponsor.action")}
             </Button>
             <Button
               type="button"
@@ -574,18 +646,7 @@ export function WelcomeScreen({
               }}
             >
               <GearSix size={16} />
-              设置
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="justify-start"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                setIsTutorialOpen(true);
-              }}
-            >
-              玩法教学
+              {t("welcome.settings")}
             </Button>
             {user ? (
               <Button
@@ -598,7 +659,7 @@ export function WelcomeScreen({
                 }}
               >
                 <UserCircle size={16} />
-                账号信息
+                {t("welcome.account.info")}
               </Button>
             ) : (
               <Button
@@ -611,7 +672,7 @@ export function WelcomeScreen({
                 }}
               >
                 <UserCircle size={16} />
-                登录/注册
+                {t("welcome.auth.signIn")}
               </Button>
             )}
             <Button asChild variant="outline" className="justify-start">
@@ -622,7 +683,7 @@ export function WelcomeScreen({
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <GithubLogo size={16} />
-                GitHub 项目
+                {t("welcome.github.title")}
               </a>
             </Button>
           </div>
@@ -644,6 +705,19 @@ export function WelcomeScreen({
           note={t("welcome.sponsor.cards.openCreator")}
         />
 
+        {/* Sponsor card - Bailian (左上) */}
+        <SponsorCard
+          sponsorId="bailian"
+          href="https://bailian.console.aliyun.com/"
+          className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--top-left"
+          rotate="4deg"
+          delay={0.15}
+          logoSrc="/sponsor/bailian.png"
+          logoAlt="百炼"
+          name="百炼"
+          note={t("welcome.sponsor.cards.bailian")}
+        />
+
         {/* Sponsor card - Minimax (右上) */}
         <SponsorCard
           sponsorId="minimax"
@@ -656,38 +730,57 @@ export function WelcomeScreen({
           name="Minimax"
           note={t("welcome.sponsor.cards.minimax")}
         />
+
+        {/* Sponsor card - ZenMux (右下) */}
+        <SponsorCard
+          sponsorId="zenmux"
+          href="https://zenmux.ai/aboutus"
+          className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom"
+          rotate="-4deg"
+          delay={0.6}
+          logoSrc="/sponsor/zenmux.png"
+          logoAlt="ZenMux"
+          name="ZenMux"
+          note={t("welcome.sponsor.cards.zenmux")}
+        />
       </div>
 
-      <div className="wc-welcome-actions absolute top-6 right-6 z-20 flex items-center gap-2">
-        <LocaleSwitcher className="hidden sm:block" />
-
+      <div className="wc-welcome-actions absolute top-5 right-5 z-20 flex items-center gap-2">
         <div className="hidden sm:flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsSponsorOpen(true)}
-            className="h-9 text-sm gap-2"
-          >
-            <Handshake size={16} />
-            {t("welcome.sponsor.action")}
-          </Button>
-
           <a
             href="https://github.com/oil-oil/wolfcha"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
-            title={t("welcome.github.title")}
+            className="hidden sm:flex items-center gap-1.5 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2 py-1 text-[11px] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all group"
+            title="View on GitHub"
           >
-            <GithubLogo size={16} className="group-hover:scale-110 transition-transform" />
+            <GithubLogo size={15} className="group-hover:scale-110 transition-transform" />
             <span className="hidden lg:inline">GitHub</span>
             <span className="flex items-center gap-1 text-[var(--color-gold)]">
-              <Star size={13} weight="fill" className="group-hover:scale-110 transition-transform" />
-              <span className="font-serif text-sm font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
+              <Star size={12} weight="fill" className="group-hover:scale-110 transition-transform" />
+              <span className="font-serif text-xs font-bold tabular-nums tracking-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}>
                 {githubStars !== null ? githubStars.toLocaleString() : '···'}
               </span>
             </span>
           </a>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsSponsorOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Handshake size={16} />
+            {t("welcome.sponsor.action")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsGroupOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Users size={16} />
+            {t("welcome.group.title")}
+          </Button>
 
           {user ? (
             <button
@@ -697,20 +790,32 @@ export function WelcomeScreen({
               title={t("welcome.account.viewInfo")}
             >
               <UserCircle size={16} />
-              <span className="truncate max-w-[160px]">{user.email ?? t("welcome.account.loggedIn")}</span>
-              <span className="opacity-70">
-                {creditsLoading ? "..." : t("welcome.account.remaining", { count: credits ?? 0 })}
-              </span>
+              <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
+              {!customKeyEnabled && (
+                <span className="opacity-70">{t("welcome.account.remaining", { count: creditsLoading ? "..." : (credits ?? 0) })}</span>
+              )}
             </button>
           ) : (
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsAuthOpen(true)}
-              className="h-9 text-sm gap-2"
+              className="h-8 text-xs gap-2"
             >
               <UserCircle size={16} />
               {t("welcome.auth.signIn")}
+            </Button>
+          )}
+
+          {user && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsUserProfileOpen(true)}
+              className="h-8 text-xs gap-2 md:hidden"
+            >
+              <UserCircle size={16} />
+              {t("welcome.account.info")}
             </Button>
           )}
 
@@ -718,13 +823,10 @@ export function WelcomeScreen({
             type="button"
             variant="outline"
             onClick={() => setIsSetupOpen(true)}
-            className="h-9 text-sm gap-2"
+            className="h-8 text-xs gap-2"
           >
             <GearSix size={16} />
             {t("welcome.settings")}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setIsTutorialOpen(true)} className="h-9 text-sm">
-            {t("welcome.tutorial")}
           </Button>
         </div>
 
@@ -733,17 +835,26 @@ export function WelcomeScreen({
             type="button"
             variant="outline"
             onClick={() => setIsSponsorOpen(true)}
-            className="h-9 text-sm gap-2"
+            className="h-8 text-xs gap-2"
           >
             <Handshake size={16} />
-            {t("welcome.sponsor.action")}
+            {t("welcome.sponsor.short")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsGroupOpen(true)}
+            className="h-8 text-xs gap-2"
+          >
+            <Users size={16} />
+            {t("welcome.group.short")}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="h-9 w-9 px-0"
-            aria-label="更多操作"
+            className="h-8 w-8 px-0"
+            aria-label={t("welcome.mobileMenu.more")}
           >
             <DotsThreeOutlineVertical size={18} />
           </Button>
@@ -762,7 +873,7 @@ export function WelcomeScreen({
           {/* Mobile: inline sponsor stamps at top of paper */}
           <div className="wc-paper-sponsors sm:hidden">
             <a
-              href="https://opencreator.io/?ref=wolfcha"
+              href="https://opencreator.io?promo=wolfcha"
               target="_blank"
               rel="noopener noreferrer"
               className="wc-paper-stamp"
@@ -771,6 +882,17 @@ export function WelcomeScreen({
             >
               <img src="/sponsor/opencreator.png" alt="OpenCreator" className="wc-paper-stamp__logo" />
               <span className="wc-paper-stamp__name">OpenCreator</span>
+            </a>
+            <a
+              href="https://bailian.console.aliyun.com/?ref=wolfcha"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="wc-paper-stamp"
+              style={{ "--stamp-rotate": "4deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("bailian")}
+            >
+              <img src="/sponsor/bailian.png" alt="百炼" className="wc-paper-stamp__logo" />
+              <span className="wc-paper-stamp__name">百炼</span>
             </a>
             <a
               href="https://minimaxi.com/?ref=wolfcha"
@@ -782,6 +904,17 @@ export function WelcomeScreen({
             >
               <img src="/sponsor/minimax.png" alt="Minimax" className="wc-paper-stamp__logo" />
               <span className="wc-paper-stamp__name">Minimax</span>
+            </a>
+            <a
+              href="https://zenmux.ai/aboutus?ref=wolfcha"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="wc-paper-stamp"
+              style={{ "--stamp-rotate": "-3deg" } as React.CSSProperties}
+              onClick={() => void trackSponsorClick("zenmux")}
+            >
+              <img src="/sponsor/zenmux.png" alt="ZenMux" className="wc-paper-stamp__logo" />
+              <span className="wc-paper-stamp__name">ZenMux</span>
             </a>
           </div>
 
@@ -807,7 +940,7 @@ export function WelcomeScreen({
               <div className="relative mt-2">
                 <input
                   type="text"
-                  value={humanName}
+                  value={mounted ? humanName : ""}
                   onChange={(e) => setHumanName(e.target.value)}
                   placeholder={t("welcome.signature.placeholder")}
                   className="wc-signature-input"
@@ -816,7 +949,7 @@ export function WelcomeScreen({
                   disabled={isLoading || isTransitioning}
                 />
                 <AnimatePresence>
-                  {!!humanName.trim() && (
+                  {mounted && !!humanName.trim() && (
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}

@@ -22,6 +22,16 @@
     "guard": "守卫"
   },
   "welcome": {
+    "group": {
+      "title": "加入游戏群",
+      "description": "扫码入群，反馈问题与建议。",
+      "short": "入群"
+    },
+    "mobileMenu": {
+      "title": "快捷操作",
+      "description": "在这里快速进入设置与账号信息。",
+      "more": "更多操作"
+    },
     "account": {
       "viewInfo": "查看账号信息",
       "loggedIn": "已登录",
@@ -32,7 +42,7 @@
       "signIn": "登录/注册"
     },
     "github": {
-      "title": "在 GitHub 查看"
+      "title": "GitHub 项目"
     },
     "sponsor": {
       "title": "成为赞助商",
@@ -48,10 +58,13 @@
       "copyEmail": "复制邮箱",
       "sendEmail": "发邮件联系",
       "action": "成为赞助商",
+      "short": "赞助",
       "showcaseLabel": "赞助商展示",
       "cards": {
         "openCreator": "OpenCreator 帮助我们生成夜晚所有的角色立绘",
-        "minimax": "Minimax 帮助我们生成过场音效与白天语音"
+        "bailian": "百炼为我们提供部分 AI 模型能力支持",
+        "minimax": "Minimax 帮助我们生成过场音效与白天语音",
+        "zenmux": "聚合全球顶尖大模型，为每一场逻辑博弈注入敏锐灵魂。"
       },
       "copySuccess": "已复制邮箱",
       "copyFallback": "邮箱地址",
@@ -276,7 +289,8 @@
       "signIn": "登录",
       "signingUp": "注册中...",
       "signUp": "注册",
-      "sendReset": "发送重置邮件"
+      "sendReset": "发送重置邮件",
+      "waitCooldown": "请稍候（{seconds}s）"
     },
     "links": {
       "forgotPassword": "忘记密码？",
@@ -290,13 +304,20 @@
     "errors": {
       "emailRequired": "请输入邮箱",
       "passwordRequired": "请输入密码",
-      "passwordTooShort": "密码长度至少为 6 位"
+      "passwordTooShort": "密码长度至少为 6 位",
+      "cooldownWait": "发送过于频繁，请在 {seconds}s 后再试",
+      "sendTooFrequent": "发送过于频繁，请稍后再试"
     },
     "messages": {
       "magicLinkSent": "登录链接已发送，请检查邮箱",
       "signUpExisting": "如果该邮箱未注册，您将收到验证邮件。如已注册，请直接登录。",
       "signUpConfirm": "注册成功！请检查邮箱完成验证。",
-      "resetSent": "重置邮件已发送，请检查邮箱"
+      "resetSent": "重置邮件已发送，请检查邮箱",
+      "signUpConfirmDetails": {
+        "line1": "注册成功！我们已向您的邮箱发送验证邮件，请打开邮件完成验证。",
+        "line2": "没有收到？邮件服务商有时会把自动验证邮件误判为广告/群发，可能会被放到垃圾箱/广告邮件。",
+        "line3": "建议将发件人加入白名单/通讯录，并稍等 1–2 分钟再刷新收件箱。"
+      }
     },
     "toasts": {
       "magicLinkSent": {
@@ -659,6 +680,7 @@
   "system": {
     "gameStart": "人到齐了，开始吧。",
     "nightFall": "第 {day} 夜，天黑请闭眼",
+    "summarizingDay": "整理今日要点…",
     "dayBreak": "天亮了，请睁眼",
     "dayBreakShort": "天亮了",
     "voteStartShort": "进入投票环节",
@@ -1337,6 +1359,77 @@
       "wolfTeammates": "【狼队友】\n{list}",
       "currentVotes": "【当前投票】\n{lines}",
       "voteLine": "{voter} -> {target}"
+    }
+  },
+  "customKey": {
+    "title": "用我自己的 key 玩",
+    "description": "开启后填写 API Key，仅保存在本地浏览器",
+    "dailyBonus": "每天上线可领 2 局，记得常来呀~",
+    "tabs": {
+      "profile": "信息",
+      "custom": "用我自己的 key 玩"
+    },
+    "selectModel": "选择模型",
+    "modelJoiner": "、",
+    "modelCount": "{preview} 等 {count} 个",
+    "validating": "验证中",
+    "validate": "验证",
+    "llmKey": {
+      "title": "语言模型 Key",
+      "description": "至少配置 Zenmux 或百炼其一，用于对局与人物生成"
+    },
+    "zenmux": {
+      "placeholder": "请输入 Zenmux API Key",
+      "hide": "隐藏 Zenmux API Key",
+      "show": "显示 Zenmux API Key",
+      "get": "获取 Zenmux Key",
+      "note": "支持国内外大部分模型"
+    },
+    "dashscope": {
+      "label": "百炼 API Key",
+      "placeholder": "可选：百炼（DeepSeek / Qwen / Kimi）",
+      "hide": "隐藏百炼 API Key",
+      "show": "显示百炼 API Key",
+      "get": "获取百炼 Key",
+      "note": "DeepSeek / Qwen / Kimi 等",
+      "short": "百炼"
+    },
+    "modelConfig": {
+      "title": "模型配置",
+      "description": "人物生成、每日总结与 AI 玩家抽选",
+      "generator": "人物生成模型",
+      "summary": "每日总结模型",
+      "candidates": "AI 玩家候选",
+      "candidatesDesc": "从中抽取 AI 玩家，可多选"
+    },
+    "voice": {
+      "title": "语音与音效（可选）",
+      "description": "配置 Minimax 后可启用语音播报与音效"
+    },
+    "minimax": {
+      "get": "获取 Minimax Key",
+      "note": "语音与音效",
+      "hide": "隐藏 Minimax API Key",
+      "show": "显示 Minimax API Key",
+      "hideGroup": "隐藏 Minimax Group ID",
+      "showGroup": "显示 Minimax Group ID"
+    },
+    "actions": {
+      "clear": "清除",
+      "save": "保存"
+    },
+    "toasts": {
+      "notValidated": "未通过验证，无法保存",
+      "notValidatedDesc": "请先点击「验证配置」",
+      "needLlmKey": "请至少配置一个 LLM Key",
+      "needLlmKeyDesc": "Zenmux 或百炼二选一即可",
+      "modelsAdjusted": "部分模型不可用，已自动调整",
+      "modelsAdjustedDesc": "请检查所选模型与已配置的 Key 是否匹配",
+      "saved": "已保存 API Key",
+      "savedDesc": "仅保存在当前浏览器",
+      "validateFailed": "验证失败",
+      "validateFailedDesc": "请检查当前API Key 是否填写错误或是否有充足额度。",
+      "cleared": "已清除 API Key"
     }
   }
 }

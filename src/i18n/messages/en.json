@@ -22,17 +22,27 @@
     "guard": "Guard"
   },
   "welcome": {
+    "group": {
+      "title": "Join Game Group",
+      "description": "Scan to join the group and share feedback.",
+      "short": "Group"
+    },
+    "mobileMenu": {
+      "title": "Quick Actions",
+      "description": "Quickly access settings and account info.",
+      "more": "More actions"
+    },
     "account": {
       "viewInfo": "View account details",
       "loggedIn": "Signed in",
-      "remaining": "Remaining {count} rounds",
-      "info": "Account"
+      "remaining": "{count} games remaining",
+      "info": "Account Info"
     },
     "auth": {
-      "signIn": "Sign in / Sign up"
+      "signIn": "Sign In / Sign Up"
     },
     "github": {
-      "title": "View on GitHub"
+      "title": "GitHub Project"
     },
     "sponsor": {
       "title": "Become a sponsor",
@@ -47,11 +57,14 @@
       "note": "We thank sponsors on the homepage with a seal; anonymous support is also welcome.",
       "copyEmail": "Copy email",
       "sendEmail": "Send an email",
-      "action": "Become a sponsor",
+      "action": "Become a Sponsor",
+      "short": "Sponsor",
       "showcaseLabel": "Sponsor showcase",
       "cards": {
         "openCreator": "OpenCreator helps us generate all night-time character art",
-        "minimax": "Minimax helps us generate transition SFX and daytime voice"
+        "bailian": "Dashscope provides us with AI model capabilities",
+        "minimax": "Minimax helps us generate transition SFX and daytime voice",
+        "zenmux": "Aggregating top global AI models to power every strategic showdown."
       },
       "copySuccess": "Email copied",
       "copyFallback": "Email address",
@@ -276,7 +289,8 @@
       "signIn": "Sign in",
       "signingUp": "Signing up...",
       "signUp": "Sign up",
-      "sendReset": "Send reset email"
+      "sendReset": "Send reset email",
+      "waitCooldown": "Please wait ({seconds}s)"
     },
     "links": {
       "forgotPassword": "Forgot password?",
@@ -290,13 +304,20 @@
     "errors": {
       "emailRequired": "Please enter your email.",
       "passwordRequired": "Please enter your password.",
-      "passwordTooShort": "Password must be at least 6 characters."
+      "passwordTooShort": "Password must be at least 6 characters.",
+      "cooldownWait": "Sending too frequently. Please wait {seconds}s.",
+      "sendTooFrequent": "Sending too frequently. Please try again later."
     },
     "messages": {
       "magicLinkSent": "Login link sent. Please check your email.",
       "signUpExisting": "If this email isn't registered, you'll receive a verification email. If it is, please sign in.",
       "signUpConfirm": "Sign-up successful. Please check your email to verify.",
-      "resetSent": "Reset email sent. Please check your inbox."
+      "resetSent": "Reset email sent. Please check your inbox.",
+      "signUpConfirmDetails": {
+        "line1": "Sign-up successful! We've sent a verification email to your inbox. Please open it to complete verification.",
+        "line2": "Didn't receive it? Email providers sometimes mark automated emails as spam/promotional. Check your spam folder.",
+        "line3": "We recommend adding the sender to your contacts and waiting 1-2 minutes before refreshing your inbox."
+      }
     },
     "toasts": {
       "magicLinkSent": {
@@ -659,6 +680,7 @@
   "system": {
     "gameStart": "Everyone is here. Let's begin.",
     "nightFall": "Night {day}. Close your eyes.",
+    "summarizingDay": "Summarizing today's events...",
     "dayBreak": "Day breaks. Open your eyes.",
     "dayBreakShort": "Day breaks",
     "voteStartShort": "Voting begins",
@@ -1337,6 +1359,77 @@
       "wolfTeammates": "【Wolf teammates】\n{list}",
       "currentVotes": "【Current votes】\n{lines}",
       "voteLine": "{voter} -> {target}"
+    }
+  },
+  "customKey": {
+    "title": "Use my own key",
+    "description": "Enable to enter your API Key. Stored locally in browser only.",
+    "dailyBonus": "Claim 2 free games daily. Come back often!",
+    "tabs": {
+      "profile": "Profile",
+      "custom": "Use my own key"
+    },
+    "selectModel": "Select model",
+    "modelJoiner": ", ",
+    "modelCount": "{preview} and {count} more",
+    "validating": "Validating",
+    "validate": "Validate",
+    "llmKey": {
+      "title": "Language Model Key",
+      "description": "Configure at least Zenmux or Dashscope for gameplay and character generation"
+    },
+    "zenmux": {
+      "placeholder": "Enter Zenmux API Key",
+      "hide": "Hide Zenmux API Key",
+      "show": "Show Zenmux API Key",
+      "get": "Get Zenmux Key",
+      "note": "Supports most domestic and international models"
+    },
+    "dashscope": {
+      "label": "Dashscope API Key",
+      "placeholder": "Optional: Dashscope (DeepSeek / Qwen / Kimi)",
+      "hide": "Hide Dashscope API Key",
+      "show": "Show Dashscope API Key",
+      "get": "Get Dashscope Key",
+      "note": "DeepSeek / Qwen / Kimi, etc.",
+      "short": "Dashscope"
+    },
+    "modelConfig": {
+      "title": "Model Configuration",
+      "description": "Character generation, daily summary, and AI player selection",
+      "generator": "Character Generator Model",
+      "summary": "Daily Summary Model",
+      "candidates": "AI Player Candidates",
+      "candidatesDesc": "Select multiple models to draw AI players from"
+    },
+    "voice": {
+      "title": "Voice & Sound (Optional)",
+      "description": "Configure Minimax to enable voice narration and sound effects"
+    },
+    "minimax": {
+      "get": "Get Minimax Key",
+      "note": "Voice and sound effects",
+      "hide": "Hide Minimax API Key",
+      "show": "Show Minimax API Key",
+      "hideGroup": "Hide Minimax Group ID",
+      "showGroup": "Show Minimax Group ID"
+    },
+    "actions": {
+      "clear": "Clear",
+      "save": "Save"
+    },
+    "toasts": {
+      "notValidated": "Validation failed. Cannot save.",
+      "notValidatedDesc": "Please click 'Validate' first.",
+      "needLlmKey": "Please configure at least one LLM Key",
+      "needLlmKeyDesc": "Either Zenmux or Dashscope is required",
+      "modelsAdjusted": "Some models unavailable. Auto-adjusted.",
+      "modelsAdjustedDesc": "Check if selected models match your configured keys.",
+      "saved": "API Key saved",
+      "savedDesc": "Stored locally in this browser only",
+      "validateFailed": "Validation failed",
+      "validateFailedDesc": "Check if the API Key is correct or has sufficient credits.",
+      "cleared": "API Key cleared"
     }
   }
 }

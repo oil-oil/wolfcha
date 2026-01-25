@@ -158,6 +158,7 @@ interface DialogAreaProps {
   isTyping: boolean;
   showFullHistory?: boolean;
   onAdvanceDialogue?: () => void;
+  onAtBottomChange?: (isAtBottom: boolean) => void;
   isHumanTurn?: boolean; // 是否轮到人类发言
   waitingForNextRound?: boolean; // 是否等待下一轮
   tutorialHelpLabel?: string;
@@ -278,11 +279,12 @@ export function DialogArea({
   humanPlayer,
   isNight = false,
   isSoundEnabled = true,
-  isAiVoiceEnabled = true,
+  isAiVoiceEnabled = false,
   currentDialogue,
   displayedText,
   isTyping,
   onAdvanceDialogue,
+  onAtBottomChange,
   isHumanTurn = false,
   waitingForNextRound = false,
   tutorialHelpLabel,
@@ -369,8 +371,6 @@ export function DialogArea({
   useEffect(() => {
     preloadRolePortraits();
   }, []);
-
-  const isSpeechPhase = gameState.phase === "DAY_SPEECH" || gameState.phase === "DAY_LAST_WORDS";
   
   // 判断是否需要用户手动点击/按键继续（而非自动过场）
   const needsManualContinue = useMemo(() => {
@@ -537,24 +537,32 @@ export function DialogArea({
 
   // 智能滚动逻辑
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const prevMessageCountRef = useRef(visibleMessages.length);
-  const scrollThreshold = 100; // 距离底部多少像素算"在底部"
+  const scrollThreshold = 24; // 距离底部多少像素算"在底部"
   const isAutoScrollingRef = useRef(false);
   const userScrollTimeoutRef = useRef<number | null>(null);
   const isUserScrollingRef = useRef(false);
 
   // 检测用户是否在底部
-  const checkIfAtBottom = useCallback(() => {
+  const checkIfAtBottom = useCallback((): boolean => {
     if (historyRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = historyRef.current;
       const nearBottom = scrollHeight - scrollTop - clientHeight < scrollThreshold;
       setIsAtBottom(nearBottom);
       if (nearBottom) {
         setUnreadCount(0);
+        setIsFollowing(true);
       }
+      return nearBottom;
     }
+    return true;
   }, []);
+
+  useEffect(() => {
+    onAtBottomChange?.(isAtBottom);
+  }, [isAtBottom, onAtBottomChange]);
 
   // 滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -562,6 +570,7 @@ export function DialogArea({
       const container = historyRef.current;
       
       isAutoScrollingRef.current = true;
+      setIsFollowing(true);
       // 先立即滚动到底部
       container.scrollTo({
         top: container.scrollHeight,
@@ -599,7 +608,10 @@ export function DialogArea({
       userScrollTimeoutRef.current = window.setTimeout(() => {
         isUserScrollingRef.current = false;
       }, 140);
-      checkIfAtBottom();
+      const nearBottom = checkIfAtBottom();
+      if (!nearBottom) {
+        setIsFollowing(false);
+      }
     };
 
     container.addEventListener("scroll", handleScroll, { passive: true });
@@ -614,7 +626,7 @@ export function DialogArea({
     if (newCount > prevCount) {
       const addedCount = newCount - prevCount;
       
-      if (isAtBottom && !isUserScrollingRef.current) {
+      if (isFollowing && !isUserScrollingRef.current) {
         // 用户在底部，自动滚动
         requestAnimationFrame(() => {
           if (historyRef.current) {
@@ -632,18 +644,18 @@ export function DialogArea({
     }
     
     prevMessageCountRef.current = newCount;
-  }, [visibleMessages.length, isAtBottom]);
+  }, [visibleMessages.length, isFollowing]);
 
   // 对话内容更新时也检查是否需要滚动
   useEffect(() => {
-    if (isAtBottom && historyRef.current && !isUserScrollingRef.current) {
+    if (isFollowing && historyRef.current && !isUserScrollingRef.current) {
       isAutoScrollingRef.current = true;
       historyRef.current.scrollTop = historyRef.current.scrollHeight;
       window.setTimeout(() => {
         isAutoScrollingRef.current = false;
       }, 120);
     }
-  }, [displayedText, isAtBottom]);
+  }, [displayedText, isFollowing]);
 
   // 空状态
   if (gameState.messages.length === 0 && !currentDialogue) {
@@ -718,7 +730,19 @@ export function DialogArea({
     }
   };
 
-  const dialogueText = (displayedText || currentSpeaker?.text || "").trim();
+  const baseDialogueText = (displayedText || currentSpeaker?.text || "").trim();
+  // When human has voted in badge election, show "你已经投票给 x 号" instead of "点击头像投票选警徽"
+  const humanBadgeVote = humanPlayer ? gameState.badge.votes[humanPlayer.playerId] : undefined;
+  const dialogueText =
+    phase === "DAY_BADGE_ELECTION" &&
+    humanPlayer &&
+    typeof humanBadgeVote === "number" &&
+    humanBadgeVote >= 0
+      ? (() => {
+          const vp = gameState.players.find((p) => p.seat === humanBadgeVote);
+          return `你已经投票给 ${humanBadgeVote + 1}号${vp ? ` ${vp.displayName}` : ""}`;
+        })()
+      : baseDialogueText;
   const shouldShowDialogue = waitingForNextRound || dialogueText.length > 0;
   const isNightActionPhase = [
     "NIGHT_GUARD_ACTION",
@@ -731,6 +755,10 @@ export function DialogArea({
   const showBadgeSignup = phase === "DAY_BADGE_SIGNUP"
     && humanPlayer?.alive
     && typeof gameState.badge.signup?.[humanPlayer.playerId] !== "boolean";
+  const showBadgeSignupWaiting = phase === "DAY_BADGE_SIGNUP"
+    && isWaitingForAI
+    && humanPlayer?.alive
+    && typeof gameState.badge.signup?.[humanPlayer.playerId] === "boolean";
   const showBadgeTransferOption = phase === "BADGE_TRANSFER"
     && humanPlayer
     && gameState.badge.holderSeat === humanPlayer.seat
@@ -772,6 +800,7 @@ export function DialogArea({
 
   const shouldShowDialogPanel = showGameEnd
     || showBadgeSignup
+    || showBadgeSignupWaiting
     || showBadgeTransferOption
     || showActionConfirm
     || showWitchPanel
@@ -793,7 +822,11 @@ export function DialogArea({
           <div className="wc-dialog-history flex-1 min-w-0 min-h-0 relative">
             <div 
               ref={historyRef}
-              className="absolute inset-0 overflow-y-auto pb-4"
+              className="absolute inset-0 overflow-y-scroll pb-4"
+              style={{
+                scrollbarGutter: "stable",
+                overflowAnchor: "none",
+              }}
             >
               {visibleMessages.map((msg, index) => {
                 const prevMsg = visibleMessages[index - 1];
@@ -880,7 +913,8 @@ export function DialogArea({
         {/* 对话气泡 - 简化结构，移除嵌套 */}
         <div
           className={cn(
-            "wc-panel wc-panel--strong rounded-xl p-5 relative min-h-[160px] transition-opacity",
+            "wc-panel wc-panel--strong rounded-xl p-5 relative transition-opacity",
+            showDialogueBlock ? "h-[160px] overflow-hidden" : "min-h-[160px]",
             shouldShowDialogPanel
               ? "opacity-100"
               : "opacity-0 pointer-events-none bg-transparent border-transparent shadow-none"
@@ -969,6 +1003,20 @@ export function DialogArea({
                       {t("dialog.badgeSignup.join")}
                       <CaretRight size={14} weight="bold" />
                     </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Badge signup waiting hint */}
+              {showBadgeSignupWaiting && (
+                <motion.div
+                  key="badge-signup-waiting"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <div className="text-lg leading-relaxed text-[var(--text-primary)]">
+                    正在统计参与警徽竞选的人数...
                   </div>
                 </motion.div>
               )}
@@ -1320,7 +1368,7 @@ export function DialogArea({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="cursor-pointer"
+                  className="cursor-pointer flex flex-col min-h-0 h-full"
                   onClick={handleAdvance}
                 >
                     {currentSpeaker?.player && (
@@ -1330,7 +1378,7 @@ export function DialogArea({
                     )}
                     
                     {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}
-                    <div className="text-xl leading-relaxed text-[var(--text-primary)]">
+                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
                       {renderPlayerMentions(
                         waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText,
                         gameState.players,
@@ -1341,7 +1389,7 @@ export function DialogArea({
                     </div>
                   
                   {/* 底部信息栏 */}
-                  <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
+                  <div className={`flex items-center justify-between mt-4 pt-3 border-t min-h-7 ${isNight ? "border-white/10" : "border-black/5"}`}> 
                     <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                       {isTyping ? (
                         <>
@@ -1352,44 +1400,36 @@ export function DialogArea({
                         <span className="opacity-60">{t("dialog.messageCount", { count: visibleMessages.length })}</span>
                       )}
                     </div>
-                    <AnimatePresence>
-                      {!isTyping && needsManualContinue && (
-                        <motion.div 
-                          initial={{ opacity: 0, x: 10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 10 }}
-                          transition={{ duration: 0.25, ease: "easeOut" }}
-                          className={`flex items-center gap-1.5 text-xs ${isNight ? "text-white/70" : "text-[var(--text-secondary)]"}`}
-                        >
-                          <span>{t("dialog.advanceHintPrefix")}</span>
-                          <kbd className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono text-[11px] ${
-                            isNight 
-                              ? "bg-white/10 border-white/20 text-white/80" 
-                              : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
-                          }`}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="9 10 4 15 9 20" />
-                              <path d="M20 4v7a4 4 0 0 1-4 4H4" />
-                            </svg>
-                            Enter
-                          </kbd>
-                          <span>{t("dialog.advanceHintSuffix")}</span>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                    {isSpeechPhase && isTyping && (
-                      <button
-                        className="wc-action-btn text-xs h-7 px-3"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAdvance();
-                        }}
-                        type="button"
-                      >
-                        {waitingForNextRound ? t("dialog.nextRoundButton") : currentDialogue ? t("dialog.continue") : t("dialog.ok")}
-                        <CaretRight size={12} weight="bold" />
-                      </button>
-                    )}
+                    <div className="h-7 flex items-center justify-end">
+                      <AnimatePresence initial={false}>
+                        {!isTyping && needsManualContinue ? (
+                          <motion.div
+                            key="enter-hint"
+                            initial={{ opacity: 0, x: 10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            transition={{ duration: 0.25, ease: "easeOut" }}
+                            className={`flex items-center gap-1.5 text-xs ${isNight ? "text-white/70" : "text-[var(--text-secondary)]"}`}
+                          >
+                            <span>点击或按</span>
+                            <kbd className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono text-[11px] ${
+                              isNight
+                                ? "bg-white/10 border-white/20 text-white/80"
+                                : "bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)]"
+                            }`}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 10 4 15 9 20" />
+                                <path d="M20 4v7a4 4 0 0 1-4 4H4" />
+                              </svg>
+                              Enter
+                            </kbd>
+                            <span>继续</span>
+                          </motion.div>
+                        ) : (
+                          <div key="placeholder" className="h-7" />
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </motion.div>
               )}

@@ -1,14 +1,13 @@
 import path from "path";
-import { readFileSync } from "fs";
 import type { NextConfig } from "next";
 
-const pkg = JSON.parse(
-  readFileSync(new URL("./package.json", import.meta.url), "utf-8")
-) as { version?: string };
+// Read version from package.json at build time
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pkg = require("./package.json") as { version?: string };
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  // Note: Removed 'output: "standalone"' - not needed for Vercel deployment
+  // standalone mode is for Docker/self-hosted environments and makes deploy much larger
   reactCompiler: true,
   async rewrites() {
     return [

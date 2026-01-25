@@ -18,14 +18,18 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useAtom } from "jotai";
 import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
-import { GENERATOR_MODEL, AVAILABLE_MODELS, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
+import { AVAILABLE_MODELS, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition } from "@/store/game-machine";
+import { getGeneratorModel } from "@/lib/api-keys";
 
 function getRandomModelRef(): ModelRef {
+  const fallback = sampleModelRefs(1)[0];
+  if (fallback) return fallback;
   if (AVAILABLE_MODELS.length === 0) {
     // Fallback to GENERATOR_MODEL if no models available
-    return { provider: "openrouter" as const, model: GENERATOR_MODEL };
+    return { provider: "zenmux" as const, model: getGeneratorModel() };
   }
   const randomIndex = Math.floor(Math.random() * AVAILABLE_MODELS.length);
   return AVAILABLE_MODELS[randomIndex];
@@ -41,9 +45,8 @@ import {
   generateDailySummary,
   getNextAliveSeat,
 } from "@/lib/game-master";
-import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters } from "@/lib/character-generator";
+import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs } from "@/lib/character-generator";
 import { getSystemMessages, getUiText } from "@/lib/game-texts";
-import { useTranslations } from "next-intl";
 import { getRandomScenario } from "@/lib/scenarios";
 import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
 import { generateUUID } from "@/lib/utils";
@@ -349,20 +352,57 @@ export function useGameLogic() {
   // ============================================
   // 每日总结生成
   // ============================================
-  const maybeGenerateDailySummary = useCallback(async (state: GameState): Promise<GameState> => {
-    if (state.day <= 0) return state;
-    if (state.dailySummaries?.[state.day]?.length) return state;
-    if (!state.messages || state.messages.length === 0) return state;
-    try {
-      const summary = await generateDailySummary(state);
-      if (!summary || summary.length === 0) return state;
-      return {
-        ...state,
-        dailySummaries: { ...state.dailySummaries, [state.day]: summary },
-      };
-    } catch {
-      return state;
-    }
+  const maybeGenerateDailySummary = useCallback(
+    async (state: GameState, options?: { force?: boolean }): Promise<GameState> => {
+      if (state.day <= 0) return state;
+      if (!options?.force && state.dailySummaries?.[state.day]?.length) return state;
+      if (!state.messages || state.messages.length === 0) return state;
+      try {
+        const summary = await generateDailySummary(state);
+        if (!summary || summary.bullets.length === 0) return state;
+        return {
+          ...state,
+          dailySummaries: { ...state.dailySummaries, [state.day]: summary.bullets },
+          dailySummaryFacts: { ...state.dailySummaryFacts, [state.day]: summary.facts },
+          dailySummaryVoteData: {
+            ...(state.dailySummaryVoteData ?? {}),
+            ...(summary.voteData ? { [state.day]: summary.voteData } : {}),
+          },
+        };
+      } catch {
+        return state;
+      }
+    },
+    []
+  );
+
+  const buildRawDayTranscript = useCallback((state: GameState): string => {
+    const aliveIds = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
+    const dayStartIndex = (() => {
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.isSystem && m.content === "天亮了") return i;
+      }
+      return 0;
+    })();
+
+    const voteStartIndex = (() => {
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.isSystem && m.content === "进入投票环节") return i;
+      }
+      return state.messages.length;
+    })();
+
+    const slice = state.messages.slice(
+      dayStartIndex,
+      voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
+    );
+
+    return slice
+      .filter((m) => !m.isSystem && aliveIds.has(m.playerId))
+      .map((m) => `${m.playerName}: ${m.content}`)
+      .join("\n");
   }, []);
 
   // ============================================
@@ -384,19 +424,8 @@ export function useGameLogic() {
   // ============================================
   const enterVotePhase = useCallback(
     async (state: GameState, token: ReturnType<typeof getToken>, options?: { isRevote?: boolean }) => {
-      // 后台生成摘要，不阻塞投票阶段
-      if (!state.dailySummaries?.[state.day]?.length && state.messages?.length) {
-        void maybeGenerateDailySummary(state)
-          .then((summarized) => {
-            setGameState((prev) => {
-              if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
-              return { ...prev, dailySummaries: summarized.dailySummaries };
-            });
-          })
-          .catch(() => {
-            // ignore summary errors
-          });
-      }
+      // 投票阶段不再触发总结 - 避免重复调用
+      // 总结将在进入夜晚时统一生成，此时信息最完整（包含投票结果和遗言）
       
       queuePhaseExtras("DAY_VOTE", buildVotePhaseExtras(token, options));
       const clearedState: GameState = {
@@ -408,7 +437,7 @@ export function useGameLogic() {
       const nextState = transitionPhase(clearedState, "DAY_VOTE");
       setGameState(nextState);
     },
-    [buildVotePhaseExtras, maybeGenerateDailySummary, queuePhaseExtras, setGameState, transitionPhase]
+    [buildVotePhaseExtras, queuePhaseExtras, setGameState, transitionPhase]
   );
 
   const resolveVotePhase = useCallback(
@@ -521,19 +550,6 @@ export function useGameLogic() {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
 
-    // 后台生成每日总结
-    void maybeGenerateDailySummary(state)
-      .then((summarized) => {
-        setGameState((prev) => {
-          if (prev.gameId !== summarized.gameId) return prev;
-          return { ...prev, dailySummaries: summarized.dailySummaries };
-        });
-      })
-      .catch(() => {});
-
-    await delay(350);
-    if (!isTokenValid(token)) return;
-
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
     // Preserve seerHistory across nights
     const seerHistory = state.nightActions.seerHistory;
@@ -558,7 +574,19 @@ export function useGameLogic() {
     await delay(250);
     if (!isTokenValid(token)) return;
 
-    await runNightPhaseAction(nextState, token, "START_NIGHT");
+    setDialogue(speakerHost, systemMessages.summarizingDay, false);
+
+    const summarized = await maybeGenerateDailySummary(state, { force: true });
+    if (!isTokenValid(token)) return;
+
+    const mergedState = {
+      ...nextState,
+      dailySummaries: summarized.dailySummaries,
+      dailySummaryFacts: summarized.dailySummaryFacts,
+      dailySummaryVoteData: summarized.dailySummaryVoteData ?? nextState.dailySummaryVoteData,
+    };
+
+    await runNightPhaseAction(mergedState, token, "START_NIGHT");
   }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
@@ -649,10 +677,7 @@ export function useGameLogic() {
   // ============================================
   const isResolvingVotesRef = useRef(false);
   useEffect(() => {
-    if (gameState.phase !== "DAY_VOTE") {
-      isResolvingVotesRef.current = false;
-      return;
-    }
+    if (gameState.phase !== "DAY_VOTE") return;
     if (isResolvingVotesRef.current) return;
     if (isWaitingForAI) return;
 
@@ -829,17 +854,18 @@ export function useGameLogic() {
     })();
   }, [gameState.devPhaseJump, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, enterVotePhase, startLastWordsPhase, resolveVotePhase, proceedToNight, setGameState]);
 
-  // ============================================
-  // 公开 API
-  // ============================================
-
   /** 开始游戏 */
-  const startGame = useCallback(async (options?: StartGameOptions) => {
-    const { fixedRoles, devPreset, difficulty = "normal", playerCount = 10, isGenshinMode = false } = options || {};
-    const totalPlayers = Math.min(12, Math.max(8, playerCount));
+  const startGame = useCallback(async (options?: Partial<StartGameOptions>) => {
+    const {
+      fixedRoles,
+      devPreset,
+      difficulty = "normal",
+      playerCount = 10,
+      isGenshinMode = false,
+    } = options ?? {};
 
-    // 清理状态
-    setGameState({ ...createInitialGameState(), difficulty });
+    const totalPlayers = playerCount;
+
     resetDialogueState();
     setInputText("");
     setShowTable(false);
@@ -858,6 +884,20 @@ export function useGameLogic() {
       const makeId = () => generateUUID();
 
       const humanSeat = 0;
+
+      const aiSeats = Array.from({ length: totalPlayers }, (_, seat) => seat).filter(
+        (seat) => seat !== humanSeat
+      );
+      const aiSeatOrder = (() => {
+        const shuffled = [...aiSeats];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      })();
+
+      const aiModelRefs = sampleModelRefs(totalPlayers - 1);
       const initialPlayers: Player[] = Array.from({ length: totalPlayers }).map((_, seat) => {
         const isHuman = seat === humanSeat;
         return {
@@ -896,10 +936,11 @@ export function useGameLogic() {
         characters = await generateCharacters(totalPlayers - 1, scenario, {
           onBaseProfiles: (profiles) => {
             profiles.forEach((p, i) => {
+              const seat = aiSeatOrder[i] ?? i + 1;
               window.setTimeout(() => {
                 setGameState((prev) => {
                   const nextPlayers = prev.players.map((pl) => {
-                    if (pl.seat === i + 1) return { ...pl, displayName: p.displayName };
+                    if (pl.seat === seat) return { ...pl, displayName: p.displayName };
                     return pl;
                   });
                   return { ...prev, players: nextPlayers };
@@ -908,7 +949,7 @@ export function useGameLogic() {
             });
           },
           onCharacter: (index, character) => {
-            const seat = index + 1;
+            const seat = aiSeatOrder[index] ?? index + 1;
             window.setTimeout(() => {
               setGameState((prev) => {
                 const nextPlayers = prev.players.map((pl) => {
@@ -918,7 +959,7 @@ export function useGameLogic() {
                     ...pl,
                     displayName: character.displayName,
                     agentProfile: {
-                      modelRef: getRandomModelRef(),
+                      modelRef: aiModelRefs[index] ?? getRandomModelRef(),
                       persona: character.persona,
                     },
                   };
@@ -937,7 +978,8 @@ export function useGameLogic() {
         totalPlayers,
         fixedRoles,
         seedPlayerIds,
-        genshinModelRefs
+        isGenshinMode ? genshinModelRefs : aiModelRefs,
+        aiSeatOrder
       );
 
       let newState: GameState = {
@@ -1004,10 +1046,8 @@ export function useGameLogic() {
       isAwaitingRoleRevealRef.current = true;
     } catch (error) {
       const msg = String(error);
-      if (msg.includes("OpenRouter API error: 401")) {
-        toast.error(t("gameLogic.errors.openRouterUnauthorized.title"), {
-          description: t("gameLogic.errors.openRouterUnauthorized.description"),
-        });
+      if (msg.includes("ZenMux API error: 401") || msg.includes(" 401")) {
+        toast.error("ZenMux 401 Unauthorized");
       } else {
         toast.error(t("gameLogic.errors.requestFailed"), { description: msg });
       }
@@ -1017,7 +1057,7 @@ export function useGameLogic() {
     } finally {
       setIsLoading(false);
     }
-  }, [humanName, setGameState, setDialogue, resetDialogueState]);
+  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable]);
 
   /** 角色揭示后继续 */
   const continueAfterRoleReveal = useCallback(async () => {
@@ -1088,22 +1128,39 @@ export function useGameLogic() {
       return;
     }
 
+    const startState = gameStateRef.current;
+    const startGameId = startState.gameId;
+    const startPhase = startState.phase;
+
     await delay(300);
+
+    const liveState = gameStateRef.current;
+    if (liveState.gameId !== startGameId) return;
+    if (liveState.phase !== startPhase) return;
+
     const token = getToken();
-    await runDaySpeechAction(gameStateRef.current, token, "ADVANCE_SPEAKER");
+    await runDaySpeechAction(liveState, token, "ADVANCE_SPEAKER");
   }, [humanPlayer, getToken, runDaySpeechAction]);
 
   /** 下一轮按钮 */
   const handleNextRound = useCallback(async () => {
-    const phase = gameStateRef.current.phase;
-    if (phase !== "DAY_SPEECH" && phase !== "DAY_LAST_WORDS" && phase !== "DAY_BADGE_SPEECH" && phase !== "DAY_PK_SPEECH") {
+    const startState = gameStateRef.current;
+    const startGameId = startState.gameId;
+    const startPhase = startState.phase;
+
+    if (startPhase !== "DAY_SPEECH" && startPhase !== "DAY_LAST_WORDS" && startPhase !== "DAY_BADGE_SPEECH" && startPhase !== "DAY_PK_SPEECH") {
       return;
     }
 
     setWaitingForNextRound(false);
     await delay(300);
+
+    const liveState = gameStateRef.current;
+    if (liveState.gameId !== startGameId) return;
+    if (liveState.phase !== startPhase) return;
+
     const token = getToken();
-    await runDaySpeechAction(gameStateRef.current, token, "ADVANCE_SPEAKER");
+    await runDaySpeechAction(liveState, token, "ADVANCE_SPEAKER");
   }, [getToken, runDaySpeechAction, setWaitingForNextRound]);
 
   /** 人类投票 */
@@ -1419,11 +1476,34 @@ export function useGameLogic() {
 
     const { segments, currentIndex, player, afterSpeech } = queue;
 
+    let nextState = gameStateRef.current;
+
     // 将当前句子添加到消息列表
     const currentSegment = segments[currentIndex];
     if (currentSegment && currentSegment.trim().length > 0) {
-      const newState = addPlayerMessage(gameStateRef.current, player.playerId, currentSegment);
-      setGameState(newState);
+      nextState = addPlayerMessage(nextState, player.playerId, currentSegment);
+      setGameState(nextState);
+
+      const rawTranscript = buildRawDayTranscript(nextState);
+      const shouldSummarizeEarly =
+        nextState.day > 0 &&
+        !nextState.dailySummaries?.[nextState.day]?.length &&
+        rawTranscript.length > 9000;
+      if (shouldSummarizeEarly) {
+        void maybeGenerateDailySummary(nextState)
+          .then((summarized) => {
+            setGameState((prev) => {
+              if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
+              return {
+                ...prev,
+                dailySummaries: summarized.dailySummaries,
+                dailySummaryFacts: summarized.dailySummaryFacts,
+                dailySummaryVoteData: summarized.dailySummaryVoteData ?? prev.dailySummaryVoteData,
+              };
+            });
+          })
+          .catch(() => {});
+      }
     }
 
     const result = advanceSpeechQueue();
@@ -1436,7 +1516,7 @@ export function useGameLogic() {
     setIsWaitingForAI(false);
 
     if (result.afterSpeech) {
-      await result.afterSpeech(gameStateRef.current);
+      await result.afterSpeech(nextState);
       return { finished: true, shouldAdvanceToNextSpeaker: false };
     }
 
