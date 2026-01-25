@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
@@ -15,6 +15,8 @@ export function useCredits() {
   const [totalReferrals, setTotalReferrals] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [dailyBonusClaimed, setDailyBonusClaimed] = useState<boolean | null>(null);
+  const dailyBonusClaimedRef = useRef(false);
 
   const fetchCredits = useCallback(async () => {
     if (!user) return;
@@ -70,6 +72,33 @@ export function useCredits() {
     setIsPasswordRecovery(false);
   }, []);
 
+  const claimDailyBonus = useCallback(async (accessToken: string): Promise<void> => {
+    if (dailyBonusClaimedRef.current) return;
+    dailyBonusClaimedRef.current = true;
+
+    try {
+      const res = await fetch("/api/credits/daily-bonus", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const payload = await res.json() as {
+        credits: number;
+        bonusClaimed: boolean;
+        bonusAmount?: number;
+      };
+
+      setCredits(payload.credits);
+      setDailyBonusClaimed(payload.bonusClaimed);
+    } catch {
+      // Silently fail - daily bonus is not critical
+    }
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -99,6 +128,9 @@ export function useCredits() {
             });
             localStorage.removeItem(REFERRAL_STORAGE_KEY);
           }
+
+          // 自动领取每日签到奖励
+          void claimDailyBonus(session.access_token);
         }
       }
     );
@@ -128,5 +160,6 @@ export function useCredits() {
     signOut,
     isPasswordRecovery,
     clearPasswordRecovery,
+    dailyBonusClaimed,
   };
 }

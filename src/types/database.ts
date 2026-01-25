@@ -16,6 +16,7 @@ export interface Database {
           referral_code: string;
           referred_by: string | null;
           total_referrals: number;
+          last_daily_bonus_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -25,6 +26,7 @@ export interface Database {
           referral_code: string;
           referred_by?: string | null;
           total_referrals?: number;
+          last_daily_bonus_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -34,6 +36,7 @@ export interface Database {
           referral_code?: string;
           referred_by?: string | null;
           total_referrals?: number;
+          last_daily_bonus_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
