@@ -8,36 +8,54 @@ import { SYSTEM_MESSAGES } from "./game-texts";
  */
 
 export const getRoleText = (role: string) => {
-  const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return t("promptUtils.roleText.werewolf");
+      return "狼人（坏人阵营）";
     case "Seer":
-      return t("promptUtils.roleText.seer");
+      return "预言家（好人阵营，每晚可查验一人身份）";
     case "Witch":
-      return t("promptUtils.roleText.witch");
+      return "女巫（好人阵营，有一瓶解药可救人，一瓶毒药可毒人）";
     case "Hunter":
-      return t("promptUtils.roleText.hunter");
+      return "猎人（好人阵营，死亡时可开枪带走一人）";
     case "Guard":
-      return t("promptUtils.roleText.guard");
+      return "守卫（好人阵营，每晚可保护一人不被狼人杀害）";
     default:
-      return t("promptUtils.roleText.villager");
+      return "村民（好人阵营）";
   }
 };
 
 export const getWinCondition = (role: string) => {
-  const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return t("promptUtils.winCondition.werewolf");
+      return `【获胜条件】狼人数量 >= 好人数量 时狼人胜利
+【核心目标】
+- 每晚与狼队友商议击杀目标，优先杀神职（预言家>女巫>猎人>守卫）
+- 白天伪装好人，引导论放逐好人
+- 保护狼队友，避免被集火`;
     case "Seer":
-      return t("promptUtils.winCondition.seer");
+      return `【获胜条件】放逐所有狼人时好人胜利
+【核心目标】
+- 每晚查验可疑玩家，積累信息
+- 选择合适时机公开身份，带领好人放逐狼人
+- 注意保护自己，预言家是狼人首要击杀目标`;
     case "Witch":
-      return t("promptUtils.winCondition.witch");
+      return `【获胜条件】放逐所有狼人时好人胜利
+【核心目标】
+- 解药谨慎使用，救关键神职或确定的好人
+- 毒药留给确认的狼人或危险玩家
+- 注意：女巫不能自救，每晚最多用一瓶药`;
     case "Hunter":
-      return t("promptUtils.winCondition.hunter");
+      return `【获胜条件】放逐所有狼人时好人胜利
+【核心目标】
+- 白天積极发言，分析局势
+- 死亡时可开枪带走一人，留给确认的狼人
+- 注意：被毒死无法开枪`;
     case "Guard":
-      return t("promptUtils.winCondition.guard");
+      return `【获胜条件】放逐所有狼人时好人胜利
+【核心目标】
+- 每晚保护可能被狼人击杀的玩家
+- 不能连续两晚保护同一人
+- 根据场上信息判断狼人的击杀目标`;
     default:
       return `【获胜条件】放逐所有狼人时好人胜利
 【核心目标】
@@ -117,31 +135,44 @@ export const getRoleKnowHow = (role: string): string => {
 };
 
 export const buildDifficultySpeechHint = (difficulty: DifficultyLevel): string => {
-  const { t } = getI18n();
   switch (difficulty) {
     case "easy":
-      return t("promptUtils.difficultySpeech.easy");
+      return `【难度】新手局（轻松、直觉）
+【风格指令】
+- 以直觉和情绪为主，少做复杂推理或多轮逻辑链
+- 更容易相信他人或随主流观点
+- 狼人：更谨慎保命，少用高阶战术，可出现小破绽
+- 好人：更多跟随信息位，少强推`;
     case "hard":
-      return t("promptUtils.difficultySpeech.hard");
+      return `【难度】高阶局（深度对抗）
+【风格指令】
+- 记录并对照发言顺序、立场变化、投票链条、收益关系
+- 主动构建论点与反证，识别搅局、钓鱼、伪逻辑
+- 狼人：分工掩护、软站边+关键时刻转向、制造信息差与误导
+- 好人：强势质询、反制带节奏、精准点狼`;
     default:
-      return t("promptUtils.difficultySpeech.normal");
+      return `【难度】标准局（均衡推理）
+【风格指令】
+- 关注发言矛盾、站边变化、投票去向
+- 观点清晰但不过度武断
+- 狼人：以自然逻辑自证，适度带节奏
+- 好人：必要时强势归票`;
   }
 };
 
 export const buildDifficultyDecisionHint = (difficulty: DifficultyLevel, role: string): string => {
-  const { t } = getI18n();
   const roleNote =
     role === "Werewolf"
-      ? t("promptUtils.difficultyDecision.roleNoteWerewolf")
-      : t("promptUtils.difficultyDecision.roleNoteGood");
+      ? "狼人侧更关注击杀收益与神职威胁。"
+      : "好人侧更关注信息价值与可信度。";
 
   switch (difficulty) {
     case "easy":
-      return t("promptUtils.difficultyDecision.easy", { roleNote });
+      return `【难度策略】偏直觉与从众，不追求最优解。${roleNote}`;
     case "hard":
-      return t("promptUtils.difficultyDecision.hard", { roleNote });
+      return `【难度策略】追求最优策略，结合投票链、发言动机与收益关系决策。${roleNote}`;
     default:
-      return t("promptUtils.difficultyDecision.normal", { roleNote });
+      return `【难度策略】平衡风险与收益，避免明显逆逻辑选择。${roleNote}`;
   }
 };
 
@@ -394,7 +425,6 @@ export const buildGameContext = (
   state: GameState,
   player: Player
 ): string => {
-  const { t } = getI18n();
   const alivePlayers = state.players.filter((p) => p.alive);
   const deadPlayers = state.players.filter((p) => !p.alive);
   const totalSeats = state.players.length;

@@ -12,20 +12,6 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { DifficultyLevel } from "@/types/game";
 import { SoundSettingsSection } from "@/components/game/SettingsModal";
-import { useTranslations } from "next-intl";
-
-interface DifficultyOption {
-  value: DifficultyLevel;
-  label: string;
-  description: string;
-}
-
-interface PlayerCountOption {
-  value: number;
-  label: string;
-  description: string;
-  roles: string;
-}
 
 interface GameSetupModalProps {
   open: boolean;
@@ -74,78 +60,28 @@ export function GameSetupModal({
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
 }: GameSetupModalProps) {
-  const t = useTranslations();
-  const difficultyOptions = useMemo<DifficultyOption[]>(() => ([
-    {
-      value: "easy",
-      label: t("difficultySelector.options.easy.title"),
-      description: t("difficultySelector.options.easy.description"),
-    },
-    {
-      value: "normal",
-      label: t("difficultySelector.options.normal.title"),
-      description: t("difficultySelector.options.normal.description"),
-    },
-    {
-      value: "hard",
-      label: t("difficultySelector.options.hard.title"),
-      description: t("difficultySelector.options.hard.description"),
-    },
-  ]), [t]);
-  const playerOptions = useMemo<PlayerCountOption[]>(() => ([
-    {
-      value: 8,
-      label: t("playerCount.options.8.title"),
-      description: t("playerCount.options.8.description"),
-      roles: t("playerCount.options.8.roles"),
-    },
-    {
-      value: 9,
-      label: t("playerCount.options.9.title"),
-      description: t("playerCount.options.9.description"),
-      roles: t("playerCount.options.9.roles"),
-    },
-    {
-      value: 10,
-      label: t("playerCount.options.10.title"),
-      description: t("playerCount.options.10.description"),
-      roles: t("playerCount.options.10.roles"),
-    },
-    {
-      value: 11,
-      label: t("playerCount.options.11.title"),
-      description: t("playerCount.options.11.description"),
-      roles: t("playerCount.options.11.roles"),
-    },
-    {
-      value: 12,
-      label: t("playerCount.options.12.title"),
-      description: t("playerCount.options.12.description"),
-      roles: t("playerCount.options.12.roles"),
-    },
-  ]), [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-serif text-[var(--text-primary)]">{t("gameSetup.title")}</DialogTitle>
+          <DialogTitle className="font-serif text-[var(--text-primary)]">游戏设置</DialogTitle>
           <DialogDescription className="text-[var(--text-muted)]">
-            {t("gameSetup.description")}
+            在开局前调整难度与人数
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.difficulty")}</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">难度</div>
             <Select
               value={difficulty}
               onValueChange={(value) => onDifficultyChange(value as DifficultyLevel)}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t("gameSetup.difficultyPlaceholder")} />
+                <SelectValue placeholder="选择难度" />
               </SelectTrigger>
               <SelectContent>
-                {difficultyOptions.map((option) => (
+                {DIFFICULTY_OPTIONS.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={option.value}
@@ -158,16 +94,16 @@ export function GameSetupModal({
           </div>
 
           <div className="space-y-2">
-            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.playerCount")}</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">人数</div>
             <Select
               value={String(playerCount)}
               onValueChange={(value) => onPlayerCountChange(Number(value))}
             >
               <SelectTrigger>
-                <SelectValue placeholder={t("gameSetup.playerCountPlaceholder")} />
+                <SelectValue placeholder="选择人数" />
               </SelectTrigger>
               <SelectContent>
-                {playerOptions.map((option) => (
+                {PLAYER_COUNT_OPTIONS.map((option) => (
                   <SelectItem
                     key={option.value}
                     value={String(option.value)}
@@ -181,9 +117,9 @@ export function GameSetupModal({
 
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.genshin.title")}</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">大模型原神模式</div>
             <div className="text-xs text-[var(--text-muted)]">
-              {t("gameSetup.genshin.description")}
+              默认情况下会为每位 AI 生成接近真实用户的角色背景与名字。开启后不再生成角色背景与名字，直接使用模型原名；如有重名会自动在后面加序号
             </div>
             </div>
             <Switch className="shrink-0 mt-1" checked={isGenshinMode} onCheckedChange={onGenshinModeChange} />

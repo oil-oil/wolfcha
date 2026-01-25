@@ -22,7 +22,6 @@ import { getGeneratorModel, getSummaryModel } from "@/lib/api-keys";
 import { PhaseManager } from "@/game/core/PhaseManager";
 import type { PromptResult } from "@/game/core/types";
 import { buildCachedSystemMessageFromParts } from "./prompt-utils";
-import { getI18n } from "@/i18n/translator";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -53,10 +52,7 @@ function sanitizeSeatMentions(text: string, totalSeats: number): string {
   const replaceIfInvalid = (raw: string, numStr: string) => {
     const n = Number.parseInt(numStr, 10);
     if (!Number.isFinite(n)) return raw;
-    if (n < 1 || n > totalSeats) {
-      const { t } = getI18n();
-      return t("gameMaster.invalidSeat");
-    }
+    if (n < 1 || n > totalSeats) return "（无效座位）";
     return raw;
   };
 
@@ -194,14 +190,13 @@ export function getRoleConfiguration(playerCount: number): Role[] {
 export function setupPlayers(
   characters: GeneratedCharacter[],
   humanSeat: number = 0,
-  humanName: string = "",
+  humanName: string = "你",
   playerCount: number = 10,
   fixedRoles?: Role[],
   seedPlayerIds?: string[],
   modelRefs?: ModelRef[],
   aiSeatOrder?: number[]
 ): Player[] {
-  const { t } = getI18n();
   const totalPlayers = playerCount;
   const roles = getRoleConfiguration(totalPlayers);
   const assignedRoles = fixedRoles && fixedRoles.length === totalPlayers ? fixedRoles : shuffleArray(roles);
@@ -240,7 +235,7 @@ export function setupPlayers(
       players.push({
         playerId: getPlayerIdForSeat(seat),
         seat,
-        displayName: humanName.trim() || t("common.you"),
+        displayName: humanName.trim() || "你",
         alive: true,
         role,
         alignment,
@@ -279,11 +274,10 @@ export function addSystemMessage(
   state: GameState,
   content: string
 ): GameState {
-  const { t } = getI18n();
   const message: ChatMessage = {
     id: uuidv4(),
     playerId: "system",
-    playerName: t("speakers.host"),
+    playerName: "主持人",
     content,
     timestamp: Date.now(),
     day: state.day,
@@ -483,7 +477,7 @@ export async function generateDailySummary(
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i];
-      if (m.isSystem && m.content === t("system.dayBreakShort")) return i;
+      if (m.isSystem && m.content === "天亮了") return i;
     }
     return 0;
   })();
