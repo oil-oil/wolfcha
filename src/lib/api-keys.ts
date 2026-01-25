@@ -91,10 +91,10 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
-// When custom key is disabled, enforce a model from AVAILABLE_MODELS.
-function resolveDefaultModelWhenCustomDisabled(preferred: string): string {
-  if (AVAILABLE_MODELS.some((ref) => ref.model === preferred)) return preferred;
-  return AVAILABLE_MODELS[0]?.model ?? preferred;
+// When custom key is disabled, always return the system default model.
+// User's stored model selection should NOT be used when custom key is off.
+function resolveDefaultModelWhenCustomDisabled(fallbackDefault: string): string {
+  return fallbackDefault;
 }
 
 // When custom key is enabled, keep model within providers that have keys.
@@ -119,12 +119,13 @@ function resolveModelForCurrentKeyState(
   fallbackValue: string,
   storageKey: string
 ): string {
-  const base = storedValue || fallbackValue;
-
+  // When custom key is disabled, always use system default - ignore user's stored selection
   if (!isCustomKeyEnabled()) {
-    return resolveDefaultModelWhenCustomDisabled(base);
+    return resolveDefaultModelWhenCustomDisabled(fallbackValue);
   }
 
+  // When custom key is enabled, use user's stored selection (or fallback if not set)
+  const base = storedValue || fallbackValue;
   const resolved = resolveModelWhenCustomEnabled(base, fallbackValue);
   if (resolved !== base) {
     writeStorage(storageKey, resolved);
