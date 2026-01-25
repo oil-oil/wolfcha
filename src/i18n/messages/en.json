@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Wolfcha | Immersive Solo Werewolf",
-    "description": "Single-player immersive werewolf experience with AI narration, voice acting, and strategic deduction."
+    "title": "Wolfcha | AI-Powered Solo Werewolf",
+    "description": "A single-player Werewolf game with AI-driven characters, voice acting, and strategic deduction."
   },
   "locale": {
     "label": "Language",
@@ -53,15 +53,15 @@
     },
     "sponsor": {
       "title": "Become a sponsor",
-      "subtitle": "Your support helps Wolfcha stay reliable and free to play.",
-      "description": "Wolfcha is a public-benefit AI Werewolf project. We spend most costs on model usage, voice synthesis, servers, and content. Any support, in any form, means a lot to us.",
+      "subtitle": "Your support keeps Wolfcha running smoothly and free for everyone.",
+      "description": "Wolfcha is a community-driven AI Werewolf project. Our costs go toward AI models, voice synthesis, servers, and content creation. Any support—big or small—means the world to us.",
       "items": {
         "credits": "Model credits / compute / server resources",
         "media": "Voice, sound effects, character art assets",
         "collaboration": "Design, product, or operations collaboration",
         "community": "Community and channel sharing"
       },
-      "note": "We thank sponsors on the homepage with a seal; anonymous support is also welcome.",
+      "note": "Sponsors are featured on our homepage with a seal. Anonymous contributions are also welcome.",
       "copyEmail": "Copy email",
       "sendEmail": "Send an email",
       "action": "Become a Sponsor",
@@ -82,17 +82,17 @@
     "tutorial": "How to play",
     "subtitle": "The Shadow Game",
     "oath": {
-      "line1": "I willingly enter this game of lies and truth.",
-      "line2": "When night descends, I will hide my identity;",
-      "line3": "When dawn arrives, I will judge the guilty."
+      "line1": "I willingly enter this game of deception and truth.",
+      "line2": "When darkness falls, I shall conceal my identity;",
+      "line3": "When dawn breaks, I shall judge the guilty."
     },
     "signature": {
       "label": "Sign your name",
       "placeholder": "Signature here..."
     },
     "sealHint": {
-      "ready": "Press the seal to confirm",
-      "waiting": "Sign your name to continue"
+      "ready": "Press the seal to begin",
+      "waiting": "Sign your name first"
     },
     "transition": {
       "title": "Game begins",
@@ -124,7 +124,7 @@
         "title": "Preset scenario tests",
         "clear": "Clear",
         "none": "None",
-        "milkPoison": "Milk poison test",
+        "milkPoison": "Double-save test",
         "lastWords": "Last words test"
       },
       "roles": {
@@ -628,7 +628,7 @@
       },
       "seer": {
         "title": "Seer",
-        "subtitle": "You see identities, but must be trusted.",
+        "subtitle": "You see the truth, but must earn trust.",
         "abilities": [
           "Check one player each night (good/wolf)",
           "Guide votes with verified info by day"
@@ -640,7 +640,7 @@
       },
       "witch": {
         "title": "Witch",
-        "subtitle": "Life or death is a single decision.",
+        "subtitle": "Life and death hang on a single choice.",
         "abilities": [
           "Antidote: save the night victim (once)",
           "Poison: kill one player (once)"
@@ -652,7 +652,7 @@
       },
       "hunter": {
         "title": "Hunter",
-        "subtitle": "If eliminated, you may shoot one player.",
+        "subtitle": "When you fall, take one with you.",
         "abilities": [
           "If banished or killed, you can take one player with you"
         ],
@@ -663,7 +663,7 @@
       },
       "guard": {
         "title": "Guard",
-        "subtitle": "Protect the key person at the right time.",
+        "subtitle": "Shield the right person at the right moment.",
         "abilities": [
           "Protect one player at night from attacks",
           "Usually cannot guard the same player on consecutive nights"
@@ -675,7 +675,7 @@
       },
       "villager": {
         "title": "Villager",
-        "subtitle": "No skills, but sound judgment.",
+        "subtitle": "No powers, but your judgment matters.",
         "abilities": [
           "No night action",
           "Find wolves through speech and voting"
@@ -715,12 +715,12 @@
     "seerActionStart": "Seer, open your eyes.",
     "peacefulNight": "It was a peaceful night.",
     "playerKilled": "Seat {seat} {name} was eliminated last night.",
-    "playerMilkKilled": "Seat {seat} {name} was taken by milk poison last night.",
+    "playerMilkKilled": "Seat {seat} {name} died from a double-save last night.",
     "playerPoisoned": "Seat {seat} {name} was poisoned last night.",
-    "badgeSpeechStart": "Badge election begins. Candidates speak in order.",
-    "badgeElectionStart": "Start badge voting.",
-    "badgeRevote": "Badge vote tied. Re-vote.",
-    "badgeElected": "Badge awarded to Seat {seat} {name} ({votes} votes).",
+    "badgeSpeechStart": "Sheriff election begins. Candidates, speak in order.",
+    "badgeElectionStart": "Sheriff voting begins.",
+    "badgeRevote": "Sheriff vote tied. Revoting.",
+    "badgeElected": "Sheriff badge goes to Seat {seat} {name} ({votes} votes).",
     "dayDiscussion": "Free discussion begins.",
     "voteStart": "Discussion ends. Start voting.",
     "playerExecuted": "Seat {seat} {name} was executed with {votes} votes.",
@@ -733,14 +733,14 @@
     "witchPoison": "You poisoned Seat {seat} {name}.",
     "guardProtect": "You protected Seat {seat} {name}.",
     "hunterShoot": "Hunter Seat {hunterSeat} shot Seat {targetSeat} {targetName}.",
-    "badgeTransferStart": "Seat {seat} {name} is the sheriff. Choose a badge transfer or tear it.",
+    "badgeTransferStart": "Seat {seat} {name} is the sheriff. Transfer the badge or tear it up.",
     "badgeTransferred": "Badge transferred to Seat {toSeat} {toName}.",
-    "badgeTorn": "Seat {seat} {name} tore the badge.",
+    "badgeTorn": "Seat {seat} {name} tore up the badge.",
     "patterns": {
       "nightFall": "^Night\\s*\\d+\\.?\\s*Close your eyes\\.?$",
       "playerKilled": "^Seat\\s+\\d+\\s+.+\\s+was eliminated last night\\.?$",
       "playerPoisoned": "^Seat\\s+\\d+\\s+.+\\s+was poisoned last night\\.?$",
-      "badgeElected": "^Badge awarded to Seat\\s+\\d+\\s+.+\\s+\\(\\d+ votes\\)\\.?$",
+      "badgeElected": "^Sheriff badge goes to Seat\\s+\\d+\\s+.+\\s+\\(\\d+ votes\\)\\.?$",
       "badgeTransferred": "^Badge transferred to Seat\\s+\\d+\\s+.+\\.?$",
       "playerExecuted": "^Seat\\s+\\d+\\s+.+\\s+was executed with\\s+\\d+ votes\\.?$",
       "voteTie": "^Tie vote\\. No one is eliminated today\\.?$"
@@ -756,12 +756,12 @@
     "witchActing": "The witch is deciding whether to use a potion...",
     "waitingGuard": "Select a player to protect",
     "guardActing": "The guard is choosing a target...",
-    "badgeVotePrompt": "Tap an avatar to vote for sheriff",
-    "hunterShoot": "Pick a target and pull the final trigger",
+    "badgeVotePrompt": "Tap a player to vote for sheriff",
+    "hunterShoot": "Choose your target and take your final shot",
     "hunterAiming": "The hunter is choosing a target...",
     "yourTurn": "Your turn to speak",
-    "votePrompt": "Tap an avatar to vote",
-    "clickToVote": "Tap an avatar to vote",
+    "votePrompt": "Tap a player to vote",
+    "clickToVote": "Tap a player to vote",
     "aiThinking": "Someone is thinking...",
     "aiVoting": "Everyone is voting...",
     "aiSpeaking": "Someone is speaking...",
@@ -780,19 +780,19 @@
   "prompts": {
     "daySpeech": {
       "speakOrder": {
-        "first": "You are the first speaker. No one else has spoken yet.",
-        "last": "You are the last speaker ({speakOrder}/{totalSpeakers}). Everyone has already spoken; do not say things like \"wait for Seat X\".",
-        "middle": "You are speaker {speakOrder}/{totalSpeakers}. Spoken: {spokenList}; Unspoken: {unspokenList}."
+        "first": "You speak first. No one has spoken yet.",
+        "last": "You are the last speaker ({speakOrder}/{totalSpeakers}). Everyone has spoken. Don't say things like \"let's see what Seat X says\".",
+        "middle": "You are speaker {speakOrder}/{totalSpeakers}. Already spoken: {spokenList}. Yet to speak: {unspokenList}."
       },
       "campaign": {
-        "badge": "【Campaign requirements】Give reasons for running (info position, leadership ability, situation judgment, stance, etc.).\nMust provide leadership commitment or focus for this round (e.g., who to watch first, how to consolidate votes, how to handle counter-claims).",
-        "pk": "【PK requirements】Point out why your opponent is unsuitable or why you are more suitable, and give leadership commitment or focus.",
-        "candidateNote": "Note: Only candidates will speak. Non-candidates ({list}) will not speak in this phase.",
-        "emptyCandidateNote": "Note: Candidate list is empty (abnormal). Only respond based on visible speech records, do not speculate about non-speakers."
+        "badge": "【Campaign requirements】Explain why you're running (information advantage, leadership skills, game sense, stance, etc.).\nProvide a leadership commitment or focus for this round (e.g., who to watch, how to consolidate votes, how to handle counter-claims).",
+        "pk": "【PK requirements】Explain why your opponent is less suitable or why you're the better choice. Include your leadership commitment or focus.",
+        "candidateNote": "Note: Only candidates speak in this phase. Non-candidates ({list}) will not speak.",
+        "emptyCandidateNote": "Note: Candidate list is empty (unusual). Only respond based on visible speech records; do not speculate about non-speakers."
       },
       "roleHints": {
-        "werewolf": "You are a werewolf. Disguise as good; shift blame subtly but not too hard.",
-        "seer": "You are the seer. You may claim or keep a low profile."
+        "werewolf": "You are a werewolf. Blend in as a villager; deflect suspicion subtly without overdoing it.",
+        "seer": "You are the seer. You can reveal your role or stay hidden for now."
       },
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n【Scenario】\nThis is an online Werewolf game. Players communicate by text.\n\n{winCondition}\n\n{persona}\n\n{difficultyHint}",
       "task": {
@@ -982,7 +982,7 @@
     "messageCount": "{count} messages",
     "advanceHintPrefix": "Click or press",
     "advanceHintSuffix": "to continue",
-    "playAgainHint": "See you next time",
+    "playAgainHint": "Hope to see you again!",
     "actionConfirmPrompt": "You choose {action} <highlight>{target}</highlight>. Confirm?",
     "actionConfirm": "Confirm {action}",
     "gameEnd": {
@@ -1008,7 +1008,7 @@
       "seerAwake": "Seer, open your eyes",
       "seerChecking": "Seer is checking",
       "hunterAwake": "Hunter action",
-      "hunterActing": "Hunter is aiming"
+      "hunterActing": "Hunter is taking aim"
     },
     "witch": {
       "poisonUsed": "Poison is already used.",
@@ -1164,7 +1164,7 @@
     "hint": "Tap a player avatar to choose a kill target"
   },
   "dayPhase": {
-    "organizing": "(Organizing thoughts...)",
+    "organizing": "(Gathering thoughts...)",
     "interrupted": "(Interrupted)",
     "lastWordsSystem": "Seat {seat} {name}, please give your last words",
     "lastWordsPrompt": "Please deliver your last words (Seat {seat} {name})"
