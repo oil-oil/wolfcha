@@ -1157,11 +1157,16 @@ export function DialogArea({
                       return (
                         <>
                           <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                            {t("dialog.witch.confirmPoisonQuestion")} <span className="text-[var(--color-danger)] font-semibold">{targetName}</span>
+                            {t.rich("dialog.witch.confirmPoisonPrompt", {
+                              target: targetName,
+                              highlight: (chunks) => (
+                                <span className="text-[var(--color-danger)] font-semibold">{chunks}</span>
+                              ),
+                            })}
                           </div>
                           <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
-                              onClick={onCancelSelection}
+                              onClick={() => onCancelSelection?.()}
                               className="wc-action-btn text-sm h-9 px-4"
                               type="button"
                             >
@@ -1200,7 +1205,12 @@ export function DialogArea({
                           <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                             {targetName ? (
                               <>
-                                {t("dialog.witch.attackedTonight", { target: targetName })}
+                                {t.rich("dialog.witch.attackedTonight", {
+                                  target: targetName,
+                                  highlight: (chunks) => (
+                                    <span className="text-[var(--color-danger)] font-semibold">{chunks}</span>
+                                  ),
+                                })}
                                 {healUsed ? (
                                   <span className="text-[var(--text-muted)]">{t("dialog.witch.healUsedNote")}</span>
                                 ) : (
