@@ -1478,7 +1478,7 @@ export function useGameLogic() {
       const shouldSummarizeEarly =
         nextState.day > 0 &&
         !nextState.dailySummaries?.[nextState.day]?.length &&
-        rawTranscript.length > 9000;
+        rawTranscript.length > 10000;
       if (shouldSummarizeEarly) {
         void maybeGenerateDailySummary(nextState)
           .then((summarized) => {
