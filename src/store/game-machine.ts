@@ -211,6 +211,7 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     humanDescription: (hp, gs) => {
       const { t } = getI18n();
       const candidates = gs.badge.candidates || [];
+      if (candidates.length === 0) return t("phase.badgeElection.description");
       if (hp && candidates.includes(hp.seat)) return t("phase.badgeElection.noVote");
       return hp?.alive && typeof gs.badge.votes[hp.playerId] !== "number"
         ? t("phase.badgeElection.human")
@@ -220,6 +221,7 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
       if (!hp?.alive) return false;
       // 候选人不需要投票
       const candidates = gs.badge.candidates || [];
+      if (candidates.length === 0) return false;
       if (candidates.includes(hp.seat)) return false;
       return typeof gs.badge.votes[hp.playerId] !== "number";
     },
@@ -228,6 +230,7 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
       if (target.isHuman) return false;
       // 候选人不能投票
       const candidates = gs.badge.candidates || [];
+      if (candidates.length === 0) return false;
       if (candidates.includes(hp.seat)) return false;
       if (typeof gs.badge.votes[hp.playerId] === "number") return false;
       if (candidates.length > 0 && !candidates.includes(target.seat)) return false;
@@ -267,10 +270,19 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   DAY_VOTE: {
     phase: "DAY_VOTE",
     description: "phase.dayVote.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      return hp?.alive && typeof gs.votes[hp?.playerId || ""] !== "number"
+        ? t("phase.dayVote.human")
+        : t("phase.dayVote.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.votes[hp?.playerId || ""] !== "number" || false,
     canSelectPlayer: (hp, target, gs) => {
       if (!hp?.alive || target.isHuman || !target.alive) return false;
       if (typeof gs.votes[hp.playerId] === "number") return false;
+      if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length === 0) {
+        return false;
+      }
       if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
         return gs.pkTargets.includes(target.seat);
       }

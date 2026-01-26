@@ -474,7 +474,7 @@
     "confirmPoisonAction": "确认毒杀",
     "saveTarget": "救 {seat}号",
     "poisonUsed": "毒药已耗尽",
-    "clickToPoison": "点击头像用毒",
+    "clickToPoison": "点击玩家卡片选择毒杀目标",
     "pass": "跳过",
     "gameEnd": {
       "villageWin": "好人阵营胜利！",
@@ -747,21 +747,21 @@
     }
   },
   "ui": {
-    "waitingSeer": "选择一名玩家进行查验",
+    "waitingSeer": "选择一名玩家进行查验。点击玩家卡片进行选择。",
     "seerChecking": "预言家正在选择要查验的对象…",
-    "waitingWolf": "选择要击杀的目标",
+    "waitingWolf": "选择要击杀的目标。点击玩家卡片进行选择。",
     "wolfActing": "狼人正在商量要击杀的目标…",
     "wolfCoordinating": "等待狼队友选择击杀目标…",
     "waitingWitch": "选择是否用药",
     "witchActing": "女巫正在决定是否使用药水…",
-    "waitingGuard": "选择一名玩家进行守护",
+    "waitingGuard": "选择一名玩家进行守护。点击玩家卡片进行选择。",
     "guardActing": "守卫正在选择要守护的对象…",
-    "badgeVotePrompt": "点击头像投票选警徽",
-    "hunterShoot": "点选目标，扣下最后一枪",
+    "badgeVotePrompt": "点击玩家卡片投票选警徽",
+    "hunterShoot": "点击玩家卡片选择开枪目标",
     "hunterAiming": "猎人正在选择要带走的目标…",
     "yourTurn": "轮到你了，开始发言吧",
-    "votePrompt": "点击头像投票",
-    "clickToVote": "点击头像投票",
+    "votePrompt": "点击玩家卡片投票",
+    "clickToVote": "点击玩家卡片投票",
     "aiThinking": "有人正在思考…",
     "aiVoting": "大家正在投票…",
     "aiSpeaking": "有人正在发言…",
@@ -902,7 +902,7 @@
     "tiePk": "警徽平票，进入PK发言",
     "signupStart": "进入警徽竞选报名环节",
     "noSignup": "无人报名竞选警长，跳过警徽竞选",
-    "transferPrompt": "请选择移交警徽的对象"
+    "transferPrompt": "点击玩家卡片选择移交警徽的对象"
   },
   "votePhase": {
     "voteDetailTitle": "投票详情",
@@ -912,27 +912,27 @@
     "lobby": { "description": "准备开始" },
     "setup": { "description": "生成角色中..." },
     "nightStart": { "description": "夜晚降临" },
-    "nightGuard": { "description": "守卫行动中", "human": "选择要保护的玩家" },
-    "nightWolf": { "description": "狼人行动中", "human": "选择击杀目标" },
+    "nightGuard": { "description": "守卫行动中", "human": "点击玩家卡片选择要保护的玩家" },
+    "nightWolf": { "description": "狼人行动中", "human": "点击玩家卡片选择击杀目标" },
     "nightWitch": { "description": "女巫行动中", "human": "是否使用药水？" },
-    "nightSeer": { "description": "预言家行动中", "human": "选择查验目标" },
+    "nightSeer": { "description": "预言家行动中", "human": "点击玩家卡片选择查验目标" },
     "nightResolve": { "description": "天亮了" },
     "dayStart": { "description": "白天开始" },
     "badgeSignup": { "description": "警徽竞选报名", "human": "是否竞选警长" },
     "badgeSpeech": { "description": "警徽竞选发言" },
     "badgeElection": {
       "description": "警徽评选",
-      "human": "投票选警徽",
+      "human": "点击玩家卡片投票选警徽",
       "noVote": "你是候选人，无需投票"
     },
     "pkSpeech": { "description": "PK发言" },
     "daySpeech": { "description": "发言阶段" },
     "speechYourTurn": "轮到你发言",
     "lastWords": { "description": "遗言阶段" },
-    "dayVote": { "description": "投票阶段" },
+    "dayVote": { "description": "投票阶段", "human": "点击玩家卡片投票" },
     "dayResolve": { "description": "处决结算" },
-    "badgeTransfer": { "description": "警长移交警徽", "human": "选择移交警徽的对象" },
-    "hunterShoot": { "description": "猎人开枪", "human": "选择开枪目标" },
+    "badgeTransfer": { "description": "警长移交警徽", "human": "点击玩家卡片选择移交对象" },
+    "hunterShoot": { "description": "猎人开枪", "human": "点击玩家卡片选择开枪目标" },
     "gameEnd": { "description": "游戏结束", "villageWin": "好人胜利", "wolfWin": "狼人胜利" }
   },
   "page": {
@@ -997,7 +997,7 @@
     "badgeTransfer": {
       "title": "警徽移交",
       "description": "你已出局，请选择将警徽移交给一名存活玩家",
-      "hint": "点击头像选择移交对象",
+      "hint": "点击玩家卡片选择移交对象",
       "tear": "撕毁警徽（不移交）"
     },
     "nightAction": {
@@ -1170,7 +1170,7 @@
     "lastWordsPrompt": "请你发表遗言（{seat}号 {name}）"
   },
   "specialEvents": {
-    "hunterPrompt": "你是猎人，请选择开枪目标（或放弃）",
+    "hunterPrompt": "你是猎人，请点击玩家卡片选择开枪目标（或放弃）",
     "villageWinLine": "好人阵营胜利，村庄恢复了和平",
     "wolfWinLine": "狼人阵营胜利，村庄陷入黑暗",
     "roleRevealItem": "{seat}号 {name}: {role}",

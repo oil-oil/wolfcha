@@ -474,7 +474,7 @@
     "confirmPoisonAction": "Confirm poison",
     "saveTarget": "Save Seat {seat}",
     "poisonUsed": "Poison used up",
-    "clickToPoison": "Tap a player to poison",
+    "clickToPoison": "Tap a player card to choose a poison target",
     "pass": "Pass",
     "gameEnd": {
       "villageWin": "Villagers win!",
@@ -747,21 +747,21 @@
     }
   },
   "ui": {
-    "waitingSeer": "Select a player to check",
+    "waitingSeer": "Select a player to check. Tap a player card to select.",
     "seerChecking": "The seer is choosing a target...",
-    "waitingWolf": "Choose a target to kill",
+    "waitingWolf": "Choose a target to kill. Tap a player card to select.",
     "wolfActing": "Werewolves are deciding their target...",
     "wolfCoordinating": "Waiting for the wolf team to pick a target...",
     "waitingWitch": "Decide whether to use a potion",
     "witchActing": "The witch is deciding whether to use a potion...",
-    "waitingGuard": "Select a player to protect",
+    "waitingGuard": "Select a player to protect. Tap a player card to select.",
     "guardActing": "The guard is choosing a target...",
-    "badgeVotePrompt": "Tap a player to vote for sheriff",
-    "hunterShoot": "Choose your target and take your final shot",
+    "badgeVotePrompt": "Tap a player card to vote for sheriff",
+    "hunterShoot": "Tap a player card to choose your shot target",
     "hunterAiming": "The hunter is choosing a target...",
     "yourTurn": "Your turn to speak",
-    "votePrompt": "Tap a player to vote",
-    "clickToVote": "Tap a player to vote",
+    "votePrompt": "Tap a player card to vote",
+    "clickToVote": "Tap a player card to vote",
     "aiThinking": "Someone is thinking...",
     "aiVoting": "Everyone is voting...",
     "aiSpeaking": "Someone is speaking...",
@@ -902,7 +902,7 @@
     "tiePk": "Sheriff vote tied. Enter PK speeches.",
     "signupStart": "Sheriff election signup begins",
     "noSignup": "No one signed up. Sheriff election skipped.",
-    "transferPrompt": "Choose a player to transfer the badge"
+    "transferPrompt": "Tap a player card to choose who receives the badge"
   },
   "votePhase": {
     "voteDetailTitle": "Vote details",
@@ -912,27 +912,27 @@
     "lobby": { "description": "Ready to start" },
     "setup": { "description": "Generating roles..." },
     "nightStart": { "description": "Night falls" },
-    "nightGuard": { "description": "Guard in action", "human": "Choose a player to protect" },
-    "nightWolf": { "description": "Werewolves in action", "human": "Choose a kill target" },
+    "nightGuard": { "description": "Guard in action", "human": "Tap a player card to choose who to protect" },
+    "nightWolf": { "description": "Werewolves in action", "human": "Tap a player card to choose a kill target" },
     "nightWitch": { "description": "Witch in action", "human": "Use a potion?" },
-    "nightSeer": { "description": "Seer in action", "human": "Choose a player to check" },
+    "nightSeer": { "description": "Seer in action", "human": "Tap a player card to choose who to check" },
     "nightResolve": { "description": "Day breaks" },
     "dayStart": { "description": "Day begins" },
     "badgeSignup": { "description": "Sheriff signup", "human": "Run for sheriff?" },
     "badgeSpeech": { "description": "Sheriff speeches" },
     "badgeElection": {
       "description": "Sheriff election",
-      "human": "Vote for sheriff",
+      "human": "Tap a player card to vote for sheriff",
       "noVote": "You're a candidate; no vote needed"
     },
     "pkSpeech": { "description": "PK speeches" },
     "daySpeech": { "description": "Discussion phase" },
     "speechYourTurn": "Your turn to speak",
     "lastWords": { "description": "Last words" },
-    "dayVote": { "description": "Voting phase" },
+    "dayVote": { "description": "Voting phase", "human": "Tap a player card to vote" },
     "dayResolve": { "description": "Execution resolution" },
-    "badgeTransfer": { "description": "Sheriff badge transfer", "human": "Choose a badge transfer target" },
-    "hunterShoot": { "description": "Hunter shot", "human": "Choose a target to shoot" },
+    "badgeTransfer": { "description": "Sheriff badge transfer", "human": "Tap a player card to choose a transfer target" },
+    "hunterShoot": { "description": "Hunter shot", "human": "Tap a player card to choose your shot target" },
     "gameEnd": { "description": "Game over", "villageWin": "Villagers win", "wolfWin": "Werewolves win" }
   },
   "page": {
@@ -997,7 +997,7 @@
     "badgeTransfer": {
       "title": "Sheriff transfer",
       "description": "You are out. Choose a living player to receive the badge.",
-      "hint": "Tap a player avatar to transfer the badge",
+      "hint": "Tap a player card to select a transfer target",
       "tear": "Tear the badge (no transfer)"
     },
     "nightAction": {
@@ -1170,7 +1170,7 @@
     "lastWordsPrompt": "Please deliver your last words (Seat {seat} {name})"
   },
   "specialEvents": {
-    "hunterPrompt": "You are the hunter. Choose a target to shoot (or skip).",
+    "hunterPrompt": "You are the hunter. Tap a player card to choose your shot target (or skip).",
     "villageWinLine": "The villagers win. Peace returns to the village.",
     "wolfWinLine": "The werewolves win. Darkness falls on the village.",
     "roleRevealItem": "Seat {seat} {name}: {role}",
