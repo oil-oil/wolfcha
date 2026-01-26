@@ -26,12 +26,12 @@ import type { DialogueState } from "@/store/game-machine";
 
 // 职业立绘映射
 const ROLE_PORTRAIT_MAP: Record<string, string> = {
-  Werewolf: '/职业/狼人.png',
-  Seer: '/职业/预言家.png',
-  Witch: '/职业/女巫.png',
-  Hunter: '/职业/猎人.png',
-  Guard: '/职业/守卫.png',
-  Villager: '/职业/平民.png',
+  Werewolf: '/roles/werewolf.png',
+  Seer: '/roles/seer.png',
+  Witch: '/roles/witch.png',
+  Hunter: '/roles/hunter.png',
+  Guard: '/roles/guard.png',
+  Villager: '/roles/villager.png',
 };
 
 // 预加载所有职业立绘

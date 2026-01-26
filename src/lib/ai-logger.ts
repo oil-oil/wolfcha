@@ -173,6 +173,11 @@ class AILogger {
   }
 
   async getLogs(): Promise<AILogEntry[]> {
+    // 生产环境直接使用 localStorage（服务端不存储）
+    if (process.env.NODE_ENV === "production") {
+      return this.loadLocalLogs();
+    }
+    
     try {
       const res = await fetch("/api/ai-log");
       const data = await res.json();

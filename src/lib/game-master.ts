@@ -1225,6 +1225,45 @@ export async function generateWitchAction(
 
   const cleanedWitch = stripMarkdownCodeFences(result.content);
 
+  const rawText = cleanedWitch.trim();
+  const contentLower = rawText.toLowerCase();
+
+  const canSave =
+    !state.roleAbilities.witchHealUsed &&
+    wolfTarget !== undefined &&
+    wolfTarget !== player.seat;
+  const canPoison = !state.roleAbilities.witchPoisonUsed;
+
+  let parsedAction: WitchAction;
+  if (contentLower.startsWith("save")) {
+    parsedAction = canSave ? { type: "save" } : { type: "pass" };
+  } else if (contentLower.startsWith("pass")) {
+    parsedAction = { type: "pass" };
+  } else if (contentLower.startsWith("poison")) {
+    if (!canPoison) {
+      parsedAction = { type: "pass" };
+    } else {
+      const match = contentLower.match(/poison\s*(\d+)/);
+      if (!match) {
+        parsedAction = { type: "pass" };
+      } else {
+        const seat = parseInt(match[1], 10) - 1;
+        if (!Number.isFinite(seat) || seat === player.seat) {
+          parsedAction = { type: "pass" };
+        } else {
+          const target = state.players.find((p) => p.seat === seat);
+          if (!target || !target.alive) {
+            parsedAction = { type: "pass" };
+          } else {
+            parsedAction = { type: "poison", target: seat };
+          }
+        }
+      }
+    }
+  } else {
+    parsedAction = { type: "pass" };
+  }
+
   await aiLogger.log({
     type: "witch_action",
     request: {
@@ -1237,40 +1276,12 @@ export async function generateWitchAction(
       raw: result.content,
       rawResponse: JSON.stringify(result.raw, null, 2),
       finishReason: result.raw.choices?.[0]?.finish_reason,
+      parsed: parsedAction,
       duration: Date.now() - startTime,
     },
   });
 
-  const raw = cleanedWitch.trim();
-  const content = raw.toLowerCase();
-
-  const canSave =
-    !state.roleAbilities.witchHealUsed &&
-    wolfTarget !== undefined &&
-    wolfTarget !== player.seat;
-  const canPoison = !state.roleAbilities.witchPoisonUsed;
-
-  if (content.startsWith("save")) {
-    return canSave ? { type: "save" } : { type: "pass" };
-  }
-
-  if (content.startsWith("pass")) {
-    return { type: "pass" };
-  }
-
-  if (content.startsWith("poison")) {
-    if (!canPoison) return { type: "pass" };
-    const match = content.match(/poison\s*(\d+)/);
-    if (!match) return { type: "pass" };
-    const seat = parseInt(match[1], 10) - 1;
-    if (!Number.isFinite(seat)) return { type: "pass" };
-    if (seat === player.seat) return { type: "pass" };
-    const target = state.players.find((p) => p.seat === seat);
-    if (!target || !target.alive) return { type: "pass" };
-    return { type: "poison", target: seat };
-  }
-
-  return { type: "pass" };
+  return parsedAction;
 }
 
 // ...
@@ -1295,6 +1306,20 @@ export async function generateGuardAction(
 
   const cleanedGuard = stripMarkdownCodeFences(result.content);
 
+  const match = cleanedGuard.match(/\d+/);
+  let parsedSeat: number;
+  if (match) {
+    const seat = parseInt(match[0]) - 1;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    if (validSeats.includes(seat)) {
+      parsedSeat = seat;
+    } else {
+      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  } else {
+    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  }
+
   await aiLogger.log({
     type: "guard_action",
     request: { 
@@ -1307,20 +1332,12 @@ export async function generateGuardAction(
       raw: result.content,
       rawResponse: JSON.stringify(result.raw, null, 2),
       finishReason: result.raw.choices?.[0]?.finish_reason,
+      parsed: { targetSeat: parsedSeat },
       duration: Date.now() - startTime,
     },
   });
 
-  const match = cleanedGuard.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedSeat;
 }
 
 // ...
@@ -1344,6 +1361,28 @@ export async function generateHunterShoot(
 
   const cleanedHunter = stripMarkdownCodeFences(result.content);
 
+  const contentLower = cleanedHunter.toLowerCase().trim();
+  let parsedTarget: number | null;
+  
+  if (contentLower.includes("pass")) {
+    parsedTarget = null;
+  } else {
+    const match = cleanedHunter.match(/\d+/);
+    if (match) {
+      const seat = parseInt(match[0]) - 1;
+      const validSeats = alivePlayers.map((p) => p.seat);
+      if (validSeats.includes(seat)) {
+        parsedTarget = seat;
+      } else {
+        // 猎人随机选择一个目标
+        parsedTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+      }
+    } else {
+      // 猎人随机选择一个目标
+      parsedTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    }
+  }
+
   await aiLogger.log({
     type: "hunter_shoot",
     request: { 
@@ -1356,24 +1395,10 @@ export async function generateHunterShoot(
       raw: result.content,
       rawResponse: JSON.stringify(result.raw, null, 2),
       finishReason: result.raw.choices?.[0]?.finish_reason,
+      parsed: { targetSeat: parsedTarget },
       duration: Date.now() - startTime,
     },
   });
 
-  const content = cleanedHunter.toLowerCase().trim();
-  if (content.includes("pass")) {
-    return null;
-  }
-
-  const match = cleanedHunter.match(/\d+/);
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      return seat;
-    }
-  }
-
-  // 猎人随机选择一个目标
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return parsedTarget;
 }
