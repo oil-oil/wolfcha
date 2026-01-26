@@ -1,0 +1,24 @@
+# Robots.txt for Wolfcha - AI Werewolf Game
+# https://wolf-cha.com
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://wolf-cha.com/sitemap.xml
+
+# Disallow API routes
+Disallow: /api/
+
+# Allow search engines to index all public pages
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+# Crawl-delay for polite crawling
+Crawl-delay: 1

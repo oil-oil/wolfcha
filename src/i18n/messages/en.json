@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Wolfcha | AI-Powered Solo Werewolf",
-    "description": "A single-player Werewolf game with AI-driven characters, voice acting, and strategic deduction."
+    "title": "Wolfcha | AI Werewolf - Play Werewolf with AI Online",
+    "description": "Play Werewolf with AI opponents online. The ultimate single-player social deduction game featuring DeepSeek, Qwen, Kimi & Gemini AI models with voice acting."
   },
   "locale": {
     "label": "Language",
@@ -231,6 +231,86 @@
         "description": "4 wolves, 4 specials, 4 villagers",
         "roles": "Special roles: Seer, Witch, Hunter, Guard"
       }
+    }
+  },
+  "seo": {
+    "nav": {
+      "home": "Play",
+      "features": "Features",
+      "models": "AI Models",
+      "howTo": "How to Play",
+      "blog": "Blog"
+    },
+    "hero": {
+      "title": "AI Werewolf",
+      "subtitle": "Play with AI Opponents",
+      "description": "Experience the classic social deduction game like never before. Battle against multiple AI models that reason, bluff, and strategize — all in a single-player experience.",
+      "playNow": "Play Now — Free",
+      "howToPlay": "How to Play"
+    },
+    "features": {
+      "title": "Why Play AI Werewolf?",
+      "solo": {
+        "title": "Play Alone, Anytime",
+        "description": "No need to gather friends. Play a full Werewolf game solo with AI opponents that reason, bluff, and strategize."
+      },
+      "models": {
+        "title": "Multiple AI Models",
+        "description": "Each AI player is powered by a different language model, creating diverse personalities and play styles."
+      },
+      "voice": {
+        "title": "Voice Acting",
+        "description": "Immersive experience with AI-generated voice acting for every character."
+      },
+      "roles": {
+        "title": "Classic Roles",
+        "description": "All your favorite roles: Werewolf, Seer, Witch, Hunter, Guard, and Villager."
+      }
+    },
+    "models": {
+      "title": "Powered by Top AI Models",
+      "description": "Each AI player uses a different language model, creating unique personalities and strategies",
+      "deepseek": "Strategic & Analytical",
+      "qwen": "Balanced & Thoughtful",
+      "kimi": "Creative & Unpredictable",
+      "gemini": "Fast & Intuitive",
+      "seed": "Expressive & Dynamic"
+    },
+    "howTo": {
+      "title": "How AI Werewolf Works",
+      "step1": {
+        "title": "Join the Game",
+        "description": "Enter your name and choose your settings. AI players join automatically."
+      },
+      "step2": {
+        "title": "Play Your Role",
+        "description": "Use your abilities at night. Discuss and vote during the day."
+      },
+      "step3": {
+        "title": "Win Together or Alone",
+        "description": "Eliminate all werewolves to win as a villager, or dominate as a wolf."
+      }
+    },
+    "faq": {
+      "title": "Frequently Asked Questions",
+      "q1": "What is AI Werewolf?",
+      "a1": "AI Werewolf is a single-player version of the classic social deduction game where you play against AI opponents powered by advanced language models.",
+      "q2": "Can I really play Werewolf alone?",
+      "a2": "Yes! All other players are AI-controlled, each with unique personalities and reasoning abilities. It feels like playing with real people.",
+      "q3": "Which AI models power the game?",
+      "a3": "We use DeepSeek V3.2, Qwen3-235B, Kimi K2, Gemini 3 Flash, and ByteDance Seed 1.8. Each brings different strengths to the game.",
+      "q4": "Is it free to play?",
+      "a4": "Yes, Wolfcha is free to play. Start immediately at wolf-cha.com.",
+      "q5": "What roles are available?",
+      "a5": "Classic roles include Werewolf, Seer, Witch, Hunter, Guard, and Villager. Role composition varies by player count (8-12)."
+    },
+    "cta": {
+      "title": "Ready to Play AI Werewolf?",
+      "description": "No signup required. Start playing for free right now.",
+      "button": "Play Now"
+    },
+    "footer": {
+      "slogan": "Wolfcha — The best way to play Werewolf with AI"
     }
   },
   "difficultySelector": {

@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Wolfcha - 猹杀｜单人沉浸式狼人杀",
-    "description": "AI 旁白与角色语音驱动的单人沉浸式狼人杀推理游戏"
+    "title": "Wolfcha - AI狼人杀｜一个人玩的沉浸式狼人杀游戏",
+    "description": "免费在线AI狼人杀游戏，一个人也能玩！多款顶级AI大模型（DeepSeek、Qwen、Kimi、Gemini）扮演其他玩家，带语音旁白的单人沉浸式狼人杀推理游戏。"
   },
   "locale": {
     "label": "语言",
@@ -231,6 +231,86 @@
         "description": "4狼 4神 4民",
         "roles": "神职：预言家、女巫、猎人、守卫"
       }
+    }
+  },
+  "seo": {
+    "nav": {
+      "home": "开始游戏",
+      "features": "特性",
+      "models": "AI 模型",
+      "howTo": "玩法教程",
+      "blog": "博客"
+    },
+    "hero": {
+      "title": "AI 狼人杀",
+      "subtitle": "与 AI 对手同台竞技",
+      "description": "前所未有的经典社交推理游戏体验。在单人模式下，与多个擅长推理、伪装和策略的 AI 模型对战。",
+      "playNow": "立即开始 — 免费",
+      "howToPlay": "玩法教程"
+    },
+    "features": {
+      "title": "为什么选择 AI 狼人杀？",
+      "solo": {
+        "title": "随时随地，单人畅玩",
+        "description": "无需凑人，随时开启一局完整的狼人杀。与 AI 对手进行推理、伪装和策略博弈。"
+      },
+      "models": {
+        "title": "多模型驱动",
+        "description": "每个 AI 玩家由不同的语言模型驱动，拥有独特的性格和游戏风格。"
+      },
+      "voice": {
+        "title": "全语音配音",
+        "description": "所有角色均由 AI 生成语音，带来身临其境的沉浸式体验。"
+      },
+      "roles": {
+        "title": "经典角色",
+        "description": "包含所有经典角色：狼人、预言家、女巫、猎人、守卫和村民。"
+      }
+    },
+    "models": {
+      "title": "由顶尖 AI 模型驱动",
+      "description": "每个 AI 玩家使用不同的语言模型，创造出独特的性格和策略。",
+      "deepseek": "战略与分析型",
+      "qwen": "平衡与深思型",
+      "kimi": "创意与不可预测型",
+      "gemini": "快速与直觉型",
+      "seed": "表达与动态型"
+    },
+    "howTo": {
+      "title": "游戏流程",
+      "step1": {
+        "title": "加入游戏",
+        "description": "输入名字并选择设置，AI 玩家将自动加入。"
+      },
+      "step2": {
+        "title": "扮演角色",
+        "description": "在夜晚使用技能，在白天进行讨论和投票。"
+      },
+      "step3": {
+        "title": "赢得胜利",
+        "description": "村民找出所有狼人获胜，或狼人数量占据优势获胜。"
+      }
+    },
+    "faq": {
+      "title": "常见问题",
+      "q1": "什么是 AI 狼人杀？",
+      "a1": "AI 狼人杀是经典社交推理游戏的单人版本，你将与由 DeepSeek、Qwen、Kimi 和 Gemini 等高级语言模型驱动的 AI 对手对战。",
+      "q2": "真的可以一个人玩吗？",
+      "a2": "是的！所有其他玩家都由 AI 控制，每个 AI 都有独特的性格和推理能力，感觉就像和真人一起玩一样。",
+      "q3": "游戏使用了哪些 AI 模型？",
+      "a3": "我们使用 DeepSeek V3.2、Qwen3-235B、Kimi K2、Gemini 3 Flash 和 ByteDance Seed 1.8。每个模型都为游戏带来了不同的优势。",
+      "q4": "游戏是免费的吗？",
+      "a4": "是的，Wolfcha 是完全免费的。访问 wolf-cha.com 即可立即开始。",
+      "q5": "有哪些角色？",
+      "a5": "经典角色包括狼人、预言家、女巫、猎人、守卫和村民。角色配置根据人数（8-12人）有所不同。"
+    },
+    "cta": {
+      "title": "准备好开始了吗？",
+      "description": "无需注册，立即免费开始游戏。",
+      "button": "立即开始"
+    },
+    "footer": {
+      "slogan": "Wolfcha — AI 狼人杀的最佳体验"
     }
   },
   "difficultySelector": {
