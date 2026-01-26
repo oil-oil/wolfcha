@@ -71,7 +71,6 @@ export type { DialogueState };
 export function useGameLogic() {
   const t = useTranslations();
   const speakerHost = t("speakers.host");
-  const systemMessages = getSystemMessages();
 
   // ============================================
   // 基础状态
@@ -548,6 +547,7 @@ export function useGameLogic() {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
 
+    const systemMessages = getSystemMessages();
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
     // Preserve seerHistory across nights
     const seerHistory = state.nightActions.seerHistory;
@@ -585,7 +585,7 @@ export function useGameLogic() {
     };
 
     await runNightPhaseAction(mergedState, token, "START_NIGHT");
-  }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, transitionPhase]);
+  }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
   hunterDeathRef.current = async (state: GameState, hunter: Player, diedAtNight: boolean) => {
@@ -878,6 +878,7 @@ export function useGameLogic() {
 
     setIsLoading(true);
     try {
+      const systemMessages = getSystemMessages();
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();
 
@@ -1055,7 +1056,7 @@ export function useGameLogic() {
     } finally {
       setIsLoading(false);
     }
-  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable]);
+  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable, t]);
 
   /** 角色揭示后继续 */
   const continueAfterRoleReveal = useCallback(async () => {
@@ -1069,7 +1070,9 @@ export function useGameLogic() {
     isAwaitingRoleRevealRef.current = false;
 
     if (!isTokenValid(token)) return;
-    
+
+    const systemMessages = getSystemMessages();
+
     // Set dialogue before playing audio so message box appears immediately
     setDialogue(speakerHost, systemMessages.nightFall(pending.day), false);
     
@@ -1077,7 +1080,7 @@ export function useGameLogic() {
     await playNarrator("nightFall");
     
     await runNightPhaseAction(pending, token, "START_NIGHT");
-  }, [getToken, isTokenValid, runNightPhaseAction, setDialogue]);
+  }, [getToken, isTokenValid, runNightPhaseAction, setDialogue, speakerHost]);
 
   /** 重新开始 */
   const restartGame = useCallback(() => {
@@ -1236,6 +1239,7 @@ export function useGameLogic() {
     if (!humanPlayer.alive && gameState.phase !== "HUNTER_SHOOT") return;
 
     const token = getToken();
+    const systemMessages = getSystemMessages();
     let currentState = gameState;
 
     // 守卫保护
@@ -1437,7 +1441,7 @@ export function useGameLogic() {
         await proceedToNight(currentState, token);
       }
     }
-  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase]);
+  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase, speakerHost, t]);
 
   /** 人类警长移交 */
   const handleHumanBadgeTransfer = useCallback(async (targetSeat: number) => {
