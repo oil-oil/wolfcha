@@ -1,6 +1,7 @@
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -256,6 +257,12 @@ export async function generateCompletion(
     promptTokens: result.usage?.prompt_tokens,
     completionTokens: result.usage?.completion_tokens,
   });
+  gameSessionTracker.addAiCall({
+    inputChars,
+    outputChars: assistantMessage.content.length,
+    promptTokens: result.usage?.prompt_tokens,
+    completionTokens: result.usage?.completion_tokens,
+  });
 
   return {
     content: assistantMessage.content,
@@ -421,6 +428,10 @@ export async function* generateCompletionStream(
 
   // 流式结束后统计 AI 调用
   gameStatsTracker.addAiCall({
+    inputChars,
+    outputChars: totalOutputChars,
+  });
+  gameSessionTracker.addAiCall({
     inputChars,
     outputChars: totalOutputChars,
   });

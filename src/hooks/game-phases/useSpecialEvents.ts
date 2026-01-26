@@ -17,6 +17,7 @@ import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { gameStatsTracker } from "@/hooks/useGameStats";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
 
 export interface SpecialEventsCallbacks {
   setDialogue: (speaker: string, text: string, isStreaming?: boolean) => void;
@@ -150,33 +151,15 @@ export function useSpecialEvents(
 
     setGameState(currentState);
     
-    // 更新游戏会话数据
-    const accessToken = getAccessToken();
-    const sessionId = gameStatsTracker.getSessionId();
-    if (accessToken && sessionId) {
-      const winnerType = winner === "village" ? "villager" : "wolf";
-      const summary = gameStatsTracker.getSummary(winnerType, true);
-      if (summary) {
-        fetch("/api/game-sessions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            action: "update",
-            sessionId,
-            ...summary,
-          }),
-        }).catch((err) => {
-          console.error("[game-sessions] Failed to update:", err);
-        });
-      }
-    }
+    // 更新游戏会话数据（前端直接调用 Supabase）
+    const winnerType = winner === "village" ? "villager" : "wolf";
+    gameSessionTracker.end(winnerType, true).catch((err) => {
+      console.error("[game-session] Failed to end:", err);
+    });
     
     // 播放游戏结束语音
     await playNarrator(winner === "village" ? "villageWin" : "wolfWin");
-  }, [setGameState, setDialogue, getAccessToken]);
+  }, [setGameState, setDialogue]);
 
   /** 结算夜晚 */
   const resolveNight = useCallback(async (
@@ -247,6 +230,9 @@ export function useSpecialEvents(
     currentState = addSystemMessage(currentState, texts.systemMessages.dayBreak);
     setGameState(currentState);
     setDialogue(texts.speakerHost, texts.systemMessages.dayBreak, false);
+
+    // 天亮时同步游戏进度到数据库
+    gameSessionTracker.syncProgress().catch(() => {});
 
     // 播放旁白语音
     await playNarrator("dayBreak");

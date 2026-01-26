@@ -49,6 +49,7 @@ import { playNarrator } from "@/lib/narrator-audio-player";
 import { PhaseManager } from "@/game/core/PhaseManager";
 import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { isCustomKeyEnabled } from "@/lib/api-keys";
 
 // 子模块
@@ -427,20 +428,25 @@ export function useGameLogic() {
   // 监听页面卸载，记录中断的游戏会话
   useEffect(() => {
     const handleBeforeUnload = () => {
-      const sessionId = gameStatsTracker.getSessionId();
+      const summary = gameSessionTracker.getSummary();
       const accessToken = accessTokenRef.current;
-      if (!sessionId || !accessToken) return;
-
-      const summary = gameStatsTracker.getSummary(null, false);
-      if (!summary) return;
+      if (!summary || !accessToken) return;
 
       // 使用 sendBeacon 确保页面关闭时请求能发出
-      // 由于 sendBeacon 无法设置 header，将 token 放在 body 中
+      // 由于 sendBeacon 无法等待异步操作，仍使用 API 路由
       const payload = JSON.stringify({
         action: "update",
-        sessionId,
+        sessionId: summary.sessionId,
         accessToken,
-        ...summary,
+        winner: null,
+        completed: false,
+        roundsPlayed: summary.roundsPlayed,
+        durationSeconds: summary.durationSeconds,
+        aiCallsCount: summary.aiCallsCount,
+        aiInputChars: summary.aiInputChars,
+        aiOutputChars: summary.aiOutputChars,
+        aiPromptTokens: summary.aiPromptTokens,
+        aiCompletionTokens: summary.aiCompletionTokens,
       });
       navigator.sendBeacon?.(
         "/api/game-sessions",
@@ -594,6 +600,10 @@ export function useGameLogic() {
   const proceedToNight = useCallback(async (state: GameState, token: ReturnType<typeof getToken>) => {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
+
+    // 天黑时同步游戏进度到数据库
+    gameSessionTracker.incrementRound();
+    gameSessionTracker.syncProgress().catch(() => {});
 
     const systemMessages = getSystemMessages();
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
@@ -935,30 +945,19 @@ export function useGameLogic() {
       };
       gameStatsTracker.start(statsConfig);
 
-      // 创建游戏会话记录
-      const accessToken = accessTokenRef.current;
-      if (accessToken) {
-        fetch("/api/game-sessions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            action: "create",
-            ...statsConfig,
-          }),
-        })
-          .then((res) => res.json())
-          .then((data: { sessionId?: string }) => {
-            if (data.sessionId) {
-              gameStatsTracker.setSessionId(data.sessionId);
-            }
-          })
-          .catch((err) => {
-            console.error("[game-sessions] Failed to create:", err);
-          });
-      }
+      // 创建游戏会话记录（前端直接调用 Supabase）
+      gameSessionTracker.start({
+        playerCount,
+        difficulty,
+        usedCustomKey: isCustomKeyEnabled(),
+        modelUsed: statsConfig.userAgent,
+      }).then((sessionId) => {
+        if (sessionId) {
+          gameStatsTracker.setSessionId(sessionId);
+        }
+      }).catch((err) => {
+        console.error("[game-session] Failed to create:", err);
+      });
 
       const systemMessages = getSystemMessages();
       const scenario = isGenshinMode ? undefined : getRandomScenario();
