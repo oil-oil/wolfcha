@@ -47,6 +47,10 @@ import {
 } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { PhaseManager } from "@/game/core/PhaseManager";
+import { supabase } from "@/lib/supabase";
+import { gameStatsTracker } from "@/hooks/useGameStats";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
+import { isCustomKeyEnabled } from "@/lib/api-keys";
 
 // 子模块
 import { useDialogueManager, type DialogueState } from "./useDialogueManager";
@@ -405,11 +409,61 @@ export function useGameLogic() {
   // ============================================
   // 特殊事件处理
   // ============================================
+  // 缓存 access token 用于游戏会话保存
+  const accessTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      accessTokenRef.current = session?.access_token ?? null;
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      accessTokenRef.current = session?.access_token ?? null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const getAccessToken = useCallback((): string | null => {
+    return accessTokenRef.current;
+  }, []);
+
+  // 监听页面卸载，记录中断的游戏会话
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const summary = gameSessionTracker.getSummary();
+      const accessToken = accessTokenRef.current;
+      if (!summary || !accessToken) return;
+
+      // 使用 sendBeacon 确保页面关闭时请求能发出
+      // 由于 sendBeacon 无法等待异步操作，仍使用 API 路由
+      const payload = JSON.stringify({
+        action: "update",
+        sessionId: summary.sessionId,
+        accessToken,
+        winner: null,
+        completed: false,
+        roundsPlayed: summary.roundsPlayed,
+        durationSeconds: summary.durationSeconds,
+        aiCallsCount: summary.aiCallsCount,
+        aiInputChars: summary.aiInputChars,
+        aiOutputChars: summary.aiOutputChars,
+        aiPromptTokens: summary.aiPromptTokens,
+        aiCompletionTokens: summary.aiCompletionTokens,
+      });
+      navigator.sendBeacon?.(
+        "/api/game-sessions",
+        new Blob([payload], { type: "application/json" })
+      );
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   const specialEvents = useSpecialEvents({
     setDialogue,
     setIsWaitingForAI,
     waitForUnpause,
     isTokenValid,
+    getAccessToken,
   });
 
   const { endGame, resolveNight } = specialEvents;
@@ -546,6 +600,10 @@ export function useGameLogic() {
   const proceedToNight = useCallback(async (state: GameState, token: ReturnType<typeof getToken>) => {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
+
+    // 天黑时同步游戏进度到数据库
+    gameSessionTracker.incrementRound();
+    gameSessionTracker.syncProgress().catch(() => {});
 
     const systemMessages = getSystemMessages();
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
@@ -878,6 +936,29 @@ export function useGameLogic() {
 
     setIsLoading(true);
     try {
+      // 初始化游戏统计追踪器
+      const statsConfig = {
+        playerCount,
+        difficulty,
+        usedCustomKey: isCustomKeyEnabled(),
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+      };
+      gameStatsTracker.start(statsConfig);
+
+      // 创建游戏会话记录（前端直接调用 Supabase）
+      gameSessionTracker.start({
+        playerCount,
+        difficulty,
+        usedCustomKey: isCustomKeyEnabled(),
+        modelUsed: statsConfig.userAgent,
+      }).then((sessionId) => {
+        if (sessionId) {
+          gameStatsTracker.setSessionId(sessionId);
+        }
+      }).catch((err) => {
+        console.error("[game-session] Failed to create:", err);
+      });
+
       const systemMessages = getSystemMessages();
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();

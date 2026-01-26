@@ -66,6 +66,69 @@ export interface Database {
         };
         Relationships: [];
       };
+      game_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          player_count: number;
+          difficulty: string | null;
+          winner: "wolf" | "villager" | null;
+          completed: boolean;
+          rounds_played: number;
+          duration_seconds: number | null;
+          ai_calls_count: number;
+          ai_input_chars: number;
+          ai_output_chars: number;
+          ai_prompt_tokens: number;
+          ai_completion_tokens: number;
+          used_custom_key: boolean;
+          model_used: string | null;
+          user_agent: string | null;
+          created_at: string;
+          ended_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          player_count: number;
+          difficulty?: string | null;
+          winner?: "wolf" | "villager" | null;
+          completed?: boolean;
+          rounds_played?: number;
+          duration_seconds?: number | null;
+          ai_calls_count?: number;
+          ai_input_chars?: number;
+          ai_output_chars?: number;
+          ai_prompt_tokens?: number;
+          ai_completion_tokens?: number;
+          used_custom_key?: boolean;
+          model_used?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+          ended_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          player_count?: number;
+          difficulty?: string | null;
+          winner?: "wolf" | "villager" | null;
+          completed?: boolean;
+          rounds_played?: number;
+          duration_seconds?: number | null;
+          ai_calls_count?: number;
+          ai_input_chars?: number;
+          ai_output_chars?: number;
+          ai_prompt_tokens?: number;
+          ai_completion_tokens?: number;
+          used_custom_key?: boolean;
+          model_used?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+          ended_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       sponsor_click_stats: {

@@ -51,6 +51,10 @@ export interface AILogEntry {
 class AILogger {
   private localCache: AILogEntry[] | null = null;
 
+  private isProduction(): boolean {
+    return process.env.NODE_ENV === "production";
+  }
+
   private shouldPrint(): boolean {
     return process.env.NODE_ENV !== "production";
   }
@@ -115,6 +119,7 @@ class AILogger {
   }
 
   private async saveToServer(entry: AILogEntry) {
+    if (this.isProduction()) return;
     try {
       await fetch("/api/ai-log", {
         method: "POST",
@@ -201,6 +206,8 @@ class AILogger {
       }
     }
     this.localCache = [];
+
+    if (this.isProduction()) return;
     try {
       await fetch("/api/ai-log", { method: "DELETE" });
     } catch (e) {

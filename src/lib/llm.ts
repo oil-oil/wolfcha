@@ -1,5 +1,7 @@
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS } from "@/types/game";
+import { gameStatsTracker } from "@/hooks/useGameStats";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -241,6 +243,27 @@ export async function generateCompletion(
     );
   }
 
+  // 统计 AI 调用
+  const inputChars = options.messages.reduce((sum, m) => {
+    if (typeof m.content === "string") return sum + m.content.length;
+    if (Array.isArray(m.content)) {
+      return sum + m.content.reduce((s, p) => s + ("text" in p ? p.text.length : 0), 0);
+    }
+    return sum;
+  }, 0);
+  gameStatsTracker.addAiCall({
+    inputChars,
+    outputChars: assistantMessage.content.length,
+    promptTokens: result.usage?.prompt_tokens,
+    completionTokens: result.usage?.completion_tokens,
+  });
+  gameSessionTracker.addAiCall({
+    inputChars,
+    outputChars: assistantMessage.content.length,
+    promptTokens: result.usage?.prompt_tokens,
+    completionTokens: result.usage?.completion_tokens,
+  });
+
   return {
     content: assistantMessage.content,
     reasoning_details: assistantMessage.reasoning_details,
@@ -366,6 +389,16 @@ export async function* generateCompletionStream(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let totalOutputChars = 0;
+
+  // 计算输入字符数
+  const inputChars = options.messages.reduce((sum, m) => {
+    if (typeof m.content === "string") return sum + m.content.length;
+    if (Array.isArray(m.content)) {
+      return sum + m.content.reduce((s, p) => s + ("text" in p ? p.text.length : 0), 0);
+    }
+    return sum;
+  }, 0);
 
   while (true) {
     const { done, value } = await reader.read();
@@ -384,6 +417,7 @@ export async function* generateCompletionStream(
         const json = JSON.parse(trimmed.slice(6));
         const delta = json.choices?.[0]?.delta?.content;
         if (delta) {
+          totalOutputChars += delta.length;
           yield delta;
         }
       } catch {
@@ -391,6 +425,16 @@ export async function* generateCompletionStream(
       }
     }
   }
+
+  // 流式结束后统计 AI 调用
+  gameStatsTracker.addAiCall({
+    inputChars,
+    outputChars: totalOutputChars,
+  });
+  gameSessionTracker.addAiCall({
+    inputChars,
+    outputChars: totalOutputChars,
+  });
 }
 
 export async function generateJSON<T>(
