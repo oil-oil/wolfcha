@@ -452,7 +452,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="zenmux-key" className="text-xs">Zenmux API Key</Label>
+                      <Label htmlFor="zenmux-key" className="text-xs">{t("customKey.zenmux.label")}</Label>
                      
                       <div className="flex gap-2">
                         <Input
@@ -624,14 +624,14 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                     </a>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor="minimax-key" className="text-xs">Minimax API Key</Label>
+                        <Label htmlFor="minimax-key" className="text-xs">{t("customKey.minimax.keyLabel")}</Label>
                         <div className="flex gap-2">
                           <Input
                             id="minimax-key"
                             name="wolfcha-minimax-api-key"
                             type={showMinimaxKey ? "text" : "password"}
                             autoComplete="new-password"
-                            placeholder="可选"
+                            placeholder={t("customKey.optionalPlaceholder")}
                             value={minimaxKey}
                             onChange={(e) => setMinimaxKeyState(e.target.value)}
                             className="flex-1"
@@ -648,14 +648,14 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="minimax-group" className="text-xs">Minimax Group ID</Label>
+                        <Label htmlFor="minimax-group" className="text-xs">{t("customKey.minimax.groupLabel")}</Label>
                         <div className="flex gap-2">
                           <Input
                             id="minimax-group"
                             name="wolfcha-minimax-group-id"
                             type={showMinimaxGroupId ? "text" : "password"}
                             autoComplete="new-password"
-                            placeholder="可选"
+                            placeholder={t("customKey.optionalPlaceholder")}
                             value={minimaxGroupId}
                             onChange={(e) => setMinimaxGroupIdState(e.target.value)}
                             className="flex-1"

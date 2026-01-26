@@ -713,8 +713,8 @@ export function WelcomeScreen({
           rotate="4deg"
           delay={0.15}
           logoSrc="/sponsor/bailian.png"
-          logoAlt="百炼"
-          name="百炼"
+          logoAlt="Bailian"
+          name="Bailian"
           note={t("welcome.sponsor.cards.bailian")}
         />
 

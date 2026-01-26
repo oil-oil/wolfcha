@@ -19,7 +19,7 @@
 现有赞助商：
 
 *   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
-*   [百炼](https://bailian.console.aliyun.com/) - 提供部分 AI 模型能力支持
+*   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 模型能力支持
 *   [Minimax](https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link) - 提供编程、游戏语音与过场音效能力支持
 *   [OpenCreator](https://opencreator.io?promo=wolfcha) - 提供角色 AI 立绘生成支持
 

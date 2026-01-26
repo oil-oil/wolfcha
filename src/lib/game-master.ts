@@ -49,11 +49,12 @@ const phaseManager = new PhaseManager();
 function sanitizeSeatMentions(text: string, totalSeats: number): string {
   if (!text) return text;
   if (!Number.isFinite(totalSeats) || totalSeats <= 0) return text;
+  const { t } = getI18n();
 
   const replaceIfInvalid = (raw: string, numStr: string) => {
     const n = Number.parseInt(numStr, 10);
     if (!Number.isFinite(n)) return raw;
-    if (n < 1 || n > totalSeats) return "(invalid seat)";
+    if (n < 1 || n > totalSeats) return t("gameMaster.invalidSeat");
     return raw;
   };
 
@@ -191,14 +192,16 @@ export function getRoleConfiguration(playerCount: number): Role[] {
 export function setupPlayers(
   characters: GeneratedCharacter[],
   humanSeat: number = 0,
-  humanName: string = "你",
+  humanName: string = "",
   playerCount: number = 10,
   fixedRoles?: Role[],
   seedPlayerIds?: string[],
   modelRefs?: ModelRef[],
   aiSeatOrder?: number[]
 ): Player[] {
+  const { t } = getI18n();
   const totalPlayers = playerCount;
+  const fallbackHumanName = t("common.you");
   const roles = getRoleConfiguration(totalPlayers);
   const assignedRoles = fixedRoles && fixedRoles.length === totalPlayers ? fixedRoles : shuffleArray(roles);
 
@@ -236,7 +239,7 @@ export function setupPlayers(
       players.push({
         playerId: getPlayerIdForSeat(seat),
         seat,
-        displayName: humanName.trim() || "你",
+        displayName: humanName.trim() || fallbackHumanName,
         alive: true,
         role,
         alignment,
@@ -436,6 +439,9 @@ function extractVoteDataFromDayMessages(
   dayMessages: ChatMessage[],
   state: GameState
 ): DailySummaryVoteData | undefined {
+  const { t } = getI18n();
+  const badgeVoteTitle = t("badgePhase.voteDetailTitle");
+  const dayVoteTitle = t("votePhase.voteDetailTitle");
   let sheriff: { winner: number; votes: Record<string, number[]> } | undefined;
   let execution: { eliminated: number; votes: Record<string, number[]> } | undefined;
 
@@ -450,10 +456,10 @@ function extractVoteDataFromDayMessages(
         const k = String(r.targetSeat);
         votes[k] = Array.isArray(r.voterSeats) ? r.voterSeats : [];
       }
-      if (data.title === "警长竞选投票详情" && Object.keys(votes).length > 0) {
+      if (data.title === badgeVoteTitle && Object.keys(votes).length > 0) {
         const winner = state.badge.holderSeat ?? -1;
         sheriff = { winner, votes };
-      } else if (data.title === "投票详情" && Object.keys(votes).length > 0) {
+      } else if (data.title === dayVoteTitle && Object.keys(votes).length > 0) {
         const eliminated = state.dayHistory?.[state.day]?.executed?.seat ?? -1;
         execution = { eliminated, votes };
       }
@@ -475,11 +481,13 @@ export async function generateDailySummary(
   const { t } = getI18n();
   const startTime = Date.now();
   const summaryModel = getSummaryModel();
+  const dayBreakShort = t("system.dayBreakShort");
+  const systemSpeaker = t("speakers.system");
 
   const dayStartIndex = (() => {
     for (let i = state.messages.length - 1; i >= 0; i--) {
       const m = state.messages[i];
-      if (m.isSystem && m.content === "天亮了") return i;
+      if (m.isSystem && m.content === dayBreakShort) return i;
     }
     return 0;
   })();
@@ -489,9 +497,9 @@ export async function generateDailySummary(
 
   const transcript = dayMessages
     .map((m) => {
-      if (m.isSystem) return `系统: ${m.content}`;
+      if (m.isSystem) return `${systemSpeaker}: ${m.content}`;
       const player = state.players.find((p) => p.playerId === m.playerId);
-      const seatLabel = player ? `${player.seat + 1}号` : "";
+      const seatLabel = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : "";
       const nameLabel = player?.displayName || m.playerName;
       const speaker = seatLabel ? `${seatLabel} ${nameLabel}`.trim() : nameLabel;
       return `${speaker}: ${m.content}`;
@@ -499,33 +507,8 @@ export async function generateDailySummary(
     .join("\n")
     .slice(0, 15000);
 
-  const system = `你是狼人杀的客观记录员。
-
-任务：把给定的记录压缩为一段连贯的【事实摘要】，作为后续玩家长期记忆。
-
-【核心原则】
-- 客观记录"谁说了什么、谁做了什么"，禁止对发言做评价或判断
-- 不要使用"逻辑缺失""带节奏""可疑""不合理"等评价性词汇
-- 保留原始发言的要点和立场，而非你对发言的看法
-
-【必须记录的内容】
-1. 死亡信息：谁在夜晚/投票中出局
-2. 身份声明：谁跳了什么身份、报了什么验人结果、谁认下
-3. 发言立场：每个玩家的核心观点/表态（用原话或简述，不加评价）
-4. 站边关系：谁表态支持谁、谁表态质疑谁（客观记录，不含判断）
-（警长竞选和公投的票型由系统单独记录，叙述中简要提及结果即可，如「X号当选警长」「X号被放逐」）
-
-【格式要求】
-- 提到玩家必须包含座位号（如"2号""10号"）
-- 使用连贯段落叙述，可分多段
-- 尽量保留细节，不要过度压缩
-- 字数不限，信息完整优先
-
-输出格式：返回 JSON 对象：
-{ "summary": "第X天摘要的连贯文本..." }`;
-
-
-  const user = `【第${state.day}天 白天记录】\n${transcript}\n\n请返回 JSON 对象：`;
+  const system = t("gameMaster.dailySummary.systemPrompt");
+  const user = t("gameMaster.dailySummary.userPrompt", { day: state.day, transcript });
 
   const messages: LLMMessage[] = [
     { role: "system", content: system },
@@ -591,6 +574,7 @@ export async function* generateAISpeechStream(
   state: GameState,
   player: Player
 ): AsyncGenerator<string, void, unknown> {
+  const { t } = getI18n();
   const prompt = resolvePhasePrompt(state.phase, state, player);
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
@@ -637,7 +621,7 @@ export async function* generateAISpeechStream(
     const raw = String(error);
     if (raw.includes("429") || raw.includes("limit_requests")) {
       if (!fullResponse.trim()) {
-        yield "（请求过于频繁，稍后再试）";
+        yield t("gameMaster.tooManyRequests");
       }
       return;
     }
@@ -661,6 +645,7 @@ export async function generateAISpeechSegments(
   state: GameState,
   player: Player
 ): Promise<string[]> {
+  const { t } = getI18n();
   const prompt = resolvePhasePrompt(state.phase, state, player);
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
@@ -798,7 +783,7 @@ export async function generateAISpeechSegments(
 
     const raw = String(error);
     if (raw.includes("429") || raw.includes("limit_requests")) {
-      return ["（请求过于频繁，稍后再试）"];
+      return [t("gameMaster.tooManyRequests")];
     }
 
     throw error;
@@ -809,6 +794,7 @@ export async function generateAIVote(
   state: GameState,
   player: Player
 ): Promise<{ seat: number; reason: string }> {
+  const { t } = getI18n();
   const prompt = resolvePhasePrompt("DAY_VOTE", state, player);
   const eligibleSeats = state.pkSource === "vote" && state.pkTargets && state.pkTargets.length > 0
     ? new Set(state.pkTargets)
@@ -840,7 +826,7 @@ export async function generateAIVote(
       const validSeats = alivePlayers.map((p) => p.seat);
       if (Number.isFinite(seat) && validSeats.includes(seat)) {
         const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
-        parsedResult = { seat, reason: reason || "未提供理由" };
+        parsedResult = { seat, reason: reason || t("gameMaster.voteFallback.missingReason") };
       }
     } catch {
       // Fallback to regex parsing below
@@ -852,17 +838,17 @@ export async function generateAIVote(
         const seat = parseInt(match[0], 10) - 1;
         const validSeats = alivePlayers.map((p) => p.seat);
         if (validSeats.includes(seat)) {
-          parsedResult = { seat, reason: "解析失败-仅座位" };
+          parsedResult = { seat, reason: t("gameMaster.voteFallback.parseSeatOnly") };
         }
       }
     }
 
     if (!parsedResult) {
       if (alivePlayers.length === 0) {
-        parsedResult = { seat: player.seat, reason: "无可选目标" };
+        parsedResult = { seat: player.seat, reason: t("gameMaster.voteFallback.noTargets") };
       } else {
         const fallback = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-        parsedResult = { seat: fallback, reason: "随机选择" };
+        parsedResult = { seat: fallback, reason: t("gameMaster.voteFallback.randomPick") };
       }
     }
 
@@ -887,8 +873,8 @@ export async function generateAIVote(
     return parsedResult;
   } catch (error) {
     const fallbackResult = alivePlayers.length === 0
-      ? { seat: player.seat, reason: "无可选目标" }
-      : { seat: alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat, reason: "随机选择" };
+      ? { seat: player.seat, reason: t("gameMaster.voteFallback.noTargets") }
+      : { seat: alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat, reason: t("gameMaster.voteFallback.randomPick") };
     
     await aiLogger.log({
       type: "vote",

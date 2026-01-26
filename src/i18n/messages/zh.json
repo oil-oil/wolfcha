@@ -1613,6 +1613,20 @@
   "nightActionOverlay": {
     "target": "目标"
   },
+  "gameMaster": {
+    "invalidSeat": "（座位无效）",
+    "tooManyRequests": "（请求过于频繁，稍后再试）",
+    "dailySummary": {
+      "systemPrompt": "你是狼人杀的客观记录员。\n\n任务：把给定的记录压缩为一段连贯的【事实摘要】，作为后续玩家长期记忆。\n\n【核心原则】\n- 客观记录\"谁说了什么、谁做了什么\"，禁止对发言做评价或判断\n- 不要使用\"逻辑缺失\"\"带节奏\"\"可疑\"\"不合理\"等评价性词汇\n- 保留原始发言的要点和立场，而非你对发言的看法\n\n【必须记录的内容】\n1. 死亡信息：谁在夜晚/投票中出局\n2. 身份声明：谁跳了什么身份、报了什么验人结果、谁认下\n3. 发言立场：每个玩家的核心观点/表态（用原话或简述，不加评价）\n4. 站边关系：谁表态支持谁、谁表态质疑谁（客观记录，不含判断）\n（警长竞选和公投的票型由系统单独记录，叙述中简要提及结果即可，如「X号当选警长」「X号被放逐」）\n\n【格式要求】\n- 提到玩家必须包含座位号（如\"2号\"\"10号\"）\n- 使用连贯段落叙述，可分多段\n- 尽量保留细节，不要过度压缩\n- 字数不限，信息完整优先\n\n输出格式：返回 JSON 对象：\n{ \"summary\": \"第X天摘要的连贯文本...\" }",
+      "userPrompt": "【第{day}天 白天记录】\n{transcript}\n\n请返回 JSON 对象："
+    },
+    "voteFallback": {
+      "missingReason": "未提供理由",
+      "parseSeatOnly": "解析失败-仅座位",
+      "noTargets": "无可选目标",
+      "randomPick": "随机选择"
+    }
+  },
   "api": {
     "errors": {
       "batchNoStream": "批量请求不支持 stream=true",
@@ -1763,6 +1777,7 @@
       "description": "至少配置 Zenmux 或百炼其一，用于对局与人物生成"
     },
     "zenmux": {
+      "label": "Zenmux API Key",
       "placeholder": "请输入 Zenmux API Key",
       "hide": "隐藏 Zenmux API Key",
       "show": "显示 Zenmux API Key",
@@ -1793,11 +1808,14 @@
     "minimax": {
       "get": "获取 Minimax Key",
       "note": "语音与音效",
+      "keyLabel": "Minimax API Key",
+      "groupLabel": "Minimax Group ID",
       "hide": "隐藏 Minimax API Key",
       "show": "显示 Minimax API Key",
       "hideGroup": "隐藏 Minimax Group ID",
       "showGroup": "显示 Minimax Group ID"
     },
+    "optionalPlaceholder": "可选",
     "actions": {
       "clear": "清除",
       "save": "保存"

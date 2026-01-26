@@ -1613,6 +1613,20 @@
   "nightActionOverlay": {
     "target": "Target"
   },
+  "gameMaster": {
+    "invalidSeat": "(invalid seat)",
+    "tooManyRequests": "Too many requests, please try again later.",
+    "dailySummary": {
+      "systemPrompt": "You are an objective Werewolf game recorder.\n\nTask: Compress the given record into a coherent FACT SUMMARY for long-term player memory.\n\nCore principles\n- Objectively record \"who said what, who did what\". No judgments.\n- Avoid evaluative words like \"illogical\", \"steering\", \"suspicious\", \"unreasonable\".\n- Preserve original points and stances, not your opinions.\n\nMust include\n1. Death info: who died at night/in voting\n2. Role claims: who claimed what role, who reported what checks, who confirmed\n3. Speech stances: each player's core viewpoint/stance (quote or paraphrase, no judgment)\n4. Alignment stances: who supported whom, who questioned whom (objective)\n(For sheriff election and public vote patterns, the system records details separately; mention results briefly like \"Seat X elected sheriff\" or \"Seat X was exiled\".)\n\nFormat requirements\n- Any player mention must include a seat number (e.g., \"Seat 2\", \"Seat 10\")\n- Use coherent paragraphs; multiple paragraphs allowed\n- Keep details; do not over-compress\n- No word limit; completeness first\n\nOutput format: return a JSON object:\n{ \"summary\": \"Coherent summary text for Day X...\" }",
+      "userPrompt": "【Day {day} Daytime Log】\n{transcript}\n\nReturn a JSON object:"
+    },
+    "voteFallback": {
+      "missingReason": "No reason provided",
+      "parseSeatOnly": "Parse failed - seat only",
+      "noTargets": "No available targets",
+      "randomPick": "Random pick"
+    }
+  },
   "api": {
     "errors": {
       "batchNoStream": "Batch request does not support stream=true",
@@ -1763,6 +1777,7 @@
       "description": "Configure at least Zenmux or Dashscope for gameplay and character generation"
     },
     "zenmux": {
+      "label": "Zenmux API Key",
       "placeholder": "Enter Zenmux API Key",
       "hide": "Hide Zenmux API Key",
       "show": "Show Zenmux API Key",
@@ -1793,11 +1808,14 @@
     "minimax": {
       "get": "Get Minimax Key",
       "note": "Voice and sound effects",
+      "keyLabel": "Minimax API Key",
+      "groupLabel": "Minimax Group ID",
       "hide": "Hide Minimax API Key",
       "show": "Show Minimax API Key",
       "hideGroup": "Hide Minimax Group ID",
       "showGroup": "Show Minimax Group ID"
     },
+    "optionalPlaceholder": "Optional",
     "actions": {
       "clear": "Clear",
       "save": "Save"
