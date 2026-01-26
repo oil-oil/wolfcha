@@ -14,5 +14,5 @@ const MODEL_LOGO_MAP: Array<{ match: RegExp; key: string }> = [
 export function getModelLogoPath(modelRef?: ModelRef): string {
   const modelName = modelRef?.model ?? "";
   const match = MODEL_LOGO_MAP.find((entry) => entry.match.test(modelName));
-  return `/模型/${match?.key ?? "openai"}.svg`;
+  return `/models/${match?.key ?? "openai"}.svg`;
 }

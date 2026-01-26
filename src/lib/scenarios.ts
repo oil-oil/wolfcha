@@ -1,4 +1,5 @@
 import type { GameScenario } from "@/types/game";
+import { getI18n } from "@/i18n/translator";
 
 /**
  * 简化版场景列表
@@ -139,7 +140,23 @@ export const SCENARIOS: GameScenario[] = [
   },
 ];
 
+const localizeScenario = (scenario: GameScenario): GameScenario => {
+  const { t } = getI18n();
+  const baseKey = `scenarios.${scenario.id}`;
+  return {
+    ...scenario,
+    title: t(`${baseKey}.title` as Parameters<typeof t>[0]),
+    description: t(`${baseKey}.description` as Parameters<typeof t>[0]),
+    rolesHint: t(`${baseKey}.rolesHint` as Parameters<typeof t>[0]),
+  };
+};
+
+export const getScenarios = (): GameScenario[] => {
+  return SCENARIOS.map(localizeScenario);
+};
+
 export const getRandomScenario = (): GameScenario => {
-  const index = Math.floor(Math.random() * SCENARIOS.length);
-  return SCENARIOS[index];
+  const scenarios = getScenarios();
+  const index = Math.floor(Math.random() * scenarios.length);
+  return scenarios[index];
 };

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useTranslations } from "next-intl";
 
 interface SharePanelProps {
   open: boolean;
@@ -24,6 +25,7 @@ export function SharePanel({
   referralCode,
   totalReferrals,
 }: SharePanelProps) {
+  const t = useTranslations();
   const [copying, setCopying] = useState(false);
 
   const shareUrl = useMemo(() => {
@@ -36,9 +38,9 @@ export function SharePanel({
     setCopying(true);
     try {
       await navigator.clipboard.writeText(shareUrl);
-      toast.success("分享链接已复制");
+      toast.success(t("sharePanel.toasts.copySuccess"));
     } catch {
-      toast.error("复制失败，请手动复制");
+      toast.error(t("sharePanel.toasts.copyFail"));
     } finally {
       setCopying(false);
     }
@@ -48,20 +50,20 @@ export function SharePanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>分享链接</DialogTitle>
+          <DialogTitle>{t("sharePanel.title")}</DialogTitle>
           <DialogDescription>
-            每邀请一位新用户注册可获得 3 局额度。
+            {t("sharePanel.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-3 py-2 text-sm break-all">
-            {shareUrl || "加载中..."}
+            {shareUrl || t("sharePanel.loading")}
           </div>
           <div className="flex items-center justify-between text-sm text-[var(--text-secondary)]">
-            <span>已邀请人数：{totalReferrals}</span>
+            <span>{t("sharePanel.invitedCount", { count: totalReferrals })}</span>
             <Button type="button" onClick={handleCopy} disabled={!shareUrl || copying}>
-              {copying ? "复制中..." : "复制链接"}
+              {copying ? t("sharePanel.actions.copying") : t("sharePanel.actions.copy")}
             </Button>
           </div>
         </div>

@@ -17,19 +17,21 @@ import LoadingMiniGame from "./MiniGame/LoadingMiniGame";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
 import { cn } from "@/lib/utils";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
-import { resolveVoiceId } from "@/lib/voice-constants";
+import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
+import { getLocale } from "@/i18n/locale-store";
+import { useTranslations } from "next-intl";
 
 type WitchActionType = "save" | "poison" | "pass";
 import type { DialogueState } from "@/store/game-machine";
 
 // 职业立绘映射
 const ROLE_PORTRAIT_MAP: Record<string, string> = {
-  Werewolf: '/职业/狼人.png',
-  Seer: '/职业/预言家.png',
-  Witch: '/职业/女巫.png',
-  Hunter: '/职业/猎人.png',
-  Guard: '/职业/守卫.png',
-  Villager: '/职业/平民.png',
+  Werewolf: '/roles/werewolf.png',
+  Seer: '/roles/seer.png',
+  Witch: '/roles/witch.png',
+  Hunter: '/roles/hunter.png',
+  Guard: '/roles/guard.png',
+  Villager: '/roles/villager.png',
 };
 
 // 预加载所有职业立绘
@@ -63,8 +65,8 @@ const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) =>
     ? getModelLogoUrl(player.agentProfile?.modelRef)
     : buildSimpleAvatarUrl(player.playerId, { gender: player.agentProfile?.persona?.gender });
 
-function isTurnPromptSystemMessage(content: string) {
-  return content.includes("轮到你发言") || content.includes("轮到你发表遗言");
+function isTurnPromptSystemMessage(content: string, t: ReturnType<typeof useTranslations>) {
+  return content.includes(t("dialog.turnToSpeak")) || content.includes(t("dialog.turnToLastWords"));
 }
 
 // 将消息中的"@X号 玩家名"或"X号"渲染为小标签
@@ -111,7 +113,7 @@ function renderPlayerMentions(
           ) : (
             <span className="w-4 h-4 rounded-full bg-black/10" aria-hidden="true" />
           )}
-          <span className={isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"}>@{seatNum}号</span>
+          <span className={isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"}>{`@${seatNum}`}</span>
         </span>
       );
     } else {
@@ -125,7 +127,7 @@ function renderPlayerMentions(
               : "text-[var(--color-accent)]"
           }`}
         >
-          @{seatNum}号
+          {`@${seatNum}`}
         </span>
       );
     }
@@ -139,6 +141,82 @@ function renderPlayerMentions(
   }
   
   return parts.length > 0 ? parts : text;
+}
+
+function renderMentionsInMarkdownChildren(
+  children: React.ReactNode,
+  players: Player[],
+  isNight: boolean,
+  isGenshinMode: boolean
+) {
+  return React.Children.map(children, (child) => {
+    if (typeof child === "string") {
+      return renderPlayerMentions(child, players, isNight, isGenshinMode);
+    }
+    return child;
+  });
+}
+
+function MentionsMarkdown({
+  content,
+  players,
+  isNight,
+  isGenshinMode,
+  className,
+}: {
+  content: string;
+  players: Player[];
+  isNight: boolean;
+  isGenshinMode: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("whitespace-pre-wrap break-words", className)}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => (
+            <p className="m-0">
+              {renderMentionsInMarkdownChildren(children, players, isNight, isGenshinMode)}
+            </p>
+          ),
+          em: ({ children }) => (
+            <em>
+              {renderMentionsInMarkdownChildren(children, players, isNight, isGenshinMode)}
+            </em>
+          ),
+          strong: ({ children }) => (
+            <strong className="font-semibold">
+              {renderMentionsInMarkdownChildren(children, players, isNight, isGenshinMode)}
+            </strong>
+          ),
+          li: ({ children }) => (
+            <li>
+              {renderMentionsInMarkdownChildren(children, players, isNight, isGenshinMode)}
+            </li>
+          ),
+          a: ({ children, href }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className={cn(
+                "underline underline-offset-2",
+                isNight ? "text-[var(--color-accent-light)]" : "text-[var(--color-accent)]"
+              )}
+            >
+              {renderMentionsInMarkdownChildren(children, players, isNight, isGenshinMode)}
+            </a>
+          ),
+          // Do not inject mentions into code blocks.
+          code: ({ children }) => <code className="font-mono">{children}</code>,
+          pre: ({ children }) => <pre className="overflow-x-auto">{children}</pre>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 interface DialogAreaProps {
@@ -178,13 +256,15 @@ interface DialogAreaProps {
 // 夜晚行动状态组件 - 带有神秘氛围
 // Note: Guard phase does not use this component - it uses the regular dialogue block instead
 function NightActionStatus({ phase, humanRole }: { phase: string; humanRole?: string }) {
+  const t = useTranslations();
+  
   // Guard phase: don't show any status animation, let dialogue block handle it
   if (phase === "NIGHT_GUARD_ACTION") {
     return null;
   }
 
   const getStatusInfo = () => {
-    // 如果是人类玩家的回合，显示"请睁眼"；否则显示"正在行动"
+    // 如果是人类玩家的回合，显示“请睁眼”；否则显示“正在行动”
     const isMyPhase = 
       (phase === "NIGHT_WOLF_ACTION" && humanRole === "Werewolf") ||
       (phase === "NIGHT_WITCH_ACTION" && humanRole === "Witch") ||
@@ -193,13 +273,13 @@ function NightActionStatus({ phase, humanRole }: { phase: string; humanRole?: st
     
     switch (phase) {
       case "NIGHT_WOLF_ACTION":
-        return { icon: WerewolfIcon, text: isMyPhase ? "狼人请睁眼" : "狼人正在选择目标", color: "text-red-500" };
+        return { icon: WerewolfIcon, text: isMyPhase ? t("dialog.nightAction.wolfAwake") : t("dialog.nightAction.wolfActing"), color: "text-red-500" };
       case "NIGHT_WITCH_ACTION":
-        return { icon: Drop, text: isMyPhase ? "女巫请睁眼" : "女巫正在行动", color: "text-purple-500" };
+        return { icon: Drop, text: isMyPhase ? t("dialog.nightAction.witchAwake") : t("dialog.nightAction.witchActing"), color: "text-purple-500" };
       case "NIGHT_SEER_ACTION":
-        return { icon: Eye, text: isMyPhase ? "预言家请睁眼" : "预言家正在查验", color: "text-blue-500" };
+        return { icon: Eye, text: isMyPhase ? t("dialog.nightAction.seerAwake") : t("dialog.nightAction.seerChecking"), color: "text-blue-500" };
       case "HUNTER_SHOOT":
-        return { icon: Crosshair, text: isMyPhase ? "猎人发动技能" : "猎人正在开枪", color: "text-orange-500" };
+        return { icon: Crosshair, text: isMyPhase ? t("dialog.nightAction.hunterAwake") : t("dialog.nightAction.hunterActing"), color: "text-orange-500" };
       default:
         return { icon: null, text: "", color: "" };
     }
@@ -280,6 +360,7 @@ export function DialogArea({
   onBadgeSignup,
   onRestart,
 }: DialogAreaProps) {
+  const t = useTranslations();
   const isGenshinMode = !!gameState.isGenshinMode;
   const phase = gameState.phase;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -312,12 +393,14 @@ export function DialogArea({
     const text = currentDialogue.text;
     if (!text || !text.trim()) return;
     // “思考中”阶段不播
-    if (text.includes("正在组织语言") || text.includes("生成语音")) return;
+    if (text.includes(t("dayPhase.organizing")) || text.includes(t("ui.generatingVoice"))) return;
 
+    const locale = getLocale() as AppLocale;
     const voiceId = resolveVoiceId(
       player.agentProfile?.persona?.voiceId,
       player.agentProfile?.persona?.gender,
-      player.agentProfile?.persona?.age
+      player.agentProfile?.persona?.age,
+      locale
     );
 
     audioManager.addToQueue({
@@ -352,7 +435,7 @@ export function DialogArea({
   const needsManualContinue = useMemo(() => {
     // 正在组织语言时不需要手动继续
     const dialogueText = currentDialogue?.text || "";
-    if (dialogueText.includes("正在组织语言") || dialogueText.includes("生成语音")) {
+    if (dialogueText.includes(t("dayPhase.organizing")) || dialogueText.includes(t("ui.generatingVoice"))) {
       return false;
     }
     // 发言阶段需要手动继续
@@ -372,9 +455,9 @@ export function DialogArea({
 
   const visibleMessages = useMemo(() => {
     return gameState.messages.filter(
-      (m) => !(m.isSystem && isTurnPromptSystemMessage(m.content))
+      (m) => !(m.isSystem && isTurnPromptSystemMessage(m.content, t))
     );
-  }, [gameState.messages]);
+  }, [gameState.messages, t]);
 
   // 获取当前发言者信息
   const currentSpeaker = useMemo(() => {
@@ -672,10 +755,10 @@ export function DialogArea({
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
             <div className="text-sm font-serif tracking-[0.2em] text-[var(--color-gold)]/80 uppercase">
-              Summoning
+              {t("dialog.emptyState.summoning")}
             </div>
             <div className="text-base font-semibold text-[var(--text-primary)]/85">
-              玩家们正在入场...
+              {t("dialog.emptyState.playersEntering")}
             </div>
             <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
               <motion.span
@@ -683,7 +766,7 @@ export function DialogArea({
                 animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0.9, 0.4] }}
                 transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
               />
-              <span>正在召集同伴</span>
+              <span>{t("dialog.emptyState.recruiting")}</span>
             </div>
             <div className="mt-4">
               <LoadingMiniGame />
@@ -697,12 +780,12 @@ export function DialogArea({
   // 获取角色中文名
   const getRoleName = (role?: string) => {
     switch (role) {
-      case "Werewolf": return "狼人";
-      case "Seer": return "预言家";
-      case "Witch": return "女巫";
-      case "Hunter": return "猎人";
-      case "Guard": return "守卫";
-      default: return "村民";
+      case "Werewolf": return t("roles.werewolf");
+      case "Seer": return t("roles.seer");
+      case "Witch": return t("roles.witch");
+      case "Hunter": return t("roles.hunter");
+      case "Guard": return t("roles.guard");
+      default: return t("roles.villager");
     }
   };
 
@@ -716,7 +799,7 @@ export function DialogArea({
     humanBadgeVote >= 0
       ? (() => {
           const vp = gameState.players.find((p) => p.seat === humanBadgeVote);
-          return `你已经投票给 ${humanBadgeVote + 1}号${vp ? ` ${vp.displayName}` : ""}`;
+          return t("dialog.alreadyVotedFor", { seat: humanBadgeVote + 1, name: vp?.displayName || "" });
         })()
       : baseDialogueText;
   const shouldShowDialogue = waitingForNextRound || dialogueText.length > 0;
@@ -848,7 +931,7 @@ export function DialogArea({
                           : "text-[var(--text-secondary)] border-[var(--border-color)] bg-white/70"
                       )}
                     >
-                      {unreadCount} 条新消息
+                      {t("dialog.newMessages", { count: unreadCount })}
                     </span>
                     <span className={cn(
                       "h-px flex-1",
@@ -873,7 +956,7 @@ export function DialogArea({
           <div className="mb-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3">
             <div className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <span className="w-2 h-2 bg-[var(--color-accent)] rounded-full animate-pulse" />
-              {gameState.phase === "DAY_BADGE_ELECTION" ? "警徽评选进行中" : "投票进行中"}
+              {gameState.phase === "DAY_BADGE_ELECTION" ? t("dialog.badgeElectionInProgress") : t("dialog.voteInProgress")}
             </div>
             <VotingProgress gameState={gameState} humanPlayer={humanPlayer} />
           </div>
@@ -889,8 +972,7 @@ export function DialogArea({
         {/* 对话气泡 - 简化结构，移除嵌套 */}
         <div
           className={cn(
-            "wc-panel wc-panel--strong rounded-xl p-5 relative transition-opacity",
-            showDialogueBlock ? "h-[160px] overflow-hidden" : "min-h-[160px]",
+            "wc-panel wc-panel--strong rounded-xl p-5 relative transition-opacity min-h-[160px]",
             shouldShowDialogPanel
               ? "opacity-100"
               : "opacity-0 pointer-events-none bg-transparent border-transparent shadow-none"
@@ -927,20 +1009,20 @@ export function DialogArea({
                 >
                   <div className="text-xl leading-relaxed text-[var(--text-primary)]">
                     {gameState.winner === "village" ? (
-                      <>GG！<span className="text-[var(--color-success)] font-semibold">好人阵营</span>胜利！</>
+                      <>GG! <span className="text-[var(--color-success)] font-semibold">{t("alignment.village")}</span> {t("gameEnd.wins")}!</>
                     ) : (
-                      <>GG！<span className="text-[var(--color-wolf)] font-semibold">狼人阵营</span>胜利！</>
+                      <>GG! <span className="text-[var(--color-wolf)] font-semibold">{t("alignment.wolf")}</span> {t("gameEnd.wins")}!</>
                     )}
                   </div>
                   <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
-                    <span className="text-xs text-[var(--text-muted)]">下次还来玩啊</span>
+                    <span className="text-xs text-[var(--text-muted)]">{t("dialog.playAgainHint")}</span>
                     <button
                       onClick={onRestart}
                       className="wc-action-btn wc-action-btn--primary text-sm h-9 px-4"
                       type="button"
                     >
                       <ArrowClockwise size={14} weight="bold" />
-                      再来一局
+                      {t("ui.restart")}
                     </button>
                   </div>
                 </motion.div>
@@ -955,7 +1037,7 @@ export function DialogArea({
                   exit={{ opacity: 0, y: -10 }}
                 >
                   <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                    你要竞选警长吗？
+                    {t("dialog.badgeSignup.question")}
                   </div>
                   <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                     <button
@@ -963,14 +1045,14 @@ export function DialogArea({
                       className="wc-action-btn text-sm h-9 px-4"
                       type="button"
                     >
-                      不竞选
+                      {t("dialog.badgeSignup.skip")}
                     </button>
                     <button
                       onClick={() => onBadgeSignup?.(true)}
                       className="wc-action-btn wc-action-btn--primary text-sm h-9 px-4"
                       type="button"
                     >
-                      我要竞选
+                      {t("dialog.badgeSignup.join")}
                       <CaretRight size={14} weight="bold" />
                     </button>
                   </div>
@@ -986,7 +1068,7 @@ export function DialogArea({
                   exit={{ opacity: 0, y: -10 }}
                 >
                   <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                    正在统计参与警徽竞选的人数...
+                    {t("dialog.badgeSignupWaiting")}
                   </div>
                 </motion.div>
               )}
@@ -1002,15 +1084,15 @@ export function DialogArea({
                 >
                   <div className={`text-center p-4 rounded-lg ${isNight ? "bg-yellow-500/10 border border-yellow-500/20" : "bg-yellow-50 border border-yellow-200"}`}>
                     <div className={`text-lg font-medium mb-2 ${isNight ? "text-yellow-300" : "text-yellow-700"}`}>
-                      警徽移交
+                      {t("dialog.badgeTransfer.title")}
                     </div>
                     <div className={`text-sm ${isNight ? "text-yellow-200/80" : "text-yellow-600"}`}>
-                      你已出局，请选择将警徽移交给一名存活玩家
+                      {t("dialog.badgeTransfer.description")}
                     </div>
                   </div>
                   
                   <div className={`text-center text-sm ${isNight ? "text-white/60" : "text-gray-500"}`}>
-                    点击头像选择移交对象
+                    {t("dialog.badgeTransfer.hint")}
                   </div>
                   
                   <div className={`flex items-center justify-center pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
@@ -1024,7 +1106,7 @@ export function DialogArea({
                       type="button"
                     >
                       <Prohibit size={18} weight="bold" />
-                      撕毁警徽（不移交）
+                      {t("dialog.badgeTransfer.tear")}
                     </button>
                   </div>
                 </motion.div>
@@ -1061,16 +1143,16 @@ export function DialogArea({
                 if (!showActionConfirm || selectedSeat === null) return null;
 
                 const targetPlayer = gameState.players.find(p => p.seat === selectedSeat);
-                const targetName = targetPlayer ? `${selectedSeat + 1}号 ${targetPlayer.displayName}` : `${selectedSeat + 1}号`;
+                const targetName = targetPlayer ? t("ui.seatWithName", { seat: selectedSeat + 1, name: targetPlayer.displayName }) : t("ui.seatOnly", { seat: selectedSeat + 1 });
 
                 const actionTextMap: Record<string, string> = {
-                  DAY_VOTE: "投票给",
-                  DAY_BADGE_ELECTION: "把警徽投给",
-                  NIGHT_SEER_ACTION: "查验",
-                  NIGHT_WOLF_ACTION: "击杀",
-                  NIGHT_GUARD_ACTION: "守护",
-                  HUNTER_SHOOT: "射击",
-                  BADGE_TRANSFER: "将警徽移交给",
+                  DAY_VOTE: t("dialog.action.vote"),
+                  DAY_BADGE_ELECTION: t("dialog.action.badgeVote"),
+                  NIGHT_SEER_ACTION: t("dialog.action.seerCheck"),
+                  NIGHT_WOLF_ACTION: t("dialog.action.wolfKill"),
+                  NIGHT_GUARD_ACTION: t("dialog.action.guardProtect"),
+                  HUNTER_SHOOT: t("dialog.action.hunterShoot"),
+                  BADGE_TRANSFER: t("dialog.action.badgeTransfer"),
                 };
 
                 const actionColorMap: Record<string, string> = {
@@ -1083,7 +1165,7 @@ export function DialogArea({
                   BADGE_TRANSFER: "text-[var(--color-warning)]",
                 };
 
-                const actionText = actionTextMap[phase] || "选择";
+                const actionText = actionTextMap[phase] || t("dialog.action.select");
                 const actionColor = actionColorMap[phase] || "text-[var(--color-accent)]";
 
                 return (
@@ -1094,7 +1176,7 @@ export function DialogArea({
                     exit={{ opacity: 0, y: -10 }}
                   >
                     <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                      你选择{actionText} <span className={`font-semibold ${actionColor}`}>{targetName}</span>，确定吗？
+                      {t("dialog.actionConfirmQuestion", { action: actionText })} <span className={`font-semibold ${actionColor}`}>{targetName}</span>
                     </div>
                     <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                       <button
@@ -1103,14 +1185,14 @@ export function DialogArea({
                         type="button"
                       >
                         <X size={14} weight="bold" />
-                        取消
+                        {t("dialog.cancel")}
                       </button>
                       <button
                         onClick={onConfirmAction}
                         className={`wc-action-btn text-sm h-9 px-4 ${phase.includes("WOLF") || phase === "HUNTER_SHOOT" ? "wc-action-btn--danger" : "wc-action-btn--primary"}`}
                         type="button"
                       >
-                        确认{actionText}
+                        {t("dialog.actionConfirm", { action: actionText })}
                         <CaretRight size={14} weight="bold" />
                       </button>
                     </div>
@@ -1132,7 +1214,7 @@ export function DialogArea({
                         return (
                           <>
                             <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                              毒药已用尽。
+                              {t("dialog.witch.poisonUsed")}
                             </div>
                             <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                               <button
@@ -1140,34 +1222,39 @@ export function DialogArea({
                                 className="wc-action-btn text-sm h-9 px-4"
                                 type="button"
                               >
-                                返回
+                                {t("dialog.back")}
                               </button>
                             </div>
                           </>
                         );
                       }
                       const targetPlayer = gameState.players.find(p => p.seat === selectedSeat);
-                      const targetName = targetPlayer ? `${selectedSeat + 1}号 ${targetPlayer.displayName}` : `${selectedSeat + 1}号`;
+                      const targetName = targetPlayer ? t("ui.seatWithName", { seat: selectedSeat + 1, name: targetPlayer.displayName }) : t("ui.seatOnly", { seat: selectedSeat + 1 });
                       return (
                         <>
                           <div className="text-lg leading-relaxed text-[var(--text-primary)]">
-                            你选择对 <span className="text-[var(--color-danger)] font-semibold">{targetName}</span> 使用毒药，确定吗？
+                            {t.rich("dialog.witch.confirmPoisonPrompt", {
+                              target: targetName,
+                              highlight: (chunks) => (
+                                <span className="text-[var(--color-danger)] font-semibold">{chunks}</span>
+                              ),
+                            })}
                           </div>
                           <div className={`flex items-center justify-end gap-3 mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
-                              onClick={onCancelSelection}
+                              onClick={() => onCancelSelection?.()}
                               className="wc-action-btn text-sm h-9 px-4"
                               type="button"
                             >
                               <X size={14} weight="bold" />
-                              取消
+                              {t("dialog.cancel")}
                             </button>
                             <button
                               onClick={() => onNightAction?.(selectedSeat, "poison")}
                               className="wc-action-btn wc-action-btn--danger text-sm h-9 px-4"
                               type="button"
                             >
-                              确认毒杀
+                              {t("dialog.confirmPoison")}
                               <CaretRight size={14} weight="bold" />
                             </button>
                           </div>
@@ -1185,7 +1272,7 @@ export function DialogArea({
                     {(() => {
                       const wolfTarget = gameState.nightActions.wolfTarget;
                       const targetPlayer = wolfTarget !== undefined ? gameState.players.find(p => p.seat === wolfTarget) : null;
-                      const targetName = targetPlayer ? `${wolfTarget! + 1}号 ${targetPlayer.displayName}` : wolfTarget !== undefined ? `${wolfTarget + 1}号` : null;
+                      const targetName = targetPlayer ? t("ui.seatWithName", { seat: wolfTarget! + 1, name: targetPlayer.displayName }) : wolfTarget !== undefined ? t("ui.seatOnly", { seat: wolfTarget + 1 }) : null;
                       const healUsed = gameState.roleAbilities.witchHealUsed;
                       const poisonUsed = gameState.roleAbilities.witchPoisonUsed;
 
@@ -1194,28 +1281,33 @@ export function DialogArea({
                           <div className="text-lg leading-relaxed text-[var(--text-primary)]">
                             {targetName ? (
                               <>
-                                今晚 <span className="text-[var(--color-danger)] font-semibold">{targetName}</span> 被狼人袭击。
+                                {t.rich("dialog.witch.attackedTonight", {
+                                  target: targetName,
+                                  highlight: (chunks) => (
+                                    <span className="text-[var(--color-danger)] font-semibold">{chunks}</span>
+                                  ),
+                                })}
                                 {healUsed ? (
-                                  <span className="text-[var(--text-muted)]">（解药已用尽）</span>
+                                  <span className="text-[var(--text-muted)]">{t("dialog.witch.healUsedNote")}</span>
                                 ) : (
                                   <>
-                                    <span className="mr-2">你可以</span>
+                                    <span className="mr-2">{t("dialog.witch.youCan")}</span>
                                     <button
                                       onClick={() => onNightAction?.(wolfTarget!, "save")}
                                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded border border-[var(--color-success)] bg-[var(--color-success)]/10 text-[var(--color-success)] font-semibold cursor-pointer hover:bg-[var(--color-success)]/20 active:scale-[0.98] transition-all text-sm"
                                       type="button"
                                     >
-                                      救他
+                                      {t("dialog.witch.saveAction")}
                                     </button>
-                                    <span className="ml-2">。</span>
+                                    <span className="ml-2">{t("dialog.witch.saveSuffix")}</span>
                                   </>
                                 )}
                               </>
                             ) : (
-                              <>今晚无人被袭击。</>
+                              <>{t("dialog.witch.noAttackTonight")}</>
                             )}
-                            {!poisonUsed && <> 或者点击玩家头像使用<span className="text-[var(--color-danger)] font-semibold">毒药</span>。</>}
-                            {poisonUsed && <span className="text-[var(--text-muted)]">（毒药已用尽）</span>}
+                            {!poisonUsed && <>{t("dialog.witch.poisonHintPrefix")}<span className="text-[var(--color-danger)] font-semibold">{t("dialog.witch.poisonLabel")}</span>{t("dialog.witch.poisonHintSuffix")}</>}
+                            {poisonUsed && <span className="text-[var(--text-muted)]">{t("dialog.witch.poisonUsedNote")}</span>}
                           </div>
                           <div className={`flex items-center justify-end mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                             <button
@@ -1223,7 +1315,7 @@ export function DialogArea({
                               className="wc-action-btn text-sm h-9 px-4"
                               type="button"
                             >
-                              什么都不做
+                              {t("dialog.witch.doNothing")}
                               <CaretRight size={14} weight="bold" />
                             </button>
                           </div>
@@ -1259,7 +1351,7 @@ export function DialogArea({
                       onVoiceHoldEnd={() => {
                         voiceRecorderRef.current?.stop();
                       }}
-                      placeholder={gameState.phase === "DAY_LAST_WORDS" ? "有什么想说的？" : "你怎么看？"}
+                      placeholder={gameState.phase === "DAY_LAST_WORDS" ? t("dialog.input.lastWordsPlaceholder") : t("dialog.input.defaultPlaceholder")}
                       isNight={isNight}
                       isGenshinMode={isGenshinMode}
                       players={gameState.players.filter((p) => p.alive)}
@@ -1282,19 +1374,19 @@ export function DialogArea({
                         onClick={onSendMessage}
                         disabled={!inputText?.trim()}
                         className="h-8 px-3 rounded text-xs font-medium bg-[var(--color-gold)] text-[#1a1614] hover:bg-[#d4b06a] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="发送"
+                        title={t("dialog.input.send")}
                       >
                         <PaperPlaneTilt size={14} weight="fill" />
-                        发送
+                        {t("dialog.input.send")}
                       </button>
 
                       <button
                         onClick={handleFinishSpeaking}
                         className="h-8 px-3 rounded text-xs font-medium border border-[var(--color-gold)]/50 text-[var(--color-gold)] bg-transparent hover:bg-[var(--color-gold)]/10 transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="结束发言"
+                        title={t("dialog.input.finishSpeech")}
                       >
                         <CheckCircle size={14} weight="fill" />
-                        结束发言
+                        {t("dialog.input.finishSpeech")}
                       </button>
                     </div>
                   </div>
@@ -1318,12 +1410,21 @@ export function DialogArea({
                     )}
                     
                     {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}
-                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
-                      {renderPlayerMentions(
-                        waitingForNextRound ? "轻触继续，轮到下一位" : dialogueText,
-                        gameState.players,
-                        isNight,
-                        isGenshinMode
+                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 pr-1 whitespace-pre-wrap break-words">
+                      {isTyping ? (
+                        renderPlayerMentions(
+                          waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText,
+                          gameState.players,
+                          isNight,
+                          isGenshinMode
+                        )
+                      ) : (
+                        <MentionsMarkdown
+                          content={waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText}
+                          players={gameState.players}
+                          isNight={isNight}
+                          isGenshinMode={isGenshinMode}
+                        />
                       )}
                       {isTyping && <span className="wc-typing-cursor"></span>}
                     </div>
@@ -1334,7 +1435,7 @@ export function DialogArea({
                       {isTyping ? (
                         <>
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                          <span>正在陈述…</span>
+                          <span>{t("dialog.speaking")}</span>
                         </>
                       ) : null}
                     </div>
@@ -1349,7 +1450,7 @@ export function DialogArea({
                             transition={{ duration: 0.25, ease: "easeOut" }}
                             className={`flex items-center gap-1.5 text-xs ${isNight ? "text-white/70" : "text-[var(--text-secondary)]"}`}
                           >
-                            <span>点击或按</span>
+                            <span>{t("dialog.advanceHintPrefix")}</span>
                             <kbd className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border font-mono text-[11px] ${
                               isNight
                                 ? "bg-white/10 border-white/20 text-white/80"
@@ -1361,7 +1462,7 @@ export function DialogArea({
                               </svg>
                               Enter
                             </kbd>
-                            <span>继续</span>
+                            <span>{t("dialog.advanceHintSuffix")}</span>
                           </motion.div>
                         ) : (
                           <div key="placeholder" className="h-7" />
@@ -1407,6 +1508,7 @@ function ChatMessageItem({
   isNight?: boolean;
   isGenshinMode?: boolean;
 }) {
+  const t = useTranslations();
   const player = players.find(p => p.playerId === msg.playerId);
   const isHuman = msg.playerId === humanPlayerId;
   const isPlayerReady = player ? (player.isHuman ? !!player.displayName?.trim() : !!player.agentProfile?.persona) : false;
@@ -1435,7 +1537,13 @@ function ChatMessageItem({
     return (
       <div className="flex justify-center my-3">
         <div className="text-xs text-center py-2 px-4 rounded-lg border text-[var(--text-secondary)] bg-[var(--glass-bg-weak)] border-[var(--glass-border)]">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+          <MentionsMarkdown
+            content={msg.content}
+            players={players}
+            isNight={isNight}
+            isGenshinMode={isGenshinMode}
+            className="text-center"
+          />
         </div>
       </div>
     );
@@ -1477,14 +1585,19 @@ function ChatMessageItem({
           <div className={cn("flex items-center gap-2 mb-1 text-xs opacity-70")}>
             {player && (
               <span className="wc-seat-badge">
-                {player.seat + 1}号
+                {t("ui.seatOnly", { seat: player.seat + 1 })}
               </span>
             )}
             <span className="font-serif font-bold text-[var(--text-primary)]">{msg.playerName}</span>
           </div>
           
-          <div className="text-base leading-relaxed text-[var(--text-primary)] break-words text-left">
-            {renderPlayerMentions(msg.content, players, isNight, isGenshinMode)}
+          <div className="text-base leading-relaxed text-[var(--text-primary)] text-left">
+            <MentionsMarkdown
+              content={msg.content}
+              players={players}
+              isNight={isNight}
+              isGenshinMode={isGenshinMode}
+            />
           </div>
         </div>
       </div>

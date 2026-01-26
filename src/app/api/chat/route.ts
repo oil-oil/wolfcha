@@ -82,6 +82,28 @@ function flattenMultipartContent(messages: unknown[]): unknown[] {
   });
 }
 
+function hasJsonHintInMessages(messages: unknown[]): boolean {
+  if (!Array.isArray(messages)) return false;
+
+  const contains = (value: unknown): boolean => {
+    if (typeof value === "string") return /json/i.test(value);
+    if (Array.isArray(value)) return value.some(contains);
+    if (!value || typeof value !== "object") return false;
+    const obj = value as Record<string, unknown>;
+    if ("text" in obj && typeof obj.text === "string") return /json/i.test(obj.text);
+    if ("content" in obj) return contains(obj.content);
+    return false;
+  };
+
+  return messages.some((m) => contains(m));
+}
+
+function withDashscopeJsonHint(messages: unknown[]): unknown[] {
+  if (!Array.isArray(messages)) return messages;
+  if (hasJsonHintInMessages(messages)) return messages;
+  return [{ role: "system", content: "Respond in json." }, ...messages];
+}
+
 // Strip cache_control from message content parts for models that don't support it
 function stripCacheControl(messages: unknown[]): unknown[] {
   if (!Array.isArray(messages)) return messages;
@@ -184,9 +206,15 @@ async function runBatchItem(
     }
 
     const normalizedModel = normalizeDashscopeModelName(model);
+    const normalizedResponseFormat = response_format as { type?: unknown } | undefined;
+    const dashscopeMessages =
+      normalizedResponseFormat?.type === "json_object"
+        ? withDashscopeJsonHint(processedMessages)
+        : processedMessages;
+
     const requestBody: Record<string, unknown> = {
       model: normalizedModel,
-      messages: processedMessages,
+      messages: dashscopeMessages,
       temperature: cappedTemperature,
     };
 
@@ -366,9 +394,14 @@ export async function POST(request: NextRequest) {
       const dashscopeApiUrl = DASHSCOPE_CHAT_COMPLETIONS_URL;
 
       const normalizedModel = normalizeDashscopeModelName(model);
+      const normalizedResponseFormat = response_format as { type?: unknown } | undefined;
+      const dashscopeMessages =
+        normalizedResponseFormat?.type === "json_object"
+          ? withDashscopeJsonHint(processedMessages)
+          : processedMessages;
       const requestBody: Record<string, unknown> = {
         model: normalizedModel,
-        messages: processedMessages,
+        messages: dashscopeMessages,
         temperature: cappedTemperature,
       };
 

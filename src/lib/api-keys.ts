@@ -91,10 +91,12 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
-// When custom key is disabled, enforce a model from AVAILABLE_MODELS.
-function resolveDefaultModelWhenCustomDisabled(preferred: string): string {
-  if (AVAILABLE_MODELS.some((ref) => ref.model === preferred)) return preferred;
-  return AVAILABLE_MODELS[0]?.model ?? preferred;
+// When custom key is disabled, use a model from AVAILABLE_MODELS so the server
+// can use its built-in API keys (no user x-zenmux-api-key header).
+function resolveDefaultModelWhenCustomDisabled(fallbackDefault: string): string {
+  const builtin =
+    AVAILABLE_MODELS.find((r) => r.provider === "zenmux") ?? AVAILABLE_MODELS[0];
+  return builtin?.model ?? fallbackDefault;
 }
 
 // When custom key is enabled, keep model within providers that have keys.
@@ -119,12 +121,13 @@ function resolveModelForCurrentKeyState(
   fallbackValue: string,
   storageKey: string
 ): string {
-  const base = storedValue || fallbackValue;
-
+  // When custom key is disabled, always use system default - ignore user's stored selection
   if (!isCustomKeyEnabled()) {
-    return resolveDefaultModelWhenCustomDisabled(base);
+    return resolveDefaultModelWhenCustomDisabled(fallbackValue);
   }
 
+  // When custom key is enabled, use user's stored selection (or fallback if not set)
+  const base = storedValue || fallbackValue;
   const resolved = resolveModelWhenCustomEnabled(base, fallbackValue);
   if (resolved !== base) {
     writeStorage(storageKey, resolved);
@@ -134,7 +137,12 @@ function resolveModelForCurrentKeyState(
 
 export function isCustomKeyEnabled(): boolean {
   if (!canUseStorage()) return false;
-  return window.localStorage.getItem(CUSTOM_KEY_ENABLED_STORAGE) === "true";
+  const flagEnabled = window.localStorage.getItem(CUSTOM_KEY_ENABLED_STORAGE) === "true";
+  if (!flagEnabled) return false;
+  // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
+  // 这可以防止用户开启了开关但没有正确配置 key 的情况
+  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey();
+  return hasAnyLLMKey;
 }
 
 export function setCustomKeyEnabled(value: boolean) {
@@ -169,6 +177,11 @@ export function setSelectedModels(models: string[]) {
 const DEPRECATED_GENERATOR_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025";
 
 export function getGeneratorModel(): string {
+  // When custom key is disabled, always use GENERATOR_MODEL directly
+  // (independent of AI player models in AVAILABLE_MODELS)
+  if (!isCustomKeyEnabled()) {
+    return GENERATOR_MODEL;
+  }
   const stored = readStorage(GENERATOR_MODEL_STORAGE);
   if (stored === DEPRECATED_GENERATOR_MODEL) {
     writeStorage(GENERATOR_MODEL_STORAGE, GENERATOR_MODEL);
@@ -182,6 +195,11 @@ export function setGeneratorModel(model: string) {
 }
 
 export function getSummaryModel(): string {
+  // When custom key is disabled, always use SUMMARY_MODEL directly
+  // (independent of AI player models in AVAILABLE_MODELS)
+  if (!isCustomKeyEnabled()) {
+    return SUMMARY_MODEL;
+  }
   const stored = readStorage(SUMMARY_MODEL_STORAGE);
   if (stored === DEPRECATED_GENERATOR_MODEL) {
     writeStorage(SUMMARY_MODEL_STORAGE, SUMMARY_MODEL);

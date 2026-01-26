@@ -6,6 +6,7 @@
  */
 
 import type { GameState, Phase, Player, Role } from "@/types/game";
+import { getI18n } from "@/i18n/translator";
 
 // ============ 阶段顺序定义 ============
 
@@ -259,13 +260,14 @@ function analyzeForwardJump(
           ? (state.nightActions.guardTarget ?? nightRecord.guardTarget)
           : nightRecord.guardTarget;
       if (guard && guardTargetExisting === undefined && !hasPassed("NIGHT_GUARD_ACTION")) {
+        const { t } = getI18n();
         result.missingTasks.push({
           phase: "NIGHT_GUARD_ACTION",
-          description: `第 ${d} 夜 守卫保护目标`,
+          description: t("smartJump.nightGuardAction", { day: d }),
           field: `day${d}GuardTarget`,
           options: alivePlayers
             .filter((p) => p.seat !== state.nightActions.lastGuardTarget)
-            .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` })),
+            .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) })),
         });
       }
 
@@ -275,13 +277,14 @@ function analyzeForwardJump(
           ? (state.nightActions.wolfTarget ?? nightRecord.wolfTarget)
           : nightRecord.wolfTarget;
       if (wolves.length > 0 && wolfTargetExisting === undefined && !hasPassed("NIGHT_WOLF_ACTION")) {
+        const { t } = getI18n();
         result.missingTasks.push({
           phase: "NIGHT_WOLF_ACTION",
-          description: `第 ${d} 夜 狼人击杀目标`,
+          description: t("smartJump.nightWolfAction", { day: d }),
           field: `day${d}WolfTarget`,
           options: aliveVillagers.map((p) => ({
             value: p.seat,
-            label: `${p.seat + 1}号 ${p.displayName}`,
+            label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }),
           })),
         });
       }
@@ -306,25 +309,27 @@ function analyzeForwardJump(
           witchSaveExisting === undefined &&
           (wolfTargetForHeal !== undefined || wolves.length > 0)
         ) {
+          const { t } = getI18n();
           result.missingTasks.push({
             phase: "NIGHT_WITCH_ACTION",
-            description: `第 ${d} 夜 女巫是否使用解药`,
+            description: t("smartJump.nightWitchSave", { day: d }),
             field: `day${d}WitchSave`,
             options: [
-              { value: "false", label: "不使用解药" },
-              { value: "true", label: "使用解药" },
+              { value: "false", label: t("smartJump.witchSaveNo") },
+              { value: "true", label: t("smartJump.witchSaveYes") },
             ],
           });
         }
 
         if (!state.roleAbilities.witchPoisonUsed && witchPoisonExisting === undefined) {
+          const { t } = getI18n();
           result.missingTasks.push({
             phase: "NIGHT_WITCH_ACTION",
-            description: `第 ${d} 夜 女巫是否使用毒药`,
+            description: t("smartJump.nightWitchPoison", { day: d }),
             field: `day${d}WitchPoison`,
             options: [
-              { value: "none", label: "不使用毒药" },
-              ...alivePlayers.map((p) => ({ value: p.seat, label: `毒杀 ${p.seat + 1}号 ${p.displayName}` })),
+              { value: "none", label: t("smartJump.witchPoisonNo") },
+              ...alivePlayers.map((p) => ({ value: p.seat, label: t("smartJump.witchPoisonTarget", { seat: p.seat + 1, name: p.displayName }) })),
             ],
           });
         }
@@ -336,27 +341,29 @@ function analyzeForwardJump(
           ? (state.nightActions.seerTarget ?? nightRecord.seerTarget)
           : nightRecord.seerTarget;
       if (seer && seerTargetExisting === undefined && !hasPassed("NIGHT_SEER_ACTION")) {
+        const { t } = getI18n();
         const checkedSeats = (state.nightActions.seerHistory || []).map((h) => h.targetSeat);
         result.missingTasks.push({
           phase: "NIGHT_SEER_ACTION",
-          description: `第 ${d} 夜 预言家查验目标`,
+          description: t("smartJump.nightSeerAction", { day: d }),
           field: `day${d}SeerTarget`,
           options: alivePlayers
             .filter((p) => !p.isHuman && !checkedSeats.includes(p.seat))
-            .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` })),
+            .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) })),
         });
       }
     }
 
     for (let d = state.day; d < target.day; d++) {
       if (state.dayHistory?.[d]?.executed || state.dayHistory?.[d]?.voteTie) continue;
+      const { t } = getI18n();
       result.missingTasks.push({
         phase: "DAY_VOTE",
-        description: `第 ${d} 天投票结果`,
+        description: t("smartJump.dayVoteResult", { day: d }),
         field: `day${d}VoteResult`,
         options: alivePlayers
-          .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` }))
-          .concat([{ value: -1, label: "平票（无人出局）" }]),
+          .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) }))
+          .concat([{ value: -1, label: t("smartJump.voteTie") }]),
       });
     }
   }
@@ -386,13 +393,14 @@ function createMissingTasksForWitch(state: GameState): MissingTask[] {
   if (!state.roleAbilities.witchHealUsed && (wolfTargetForHeal !== undefined || wolves.length > 0)) {
     // 已经明确过是否救人，则无需补全
     if (state.nightActions.witchSave === undefined) {
+      const { t } = getI18n();
       tasks.push({
         phase: "NIGHT_WITCH_ACTION",
-        description: "女巫是否使用解药",
+        description: t("smartJump.witchSave"),
         field: "witchSave",
         options: [
-          { value: "false", label: "不使用解药" },
-          { value: "true", label: "使用解药" },
+          { value: "false", label: t("smartJump.witchSaveNo") },
+          { value: "true", label: t("smartJump.witchSaveYes") },
         ],
       });
     }
@@ -401,14 +409,15 @@ function createMissingTasksForWitch(state: GameState): MissingTask[] {
   // 毒药：仅当毒药未用时，才需要明确“是否毒/毒谁”
   if (!state.roleAbilities.witchPoisonUsed) {
     if (state.nightActions.witchPoison === undefined) {
+      const { t } = getI18n();
       const alivePlayers = state.players.filter((p) => p.alive);
       tasks.push({
         phase: "NIGHT_WITCH_ACTION",
-        description: "女巫是否使用毒药",
+        description: t("smartJump.witchPoison"),
         field: "witchPoison",
         options: [
-          { value: "none", label: "不使用毒药" },
-          ...alivePlayers.map((p) => ({ value: p.seat, label: `毒杀 ${p.seat + 1}号 ${p.displayName}` })),
+          { value: "none", label: t("smartJump.witchPoisonNo") },
+          ...alivePlayers.map((p) => ({ value: p.seat, label: t("smartJump.witchPoisonTarget", { seat: p.seat + 1, name: p.displayName }) })),
         ],
       });
     }
@@ -428,26 +437,28 @@ function createMissingTask(state: GameState, phase: Phase): MissingTask | null {
       if (!guard) return null;
       // 已经选择过目标则不需要补全
       if (state.nightActions.guardTarget !== undefined) return null;
+      const { t } = getI18n();
       return {
         phase,
-        description: "守卫保护目标",
+        description: t("smartJump.guardAction"),
         field: "guardTarget",
         options: alivePlayers
           .filter((p) => p.seat !== state.nightActions.lastGuardTarget)
-          .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` })),
+          .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) })),
       };
     }
     case "NIGHT_WOLF_ACTION": {
       const wolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
       if (wolves.length === 0) return null;
       if (state.nightActions.wolfTarget !== undefined) return null;
+      const { t } = getI18n();
       return {
         phase,
-        description: "狼人击杀目标",
+        description: t("smartJump.wolfAction"),
         field: "wolfTarget",
         options: aliveVillagers.map((p) => ({
           value: p.seat,
-          label: `${p.seat + 1}号 ${p.displayName}`,
+          label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }),
         })),
       };
     }
@@ -459,26 +470,28 @@ function createMissingTask(state: GameState, phase: Phase): MissingTask | null {
       const seer = state.players.find((p) => p.role === "Seer" && p.alive);
       if (!seer) return null;
       if (state.nightActions.seerTarget !== undefined) return null;
+      const { t } = getI18n();
       const checkedSeats = (state.nightActions.seerHistory || []).map((h) => h.targetSeat);
       return {
         phase,
-        description: "预言家查验目标",
+        description: t("smartJump.seerAction"),
         field: "seerTarget",
         options: alivePlayers
           .filter((p) => !p.isHuman && !checkedSeats.includes(p.seat))
-          .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` })),
+          .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) })),
       };
     }
     case "DAY_VOTE":
       // 已有投票结算（处决或平票）则不需要补全
       if (state.dayHistory?.[state.day]?.executed || state.dayHistory?.[state.day]?.voteTie) return null;
+      const { t } = getI18n();
       return {
         phase,
-        description: "投票处决目标",
+        description: t("smartJump.voteAction"),
         field: "voteResult",
         options: alivePlayers
-          .map((p) => ({ value: p.seat, label: `${p.seat + 1}号 ${p.displayName}` }))
-          .concat([{ value: -1, label: "平票（无人出局）" }]),
+          .map((p) => ({ value: p.seat, label: t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) }))
+          .concat([{ value: -1, label: t("smartJump.voteTie") }]),
       };
     default:
       return null;

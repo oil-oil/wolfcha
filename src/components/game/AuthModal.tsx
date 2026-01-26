@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { translateAuthError } from "@/lib/auth-errors";
+import { useTranslations } from "next-intl";
 
 interface AuthModalProps {
   open: boolean;
@@ -24,6 +25,7 @@ interface AuthModalProps {
 type PasswordView = "sign_in" | "sign_up" | "forgot_password";
 
 export function AuthModal({ open, onOpenChange }: AuthModalProps) {
+  const t = useTranslations();
   const EMAIL_SEND_COOLDOWN_SECONDS = 60;
   const EMAIL_SEND_COOLDOWN_STORAGE_KEY = "wolfcha_auth_email_cooldown_until";
 
@@ -114,11 +116,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError("请输入邮箱");
+      setError(t("authModal.errors.emailRequired"));
       return;
     }
     if (!password) {
-      setError("请输入密码");
+      setError(t("authModal.errors.passwordRequired"));
       return;
     }
     setLoading(true);
@@ -133,7 +135,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     if (error) {
       setError(translateAuthError(error.message));
     } else {
-      toast.success("登录成功");
+      toast.success(t("authModal.toasts.signInSuccess"));
       onOpenChange(false);
       resetForm();
     }
@@ -143,15 +145,15 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError("请输入邮箱");
+      setError(t("authModal.errors.emailRequired"));
       return;
     }
     if (!password) {
-      setError("请输入密码");
+      setError(t("authModal.errors.passwordRequired"));
       return;
     }
     if (password.length < 6) {
-      setError("密码长度至少为 6 位");
+      setError(t("authModal.errors.passwordTooShort"));
       return;
     }
     setLoading(true);
@@ -175,27 +177,27 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
       
       if (isExistingUser) {
         // User already exists - show helpful message without revealing this fact explicitly
-        setSuccessMessage("如果该邮箱未注册，您将收到验证邮件。如已注册，请直接登录。");
+        setSuccessMessage(t("authModal.messages.signUpExisting"));
       } else if (data.session) {
         // Auto-confirmed, user is logged in
-        toast.success("注册成功");
+        toast.success(t("authModal.toasts.signUpSuccess"));
         onOpenChange(false);
         resetForm();
       } else if (data.user) {
         // New user, needs email confirmation
         setSuccessMessage(
           <div className="space-y-1">
-            <div>注册成功！我们已向您的邮箱发送验证邮件，请打开邮件完成验证。</div>
+            <div>{t("authModal.messages.signUpConfirmDetails.line1")}</div>
             <div className="font-semibold text-amber-700">
-              没有收到？邮件服务商有时会把自动验证邮件误判为广告/群发，可能会被放到垃圾箱/广告邮件。
+              {t("authModal.messages.signUpConfirmDetails.line2")}
             </div>
             <div className="text-[var(--text-muted)]">
-              建议将发件人加入白名单/通讯录，并稍等 1–2 分钟再刷新收件箱。
+              {t("authModal.messages.signUpConfirmDetails.line3")}
             </div>
           </div>
         );
-        toast.success("注册成功", {
-          description: "请查收邮箱完成验证（可能被误判到垃圾箱/广告邮件）",
+        toast.success(t("authModal.toasts.signUpConfirm.title"), {
+          description: t("authModal.toasts.signUpConfirm.description"),
         });
       }
     }
@@ -205,11 +207,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError("请输入邮箱");
+      setError(t("authModal.errors.emailRequired"));
       return;
     }
     if (emailCooldownSecondsLeft > 0) {
-      setError(`发送过于频繁，请在 ${emailCooldownSecondsLeft}s 后再试`);
+      setError(t("authModal.errors.cooldownWait", { seconds: emailCooldownSecondsLeft }));
       return;
     }
     setLoading(true);
@@ -229,14 +231,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
         /rate limit/i.test(error.message)
       ) {
         startEmailCooldown();
-        setError("发送过于频繁，请稍后再试");
+        setError(t("authModal.errors.sendTooFrequent"));
       } else {
         setError(translateAuthError(error.message));
       }
     } else {
       startEmailCooldown();
-      setSuccessMessage("重置邮件已发送，请检查邮箱");
-      toast.success("重置邮件已发送", { description: "请检查邮箱" });
+      setSuccessMessage(t("authModal.messages.resetSent"));
+      toast.success(t("authModal.toasts.resetSent.title"), { description: t("authModal.toasts.resetSent.description") });
     }
   };
 
@@ -250,8 +252,8 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
     }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>登录或注册</DialogTitle>
-          <DialogDescription>登录后可获得额度并使用分享奖励。</DialogDescription>
+          <DialogTitle>{t("authModal.title")}</DialogTitle>
+          <DialogDescription>{t("authModal.description")}</DialogDescription>
         </DialogHeader>
 
         <div className="pt-4">
@@ -259,11 +261,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
           {passwordView === "sign_in" && (
               <form onSubmit={handleSignIn} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">邮箱</Label>
+                  <Label htmlFor="signin-email">{t("authModal.fields.email")}</Label>
                   <Input
                     id="signin-email"
                     type="email"
-                    placeholder="请输入邮箱"
+                    placeholder={t("authModal.placeholders.email")}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -272,11 +274,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">密码</Label>
+                  <Label htmlFor="signin-password">{t("authModal.fields.password")}</Label>
                   <Input
                     id="signin-password"
                     type="password"
-                    placeholder="请输入密码"
+                    placeholder={t("authModal.placeholders.password")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
@@ -291,7 +293,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "登录中..." : "登录"}
+                  {loading ? t("authModal.actions.signingIn") : t("authModal.actions.signIn")}
                 </Button>
 
                 <div className="flex flex-col items-center gap-2 text-sm">
@@ -300,14 +302,14 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("forgot_password")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    忘记密码？
+                    {t("authModal.links.forgotPassword")}
                   </button>
                   <button
                     type="button"
                     onClick={() => handlePasswordViewChange("sign_up")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    还没有账号？去注册
+                    {t("authModal.links.noAccount")}
                   </button>
                 </div>
               </form>
@@ -317,11 +319,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {passwordView === "sign_up" && (
               <form onSubmit={handleSignUp} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">邮箱</Label>
+                  <Label htmlFor="signup-email">{t("authModal.fields.email")}</Label>
                   <Input
                     id="signup-email"
                     type="email"
-                    placeholder="请输入邮箱"
+                    placeholder={t("authModal.placeholders.email")}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -330,11 +332,11 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">密码</Label>
+                  <Label htmlFor="signup-password">{t("authModal.fields.password")}</Label>
                   <Input
                     id="signup-password"
                     type="password"
-                    placeholder="请输入密码（至少 6 位）"
+                    placeholder={t("authModal.placeholders.passwordMin")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={loading}
@@ -356,7 +358,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                 )}
 
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "注册中..." : "注册"}
+                  {loading ? t("authModal.actions.signingUp") : t("authModal.actions.signUp")}
                 </Button>
 
                 <div className="flex justify-center text-sm">
@@ -365,7 +367,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("sign_in")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    已有账号？去登录
+                    {t("authModal.links.haveAccount")}
                   </button>
                 </div>
               </form>
@@ -375,15 +377,15 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
             {passwordView === "forgot_password" && (
               <form onSubmit={handleForgotPassword} className="space-y-4 pt-4">
                 <p className="text-sm text-[var(--text-muted)]">
-                  输入您的邮箱，我们将发送密码重置链接。
+                  {t("authModal.forgot.description")}
                 </p>
 
                 <div className="space-y-2">
-                  <Label htmlFor="forgot-email">邮箱</Label>
+                  <Label htmlFor="forgot-email">{t("authModal.fields.email")}</Label>
                   <Input
                     id="forgot-email"
                     type="email"
-                    placeholder="请输入邮箱"
+                    placeholder={t("authModal.placeholders.email")}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
@@ -409,10 +411,10 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                   disabled={loading || emailCooldownSecondsLeft > 0}
                 >
                   {loading
-                    ? "发送中..."
+                    ? t("authModal.actions.sending")
                     : emailCooldownSecondsLeft > 0
-                      ? `请稍候（${emailCooldownSecondsLeft}s）`
-                      : "发送重置邮件"}
+                      ? t("authModal.actions.waitCooldown", { seconds: emailCooldownSecondsLeft })
+                      : t("authModal.actions.sendReset")}
                 </Button>
 
                 <div className="flex justify-center text-sm">
@@ -421,7 +423,7 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
                     onClick={() => handlePasswordViewChange("sign_in")}
                     className="text-[var(--color-gold-dark)] hover:underline"
                   >
-                    返回登录
+                    {t("authModal.links.backToSignIn")}
                   </button>
                 </div>
               </form>

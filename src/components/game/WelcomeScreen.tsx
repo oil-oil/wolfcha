@@ -6,6 +6,7 @@ import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type { DevPreset, DifficultyLevel, Role, StartGameOptions } from "@/types/game";
 import { DevModeButton } from "@/components/DevTools";
@@ -15,8 +16,10 @@ import { SharePanel } from "@/components/game/SharePanel";
 import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
+import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { useCredits } from "@/hooks/useCredits";
 import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { useAppLocale } from "@/i18n/useAppLocale";
 
 type SponsorCardProps = {
   sponsorId: string;
@@ -209,9 +212,14 @@ export function WelcomeScreen({
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
 }: WelcomeScreenProps) {
+  const t = useTranslations();
+  const { locale } = useAppLocale();
   const sponsorEmail = "zhihuang.oiloil@gmail.com";
-  const sponsorMailto =
-    "mailto:zhihuang.oiloil@gmail.com?subject=Wolfcha%20赞助合作&body=你好，我对%20Wolfcha%20项目很感兴趣，希望能够提供以下支持：%0A%0A-（模型额度/算力）%0A-（语音/音效资源）%0A-（设计/产品协作）%0A-（其他）%0A%0A我的联系方式：%0A%0A";
+  const sponsorMailto = useMemo(() => {
+    const subject = t("welcome.sponsor.mailSubject");
+    const body = t("welcome.sponsor.mailBody");
+    return `mailto:${sponsorEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [sponsorEmail, t]);
 
   const {
     user,
@@ -267,14 +275,17 @@ export function WelcomeScreen({
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
 
   const roleOptions: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
-  const roleLabels: Record<Role, string> = {
-    Villager: "村民",
-    Werewolf: "狼人",
-    Seer: "预言家",
-    Witch: "女巫",
-    Hunter: "猎人",
-    Guard: "守卫",
-  };
+  const roleLabels = useMemo<Record<Role, string>>(
+    () => ({
+      Villager: t("roles.villager"),
+      Werewolf: t("roles.werewolf"),
+      Seer: t("roles.seer"),
+      Witch: t("roles.witch"),
+      Hunter: t("roles.hunter"),
+      Guard: t("roles.guard"),
+    }),
+    [t]
+  );
 
   const [fixedRoles, setFixedRoles] = useState<(Role | "")[]>(() => buildDefaultRoles(10));
 
@@ -325,9 +336,14 @@ export function WelcomeScreen({
 
   const roleConfigHint = useMemo(() => {
     const expected = getRoleCountConfig(playerCount);
-    const godLabel = expected.guardCount > 0 ? "预女猎守" : "预女猎";
-    return `需满足：${expected.wolfCount}狼 ${godLabel} ${expected.villagerCount}民`;
-  }, [playerCount]);
+    const godLabel =
+      expected.guardCount > 0 ? t("welcome.roleConfig.godLabelFull") : t("welcome.roleConfig.godLabelNoGuard");
+    return t("welcome.roleConfig.hint", {
+      wolfCount: expected.wolfCount,
+      godLabel,
+      villagerCount: expected.villagerCount,
+    });
+  }, [playerCount, t]);
 
   const canConfirm = useMemo(() => {
     return !!humanName.trim() && !isLoading && !isTransitioning && !creditsLoading;
@@ -335,12 +351,12 @@ export function WelcomeScreen({
 
   const difficultyLabel = useMemo(() => {
     const labels: Record<DifficultyLevel, string> = {
-      easy: "新手局",
-      normal: "标准局",
-      hard: "高阶局",
+      easy: t("difficulty.easy"),
+      normal: t("difficulty.normal"),
+      hard: t("difficulty.hard"),
     };
     return labels[difficulty];
-  }, [difficulty]);
+  }, [difficulty, t]);
 
   useEffect(() => {
     const paper = paperRef.current;
@@ -423,9 +439,9 @@ export function WelcomeScreen({
   const handleCopySponsorEmail = async () => {
     try {
       await navigator.clipboard.writeText(sponsorEmail);
-      toast.success("已复制邮箱", { description: sponsorEmail });
+      toast.success(t("welcome.sponsor.copySuccess"), { description: sponsorEmail });
     } catch {
-      toast("邮箱地址", { description: sponsorEmail });
+      toast(t("welcome.sponsor.copyFallback"), { description: sponsorEmail });
     }
   };
 
@@ -435,14 +451,14 @@ export function WelcomeScreen({
 
     if (!user) {
       setIsAuthOpen(true);
-      toast("请先登录或注册");
+      toast(t("welcome.toast.signInFirst"));
       return;
     }
 
     const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
     if (!hasUserKey && credits !== null && credits <= 0) {
       setIsShareOpen(true);
-      toast("额度不足", { description: "分享邀请可获得更多额度。" });
+      toast(t("welcome.toast.noCredits.title"), { description: t("welcome.toast.noCredits.description") });
       return;
     }
 
@@ -472,14 +488,14 @@ export function WelcomeScreen({
         setIsTransitioning(false);
         onAbort?.();
         setIsShareOpen(true);
-        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+        toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
       })
       .catch(() => {
         // Credit deduction failed, abort the game and show share panel
         setIsTransitioning(false);
         onAbort?.();
         setIsShareOpen(true);
-        toast.error("扣除额度失败", { description: "请分享邀请获取更多额度。" });
+        toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
       })
       .finally(() => {
         isStartingRef.current = false;
@@ -539,23 +555,23 @@ export function WelcomeScreen({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Users size={18} weight="duotone" />
-              加入游戏群
+              {t("welcome.group.title")}
             </DialogTitle>
-            <DialogDescription>扫码入群，反馈问题与建议。</DialogDescription>
+            <DialogDescription>{t("welcome.group.description")}</DialogDescription>
           </DialogHeader>
 
           <div className="mt-2 flex items-center justify-center">
             {groupImgOk !== false && (
               <img
                 src="/group.png"
-                alt="Wolfcha 用户群"
+                alt={t("settings.about.group.alt")}
                 className="w-full max-w-[280px] max-h-[50vh] rounded-md border-2 border-[var(--border-color)] bg-white object-contain"
                 onLoad={() => setGroupImgOk(true)}
                 onError={() => setGroupImgOk(false)}
               />
             )}
             {groupImgOk === false && (
-              <div className="text-xs text-[var(--text-muted)]">未找到群组图片（public/group.png）</div>
+              <div className="text-xs text-[var(--text-muted)]">{t("settings.about.group.missing")}</div>
             )}
           </div>
         </DialogContent>
@@ -566,38 +582,37 @@ export function WelcomeScreen({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Handshake size={18} weight="duotone" />
-              成为赞助商
+              {t("welcome.sponsor.title")}
             </DialogTitle>
             <DialogDescription>
-              你的支持会直接帮助 Wolfcha 跑得更稳、让更多人可以免费玩到。
+              {t("welcome.sponsor.subtitle")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 text-sm leading-relaxed text-[var(--text-primary)]">
             <p>
-              Wolfcha 是一个公益性质的 AI 狼人杀项目。我们把成本主要花在模型调用、语音合成、服务器与内容生产上。
-              如果你愿意帮我们一把，无论支持多少、以什么形式，我们都会非常感激。
+              {t("welcome.sponsor.description")}
             </p>
             <ul className="list-disc pl-5 space-y-1 text-[var(--text-secondary)]">
-              <li>模型额度 / 算力 / 服务器资源</li>
-              <li>语音、音效、立绘等素材支持</li>
-              <li>设计、产品、运营协作与建议</li>
-              <li>渠道与社区传播（转发也很有帮助）</li>
+              <li>{t("welcome.sponsor.items.credits")}</li>
+              <li>{t("welcome.sponsor.items.media")}</li>
+              <li>{t("welcome.sponsor.items.collaboration")}</li>
+              <li>{t("welcome.sponsor.items.community")}</li>
             </ul>
             <p className="text-[var(--text-secondary)]">
-              我们会在首页以“印章”的方式向赞助方致谢；如需匿名，也完全没问题。
+              {t("welcome.sponsor.note")}
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
             <Button type="button" variant="outline" onClick={handleCopySponsorEmail} className="gap-2">
               <EnvelopeSimple size={16} />
-              复制邮箱
+              {t("welcome.sponsor.copyEmail")}
             </Button>
             <Button asChild className="gap-2">
               <a href={sponsorMailto} target="_blank" rel="noopener noreferrer">
                 <EnvelopeSimple size={16} />
-                发邮件联系
+                {t("welcome.sponsor.sendEmail")}
               </a>
             </Button>
           </div>
@@ -607,8 +622,8 @@ export function WelcomeScreen({
       <Dialog open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
         <DialogContent className="max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>快捷操作</DialogTitle>
-            <DialogDescription>在这里快速进入设置与账号信息。</DialogDescription>
+            <DialogTitle>{t("welcome.mobileMenu.title")}</DialogTitle>
+            <DialogDescription>{t("welcome.mobileMenu.description")}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
             <Button
@@ -621,7 +636,7 @@ export function WelcomeScreen({
               }}
             >
               <Handshake size={16} />
-              成为赞助商
+              {t("welcome.sponsor.action")}
             </Button>
             <Button
               type="button"
@@ -633,7 +648,7 @@ export function WelcomeScreen({
               }}
             >
               <GearSix size={16} />
-              设置
+              {t("welcome.settings")}
             </Button>
             {user ? (
               <Button
@@ -646,7 +661,7 @@ export function WelcomeScreen({
                 }}
               >
                 <UserCircle size={16} />
-                账号信息
+                {t("welcome.account.info")}
               </Button>
             ) : (
               <Button
@@ -659,7 +674,7 @@ export function WelcomeScreen({
                 }}
               >
                 <UserCircle size={16} />
-                登录/注册
+                {t("welcome.auth.signIn")}
               </Button>
             )}
             <Button asChild variant="outline" className="justify-start">
@@ -670,7 +685,7 @@ export function WelcomeScreen({
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <GithubLogo size={16} />
-                GitHub 项目
+                {t("welcome.github.title")}
               </a>
             </Button>
           </div>
@@ -678,7 +693,7 @@ export function WelcomeScreen({
       </Dialog>
 
       {/* Scattered sponsor cards */}
-      <div className="wc-sponsor-cards" aria-label="赞助商展示">
+      <div className="wc-sponsor-cards" aria-label={t("welcome.sponsor.showcaseLabel")}>
         {/* Sponsor card - OpenCreator (左侧) */}
         <SponsorCard
           sponsorId="opencreator"
@@ -689,7 +704,7 @@ export function WelcomeScreen({
           logoSrc="/sponsor/opencreator.png"
           logoAlt="OpenCreator"
           name="OpenCreator"
-          note="OpenCreator 帮助我们生成夜晚所有的角色立绘"
+          note={t("welcome.sponsor.cards.openCreator")}
         />
 
         {/* Sponsor card - Bailian (左上) */}
@@ -700,9 +715,9 @@ export function WelcomeScreen({
           rotate="4deg"
           delay={0.15}
           logoSrc="/sponsor/bailian.png"
-          logoAlt="百炼"
-          name="百炼"
-          note="百炼为我们提供部分 AI 模型能力支持"
+          logoAlt="Bailian"
+          name="Bailian"
+          note={t("welcome.sponsor.cards.bailian")}
         />
 
         {/* Sponsor card - Minimax (右上) */}
@@ -715,7 +730,7 @@ export function WelcomeScreen({
           logoSrc="/sponsor/minimax.png"
           logoAlt="Minimax"
           name="Minimax"
-          note="Minimax 帮助我们生成过场音效与白天语音"
+          note={t("welcome.sponsor.cards.minimax")}
         />
 
         {/* Sponsor card - ZenMux (右下) */}
@@ -728,12 +743,13 @@ export function WelcomeScreen({
           logoSrc="/sponsor/zenmux.png"
           logoAlt="ZenMux"
           name="ZenMux"
-          note="聚合全球顶尖大模型，为每一场逻辑博弈注入敏锐灵魂。"
+          note={t("welcome.sponsor.cards.zenmux")}
         />
       </div>
 
       <div className="wc-welcome-actions absolute top-5 right-5 z-20 flex items-center gap-2">
         <div className="hidden sm:flex items-center gap-2">
+          <LocaleSwitcher className="shrink-0" />
           <a
             href="https://github.com/oil-oil/wolfcha"
             target="_blank"
@@ -757,7 +773,7 @@ export function WelcomeScreen({
             className="h-8 text-xs gap-2"
           >
             <Handshake size={16} />
-            成为赞助商
+            {t("welcome.sponsor.action")}
           </Button>
           <Button
             type="button"
@@ -766,7 +782,7 @@ export function WelcomeScreen({
             className="h-8 text-xs gap-2"
           >
             <Users size={16} />
-            加入游戏群
+            {t("welcome.group.title")}
           </Button>
 
           {user ? (
@@ -774,12 +790,14 @@ export function WelcomeScreen({
               type="button"
               onClick={() => setIsUserProfileOpen(true)}
               className="hidden md:flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-              title="查看账号信息"
+              title={t("welcome.account.viewInfo")}
             >
               <UserCircle size={16} />
-              <span className="truncate max-w-[160px]">{user.email ?? "已登录"}</span>
-              {!customKeyEnabled && (
-                <span className="opacity-70">剩余 {creditsLoading ? "..." : (credits ?? 0)} 局</span>
+              <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
+              {customKeyEnabled ? (
+                <span className="opacity-70">{t("customKey.title")}</span>
+              ) : (
+                <span className="opacity-70">{t("welcome.account.remaining", { count: creditsLoading ? "..." : (credits ?? 0) })}</span>
               )}
             </button>
           ) : (
@@ -790,7 +808,7 @@ export function WelcomeScreen({
               className="h-8 text-xs gap-2"
             >
               <UserCircle size={16} />
-              登录/注册
+              {t("welcome.auth.signIn")}
             </Button>
           )}
 
@@ -802,7 +820,7 @@ export function WelcomeScreen({
               className="h-8 text-xs gap-2 md:hidden"
             >
               <UserCircle size={16} />
-              账号信息
+              {t("welcome.account.info")}
             </Button>
           )}
 
@@ -813,11 +831,12 @@ export function WelcomeScreen({
             className="h-8 text-xs gap-2"
           >
             <GearSix size={16} />
-            设置
+            {t("welcome.settings")}
           </Button>
         </div>
 
         <div className="flex sm:hidden items-center gap-2">
+          <LocaleSwitcher className="shrink-0" />
           <Button
             type="button"
             variant="outline"
@@ -825,7 +844,7 @@ export function WelcomeScreen({
             className="h-8 text-xs gap-2"
           >
             <Handshake size={16} />
-            赞助
+            {t("welcome.sponsor.short")}
           </Button>
           <Button
             type="button"
@@ -834,14 +853,14 @@ export function WelcomeScreen({
             className="h-8 text-xs gap-2"
           >
             <Users size={16} />
-            入群
+            {t("welcome.group.short")}
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => setIsMobileMenuOpen(true)}
             className="h-8 w-8 px-0"
-            aria-label="更多操作"
+            aria-label={t("welcome.mobileMenu.more")}
           >
             <DotsThreeOutlineVertical size={18} />
           </Button>
@@ -856,6 +875,23 @@ export function WelcomeScreen({
       >
         <div ref={paperRef} className="wc-contract-paper">
           <div className="wc-contract-borders" aria-hidden="true" />
+
+          {locale === "zh" && (
+            <a
+              href="https://my.feishu.cn/share/base/form/shrcnqLuGo3qyh64vFp2JhCN9CF"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="wc-promo-tag-container"
+              aria-label="赠送次数"
+            >
+              <span className="wc-paper-clip" aria-hidden="true" />
+              <span className="wc-promo-ticket">
+                <span className="wc-shine-effect" aria-hidden="true" />
+                <span className="wc-promo-title">赠送次数</span>
+                <span className="wc-promo-subtitle">Free Rounds</span>
+              </span>
+            </a>
+          )}
 
           {/* Mobile: inline sponsor stamps at top of paper */}
           <div className="wc-paper-sponsors sm:hidden">
@@ -910,26 +946,26 @@ export function WelcomeScreen({
               <PawPrint weight="fill" size={42} />
             </div>
             <div className="wc-contract-title">WOLFCHA</div>
-            <div className="wc-contract-subtitle">The Shadow Game</div>
+            <div className="wc-contract-subtitle">{t("welcome.subtitle")}</div>
           </div>
 
           <div className="mt-7 text-center wc-contract-body">
             <div className="wc-contract-oath">
-              我自愿加入这场关于谎言与真相的游戏。
+              {t("welcome.oath.line1")}
               <br />
-              当夜幕降临，我将隐藏我的身份；
+              {t("welcome.oath.line2")}
               <br />
-              当黎明升起，我将审判罪恶。
+              {t("welcome.oath.line3")}
             </div>
 
             <div className="mt-8">
-              <div className="wc-contract-label">签署你的名字</div>
+              <div className="wc-contract-label">{t("welcome.signature.label")}</div>
               <div className="relative mt-2">
                 <input
                   type="text"
                   value={mounted ? humanName : ""}
                   onChange={(e) => setHumanName(e.target.value)}
-                  placeholder="Signature Here..."
+                  placeholder={t("welcome.signature.placeholder")}
                   className="wc-signature-input"
                   autoComplete="off"
                   autoFocus
@@ -953,7 +989,7 @@ export function WelcomeScreen({
 
           <div className="mt-8 flex flex-col items-center gap-3">
             <div className="wc-seal-hint">
-              {canConfirm ? "按下印章以生效" : "签署名字后才可生效"}
+              {canConfirm ? t("welcome.sealHint.ready") : t("welcome.sealHint.waiting")}
             </div>
             <button
               ref={sealButtonRef}
@@ -987,8 +1023,8 @@ export function WelcomeScreen({
               animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
               transition={{ delay: 0.18, duration: 0.55, ease: "easeOut" }}
             >
-              <div className="wc-transition-title">游戏开始</div>
-              <div className="wc-transition-subtitle">The Game Begins</div>
+              <div className="wc-transition-title">{t("welcome.transition.title")}</div>
+              <div className="wc-transition-subtitle">{t("welcome.transition.subtitle")}</div>
             </motion.div>
           </motion.div>
         )}
@@ -1016,7 +1052,7 @@ export function WelcomeScreen({
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50">
                 <div className="flex items-center gap-2">
                   <Wrench size={20} className="text-yellow-400" />
-                  <span className="font-bold text-white">开发者模式</span>
+                  <span className="font-bold text-white">{t("welcome.dev.title")}</span>
                 </div>
                 <button
                   onClick={() => setIsDevConsoleOpen(false)}
@@ -1037,7 +1073,7 @@ export function WelcomeScreen({
                   : "text-gray-400 hover:text-white hover:bg-gray-800/30"
               }`}
             >
-              预设
+              {t("welcome.dev.tabs.preset")}
             </button>
             <button
               type="button"
@@ -1048,7 +1084,7 @@ export function WelcomeScreen({
                   : "text-gray-400 hover:text-white hover:bg-gray-800/30"
               }`}
             >
-              配置
+              {t("welcome.dev.tabs.roles")}
             </button>
           </div>
 
@@ -1056,13 +1092,13 @@ export function WelcomeScreen({
             {devTab === "preset" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-gray-300">预设场景测试</div>
+                  <div className="text-xs font-semibold text-gray-300">{t("welcome.dev.preset.title")}</div>
                   <button
                     type="button"
                     onClick={() => setDevPreset("")}
                     className="text-xs text-gray-400 hover:text-white"
                   >
-                    清除
+                    {t("welcome.dev.preset.clear")}
                   </button>
                 </div>
                 <select
@@ -1070,9 +1106,9 @@ export function WelcomeScreen({
                   onChange={(e) => setDevPreset(e.target.value as DevPreset | "")}
                   className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400"
                 >
-                  <option value="">无</option>
-                  <option value="MILK_POISON_TEST">毒奶测试</option>
-                  <option value="LAST_WORDS_TEST">遗言测试</option>
+                  <option value="">{t("welcome.dev.preset.none")}</option>
+                  <option value="MILK_POISON_TEST">{t("welcome.dev.preset.milkPoison")}</option>
+                  <option value="LAST_WORDS_TEST">{t("welcome.dev.preset.lastWords")}</option>
                 </select>
               </div>
             )}
@@ -1080,16 +1116,20 @@ export function WelcomeScreen({
             {devTab === "roles" && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-semibold text-gray-300">{`身份配置（${playerCount}人局）`}</div>
+                  <div className="text-xs font-semibold text-gray-300">
+                    {t("welcome.dev.roles.title", { count: playerCount })}
+                  </div>
                   <div className={`text-xs ${roleConfigValid ? "text-green-400" : "text-gray-400"}`}>
-                    {roleConfigValid ? "配置完成" : roleConfigHint}
+                    {roleConfigValid ? t("welcome.dev.roles.ready") : roleConfigHint}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   {fixedRoles.map((role, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="w-10 text-xs text-gray-400">{idx + 1}号</span>
+                      <span className="w-10 text-xs text-gray-400">
+                        {t("welcome.dev.roles.seat", { seat: idx + 1 })}
+                      </span>
                       <select
                         value={role}
                         onChange={(e) => {

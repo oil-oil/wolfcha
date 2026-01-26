@@ -21,7 +21,8 @@ import {
   killPlayer,
   transitionPhase,
 } from "@/lib/game-master";
-import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/game-texts";
+import { getSystemMessages, getUiText } from "@/lib/game-texts";
+import { getI18n } from "@/i18n/translator";
 import { DELAY_CONFIG } from "@/lib/game-constants";
 import { delay } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
@@ -67,6 +68,7 @@ export class DaySpeechPhase extends GamePhase {
   }
 
   getPrompt(context: GameContext, player: Player): PromptResult {
+    const { t } = getI18n();
     const state = context.state;
     const gameContext = buildGameContext(state, player);
     const isGenshinMode = !!state.isGenshinMode;
@@ -74,7 +76,7 @@ export class DaySpeechPhase extends GamePhase {
     const difficultyHint = buildDifficultySpeechHint(state.difficulty);
     const totalSeats = state.players.length;
 
-    const todayTranscript = buildTodayTranscript(state, 9000);
+    const todayTranscript = buildTodayTranscript(state, 10000);
     const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
 
     const todaySpeakers = new Set<string>();
@@ -123,91 +125,48 @@ export class DaySpeechPhase extends GamePhase {
 
     let speakOrderHint = "";
     if (isFirstSpeaker) {
-      speakOrderHint = "你是第1个发言，其他人都还没发言。";
+      speakOrderHint = t("prompts.daySpeech.speakOrder.first");
     } else if (isLastSpeaker) {
-      speakOrderHint = `你是最后一个发言（第${speakOrder}/${totalSpeakers}个），所有人都已经发言完毕，不要说"等X号发言"或"看X号接下来怎么说"这类话。`;
+      speakOrderHint = t("prompts.daySpeech.speakOrder.last", { speakOrder, totalSpeakers });
     } else {
-      const spokenList = spokenPlayers.map((p) => `${p.seat + 1}号`).join("、");
-      const unspokenList = unspokenPlayers.map((p) => `${p.seat + 1}号`).join("、");
-      speakOrderHint = `你是第${speakOrder}/${totalSpeakers}个发言。已发言: ${spokenList || "无"}；未发言: ${unspokenList || "无"}。`;
+      const spokenList = spokenPlayers.map((p) => t("ui.seatNumber", { seat: p.seat + 1 })).join(t("common.listSeparator"));
+      const unspokenList = unspokenPlayers.map((p) => t("ui.seatNumber", { seat: p.seat + 1 })).join(t("common.listSeparator"));
+      speakOrderHint = t("prompts.daySpeech.speakOrder.middle", { speakOrder, totalSpeakers, spokenList: spokenList || t("common.none"), unspokenList: unspokenList || t("common.none") });
     }
 
-    const campaignRequirements = isBadgeSpeech
-      ? `【竞选要求】给出上警理由（信息位、带队能力、对局势判断、站边等）。
-必须给带队承诺或本轮关注点（如：今天先看谁、怎么归票、怎么处理对跳）。
-${hasCandidateList
-  ? `注意：仅有参与竞选的玩家会发言，未竞选玩家（${state.players
+    const nonCandidateList = state.players
       .filter((p) => p.alive && !candidates.includes(p.seat))
-      .map((p) => `${p.seat + 1}号`)
-      .join("、")}）在本环节不会发言。`
-  : "注意：候选人列表为空（异常），请只基于当前可见发言记录进行回应，不要臆测未发言者。"}`
+      .map((p) => t("ui.seatNumber", { seat: p.seat + 1 }))
+      .join(t("common.listSeparator"));
+    const campaignRequirements = isBadgeSpeech
+      ? t("prompts.daySpeech.campaign.badge") + "\n" + (hasCandidateList
+        ? t("prompts.daySpeech.campaign.candidateNote", { list: nonCandidateList })
+        : t("prompts.daySpeech.campaign.emptyCandidateNote"))
       : isPkSpeech
-        ? "【PK要求】指出对手不适合或你更合适的原因，并给出带队承诺或本轮关注点。"
+        ? t("prompts.daySpeech.campaign.pk")
         : "";
 
     // Get role-specific strategy tips
     const roleKnowHow = getRoleKnowHow(player.role);
 
-    const baseCacheable = `【身份】
-你是 ${player.seat + 1}号「${player.displayName}」
-身份: ${getRoleText(player.role)}
-
-【场景】
-这是一个线上狼人杀游戏，玩家通过打字交流。
-
-${getWinCondition(player.role)}
-
-${roleKnowHow}
-
-${persona}
-
-${difficultyHint}`;
-    const taskSection = `【任务】
-${isLastWords ? "你已经出局，现在发表遗言。" : isCampaignSpeech ? "警徽竞选发言阶段，发表你的竞选发言。" : "白天讨论环节，发表你的看法。"}
-${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
+    const baseCacheable = t("prompts.daySpeech.base", {
+      seat: player.seat + 1,
+      name: player.displayName,
+      role: getRoleText(player.role),
+      winCondition: getWinCondition(player.role),
+      persona,
+      difficultyHint,
+    });
+    const taskLine = isLastWords 
+      ? t("prompts.daySpeech.task.lastWords") 
+      : isCampaignSpeech 
+        ? t("prompts.daySpeech.task.campaign") 
+        : t("prompts.daySpeech.task.dayDiscussion");
+    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" });
+    const roleHintLine = player.role === "Werewolf" ? t("prompts.daySpeech.roleHints.werewolf") : player.role === "Seer" ? t("prompts.daySpeech.roleHints.seer") : "";
     const guidelinesSection = isGenshinMode
-      ? `【说话要求】
-1. 只基于当前局势与规则做判断，不要编造人设背景或口头禅。
-2. 发言简洁清晰，说明你这一轮的判断与行动意图。
-3. 仅允许提及有效座位号：1号-${totalSeats}号（严禁出现@12、12号等超出范围的编号）。
-4. **每条消息限制在40字以内**，避免在单条消息中说太多内容。
-
-【严禁事项】
-- 严禁讨论、分析、提及任何已出局玩家（查看【出局玩家】列表）
-- 严禁回应或评价已出局玩家曾经说过的话
-- 严禁推测已出局玩家的身份或动机
-- 只能围绕当前存活玩家进行讨论
-
-【输出格式】
-返回 JSON 字符串数组，每个元素是一条消息气泡。
-每条消息保持简短（不超过40字），分成2-4条自然的短句。
-示例：
-["我倾向先看3号的发言细节。", "今天我会把票集中在2号或3号。"]`
-      : `【核心原则】
-1. **沉浸式扮演**：你就是${player.displayName}，完全融入这个角色的性格和说话习惯。不要只是“模仿”风格，要思考“如果我是他，我现在会怎么想，怎么说”。
-2. **性格鲜明**：如果你的设定是暴躁的，那就表现得不耐烦；如果是蠢萌的，那就表现得迷糊一点。不要因为是游戏就强行变身“逻辑大师”。
-3. **局内优先**：发言以本局信息为主（发言、站边、投票、夜里结果），避免编剧情节或展开场外话题。
-4. **自然对话**：像真人在群聊里打字一样说话。可以是断断续续的短句，可以有感叹、犹豫或情绪化的表达。不要写成“逻辑分析报告”。
-5. **针对性互动**：仔细听前几个人的发言，对他们的观点、语气甚至态度做出反应。如果觉得某人好笑就笑，觉得某人胡扯就怼。
-
-【严禁事项】
-- 严禁讨论、分析、提及任何已出局玩家（查看【出局玩家】列表）
-- 严禁回应或评价已出局玩家曾经说过的话
-- 严禁推测已出局玩家的身份或动机
-- 只能围绕当前存活玩家进行讨论
-
-【说话指南】
-- 允许口语化表达（如：呃、那个、我说...），但不要过度堆砌。
-- 人设只体现在语气和措辞里，不要讲设定经历或个人剧情。
-- 提到其他玩家时，建议使用"X号"（如"3号"），但在语境清晰时也可以用自然代词（"你"、"前面那个"）。
-- 仅允许提及有效座位号：1号-${totalSeats}号（严禁出现@12、12号等超出范围的编号）。
-- 严禁出现剧本括号动作（如：*推眼镜*），只输出语音/文字内容。
-- 分成 2-5 条自然的消息气泡，长短不一，模拟打字节奏。
-
-【输出格式】
-返回 JSON 字符串数组，每个元素是一条消息气泡。
-示例：
-["哎不是...", "3号你这逻辑也太牵强了吧？", "我感觉你就像是在硬找茬，真的。"]`;
+      ? t("prompts.daySpeech.guidelines.genshin", { totalSeats })
+      : t("prompts.daySpeech.guidelines.default", { playerName: player.displayName, totalSeats, roleHintLine });
     const systemParts: SystemPromptPart[] = [
       { text: baseCacheable, cacheable: true, ttl: "1h" },
       { text: taskSection },
@@ -216,23 +175,19 @@ ${campaignRequirements ? `\n${campaignRequirements}` : ""}`;
     const system = buildSystemTextFromParts(systemParts);
 
     const phaseHint = isBadgeSpeech
-      ? "你正在进行警徽竞选发言，请严格满足竞选要求。"
+      ? t("prompts.daySpeech.phaseHint.badge")
       : isPkSpeech
-        ? "你正在进行警徽PK发言，请严格满足PK要求。"
+        ? t("prompts.daySpeech.phaseHint.pk")
         : "";
+    const phaseHintSection = phaseHint ? t("prompts.daySpeech.phaseSection", { phaseHint }) : "";
 
-    const user = `${gameContext}
-
-${todayTranscript ? `【本日讨论记录】\n${todayTranscript}` : `【本日讨论记录】\n（暂无，你是第${speakOrder}个发言）`}
-
-${selfSpeech ? `【你本日已说过的话】\n"${selfSpeech}"` : "【你本日已说过的话】\n（无）"}
-
-${phaseHint ? `【当前环节】\n${phaseHint}` : ""}
-
-【发言顺序】
-${speakOrderHint}
-
-轮到你发言，返回JSON数组：`;
+    const user = t("prompts.daySpeech.user", {
+      gameContext,
+      todayTranscript: todayTranscript || t("prompts.daySpeech.userNoTranscript", { speakOrder }),
+      selfSpeech: selfSpeech || t("prompts.daySpeech.userNoSelfSpeech"),
+      phaseHintSection,
+      speakOrderHint,
+    });
 
     return { system, user, systemParts };
   }
@@ -268,6 +223,11 @@ ${speakOrderHint}
     runtime: DaySpeechRuntime,
     options?: { skipAnnouncements?: boolean }
   ): Promise<void> {
+    const { t } = getI18n();
+    const systemMessages = getSystemMessages();
+    const uiText = getUiText();
+    const speakerHost = t("speakers.host");
+    const speakerHint = t("speakers.hint");
     let currentState = state;
     const skipAnnouncements = options?.skipAnnouncements === true;
 
@@ -284,11 +244,11 @@ ${speakOrderHint}
         if (wolfVictim) {
           currentState = addSystemMessage(
             currentState,
-            SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName)
+            systemMessages.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName)
           );
           runtime.setDialogue(
-            "主持人",
-            SYSTEM_MESSAGES.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName),
+            speakerHost,
+            systemMessages.playerKilled(wolfVictim.seat + 1, wolfVictim.displayName),
             false
           );
           runtime.setGameState(currentState);
@@ -314,11 +274,11 @@ ${speakOrderHint}
           }
           currentState = addSystemMessage(
             currentState,
-            SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName)
+            systemMessages.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName)
           );
           runtime.setDialogue(
-            "主持人",
-            SYSTEM_MESSAGES.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName),
+            speakerHost,
+            systemMessages.playerPoisoned(poisonVictim.seat + 1, poisonVictim.displayName),
             false
           );
           runtime.setGameState(currentState);
@@ -332,8 +292,8 @@ ${speakOrderHint}
       }
 
       if (!hasDeaths) {
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.peacefulNight);
-        runtime.setDialogue("主持人", SYSTEM_MESSAGES.peacefulNight, false);
+        currentState = addSystemMessage(currentState, systemMessages.peacefulNight);
+        runtime.setDialogue(speakerHost, systemMessages.peacefulNight, false);
         runtime.setGameState(currentState);
 
         await playNarrator("peacefulNight");
@@ -372,7 +332,7 @@ ${speakOrderHint}
         }
 
         let speechState = transitionPhase(afterTransferState, "DAY_SPEECH");
-        speechState = addSystemMessage(speechState, SYSTEM_MESSAGES.dayDiscussion);
+        speechState = addSystemMessage(speechState, systemMessages.dayDiscussion);
 
         await playNarrator("discussionStart");
 
@@ -396,7 +356,7 @@ ${speakOrderHint}
           speechDirection,
         };
 
-        runtime.setDialogue("主持人", "请各位玩家依次发言", false);
+        runtime.setDialogue(speakerHost, uiText.speechOrder, false);
         runtime.setGameState(speechState);
 
         await delay(1500);
@@ -405,7 +365,7 @@ ${speakOrderHint}
         if (firstSpeaker && !firstSpeaker.isHuman) {
           await runtime.runAISpeech(speechState, firstSpeaker);
         } else if (firstSpeaker?.isHuman) {
-          runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
+          runtime.setDialogue(speakerHint, uiText.yourTurn, false);
         }
       });
       return;
@@ -423,7 +383,7 @@ ${speakOrderHint}
     }
 
     let speechState = transitionPhase(currentState, "DAY_SPEECH");
-    speechState = addSystemMessage(speechState, SYSTEM_MESSAGES.dayDiscussion);
+    speechState = addSystemMessage(speechState, systemMessages.dayDiscussion);
 
     await playNarrator("discussionStart");
 
@@ -447,7 +407,7 @@ ${speakOrderHint}
       speechDirection,
     };
 
-    runtime.setDialogue("主持人", "请各位玩家依次发言", false);
+    runtime.setDialogue(speakerHost, uiText.speechOrder, false);
     runtime.setGameState(speechState);
 
     await delay(1500);
@@ -456,11 +416,14 @@ ${speakOrderHint}
     if (firstSpeaker && !firstSpeaker.isHuman) {
       await runtime.runAISpeech(speechState, firstSpeaker);
     } else if (firstSpeaker?.isHuman) {
-      runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
+      runtime.setDialogue(speakerHint, uiText.yourTurn, false);
     }
   }
 
   private async advanceSpeaker(state: GameState, runtime: DaySpeechRuntime): Promise<void> {
+    const { t } = getI18n();
+    const uiText = getUiText();
+    const speakerHint = t("speakers.hint");
     if (this.isMovingToNextSpeaker) return;
     this.isMovingToNextSpeaker = true;
 
@@ -534,7 +497,7 @@ ${speakOrderHint}
           if (sheriffPlayer && !sheriffPlayer.isHuman) {
             await runtime.runAISpeech(currentState, sheriffPlayer);
           } else if (sheriffPlayer?.isHuman) {
-            runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
+            runtime.setDialogue(speakerHint, uiText.yourTurn, false);
           }
           return;
         }
@@ -558,7 +521,7 @@ ${speakOrderHint}
           if (sheriffPlayer && !sheriffPlayer.isHuman) {
             await runtime.runAISpeech(currentState, sheriffPlayer);
           } else if (sheriffPlayer?.isHuman) {
-            runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
+            runtime.setDialogue(speakerHint, uiText.yourTurn, false);
           }
           return;
         }
@@ -573,7 +536,7 @@ ${speakOrderHint}
       if (nextPlayer && !nextPlayer.isHuman) {
         await runtime.runAISpeech(currentState, nextPlayer);
       } else if (nextPlayer?.isHuman) {
-        runtime.setDialogue("提示", UI_TEXT.yourTurn, false);
+        runtime.setDialogue(speakerHint, uiText.yourTurn, false);
       }
     } finally {
       this.isMovingToNextSpeaker = false;

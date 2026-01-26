@@ -1,10 +1,19 @@
 import { generateJSON } from "./llm";
-import { AVAILABLE_MODELS, ALL_MODELS, GENERATOR_MODEL, type GameScenario, type ModelRef, type Persona } from "@/types/game";
+import {
+  ALL_MODELS,
+  GENERATOR_MODEL,
+  PLAYER_MODELS,
+  filterPlayerModels,
+  type GameScenario,
+  type ModelRef,
+  type Persona,
+} from "@/types/game";
 import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
 import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
-import { resolveVoiceId, VOICE_PRESETS } from "./voice-constants";
+import { resolveVoiceId, VOICE_PRESETS, type AppLocale } from "./voice-constants";
+import { getI18n } from "@/i18n/translator";
 
 export interface GeneratedCharacter {
   displayName: string;
@@ -40,8 +49,8 @@ function shuffleArray<T>(array: T[]): T[] {
 export const sampleModelRefs = (count: number): ModelRef[] => {
   // Default pool when custom key is not enabled
   const defaultPool =
-    AVAILABLE_MODELS.length > 0
-      ? AVAILABLE_MODELS
+    PLAYER_MODELS.length > 0
+      ? PLAYER_MODELS
       : [{ provider: "zenmux" as const, model: GENERATOR_MODEL }];
 
   const pool = (() => {
@@ -55,8 +64,10 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
     if (hasDashscopeKey()) allowedProviders.add("dashscope");
     if (allowedProviders.size === 0) return defaultPool;
 
-    // Filter by allowed providers
-    const allowedPool = fullPool.filter((ref) => allowedProviders.has(ref.provider));
+    // Filter by allowed providers, then exclude non-player models
+    const allowedPool = filterPlayerModels(
+      fullPool.filter((ref) => allowedProviders.has(ref.provider))
+    );
     if (allowedPool.length === 0) return defaultPool;
 
     // Filter by user's selected models
@@ -92,28 +103,9 @@ type NicknameItem = { model: string; nicknames: string[] };
 const nicknameCache = new Map<string, string[]>();
 
 const buildNicknamePrompt = (requirements: Array<{ model: string; count: number }>) => {
+  const { t } = getI18n();
   const list = requirements.map((r) => `- ${r.model} x${r.count}`).join("\n");
-
-  return `你是取名助手，为模型英文名生成中文昵称。
-
-【模型列表】
-${list}
-
-【要求】
-1. 每个模型给对应数量的昵称（同一模型昵称彼此不同）
-2. 1-4 字为主，可中英混合
-3. 有趣、好记，能呼应英文名
-4. items[].model 必须与上方列表中的模型名称完全一致
-5. 不要重复，不要加引号或编号
-
-【输出 JSON】
-{
-  "items": [
-    { "model": "ModelX", "nicknames": ["小X", "X仔"] }
-  ]
-}
-
-现在输出：`;
+  return t("characterGenerator.nicknamePrompt", { list });
 };
 
 const normalizeNicknameResponse = (raw: unknown): Map<string, string[]> => {
@@ -281,43 +273,13 @@ const isValidBaseProfiles = (profiles: any, count: number): profiles is BaseProf
 };
 
 const buildBaseProfilesPrompt = (count: number, scenario: GameScenario) => {
-  return `你是一个狼人杀游戏的角色设计师。
-
-【当前剧本背景】
-标题：${scenario.title}
-背景：${scenario.description}
-角色建议：${scenario.rolesHint}
-
-【任务】
-生成 ${count} 个玩家角色档案。这些是"玩狼人杀的普通人"，不是悬疑剧本的角色。
-
-【重要】
-- 这是狼人杀游戏，角色需要能正常讨论、投票、发言
-- 口头禅要像口语习惯/语气词/连接词，避免夸张或“动漫式”口癖
-- 口头禅只是偶尔使用，不要每句话都重复或固定句尾
-- 背景是普通人的职业/身份，不要悬疑剧情
-- 角色要有性格差异，但说话方式要正常
-
-【输出要求】
-1. 必须严格输出 JSON 对象
-2. 必须恰好 ${count} 个档案
-3. 每个档案字段：
-   - displayName: string（符合场景的名字，2-3个字）
-   - gender: "male" | "female"
-   - age: number（20-55）
-   - mbti: string（4字母，如 INTJ/ENFP）
-   - basicInfo: string（一句话职业/身份，如"开出租的老司机"、"刚毕业的大学生"）
-4. 名字必须各不相同
-
-【示例】
-{
-  "profiles": [
-    { "displayName": "张伟", "gender": "male", "age": 35, "mbti": "ESTJ", "basicInfo": "开了十年出租车的老司机" },
-    { "displayName": "林小雨", "gender": "female", "age": 24, "mbti": "ENFP", "basicInfo": "互联网公司的产品经理" }
-  ]
-}
-
-现在输出：`;
+  const { t } = getI18n();
+  return t("characterGenerator.baseProfilesPrompt", {
+    count,
+    title: scenario.title,
+    description: scenario.description,
+    rolesHint: scenario.rolesHint,
+  });
 };
 
 const normalizeGeneratedCharacters = (
@@ -396,48 +358,34 @@ const alignCharactersToProfiles = (
 };
 
 const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfile[]) => {
+  const { t } = getI18n();
   const roster = allProfiles
-    .map((p, i) => `${i + 1}. ${p.displayName} (${p.gender}, ${p.age}岁) - ${p.basicInfo}`)
+    .map((p, i) =>
+      t("characterGenerator.rosterLine", {
+        index: i + 1,
+        name: p.displayName,
+        gender: p.gender,
+        age: p.age,
+        basicInfo: p.basicInfo,
+      })
+    )
     .join("\n");
 
   const schema = allProfiles
     .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return `你是狼人杀游戏的角色设计师。
-
-【场景】
-${scenario.title} - ${scenario.description}
-
-【全员档案】
-${roster}
-
-【任务】
-为每个角色补全 persona，让他们在狼人杀游戏中有自然且有辨识度的说话风格。
-请自由发挥，确保每个人的性格、说话习惯和表达节奏都有明显差异，但整体像真实玩家而不是戏剧角色。
-
-【重要约束】
-- 这是狼人杀游戏，角色需要能正常讨论、分析、投票
-- 角色发言需聚焦局内，不要引导编剧情节或场外聊天
-- voiceRules 需体现具体说话特征
-- styleLabel 用简短标签概括性格或表达方式
-
-【输出要求】
-1. 必须输出 JSON：{ "characters": [...] }
-2. 必须恰好 ${allProfiles.length} 个角色，顺序与档案一致
-3. persona.gender/age/mbti 必须与档案完全一致
-
-【输出结构】
-{
-  "characters": [
-${schema}
-  ]
-}
-
-现在输出：`;
+  return t("characterGenerator.fullPersonasPrompt", {
+    title: scenario.title,
+    description: scenario.description,
+    roster,
+    count: allProfiles.length,
+    schema,
+  });
 };
 
 const buildRepairBaseProfilesPrompt = (count: number, scenario: GameScenario, raw: unknown) => {
+  const { t } = getI18n();
   const rawStr = (() => {
     try {
       return JSON.stringify(raw);
@@ -446,30 +394,16 @@ const buildRepairBaseProfilesPrompt = (count: number, scenario: GameScenario, ra
     }
   })();
 
-  return `你是一个严格的 JSON 修复器。
-
-【目标】
-把输入修复成严格 JSON 对象，结构为 { "profiles": [...] }，并确保 profiles 恰好 ${count} 个。
-
-【字段要求】
-- displayName: string
-- gender: "male" | "female" | "nonbinary"
-- age: number（16-70）
-- mbti: string（4 字母，例如 INTJ/ENFP）
-- basicInfo: string
-
-【场景】
-${scenario.title}
-${scenario.description}
-
-【输入】
-${rawStr}
-
-【输出】
-只输出 JSON：`;
+  return t("characterGenerator.repairBaseProfilesPrompt", {
+    count,
+    title: scenario.title,
+    description: scenario.description,
+    raw: rawStr,
+  });
 };
 
 const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfile[], raw: unknown) => {
+  const { t } = getI18n();
   const rawStr = (() => {
     try {
       return JSON.stringify(raw);
@@ -479,41 +413,28 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
   })();
 
   const roster = allProfiles
-    .map((p, i) => `${i + 1}. ${p.displayName} (${p.gender}) - ${p.basicInfo}`)
+    .map((p, i) =>
+      t("characterGenerator.rosterLineSimple", {
+        index: i + 1,
+        name: p.displayName,
+        gender: p.gender,
+        basicInfo: p.basicInfo,
+      })
+    )
     .join("\n");
 
   const schema = allProfiles
     .map((p) => `  { "displayName": "${p.displayName}", "persona": { "styleLabel": string, "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
-  return `你是一个严格的 JSON 修复器。
-
-【目标】
-把输入修复成严格 JSON 对象，结构为 { "characters": [...] }，并确保 characters 恰好 ${allProfiles.length} 个。
-
-【必须严格满足】
-1. characters 顺序必须与基础档案一致
-2. persona.gender/age/mbti 必须与对应档案一致
-3. styleLabel 和 voiceRules 保持原样或合理修复，不要替换成固定模板
-
-【场景】
-${scenario.title}
-${scenario.description}
-
-【全员基础档案】
-${roster}
-
-【输入】
-${rawStr}
-
-【输出】
-{
-  "characters": [
-${schema}
-  ]
-}
-
-注意：只输出 JSON，不要解释。`;
+  return t("characterGenerator.repairFullPersonasPrompt", {
+    title: scenario.title,
+    description: scenario.description,
+    roster,
+    raw: rawStr,
+    count: allProfiles.length,
+    schema,
+  });
 };
 
 export async function generateCharacters(
@@ -589,10 +510,13 @@ export async function generateCharacters(
     const finalizedCharacters = alignedCharacters.map((c, index) => {
       const profile = baseProfiles[index];
       // 分配 Voice ID：按性别 + 年龄选择（缺失/非法时兜底到默认音色）
+      // Note: We always store Chinese voice ID at generation time.
+      // Runtime resolution (useDayPhase) will switch to English based on current locale.
       const voiceId = resolveVoiceId(
         c.persona.voiceId,
         c.persona.gender,
-        c.persona.age
+        c.persona.age,
+        "zh" as AppLocale
       );
 
       const character: GeneratedCharacter = {

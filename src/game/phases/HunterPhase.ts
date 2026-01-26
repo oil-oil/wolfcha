@@ -8,6 +8,7 @@ import {
   getWinCondition,
   buildSystemTextFromParts,
 } from "@/lib/prompt-utils";
+import { getI18n } from "@/i18n/translator";
 
 export class HunterPhase extends GamePhase {
   async onEnter(_context: GameContext): Promise<void> {
@@ -15,6 +16,7 @@ export class HunterPhase extends GamePhase {
   }
 
   getPrompt(context: GameContext, player: Player): PromptResult {
+    const { t } = getI18n();
     const state = context.state;
     const gameContext = buildGameContext(state, player);
     const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
@@ -22,33 +24,24 @@ export class HunterPhase extends GamePhase {
       (p) => p.alive && p.playerId !== player.playerId
     );
 
-    const cacheableContent = `【身份】
-你是 ${player.seat + 1}号「${player.displayName}」
-身份: 猎人（好人阵营）
-
-${getWinCondition("Hunter")}
-
-${difficultyHint}`;
-    const dynamicContent = `【任务】
-你已死亡，现在可以开枪带走一人。
-本环节只需要给出座位数字或 pass，不要分析，不要角色扮演。
-
-可选: ${alivePlayers.map((p) => `${p.seat + 1}号(${p.displayName})`).join(", ")}
-`;
+    const cacheableContent = t("prompts.hunter.base", {
+      seat: player.seat + 1,
+      name: player.displayName,
+      role: getRoleText(player.role),
+      winCondition: getWinCondition("Hunter"),
+      difficultyHint,
+    });
+    const options = alivePlayers
+      .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
+      .join(t("promptUtils.gameContext.listSeparator"));
+    const dynamicContent = t("prompts.hunter.task", { options });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
       { text: dynamicContent },
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = `${gameContext}
-
-你要带走几号？
-
-【格式】
-只回复座位数字，如: 5
-如果不想开枪，回复: pass
-不要解释，不要输出多余文字，不要代码块`;
+    const user = t("prompts.hunter.user", { context: gameContext });
 
     return { system, user, systemParts };
   }

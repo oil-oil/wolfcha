@@ -72,17 +72,23 @@ export const PHASE_CATEGORIES = {
   SPECIAL_PHASES: ["BADGE_TRANSFER", "HUNTER_SHOOT", "GAME_END"] as const,
 } as const;
 
-/** 角色中文名映射 */
-export const ROLE_NAMES: Record<string, string> = {
-  Werewolf: "狼人",
-  Seer: "预言家",
-  Witch: "女巫",
-  Hunter: "猎人",
-  Guard: "守卫",
-  Villager: "村民",
-} as const;
+import { getI18n } from "@/i18n/translator";
 
-/** 获取角色中文名 */
+/** 获取角色名称（国际化） */
 export function getRoleName(role: string): string {
-  return ROLE_NAMES[role] ?? "村民";
+  const { t } = getI18n();
+  switch (role) {
+    case "Werewolf":
+      return t("roles.werewolf");
+    case "Seer":
+      return t("roles.seer");
+    case "Witch":
+      return t("roles.witch");
+    case "Hunter":
+      return t("roles.hunter");
+    case "Guard":
+      return t("roles.guard");
+    default:
+      return t("roles.villager");
+  }
 }

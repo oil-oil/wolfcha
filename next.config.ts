@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   // Note: Removed 'output: "standalone"' - not needed for Vercel deployment
   // standalone mode is for Docker/self-hosted environments and makes deploy much larger
   reactCompiler: true,
+  async rewrites() {
+    return [
+      { source: "/zh", destination: "/" },
+      { source: "/zh/", destination: "/" },
+    ];
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version ?? "0.0.0",
   },

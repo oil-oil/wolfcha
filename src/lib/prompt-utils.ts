@@ -1,67 +1,46 @@
 import type { DifficultyLevel, GameState, Player, DailySummaryVoteData } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
-import { SYSTEM_MESSAGES } from "./game-texts";
+import { getSystemMessages } from "./game-texts";
+import { getI18n } from "@/i18n/translator";
 
 /**
  * Prompt helper utilities used by Phase prompts.
  */
 
 export const getRoleText = (role: string) => {
+  const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return "狼人（坏人阵营）";
+      return t("promptUtils.roleText.werewolf");
     case "Seer":
-      return "预言家（好人阵营，每晚可查验一人身份）";
+      return t("promptUtils.roleText.seer");
     case "Witch":
-      return "女巫（好人阵营，有一瓶解药可救人，一瓶毒药可毒人）";
+      return t("promptUtils.roleText.witch");
     case "Hunter":
-      return "猎人（好人阵营，死亡时可开枪带走一人）";
+      return t("promptUtils.roleText.hunter");
     case "Guard":
-      return "守卫（好人阵营，每晚可保护一人不被狼人杀害）";
+      return t("promptUtils.roleText.guard");
     default:
-      return "村民（好人阵营）";
+      return t("promptUtils.roleText.villager");
   }
 };
 
 export const getWinCondition = (role: string) => {
+  const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return `【获胜条件】狼人数量 >= 好人数量 时狼人胜利
-【核心目标】
-- 每晚与狼队友商议击杀目标，优先杀神职（预言家>女巫>猎人>守卫）
-- 白天伪装好人，引导论放逐好人
-- 保护狼队友，避免被集火`;
+      return t("promptUtils.winCondition.werewolf");
     case "Seer":
-      return `【获胜条件】放逐所有狼人时好人胜利
-【核心目标】
-- 每晚查验可疑玩家，積累信息
-- 选择合适时机公开身份，带领好人放逐狼人
-- 注意保护自己，预言家是狼人首要击杀目标`;
+      return t("promptUtils.winCondition.seer");
     case "Witch":
-      return `【获胜条件】放逐所有狼人时好人胜利
-【核心目标】
-- 解药谨慎使用，救关键神职或确定的好人
-- 毒药留给确认的狼人或危险玩家
-- 注意：女巫不能自救，每晚最多用一瓶药`;
+      return t("promptUtils.winCondition.witch");
     case "Hunter":
-      return `【获胜条件】放逐所有狼人时好人胜利
-【核心目标】
-- 白天積极发言，分析局势
-- 死亡时可开枪带走一人，留给确认的狼人
-- 注意：被毒死无法开枪`;
+      return t("promptUtils.winCondition.hunter");
     case "Guard":
-      return `【获胜条件】放逐所有狼人时好人胜利
-【核心目标】
-- 每晚保护可能被狼人击杀的玩家
-- 不能连续两晚保护同一人
-- 根据场上信息判断狼人的击杀目标`;
+      return t("promptUtils.winCondition.guard");
     default:
-      return `【获胜条件】放逐所有狼人时好人胜利
-【核心目标】
-- 白天认真听发言，分析每个人的行为
-- 通过投票放逐狼人
-- 配合神职的引导`;
+      return t("promptUtils.winCondition.villager");
   }
 };
 
@@ -70,156 +49,103 @@ export const getWinCondition = (role: string) => {
  * These tips are tailored to each role to prevent homogenization
  */
 export const getRoleKnowHow = (role: string): string => {
+  const { t } = getI18n();
   switch (role) {
     case "Werewolf":
-      return `<role_tips>
-- 刀人优先级：预言家 > 女巫 > 猎人 > 守卫 > 有威胁的村民
-- 悍跳时机：真预言家暴露后可考虑悍跳，分散好人火力
-- 站边技巧：适度踩队友制造分歧，但关键投票要保队友
-- 发言策略：不要过于沉默也不要太激进，保持自然节奏
-- 投票陷阱：避免多狼抱团投票暴露狼坑，可以分散投票
-- 躲刀意识：如果你状态好，可以让队友先被关注
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
+      return t.raw("promptUtils.roleKnowHow.werewolf");
     case "Seer":
-      return `<role_tips>
-- 跳身份时机：首验狼可考虑首天跳带节奏；首验好人可先观察
-- 报验顺序：先报狼后报好人，信息价值更高
-- 首验策略：可验边缘位或发言有问题的人，避免验明显好人
-- 应对对跳：要求对方先报验，观察对方查验逻辑是否合理
-- 自保意识：你是狼人首刀目标，注意暗示守卫保护
-- 遗言准备：如果感觉要死，提前想好遗言报验内容
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
+      return t.raw("promptUtils.roleKnowHow.seer");
     case "Witch":
-      return `<role_tips>
-- 首夜用药：通常建议首夜不救，除非被刀的是明确的神职
-- 解药原则：救确定的好人或关键神职，不要救身份不明的人
-- 毒药时机：留给确认的狼人，不要冲动毒人
-- 信息隐藏：不要轻易暴露你的用药情况，这是重要信息
-- 自救规则：记住你不能自救，被刀就是死
-- 站边价值：你知道谁被刀了，这是判断狼人的重要线索
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
+      return t.raw("promptUtils.roleKnowHow.witch");
     case "Hunter":
-      return `<role_tips>
-- 开枪时机：死亡时可开枪，优先带走确认的狼人
-- 诈身份：可以适当诈身份试探，但不要太早暴露
-- 被毒规则：被女巫毒死无法开枪，注意这个限制
-- 遗言价值：如果被投票出局，遗言后可以开枪
-- 威慑作用：狼人知道你是猎人会有顾虑，可以利用这点
-- 保命意识：你的开枪权很有价值，尽量活到关键时刻
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
+      return t.raw("promptUtils.roleKnowHow.hunter");
     case "Guard":
-      return `<role_tips>
-- 保护优先级：预言家 > 女巫 > 其他神职 > 关键好人
-- 连续保护：不能连续两晚保护同一人，注意规划
-- 读刀意识：根据场上局势判断狼人今晚会刀谁
-- 空刀判断：如果你保护的人没死，狼人可能刀了别人
-- 信息隐藏：不要轻易暴露你保护过谁，这是重要信息
-- 配合预言家：如果预言家跳了，优先考虑保护
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
-    default: // Villager
-      return `<role_tips>
-- 听牌技巧：认真听每个人的发言，找矛盾和破绽
-- 站边时机：有足够信息后再站边，不要盲目跟风
-- 归票配合：配合神职的归票指令，形成票型优势
-- 发言价值：作为村民也要积极发言，提供你的判断
-- 投票谨慎：不要轻易投票给没有证据的人
-- 认清局势：理解当前是几狼几好人的局面
-- 关注死亡信息：若有玩家夜晚出局，发言时需对死因做出反应
-</role_tips>`;
+      return t.raw("promptUtils.roleKnowHow.guard");
+    default:
+      return t.raw("promptUtils.roleKnowHow.villager");
   }
 };
 
 export const buildDifficultySpeechHint = (difficulty: DifficultyLevel): string => {
+  const { t } = getI18n();
   switch (difficulty) {
     case "easy":
-      return `【难度】新手局（轻松、直觉）
-【风格指令】
-- 以直觉和情绪为主，少做复杂推理或多轮逻辑链
-- 更容易相信他人或随主流观点
-- 狼人：更谨慎保命，少用高阶战术，可出现小破绽
-- 好人：更多跟随信息位，少强推`;
+      return t("promptUtils.difficultySpeech.easy");
     case "hard":
-      return `【难度】高阶局（深度对抗）
-【风格指令】
-- 记录并对照发言顺序、立场变化、投票链条、收益关系
-- 主动构建论点与反证，识别搅局、钓鱼、伪逻辑
-- 狼人：分工掩护、软站边+关键时刻转向、制造信息差与误导
-- 好人：强势质询、反制带节奏、精准点狼`;
+      return t("promptUtils.difficultySpeech.hard");
     default:
-      return `【难度】标准局（均衡推理）
-【风格指令】
-- 关注发言矛盾、站边变化、投票去向
-- 观点清晰但不过度武断
-- 狼人：以自然逻辑自证，适度带节奏
-- 好人：必要时强势归票`;
+      return t("promptUtils.difficultySpeech.normal");
   }
 };
 
 export const buildDifficultyDecisionHint = (difficulty: DifficultyLevel, role: string): string => {
+  const { t } = getI18n();
   const roleNote =
     role === "Werewolf"
-      ? "狼人侧更关注击杀收益与神职威胁。"
-      : "好人侧更关注信息价值与可信度。";
+      ? t("promptUtils.difficultyDecision.roleNoteWerewolf")
+      : t("promptUtils.difficultyDecision.roleNoteGood");
 
   switch (difficulty) {
     case "easy":
-      return `【难度策略】偏直觉与从众，不追求最优解。${roleNote}`;
+      return t("promptUtils.difficultyDecision.easy", { roleNote });
     case "hard":
-      return `【难度策略】追求最优策略，结合投票链、发言动机与收益关系决策。${roleNote}`;
+      return t("promptUtils.difficultyDecision.hard", { roleNote });
     default:
-      return `【难度策略】平衡风险与收益，避免明显逆逻辑选择。${roleNote}`;
+      return t("promptUtils.difficultyDecision.normal", { roleNote });
   }
 };
 
 export const buildPersonaSection = (player: Player, isGenshinMode: boolean = false): string => {
   if (isGenshinMode || !player.agentProfile) return "";
+  const { t } = getI18n();
   const { persona } = player.agentProfile;
+  const separator = t("promptUtils.gameContext.listSeparator");
 
-  return `【角色设定】
-性格: ${persona.styleLabel}
-说话习惯: ${persona.voiceRules.join("、")}`;
+  return t("promptUtils.persona.section", {
+    styleLabel: persona.styleLabel,
+    voiceRules: persona.voiceRules.join(separator),
+    riskLabel: t("promptUtils.persona.riskBalanced")
+  });
 };
 
 export const buildAliveCountsSection = (state: GameState): string => {
+  const { t } = getI18n();
   const alive = state.players.filter((p) => p.alive);
 
-  return `【人数概况】
-总存活: ${alive.length}`;
+  return t("promptUtils.aliveCounts", { count: alive.length });
 };
 
 /** Format structured vote_data into readable text for <history>. Seat numbers in vote_data are 0-based. */
 function formatVoteDataForHistory(v: DailySummaryVoteData): string {
+  const { t } = getI18n();
+  const separator = t("promptUtils.gameContext.listSeparator");
   const parts: string[] = [];
   const fmt = (votes: Record<string, number[]>) =>
     Object.entries(votes)
       .map(([target, arr]) => {
-        const voters = (arr as number[]).map((s) => `${s + 1}号`).join("、");
-        const t = Number.parseInt(target, 10);
-        return `${voters}投给${Number.isFinite(t) ? t + 1 : target}号`;
+        const voters = (arr as number[]).map((s) => t("promptUtils.gameContext.seatLabel", { seat: s + 1 })).join(separator);
+        const targetNum = Number.parseInt(target, 10);
+        return t("promptUtils.gameContext.votersVotedFor", { voters, target: Number.isFinite(targetNum) ? targetNum + 1 : target });
       })
       .filter(Boolean)
-      .join("；");
+      .join(t("promptUtils.gameContext.semicolon"));
   if (v.sheriff_election) {
     const { winner, votes } = v.sheriff_election;
-    const base = `【警长投票】${winner + 1}号当选`;
+    const base = t("promptUtils.gameContext.sheriffVote", { seat: winner + 1 });
     const detail = fmt(votes);
-    parts.push(detail ? `${base}；${detail}` : base);
+    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
   }
   if (v.execution_vote) {
     const { eliminated, votes } = v.execution_vote;
-    const base = `【公投】${eliminated + 1}号出局`;
+    const base = t("promptUtils.gameContext.executionVote", { seat: eliminated + 1 });
     const detail = fmt(votes);
-    parts.push(detail ? `${base}；${detail}` : base);
+    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
   }
   return parts.join(" ");
 }
 
 export const buildDailySummariesSection = (state: GameState): string => {
+  const { t } = getI18n();
   // Get summaries from dailySummaries (new format: single paragraph text)
   const entries = Object.entries(state.dailySummaries || {})
     .map(([day, bullets]) => ({ day: Number(day), bullets }))
@@ -241,7 +167,8 @@ export const buildDailySummariesSection = (state: GameState): string => {
     // Append structured vote_data so "who voted for whom" is never lost
     const voteData = state.dailySummaryVoteData?.[day];
     const voteText = voteData ? formatVoteDataForHistory(voteData) : "";
-    const line = voteText ? `【第${day}天】${fullSummary} ${voteText}` : `【第${day}天】${fullSummary}`;
+    const dayLabel = t("promptUtils.gameContext.dayLabel", { day });
+    const line = voteText ? `${dayLabel}${fullSummary} ${voteText}` : `${dayLabel}${fullSummary}`;
     lines.push(line);
   }
 
@@ -250,17 +177,21 @@ export const buildDailySummariesSection = (state: GameState): string => {
 };
 
 export const getDayStartIndex = (state: GameState): number => {
+  const systemMessages = getSystemMessages();
   for (let i = state.messages.length - 1; i >= 0; i--) {
     const m = state.messages[i];
-    if (m.isSystem && (m.content === "天亮了" || m.content === SYSTEM_MESSAGES.dayBreak)) return i;
+    // Match both Chinese and English versions
+    if (m.isSystem && (m.content === "天亮了" || m.content === "Dawn breaks, please open your eyes" || m.content === systemMessages.dayBreak)) return i;
   }
   return 0;
 };
 
 export const getVoteStartIndex = (state: GameState): number => {
+  const systemMessages = getSystemMessages();
   for (let i = state.messages.length - 1; i >= 0; i--) {
     const m = state.messages[i];
-    if (m.isSystem && (m.content === "进入投票环节" || m.content === SYSTEM_MESSAGES.voteStart)) return i;
+    // Match both Chinese and English versions
+    if (m.isSystem && (m.content === "进入投票环节" || m.content === "发言结束，开始投票。" || m.content === "Discussion ends, voting begins." || m.content === systemMessages.voteStart)) return i;
   }
   return state.messages.length;
 };
@@ -304,6 +235,7 @@ export const buildTodayTranscript = (
   maxChars: number,
   options?: { includeDeadSpeech?: boolean }
 ): string => {
+  const { t } = getI18n();
   const dayStartIndex = getDayStartIndex(state);
   const voteStartIndex = getVoteStartIndex(state);
 
@@ -333,8 +265,8 @@ export const buildTodayTranscript = (
 
   const formatMessage = (m: typeof slice[0]) => {
     const isAlive = playerAliveMap.get(m.playerId) ?? true;
-    const statusLabel = isAlive ? "" : "（已出局）";
-    const lastWordsLabel = m.isLastWords ? "【遗言】" : "";
+    const statusLabel = isAlive ? "" : t("promptUtils.gameContext.eliminated");
+    const lastWordsLabel = m.isLastWords ? t("promptUtils.gameContext.lastWordsLabel") : "";
     return `${lastWordsLabel}${m.playerName}${statusLabel}: ${m.content}`;
   };
 
@@ -360,7 +292,7 @@ export const buildTodayTranscript = (
       .map((s) => String(s).trim())
       .filter(Boolean)
       .slice(0, 8)
-      .join("；");
+      .join(t("promptUtils.gameContext.semicolon"));
     const header = `<early_summary>${summaryText}</early_summary>\n<recent_speech>\n`;
     const footer = `\n</recent_speech>`;
     
@@ -413,7 +345,13 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
   const systemLines = slice
     .filter((m) => m.isSystem)
     .map((m) => String(m.content || "").trim())
-    .filter((c) => c && c !== "天亮了" && c !== SYSTEM_MESSAGES.dayBreak && c !== "进入投票环节" && c !== SYSTEM_MESSAGES.voteStart);
+    .filter((c) => {
+      if (!c) return false;
+      const systemMessages = getSystemMessages();
+      // Filter out dawn and vote start messages in both locales
+      const excluded = ["天亮了", "Dawn breaks, please open your eyes", systemMessages.dayBreak, "进入投票环节", "发言结束，开始投票。", "Discussion ends, voting begins.", systemMessages.voteStart];
+      return !excluded.includes(c);
+    });
 
   const limit = Math.max(0, maxLines);
   if (limit === 0 || systemLines.length === 0) return "";
@@ -423,8 +361,10 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
 
 export const buildGameContext = (
   state: GameState,
-  player: Player
+  player: Player,
+  options?: { excludePendingDeaths?: boolean }
 ): string => {
+  const { t } = getI18n();
   const alivePlayers = state.players.filter((p) => p.alive);
   const deadPlayers = state.players.filter((p) => !p.alive);
   const totalSeats = state.players.length;
@@ -433,24 +373,24 @@ export const buildGameContext = (
   const aliveSeats = alivePlayers.map((p) => p.seat + 1);
   const deadInfo = deadPlayers.map((p) => {
     // Find death info
-    let cause = "unknown";
+    let cause = t("promptUtils.gameContext.deathCauseUnknown");
     let deathDay = 0;
     for (const [day, history] of Object.entries(state.nightHistory || {})) {
-      if (history.wolfTarget === p.seat) { cause = "狼杀"; deathDay = Number(day); }
-      if (history.witchPoison === p.seat) { cause = "毒杀"; deathDay = Number(day); }
+      if (history.wolfTarget === p.seat) { cause = t("promptUtils.gameContext.deathCauseWolf"); deathDay = Number(day); }
+      if (history.witchPoison === p.seat) { cause = t("promptUtils.gameContext.deathCausePoison"); deathDay = Number(day); }
     }
     for (const [day, history] of Object.entries(state.dayHistory || {})) {
-      if (history.executed?.seat === p.seat) { cause = "投票"; deathDay = Number(day); }
+      if (history.executed?.seat === p.seat) { cause = t("promptUtils.gameContext.deathCauseVote"); deathDay = Number(day); }
     }
     return `{seat: ${p.seat + 1}, name: ${p.displayName}, day: ${deathDay}, cause: ${cause}}`;
   });
 
   const sheriffSeat = state.badge.holderSeat;
-  const sheriffInfo = sheriffSeat !== null ? sheriffSeat + 1 : "无";
+  const sheriffInfo = sheriffSeat !== null ? sheriffSeat + 1 : t("promptUtils.gameContext.noSheriff");
 
   let context = `<game_state>
 day: ${state.day}
-phase: ${state.phase.includes("NIGHT") ? "夜晚" : "白天"}
+phase: ${state.phase.includes("NIGHT") ? t("promptUtils.gameContext.night") : t("promptUtils.gameContext.day")}
 you: {seat: ${player.seat + 1}, name: ${player.displayName}}
 total_seats: ${totalSeats}
 alive: [${aliveSeats.join(", ")}]
@@ -461,9 +401,14 @@ alive_count: ${alivePlayers.length}
 
   // Add alive players list for reference
   const playerList = alivePlayers
-    .map((p) => `  - ${p.seat + 1}号 ${p.displayName}${p.playerId === player.playerId ? " (你)" : ""}`)
+    .map((p) => `  - ${t("promptUtils.gameContext.seatLabel", { seat: p.seat + 1 })} ${p.displayName}${p.playerId === player.playerId ? t("promptUtils.gameContext.youSuffix") : ""}`)
     .join("\n");
   context += `\n\n<alive_players>\n${playerList}\n</alive_players>`;
+
+  const wolfFriendlyFireNote = t("promptUtils.gameContext.wolfFriendlyFireNote");
+  if (wolfFriendlyFireNote) {
+    context += `\n\n<rules>\n${wolfFriendlyFireNote}\n</rules>`;
+  }
 
   const summarySection = buildDailySummariesSection(state);
   if (summarySection) {
@@ -476,47 +421,49 @@ alive_count: ${alivePlayers.length}
   }
 
   if (deadPlayers.length > 0) {
-    // Build today's deaths info
-    const currentDayDeaths: string[] = [];
-    const nightHistory = state.nightHistory?.[state.day];
-    if (nightHistory?.wolfTarget !== undefined) {
-      const p = state.players.find(p => p.seat === nightHistory.wolfTarget);
-      if (p && !p.alive) {
-        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 狼杀}`);
-      }
-    }
-    if (nightHistory?.witchPoison !== undefined) {
-      const p = state.players.find(p => p.seat === nightHistory.witchPoison);
-      if (p && !p.alive) {
-        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 毒杀}`);
-      }
-    }
-    if (nightHistory?.deaths && Array.isArray(nightHistory.deaths)) {
-      nightHistory.deaths.forEach(death => {
-        if (death && typeof death.seat === 'number') {
-          const p = state.players.find(p => p.seat === death.seat);
-          if (p && !p.alive) {
-            const cause = death.reason === 'wolf' ? '狼杀' : death.reason === 'poison' ? '毒杀' : '死亡';
-            currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${cause}}`);
-          }
+    // Build today's deaths info (skip if excludePendingDeaths is true - deaths not announced yet)
+    if (!options?.excludePendingDeaths) {
+      const currentDayDeaths: string[] = [];
+      const nightHistory = state.nightHistory?.[state.day];
+      if (nightHistory?.wolfTarget !== undefined) {
+        const p = state.players.find(p => p.seat === nightHistory.wolfTarget);
+        if (p && !p.alive) {
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${t("promptUtils.gameContext.deathCauseWolf")}}`);
         }
-      });
-    }
-    const dayHistory = state.dayHistory?.[state.day];
-    if (dayHistory?.executed && typeof dayHistory.executed.seat === 'number') {
-      const executedSeat = dayHistory.executed.seat;
-      const p = state.players.find(p => p.seat === executedSeat);
-      if (p) {
-        currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: 投票}`);
       }
-    }
+      if (nightHistory?.witchPoison !== undefined) {
+        const p = state.players.find(p => p.seat === nightHistory.witchPoison);
+        if (p && !p.alive) {
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${t("promptUtils.gameContext.deathCausePoison")}}`);
+        }
+      }
+      if (nightHistory?.deaths && Array.isArray(nightHistory.deaths)) {
+        nightHistory.deaths.forEach(death => {
+          if (death && typeof death.seat === 'number') {
+            const p = state.players.find(p => p.seat === death.seat);
+            if (p && !p.alive) {
+              const cause = death.reason === 'wolf' ? t("promptUtils.gameContext.deathCauseWolf") : death.reason === 'poison' ? t("promptUtils.gameContext.deathCausePoison") : t("promptUtils.gameContext.deathCauseDeath");
+              currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${cause}}`);
+            }
+          }
+        });
+      }
+      const dayHistory = state.dayHistory?.[state.day];
+      if (dayHistory?.executed && typeof dayHistory.executed.seat === 'number') {
+        const executedSeat = dayHistory.executed.seat;
+        const p = state.players.find(p => p.seat === executedSeat);
+        if (p) {
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${t("promptUtils.gameContext.deathCauseVote")}}`);
+        }
+      }
 
-    if (currentDayDeaths.length > 0) {
-      context += `\n\n<today_deaths>\n${currentDayDeaths.join("\n")}\n</today_deaths>`;
+      if (currentDayDeaths.length > 0) {
+        context += `\n\n<today_deaths>\n${currentDayDeaths.join("\n")}\n</today_deaths>`;
+      }
     }
 
     // Dead players warning
-    context += `\n\n<banned_discussion>严禁讨论已出局玩家: [${deadPlayers.map((p) => p.seat + 1).join(", ")}]</banned_discussion>`;
+    context += `\n\n<banned_discussion>${t("promptUtils.gameContext.bannedDiscussion")}: [${deadPlayers.map((p) => p.seat + 1).join(", ")}]</banned_discussion>`;
   }
 
   if (state.voteHistory && Object.keys(state.voteHistory).length > 0) {
@@ -561,7 +508,7 @@ alive_count: ${alivePlayers.length}
             const targetPlayer = state.players.find(p => p.seat === target);
             const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
             const voterList = voters.map(s => s + 1).join(',');
-            context += `\n  ${target + 1}号${targetPlayer?.displayName || ''}: {票数: ${voteLabel}, 投票者: [${voterList}]}`;
+            context += `\n  ${t("promptUtils.gameContext.seatLabel", { seat: target + 1 })}${targetPlayer?.displayName || ''}: {${t("promptUtils.gameContext.voteCount")}: ${voteLabel}, ${t("promptUtils.gameContext.voters")}: [${voterList}]}`;
           });
         } else {
           // Older days: compressed summary
@@ -571,9 +518,9 @@ alive_count: ${alivePlayers.length}
             const executedPlayer = state.players.find(p => p.seat === executedSeat);
             const topVoter = sortedTargets[0]?.voters[0];
             const leaderSeat = topVoter !== undefined ? topVoter + 1 : null;
-            context += `\nday_${day}: {出局: ${executedSeat + 1}号${executedPlayer?.displayName || ''}, 票数: ${dayHistory.executed.votes}${leaderSeat ? `, 主归: ${leaderSeat}号` : ''}}`;
+            context += `\nday_${day}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: executedSeat + 1 })}${executedPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${dayHistory.executed.votes}${leaderSeat ? `, ${t("promptUtils.gameContext.mainVoter")}: ${t("promptUtils.gameContext.seatLabel", { seat: leaderSeat })}` : ''}}`;
           } else if (dayHistory?.voteTie) {
-            context += `\nday_${day}: {结果: 平票}`;
+            context += `\nday_${day}: {${t("promptUtils.gameContext.result")}: ${t("promptUtils.gameContext.tie")}}`;
           }
         }
       });
@@ -586,27 +533,27 @@ alive_count: ${alivePlayers.length}
     if (history.length > 0) {
       const checks = history.map((record) => {
         const target = state.players.find((p) => p.seat === record.targetSeat);
-        return `  - {day: ${record.day}, target: ${record.targetSeat + 1}号${target?.displayName || ''}, result: ${record.isWolf ? "狼人" : "好人"}}`;
+        return `  - {day: ${record.day}, target: ${t("promptUtils.gameContext.seatLabel", { seat: record.targetSeat + 1 })}${target?.displayName || ''}, result: ${record.isWolf ? t("promptUtils.gameContext.seerResultWolf") : t("promptUtils.gameContext.seerResultGood")}}`;
       });
       context += `\n\n<your_checks>\n${checks.join("\n")}\n</your_checks>`;
     }
   }
 
   if (player.role === "Witch") {
-    const potionStatus = `heal: ${state.roleAbilities.witchHealUsed ? "已用" : "可用"}, poison: ${state.roleAbilities.witchPoisonUsed ? "已用" : "可用"}`;
+    const potionStatus = `heal: ${state.roleAbilities.witchHealUsed ? t("promptUtils.gameContext.used") : t("promptUtils.gameContext.available")}, poison: ${state.roleAbilities.witchPoisonUsed ? t("promptUtils.gameContext.used") : t("promptUtils.gameContext.available")}`;
     const witchActions: string[] = [];
     if (state.nightHistory) {
       Object.entries(state.nightHistory).forEach(([day, history]) => {
         if (history.witchSave && history.wolfTarget !== undefined) {
           const savedPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (savedPlayer) {
-            witchActions.push(`  - {day: ${day}, action: 救, target: ${history.wolfTarget + 1}号${savedPlayer.displayName}}`);
+            witchActions.push(`  - {day: ${day}, action: heal, target: ${t("promptUtils.gameContext.seatLabel", { seat: history.wolfTarget + 1 })}${savedPlayer.displayName}}`);
           }
         }
         if (history.witchPoison !== undefined) {
           const poisonedPlayer = state.players.find(p => p.seat === history.witchPoison);
           if (poisonedPlayer) {
-            witchActions.push(`  - {day: ${day}, action: 毒, target: ${history.witchPoison + 1}号${poisonedPlayer.displayName}}`);
+            witchActions.push(`  - {day: ${day}, action: poison, target: ${t("promptUtils.gameContext.seatLabel", { seat: history.witchPoison + 1 })}${poisonedPlayer.displayName}}`);
           }
         }
       });
@@ -620,7 +567,7 @@ alive_count: ${alivePlayers.length}
 
   if (player.role === "Guard" && state.nightActions.lastGuardTarget !== undefined) {
     const lastTarget = state.players.find((p) => p.seat === state.nightActions.lastGuardTarget);
-    context += `\n\n<your_guard>\nlast_protected: ${state.nightActions.lastGuardTarget + 1}号${lastTarget?.displayName || ''}\nnote: 今晚不能连续保护此人\n</your_guard>`;
+    context += `\n\n<your_guard>\nlast_protected: ${t("promptUtils.gameContext.seatLabel", { seat: state.nightActions.lastGuardTarget + 1 })}${lastTarget?.displayName || ''}\nnote: ${t("promptUtils.gameContext.guardLast", { seat: state.nightActions.lastGuardTarget + 1, name: lastTarget?.displayName || '' }).split("】")[1] || ''}\n</your_guard>`;
   }
 
   if (player.role === "Werewolf") {
@@ -629,7 +576,7 @@ alive_count: ${alivePlayers.length}
     );
     const allWolves = state.players.filter((p) => p.role === "Werewolf");
     const aliveWolves = allWolves.filter((p) => p.alive);
-    context += `\n\n<wolf_team>\nalive_teammates: [${teammates.map((t) => `${t.seat + 1}号${t.displayName}`).join(", ")}]\nwolf_count: {total: ${allWolves.length}, alive: ${aliveWolves.length}}\n</wolf_team>`;
+    context += `\n\n<wolf_team>\nalive_teammates: [${teammates.map((tm) => `${t("promptUtils.gameContext.seatLabel", { seat: tm.seat + 1 })}${tm.displayName}`).join(", ")}]\nwolf_count: {total: ${allWolves.length}, alive: ${aliveWolves.length}}\n</wolf_team>`;
   }
 
   const showCurrentVotes = state.phase === "DAY_VOTE" || state.phase === "DAY_RESOLVE";

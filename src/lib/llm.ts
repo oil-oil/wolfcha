@@ -24,6 +24,17 @@ function getProviderForModel(model: string): Provider {
    return modelRef?.provider ?? "zenmux";
  }
 
+// When using built-in keys (custom disabled), only models in AVAILABLE_MODELS
+// are allowed; the server rejects non-AVAILABLE models without x-zenmux-api-key.
+// Game state may contain modelRef from ALL_MODELS (e.g. from a game started with
+// custom key on). Map to an AVAILABLE model to avoid "此模型需要您提供 Zenmux API Key".
+function resolveModelForBuiltin(model: string): string {
+  if (AVAILABLE_MODELS.some((r) => r.model === model)) return model;
+  const m =
+    AVAILABLE_MODELS.find((r) => r.provider === "zenmux") ?? AVAILABLE_MODELS[0];
+  return m?.model ?? model;
+}
+
 export function resolveApiKeySource(model: string): ApiKeySource {
    const customEnabled = isCustomKeyEnabled();
    if (!customEnabled) return "project";
@@ -177,6 +188,9 @@ export async function generateCompletion(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const modelToUse = customEnabled
+    ? options.model
+    : resolveModelForBuiltin(options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -195,7 +209,7 @@ export async function generateCompletion(
         ...headers,
       },
       body: JSON.stringify({
-        model: options.model,
+        model: modelToUse,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -258,6 +272,9 @@ export async function generateCompletionBatch(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const resolvedRequests = customEnabled
+    ? requests
+    : requests.map((r) => ({ ...r, model: resolveModelForBuiltin(r.model) }));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -273,7 +290,7 @@ export async function generateCompletionBatch(
     {
       method: "POST",
       headers,
-      body: JSON.stringify({ requests }),
+      body: JSON.stringify({ requests: resolvedRequests }),
     },
     3
   );
@@ -320,6 +337,9 @@ export async function* generateCompletionStream(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const modelToUse = customEnabled
+    ? options.model
+    : resolveModelForBuiltin(options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -338,7 +358,7 @@ export async function* generateCompletionStream(
         ...headers,
       },
       body: JSON.stringify({
-        model: options.model,
+        model: modelToUse,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,

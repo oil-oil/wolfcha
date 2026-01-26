@@ -4,6 +4,8 @@
  */
 
 import { getNarratorAudioPath, type NarratorTextKey } from "./narrator-voice";
+import { getLocale } from "@/i18n/locale-store";
+import type { AppLocale } from "./voice-constants";
 
 class NarratorAudioPlayer {
   private static instance: NarratorAudioPlayer | null = null;
@@ -51,17 +53,20 @@ class NarratorAudioPlayer {
   /**
    * 播放旁白语音
    * @param key 旁白文本键名
+   * @param localeOverride 可选：强制指定语言，不传则自动检测
    * @returns Promise，播放完成后 resolve
    */
-  async play(key: NarratorTextKey): Promise<void> {
+  async play(key: NarratorTextKey, localeOverride?: AppLocale): Promise<void> {
     if (!this.enabled) return;
     if (typeof window === "undefined") return;
 
     // 停止当前播放
     this.stop();
 
-    const audioPath = getNarratorAudioPath(key);
-    console.log(`[NarratorAudioPlayer] Playing: ${key} from ${audioPath}`);
+    // 获取当前语言设置
+    const locale: AppLocale = localeOverride ?? (getLocale() as AppLocale);
+    const audioPath = getNarratorAudioPath(key, locale);
+    console.log(`[NarratorAudioPlayer] Playing: ${key} (${locale}) from ${audioPath}`);
 
     return new Promise((resolve) => {
       const audio = new Audio(audioPath);
@@ -130,13 +135,13 @@ export const getNarratorPlayer = (): NarratorAudioPlayer => {
 };
 
 // 便捷函数：播放旁白（等待完成）
-export const playNarrator = async (key: NarratorTextKey): Promise<void> => {
-  return getNarratorPlayer().play(key);
+export const playNarrator = async (key: NarratorTextKey, locale?: AppLocale): Promise<void> => {
+  return getNarratorPlayer().play(key, locale);
 };
 
 // 便捷函数：播放旁白（不等待）
-export const playNarratorAsync = (key: NarratorTextKey): void => {
-  getNarratorPlayer().playAsync(key);
+export const playNarratorAsync = (key: NarratorTextKey, locale?: AppLocale): void => {
+  getNarratorPlayer().play(key, locale).catch(() => {});
 };
 
 // 便捷函数：停止旁白

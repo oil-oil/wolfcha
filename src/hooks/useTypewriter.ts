@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+const CHUNK_SIZE = 3; // characters per tick (faster for both Chinese and English)
+const SPEED_MULTIPLIER = 0.7; // ~1.43x faster overall
+
 interface UseTypewriterOptions {
   text: string;
-  speed?: number; // ms per character
+  speed?: number; // ms per character (used to compute delay per chunk)
   enabled?: boolean;
   onComplete?: () => void;
 }
@@ -39,7 +42,6 @@ export function useTypewriter({
       return;
     }
 
-    // If text changed, reset and start typing
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -49,35 +51,35 @@ export function useTypewriter({
       setIsTyping(true);
     });
 
-    const typeNextChar = () => {
-      if (indexRef.current < text.length) {
-        indexRef.current++;
-        setDisplayedText(text.slice(0, indexRef.current));
-        
-        // Variable speed for more natural effect
-        const char = text[indexRef.current - 1];
-        let delay = speed;
-        if (char === "，" || char === ",") delay = speed * 3;
-        else if (char === "。" || char === ".") delay = speed * 5;
-        else if (char === "！" || char === "!") delay = speed * 4;
-        else if (char === "？" || char === "?") delay = speed * 4;
-        else if (char === " ") delay = speed * 0.5;
-        
-        timeoutRef.current = setTimeout(typeNextChar, delay);
-      } else {
+    const typeNextChunk = () => {
+      if (indexRef.current >= text.length) {
         setIsTyping(false);
         onComplete?.();
+        return;
       }
+      const advance = Math.min(CHUNK_SIZE, text.length - indexRef.current);
+      indexRef.current += advance;
+      setDisplayedText(text.slice(0, indexRef.current));
+
+      // Base delay: faster (SPEED_MULTIPLIER) and scales with chunk size
+      let delay = speed * advance * SPEED_MULTIPLIER;
+      const lastChar = text[indexRef.current - 1];
+      if (lastChar === "。" || lastChar === ".") delay *= 1.8;
+      else if (lastChar === "，" || lastChar === ",") delay *= 1.2;
+      else if (lastChar === "！" || lastChar === "!" || lastChar === "？" || lastChar === "?") delay *= 1.3;
+      else if (lastChar === " ") delay *= 0.9;
+
+      timeoutRef.current = setTimeout(typeNextChunk, Math.round(delay));
     };
 
-    timeoutRef.current = setTimeout(typeNextChar, speed);
+    timeoutRef.current = setTimeout(typeNextChunk, Math.round(speed * SPEED_MULTIPLIER));
 
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [text, speed, enabled, onComplete, reset]);
+  }, [text, speed, enabled, onComplete]);
 
   return { displayedText, isTyping, reset };
 }

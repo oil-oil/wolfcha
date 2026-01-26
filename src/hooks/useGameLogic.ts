@@ -18,21 +18,11 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useAtom } from "jotai";
 import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
-import { AVAILABLE_MODELS, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
+import { PLAYER_MODELS, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition } from "@/store/game-machine";
 import { getGeneratorModel } from "@/lib/api-keys";
-
-function getRandomModelRef(): ModelRef {
-  const fallback = sampleModelRefs(1)[0];
-  if (fallback) return fallback;
-  if (AVAILABLE_MODELS.length === 0) {
-    // Fallback to GENERATOR_MODEL if no models available
-    return { provider: "zenmux" as const, model: getGeneratorModel() };
-  }
-  const randomIndex = Math.floor(Math.random() * AVAILABLE_MODELS.length);
-  return AVAILABLE_MODELS[randomIndex];
-}
 import {
   createInitialGameState,
   setupPlayers,
@@ -45,7 +35,7 @@ import {
   getNextAliveSeat,
 } from "@/lib/game-master";
 import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs } from "@/lib/character-generator";
-import { SYSTEM_MESSAGES, UI_TEXT } from "@/lib/game-texts";
+import { getSystemMessages } from "@/lib/game-texts";
 import { getRandomScenario } from "@/lib/scenarios";
 import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
 import { generateUUID } from "@/lib/utils";
@@ -67,10 +57,24 @@ import { useDayPhase } from "./game-phases/useDayPhase";
 import { useBadgePhase } from "./game-phases/useBadgePhase";
 import { useSpecialEvents } from "./game-phases/useSpecialEvents";
 
+function getRandomModelRef(): ModelRef {
+  const fallback = sampleModelRefs(1)[0];
+  if (fallback) return fallback;
+  if (PLAYER_MODELS.length === 0) {
+    // Fallback to GENERATOR_MODEL if no models available
+    return { provider: "zenmux" as const, model: getGeneratorModel() };
+  }
+  const randomIndex = Math.floor(Math.random() * PLAYER_MODELS.length);
+  return PLAYER_MODELS[randomIndex];
+}
+
 // Re-export for backward compatibility
 export type { DialogueState };
 
 export function useGameLogic() {
+  const t = useTranslations();
+  const speakerHost = t("speakers.host");
+
   // ============================================
   // 基础状态
   // ============================================
@@ -377,7 +381,7 @@ export function useGameLogic() {
     const dayStartIndex = (() => {
       for (let i = state.messages.length - 1; i >= 0; i--) {
         const m = state.messages[i];
-        if (m.isSystem && m.content === "天亮了") return i;
+        if (m.isSystem && m.content === t("gameLogicMessages.dayBreak")) return i;
       }
       return 0;
     })();
@@ -385,7 +389,7 @@ export function useGameLogic() {
     const voteStartIndex = (() => {
       for (let i = state.messages.length - 1; i >= 0; i--) {
         const m = state.messages[i];
-        if (m.isSystem && m.content === "进入投票环节") return i;
+        if (m.isSystem && m.content === t("gameLogicMessages.voteStart")) return i;
       }
       return state.messages.length;
     })();
@@ -591,6 +595,7 @@ export function useGameLogic() {
     if (!isTokenValid(token)) return;
     if (isAwaitingRoleRevealRef.current) return;
 
+    const systemMessages = getSystemMessages();
     const lastGuardTarget = state.nightActions.guardTarget ?? state.nightActions.lastGuardTarget;
     // Preserve seerHistory across nights
     const seerHistory = state.nightActions.seerHistory;
@@ -603,11 +608,11 @@ export function useGameLogic() {
       },
     };
     nextState = transitionPhase(nextState, "NIGHT_START");
-    nextState = addSystemMessage(nextState, SYSTEM_MESSAGES.nightFall(nextState.day));
+    nextState = addSystemMessage(nextState, systemMessages.nightFall(nextState.day));
     setGameState(nextState);
 
     // Set dialogue before playing audio so message box appears immediately
-    setDialogue("主持人", SYSTEM_MESSAGES.nightFall(nextState.day), false);
+    setDialogue(speakerHost, systemMessages.nightFall(nextState.day), false);
 
     // 播放旁白语音
     await playNarrator("nightFall");
@@ -615,7 +620,7 @@ export function useGameLogic() {
     await delay(250);
     if (!isTokenValid(token)) return;
 
-    setDialogue("主持人", SYSTEM_MESSAGES.summarizingDay, false);
+    setDialogue(speakerHost, systemMessages.summarizingDay, false);
 
     const summarized = await maybeGenerateDailySummary(state, { force: true });
     if (!isTokenValid(token)) return;
@@ -628,7 +633,7 @@ export function useGameLogic() {
     };
 
     await runNightPhaseAction(mergedState, token, "START_NIGHT");
-  }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, transitionPhase]);
+  }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
   hunterDeathRef.current = async (state: GameState, hunter: Player, diedAtNight: boolean) => {
@@ -955,6 +960,7 @@ export function useGameLogic() {
           });
       }
 
+      const systemMessages = getSystemMessages();
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();
 
@@ -1067,8 +1073,8 @@ export function useGameLogic() {
         isGenshinMode,
       };
 
-      newState = addSystemMessage(newState, SYSTEM_MESSAGES.gameStart);
-      newState = addSystemMessage(newState, SYSTEM_MESSAGES.nightFall(1));
+      newState = addSystemMessage(newState, systemMessages.gameStart);
+      newState = addSystemMessage(newState, systemMessages.nightFall(1));
 
       // Dev 预设处理
       if (devPreset === "MILK_POISON_TEST") {
@@ -1122,17 +1128,17 @@ export function useGameLogic() {
     } catch (error) {
       const msg = String(error);
       if (msg.includes("ZenMux API error: 401") || msg.includes(" 401")) {
-        toast.error("ZenMux 401 Unauthorized");
+        toast.error(t("gameLogicMessages.zenmux401"));
       } else {
-        toast.error("请求失败", { description: msg });
+        toast.error(t("gameLogicMessages.requestFailed"), { description: msg });
       }
-      setDialogue("系统", `出错了: ${error}`, false);
+      setDialogue(t("speakers.system"), t("gameLogicMessages.errorOccurred", { error: String(error) }), false);
       setGameStarted(false);
       setShowTable(false);
     } finally {
       setIsLoading(false);
     }
-  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable]);
+  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable, t]);
 
   /** 角色揭示后继续 */
   const continueAfterRoleReveal = useCallback(async () => {
@@ -1146,15 +1152,17 @@ export function useGameLogic() {
     isAwaitingRoleRevealRef.current = false;
 
     if (!isTokenValid(token)) return;
-    
+
+    const systemMessages = getSystemMessages();
+
     // Set dialogue before playing audio so message box appears immediately
-    setDialogue("主持人", SYSTEM_MESSAGES.nightFall(pending.day), false);
+    setDialogue(speakerHost, systemMessages.nightFall(pending.day), false);
     
     // 播放第一晚的"天黑请闭眼"旁白
     await playNarrator("nightFall");
     
     await runNightPhaseAction(pending, token, "START_NIGHT");
-  }, [getToken, isTokenValid, runNightPhaseAction, setDialogue]);
+  }, [getToken, isTokenValid, runNightPhaseAction, setDialogue, speakerHost]);
 
   /** 重新开始 */
   const restartGame = useCallback(() => {
@@ -1313,12 +1321,13 @@ export function useGameLogic() {
     if (!humanPlayer.alive && gameState.phase !== "HUNTER_SHOOT") return;
 
     const token = getToken();
+    const systemMessages = getSystemMessages();
     let currentState = gameState;
 
     // 守卫保护
     if (gameState.phase === "NIGHT_GUARD_ACTION" && humanPlayer.role === "Guard") {
       if (currentState.nightActions.lastGuardTarget === targetSeat) {
-        toast.error("守卫不能连续两晚守护同一人");
+        toast.error(t("gameLogicMessages.guardNoRepeat"));
         return;
       }
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
@@ -1326,7 +1335,7 @@ export function useGameLogic() {
         ...currentState,
         nightActions: { ...currentState.nightActions, guardTarget: targetSeat },
       };
-      setDialogue("系统", `你保护了 ${targetSeat + 1}号 ${targetPlayer?.displayName}`, false);
+      setDialogue(t("speakers.system"), t("gameLogicMessages.youProtected", { seat: targetSeat + 1, name: targetPlayer?.displayName || "" }), false);
       setGameState(currentState);
 
       await delay(1000);
@@ -1344,7 +1353,7 @@ export function useGameLogic() {
         ...currentState,
         nightActions: { ...currentState.nightActions, wolfVotes: existingVotes, wolfTarget: undefined },
       };
-      setDialogue("系统", `你投票选择袭击 ${targetSeat + 1}号 ${targetPlayer?.displayName}，等待队友投票...`, false);
+      setDialogue(t("speakers.system"), t("gameLogicMessages.youVotedAttack", { seat: targetSeat + 1, name: targetPlayer?.displayName || "" }), false);
       setGameState(currentState);
 
       // AI 狼人投票
@@ -1376,7 +1385,7 @@ export function useGameLogic() {
             nightActions: { ...currentState.nightActions, wolfVotes: existingVotes },
           };
           setGameState(currentState);
-          toast.error("队友响应超时", { description: "AI 狼人跟随你的选择" });
+          toast.error(t("gameLogicMessages.teammateTimeout"), { description: t("gameLogicMessages.aiFollowsYou") });
         } finally {
           setIsWaitingForAI(false);
         }
@@ -1389,8 +1398,8 @@ export function useGameLogic() {
           nightActions: { ...currentState.nightActions, wolfVotes: {} },
         };
         setGameState(currentState);
-        setDialogue("系统", "狼队投票出现平票，请重新选择目标。", false);
-        toast.warning("狼队平票", { description: "请重新点击玩家头像选择击杀目标" });
+        setDialogue(t("speakers.system"), t("gameLogicMessages.wolfTieVote"), false);
+        toast.warning(t("gameLogicMessages.wolfTieTitle"), { description: t("gameLogicMessages.wolfTieDesc") });
         return;
       }
 
@@ -1401,7 +1410,7 @@ export function useGameLogic() {
       
       // 添加狼队达成一致的确认消息
       const chosenTarget = currentState.players.find((p) => p.seat === chosenSeat);
-      setDialogue("系统", `狼队决定袭击 ${chosenSeat + 1}号 ${chosenTarget?.displayName}`, false);
+      setDialogue(t("speakers.system"), t("gameLogicMessages.wolfDecided", { seat: chosenSeat + 1, name: chosenTarget?.displayName || "" }), false);
       setGameState(currentState);
 
       await delay(800);
@@ -1416,7 +1425,7 @@ export function useGameLogic() {
           nightActions: { ...currentState.nightActions, witchSave: true },
           roleAbilities: { ...currentState.roleAbilities, witchHealUsed: true },
         };
-        setDialogue("系统", "你使用了解药", false);
+        setDialogue(t("speakers.system"), t("gameLogicMessages.usedAntidote"), false);
       } else if (witchAction === "poison" && !currentState.roleAbilities.witchPoisonUsed) {
         const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
         currentState = {
@@ -1424,9 +1433,9 @@ export function useGameLogic() {
           nightActions: { ...currentState.nightActions, witchPoison: targetSeat },
           roleAbilities: { ...currentState.roleAbilities, witchPoisonUsed: true },
         };
-        setDialogue("系统", `你对 ${targetSeat + 1}号 ${targetPlayer?.displayName} 使用了毒药`, false);
+        setDialogue(t("speakers.system"), t("gameLogicMessages.usedPoison", { seat: targetSeat + 1, name: targetPlayer?.displayName || "" }), false);
       } else {
-        setDialogue("系统", "你选择不使用药水", false);
+        setDialogue(t("speakers.system"), t("gameLogicMessages.noPotion"), false);
       }
       setGameState(currentState);
 
@@ -1453,7 +1462,7 @@ export function useGameLogic() {
           seerHistory: [...seerHistory, { targetSeat, isWolf: isWolf || false, day: currentState.day }],
         },
       };
-      setDialogue("查验结果", `${targetSeat + 1}号 ${targetPlayer?.displayName} 是${isWolf ? "狼人" : "好人"}`, false);
+      setDialogue(t("speakers.seerResult"), t("gameLogicMessages.seerResultText", { seat: targetSeat + 1, name: targetPlayer?.displayName || "", result: isWolf ? t("gameLogicMessages.werewolfResult") : t("gameLogicMessages.goodResult") }), false);
       setGameState(currentState);
 
       nightContinueRef.current = async (s) => {
@@ -1470,8 +1479,8 @@ export function useGameLogic() {
         currentState = killPlayer(currentState, targetSeat);
         const target = currentState.players.find((p) => p.seat === targetSeat);
         if (target) {
-          currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName));
-          setDialogue("主持人", SYSTEM_MESSAGES.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName), false);
+          currentState = addSystemMessage(currentState, systemMessages.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName));
+          setDialogue(speakerHost, systemMessages.hunterShoot(humanPlayer.seat + 1, targetSeat + 1, target.displayName), false);
         }
 
         const shot = { hunterSeat: humanPlayer.seat, targetSeat };
@@ -1506,7 +1515,7 @@ export function useGameLogic() {
       await delay(1200);
       if (diedAtNight) {
         currentState = transitionPhase(currentState, "DAY_START");
-        currentState = addSystemMessage(currentState, SYSTEM_MESSAGES.dayBreak);
+        currentState = addSystemMessage(currentState, systemMessages.dayBreak);
         setGameState(currentState);
         await delay(800);
         await startDayPhaseInternal(currentState, token, { skipAnnouncements: true });
@@ -1514,7 +1523,7 @@ export function useGameLogic() {
         await proceedToNight(currentState, token);
       }
     }
-  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase]);
+  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase, speakerHost, t]);
 
   /** 人类警长移交 */
   const handleHumanBadgeTransfer = useCallback(async (targetSeat: number) => {
@@ -1555,7 +1564,7 @@ export function useGameLogic() {
       const shouldSummarizeEarly =
         nextState.day > 0 &&
         !nextState.dailySummaries?.[nextState.day]?.length &&
-        rawTranscript.length > 9000;
+        rawTranscript.length > 10000;
       if (shouldSummarizeEarly) {
         void maybeGenerateDailySummary(nextState)
           .then((summarized) => {

@@ -3,6 +3,8 @@
 import { CheckCircle } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DifficultyLevel } from "@/types/game";
+import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 
 interface DifficultySelectorProps {
   open: boolean;
@@ -11,35 +13,13 @@ interface DifficultySelectorProps {
   onChange: (value: DifficultyLevel) => void;
 }
 
-const DIFFICULTY_OPTIONS: Array<{
+type DifficultyOption = {
   id: DifficultyLevel;
   title: string;
   subtitle: string;
   description: string;
   tag: string;
-}> = [
-  {
-    id: "easy",
-    title: "新手局",
-    subtitle: "轻松氛围",
-    description: "更直觉、更容易信任他人，适合初次体验。",
-    tag: "放松",
-  },
-  {
-    id: "normal",
-    title: "标准局",
-    subtitle: "均衡推理",
-    description: "信息量适中，逻辑与表演强度平衡。",
-    tag: "经典",
-  },
-  {
-    id: "hard",
-    title: "高阶局",
-    subtitle: "深度对抗",
-    description: "推理更复杂，博弈更激烈，适合老玩家。",
-    tag: "挑战",
-  },
-];
+};
 
 export function DifficultySelector({
   open,
@@ -47,18 +27,42 @@ export function DifficultySelector({
   value,
   onChange,
 }: DifficultySelectorProps) {
+  const t = useTranslations();
+  const options = useMemo<DifficultyOption[]>(() => ([
+    {
+      id: "easy",
+      title: t("difficultySelector.options.easy.title"),
+      subtitle: t("difficultySelector.options.easy.subtitle"),
+      description: t("difficultySelector.options.easy.description"),
+      tag: t("difficultySelector.options.easy.tag"),
+    },
+    {
+      id: "normal",
+      title: t("difficultySelector.options.normal.title"),
+      subtitle: t("difficultySelector.options.normal.subtitle"),
+      description: t("difficultySelector.options.normal.description"),
+      tag: t("difficultySelector.options.normal.tag"),
+    },
+    {
+      id: "hard",
+      title: t("difficultySelector.options.hard.title"),
+      subtitle: t("difficultySelector.options.hard.subtitle"),
+      description: t("difficultySelector.options.hard.description"),
+      tag: t("difficultySelector.options.hard.tag"),
+    },
+  ]), [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="wc-difficulty-dialog">
         <DialogHeader>
-          <DialogTitle className="font-serif text-[var(--text-primary)]">难度设置</DialogTitle>
+          <DialogTitle className="font-serif text-[var(--text-primary)]">{t("difficultySelector.title")}</DialogTitle>
           <DialogDescription className="text-[var(--text-muted)]">
-            选择 AI 的推理深度与话术强度
+            {t("difficultySelector.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="wc-difficulty-grid">
-          {DIFFICULTY_OPTIONS.map((option) => {
+          {options.map((option) => {
             const active = option.id === value;
             return (
               <button
@@ -86,7 +90,7 @@ export function DifficultySelector({
         </div>
 
         <div className="wc-difficulty-footer">
-          难度只影响 AI 行为强度，游戏规则保持一致。
+          {t("difficultySelector.footer")}
         </div>
       </DialogContent>
     </Dialog>

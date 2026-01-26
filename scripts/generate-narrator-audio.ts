@@ -1,10 +1,13 @@
 /**
- * 旁白语音生成脚本
+ * 旁白语音生成脚本 (Multi-language Support)
  * 使用 MiniMax TTS API 生成游戏旁白语音并保存到本地
  * 
  * 使用方法:
  * 1. 确保 .env.local 中配置了 MINIMAX_API_KEY 和 MINIMAX_GROUP_ID
- * 2. 运行: npx tsx scripts/generate-narrator-audio.ts
+ * 2. 运行: npx tsx scripts/generate-narrator-audio.ts [locale]
+ *    - npx tsx scripts/generate-narrator-audio.ts        # Generate all languages
+ *    - npx tsx scripts/generate-narrator-audio.ts zh     # Generate Chinese only
+ *    - npx tsx scripts/generate-narrator-audio.ts en     # Generate English only
  */
 
 import * as fs from "node:fs";
@@ -38,9 +41,14 @@ function loadEnvFile(filePath: string): void {
 
 loadEnvFile(path.join(process.cwd(), ".env.local"));
 
-const NARRATOR_VOICE_ID = "Chinese (Mandarin)_Mature_Woman";
+// Voice IDs for each language
+const NARRATOR_VOICE_IDS: Record<string, string> = {
+  zh: "Chinese (Mandarin)_Mature_Woman",
+  en: "Serene_Woman",
+};
 
-const NARRATOR_TEXTS: Record<string, string> = {
+// Chinese narrator texts
+const NARRATOR_TEXTS_ZH: Record<string, string> = {
   nightFall: "天黑请闭眼",
   guardWake: "守卫请睁眼",
   guardClose: "守卫请闭眼",
@@ -70,7 +78,44 @@ const NARRATOR_TEXTS: Record<string, string> = {
   wolfWin: "狼人获胜",
 };
 
-const OUTPUT_DIR = path.join(process.cwd(), "public", "audio", "narrator");
+// English narrator texts
+const NARRATOR_TEXTS_EN: Record<string, string> = {
+  nightFall: "Night has fallen, please close your eyes",
+  guardWake: "Guard, please open your eyes",
+  guardClose: "Guard, please close your eyes",
+  wolfWake: "Werewolves, please open your eyes",
+  wolfClose: "Werewolves, please close your eyes",
+  witchWake: "Witch, please open your eyes",
+  witchClose: "Witch, please close your eyes",
+  seerWake: "Seer, please open your eyes",
+  seerClose: "Seer, please close your eyes",
+  dayBreak: "Dawn has broken, please open your eyes",
+  peacefulNight: "Last night was peaceful",
+  discussionStart: "Discussion begins",
+  voteStart: "Discussion ends, voting begins",
+  badgeSpeechStart: "Sheriff election begins",
+  badgeElectionStart: "Sheriff voting begins",
+  playerDied1: "Player 1 has been eliminated",
+  playerDied2: "Player 2 has been eliminated",
+  playerDied3: "Player 3 has been eliminated",
+  playerDied4: "Player 4 has been eliminated",
+  playerDied5: "Player 5 has been eliminated",
+  playerDied6: "Player 6 has been eliminated",
+  playerDied7: "Player 7 has been eliminated",
+  playerDied8: "Player 8 has been eliminated",
+  playerDied9: "Player 9 has been eliminated",
+  playerDied10: "Player 10 has been eliminated",
+  villageWin: "The village wins",
+  wolfWin: "The werewolves win",
+};
+
+// Texts by locale
+const NARRATOR_TEXTS_BY_LOCALE: Record<string, Record<string, string>> = {
+  zh: NARRATOR_TEXTS_ZH,
+  en: NARRATOR_TEXTS_EN,
+};
+
+const BASE_OUTPUT_DIR = path.join(process.cwd(), "public", "audio", "narrator");
 
 async function requestMiniMaxTTS(text: string, voiceId: string): Promise<Buffer> {
   const apiKey = process.env.MINIMAX_API_KEY;
@@ -178,21 +223,32 @@ async function requestMiniMaxTTS(text: string, voiceId: string): Promise<Buffer>
   });
 }
 
-async function generateAllNarratorAudio() {
+async function generateNarratorAudioForLocale(locale: string) {
+  const texts = NARRATOR_TEXTS_BY_LOCALE[locale];
+  const voiceId = NARRATOR_VOICE_IDS[locale];
+  
+  if (!texts || !voiceId) {
+    console.error(`[ERROR] Unknown locale: ${locale}`);
+    return { success: 0, fail: 0 };
+  }
+  
+  const outputDir = path.join(BASE_OUTPUT_DIR, locale);
+  
   // 确保输出目录存在
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-    console.log(`Created output directory: ${OUTPUT_DIR}`);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    console.log(`Created output directory: ${outputDir}`);
   }
 
-  const entries = Object.entries(NARRATOR_TEXTS);
-  console.log(`\nGenerating ${entries.length} narrator audio files...\n`);
+  const entries = Object.entries(texts);
+  console.log(`\n[${locale.toUpperCase()}] Generating ${entries.length} narrator audio files...`);
+  console.log(`Voice ID: ${voiceId}\n`);
 
   let successCount = 0;
   let failCount = 0;
 
   for (const [key, text] of entries) {
-    const outputPath = path.join(OUTPUT_DIR, `${key}.mp3`);
+    const outputPath = path.join(outputDir, `${key}.mp3`);
     
     // 检查文件是否已存在
     if (fs.existsSync(outputPath)) {
@@ -203,9 +259,9 @@ async function generateAllNarratorAudio() {
 
     try {
       console.log(`[GEN] ${key}: "${text}"`);
-      const audioBuffer = await requestMiniMaxTTS(text, NARRATOR_VOICE_ID);
+      const audioBuffer = await requestMiniMaxTTS(text, voiceId);
       fs.writeFileSync(outputPath, audioBuffer);
-      console.log(`[OK] ${key}: Saved to ${outputPath} (${audioBuffer.length} bytes)`);
+      console.log(`[OK] ${key}: Saved (${audioBuffer.length} bytes)`);
       successCount++;
       
       // 添加延迟避免 API 限流
@@ -216,12 +272,44 @@ async function generateAllNarratorAudio() {
     }
   }
 
+  return { success: successCount, fail: failCount };
+}
+
+async function generateAllNarratorAudio(targetLocale?: string) {
+  const localesToGenerate = targetLocale 
+    ? [targetLocale] 
+    : Object.keys(NARRATOR_TEXTS_BY_LOCALE);
+  
+  console.log(`\n========================================`);
+  console.log(`Narrator Audio Generation`);
+  console.log(`Target locales: ${localesToGenerate.join(", ")}`);
+  console.log(`========================================`);
+  
+  let totalSuccess = 0;
+  let totalFail = 0;
+  
+  for (const locale of localesToGenerate) {
+    const result = await generateNarratorAudioForLocale(locale);
+    totalSuccess += result.success;
+    totalFail += result.fail;
+  }
+
   console.log(`\n========================================`);
   console.log(`Generation complete!`);
-  console.log(`Success: ${successCount}, Failed: ${failCount}`);
-  console.log(`Output directory: ${OUTPUT_DIR}`);
+  console.log(`Total Success: ${totalSuccess}, Total Failed: ${totalFail}`);
+  console.log(`Output directory: ${BASE_OUTPUT_DIR}`);
   console.log(`========================================\n`);
 }
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const targetLocale = args[0]; // Optional: "zh" or "en"
+
+if (targetLocale && !NARRATOR_TEXTS_BY_LOCALE[targetLocale]) {
+  console.error(`[ERROR] Invalid locale: ${targetLocale}`);
+  console.error(`Available locales: ${Object.keys(NARRATOR_TEXTS_BY_LOCALE).join(", ")}`);
+  process.exit(1);
+}
+
 // 运行脚本
-generateAllNarratorAudio().catch(console.error);
+generateAllNarratorAudio(targetLocale).catch(console.error);

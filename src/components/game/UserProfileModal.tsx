@@ -16,7 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
- import { toast } from "sonner";
+import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import {
   clearApiKeys,
   getDashscopeApiKey,
@@ -41,7 +42,14 @@ import {
   isCustomKeyEnabled as getCustomKeyEnabled,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
-import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type ModelRef } from "@/types/game";
+import {
+  ALL_MODELS,
+  AVAILABLE_MODELS,
+  GENERATOR_MODEL,
+  SUMMARY_MODEL,
+  filterPlayerModels,
+  type ModelRef,
+} from "@/types/game";
  
  interface UserProfileModalProps {
    open: boolean;
@@ -68,6 +76,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
    onSignOut,
   onCustomKeyEnabledChange,
  }: UserProfileModalProps) {
+  const t = useTranslations();
   const [zenmuxKey, setZenmuxKeyState] = useState("");
   const [dashscopeKey, setDashscopeKeyState] = useState("");
   const [minimaxKey, setMinimaxKeyState] = useState("");
@@ -89,7 +98,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
   });
 
    const displayCredits = useMemo(() => {
-     if (credits === null || credits === undefined) return "—";
+    if (credits === null || credits === undefined) return t("userProfile.empty");
      return `${credits}`;
    }, [credits]);
  
@@ -147,14 +156,21 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
     if (providers.size === 0) return [];
     return defaultModelPool.filter((ref) => providers.has(ref.provider));
   }, [dashscopeConfigured, defaultModelPool, zenmuxConfigured]);
+  const playerModelPool = useMemo(() => {
+    return filterPlayerModels(availableModelPool);
+  }, [availableModelPool]);
+  const defaultPlayerModels = useMemo(() => {
+    return filterPlayerModels(defaultAvailableModels);
+  }, [defaultAvailableModels]);
 
   useEffect(() => {
     if (!isCustomKeyEnabled) return;
     const availableSet = new Set(availableModelPool.map((ref) => ref.model));
+    const playerSet = new Set(playerModelPool.map((ref) => ref.model));
     setSelectedModelsState((prev) => {
-      const filtered = prev.filter((m) => availableSet.has(m));
+      const filtered = prev.filter((m) => playerSet.has(m));
       if (filtered.length > 0) return filtered;
-      return defaultAvailableModels.map((ref) => ref.model).filter((m) => availableSet.has(m));
+      return defaultPlayerModels.map((ref) => ref.model).filter((m) => playerSet.has(m));
     });
     setGeneratorModelState((prev) => {
       if (prev && availableSet.has(prev)) return prev;
@@ -166,13 +182,13 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       if (availableSet.has(SUMMARY_MODEL)) return SUMMARY_MODEL;
       return availableModelPool[0]?.model ?? "";
     });
-  }, [availableModelPool, defaultAvailableModels, isCustomKeyEnabled]);
+  }, [availableModelPool, defaultPlayerModels, isCustomKeyEnabled, playerModelPool]);
 
   const selectedModelSummary = useMemo(() => {
-    if (selectedModels.length === 0) return "选择模型";
-    const preview = selectedModels.slice(0, 2).join("、");
+    if (selectedModels.length === 0) return t("customKey.selectModel");
+    const preview = selectedModels.slice(0, 2).join(t("customKey.modelJoiner"));
     if (selectedModels.length <= 2) return preview;
-    return `${preview} 等 ${selectedModels.length} 个`;
+    return t("customKey.modelCount", { preview, count: selectedModels.length });
   }, [selectedModels]);
 
   // Close model selector when modal closes
@@ -184,9 +200,11 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
      if (!referralCode) return;
      try {
        await navigator.clipboard.writeText(referralCode);
-       toast("邀请码已复制");
+      toast(t("userProfile.toasts.copySuccess"));
      } catch {
-       toast("复制失败", { description: "当前环境不支持剪贴板或权限被拒绝" });
+      toast(t("userProfile.toasts.copyFail.title"), {
+        description: t("userProfile.toasts.copyFail.description"),
+      });
      }
    };
  
@@ -203,17 +221,18 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       const zenmuxOk = !zenmuxKey.trim() || validatedKeys.zenmux === zenmuxKey.trim();
       const dashscopeOk = !dashscopeKey.trim() || validatedKeys.dashscope === dashscopeKey.trim();
       if (!zenmuxOk || !dashscopeOk) {
-        toast("未通过验证，无法保存", { description: "请先点击“验证配置”" });
+        toast(t("customKey.toasts.notValidated"), { description: t("customKey.toasts.notValidatedDesc") });
         return;
       }
     }
     const availableSet = new Set(availableModelPool.map((ref) => ref.model));
+    const playerAvailableSet = new Set(playerModelPool.map((ref) => ref.model));
     if (isCustomKeyEnabled && availableSet.size === 0) {
       // Prevent saving an unusable custom-key state with no LLM keys.
-      toast("请至少配置一个 LLM Key", { description: "Zenmux 或百炼二选一即可" });
+      toast(t("customKey.toasts.needLlmKey"), { description: t("customKey.toasts.needLlmKeyDesc") });
       return;
     }
-    const nextSelectedModels = selectedModels.filter((m) => availableSet.has(m));
+    const nextSelectedModels = selectedModels.filter((m) => playerAvailableSet.has(m));
     const fallbackGenerator = availableSet.has(GENERATOR_MODEL)
       ? GENERATOR_MODEL
       : availableModelPool[0]?.model ?? "";
@@ -222,7 +241,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       : availableModelPool[0]?.model ?? "";
     const nextGeneratorModel = availableSet.has(generatorModel) ? generatorModel : fallbackGenerator;
     const nextSummaryModel = availableSet.has(summaryModel) ? summaryModel : fallbackSummary;
-    const removedSelected = selectedModels.filter((m) => !availableSet.has(m));
+    const removedSelected = selectedModels.filter((m) => !playerAvailableSet.has(m));
     const generatorAdjusted = Boolean(generatorModel) && !availableSet.has(generatorModel);
     const summaryAdjusted = Boolean(summaryModel) && !availableSet.has(summaryModel);
 
@@ -230,8 +249,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       isCustomKeyEnabled &&
       (availableSet.size === 0 || removedSelected.length > 0 || generatorAdjusted || summaryAdjusted)
     ) {
-      toast("部分模型不可用，已自动调整", {
-        description: "请检查所选模型与已配置的 Key 是否匹配",
+      toast(t("customKey.toasts.modelsAdjusted"), {
+        description: t("customKey.toasts.modelsAdjustedDesc"),
       });
     }
     setZenmuxApiKey(zenmuxKey);
@@ -244,7 +263,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
     setSelectedModelsState(nextSelectedModels);
     setGeneratorModelState(nextGeneratorModel);
     setSummaryModelState(nextSummaryModel);
-    toast("已保存 API Key", { description: "仅保存在当前浏览器" });
+    toast(t("customKey.toasts.saved"), { description: t("customKey.toasts.savedDesc") });
     onOpenChange(false);
   };
 
@@ -283,7 +302,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
       } catch {
         detail = await response.text();
       }
-      throw new Error(detail || "验证失败");
+      throw new Error(detail || t("customKey.toasts.validateFailed"));
     }
   };
 
@@ -301,8 +320,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
     } catch (error) {
       setValidatedKeys((prev) => ({ ...prev, zenmux: "" }));
       if (zenmuxKey.trim() === getValidatedZenmuxKey()) setValidatedZenmuxKey("");
-      toast("验证失败", {
-        description: "请检查当前API Key 是否填写错误或是否有充足额度。",
+      toast(t("customKey.toasts.validateFailed"), {
+        description: t("customKey.toasts.validateFailedDesc"),
       });
     } finally {
       setIsValidatingZenmux(false);
@@ -323,8 +342,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
     } catch (error) {
       setValidatedKeys((prev) => ({ ...prev, dashscope: "" }));
       if (dashscopeKey.trim() === getValidatedDashscopeKey()) setValidatedDashscopeKey("");
-      toast("验证失败", {
-        description: "请检查当前API Key 是否填写错误或是否有充足额度。",
+      toast(t("customKey.toasts.validateFailed"), {
+        description: t("customKey.toasts.validateFailedDesc"),
       });
     } finally {
       setIsValidatingDashscope(false);
@@ -343,7 +362,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
     setIsCustomKeyEnabled(false);
     setValidatedKeys({ zenmux: "", dashscope: "" });
     onCustomKeyEnabledChange?.(false);
-    toast("已清除 API Key");
+    toast(t("customKey.toasts.cleared"));
   };
 
   return (
@@ -355,34 +374,34 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCircle size={20} />
-            账号信息
+            {t("userProfile.title")}
           </DialogTitle>
-          <DialogDescription>查看账号信息与账户操作</DialogDescription>
+          <DialogDescription>{t("userProfile.description")}</DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="profile">
           <TabsList>
-            <TabsTrigger value="profile">信息</TabsTrigger>
-            <TabsTrigger value="custom">用我自己的 key 玩</TabsTrigger>
+            <TabsTrigger value="profile">{t("customKey.tabs.profile")}</TabsTrigger>
+            <TabsTrigger value="custom">{t("customKey.tabs.custom")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
                 <div className="space-y-4">
                   <div className="rounded-lg border-2 border-[var(--border-color)] bg-[var(--bg-card)] p-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-[var(--text-muted)]">邮箱</span>
-                      <span className="text-[var(--text-primary)]">{email ?? "已登录"}</span>
+                      <span className="text-[var(--text-muted)]">{t("userProfile.fields.email")}</span>
+                      <span className="text-[var(--text-primary)]">{email ?? t("userProfile.loggedIn")}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[var(--text-muted)]">剩余额度</span>
+                      <span className="text-[var(--text-muted)]">{t("userProfile.fields.credits")}</span>
                       <span className="text-[var(--text-primary)]">{displayCredits}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[var(--text-muted)]">邀请人数</span>
+                      <span className="text-[var(--text-muted)]">{t("userProfile.fields.referrals")}</span>
                       <span className="text-[var(--text-primary)]">{totalReferrals ?? 0}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[var(--text-muted)]">邀请码</span>
+                      <span className="text-[var(--text-muted)]">{t("userProfile.fields.referralCode")}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-[var(--text-primary)]">{referralCode ?? "—"}</span>
                         {referralCode && (
@@ -390,29 +409,30 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                             type="button"
                             onClick={handleCopyReferral}
                             className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                            title="复制邀请码"
+                            title={t("userProfile.actions.copy")}
                           >
                             <Copy size={14} />
                           </button>
                         )}
                       </div>
                     </div>
+                    <p className="text-xs text-[var(--text-muted)] pt-0.5">{t("customKey.dailyBonus")}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <Button type="button" variant="outline" onClick={onChangePassword} className="gap-2">
                       <Key size={16} />
-                      修改密码
+                      {t("userProfile.actions.changePassword")}
                     </Button>
                     <Button type="button" variant="outline" onClick={onShareInvite} className="gap-2">
                       <ShareNetwork size={16} />
-                      分享邀请
+                      {t("userProfile.actions.shareInvite")}
                     </Button>
                   </div>
 
                   <Button type="button" variant="outline" onClick={handleSignOut} className="w-full gap-2">
                     <SignOut size={16} />
-                    退出登录
+                    {t("userProfile.actions.signOut")}
                   </Button>
                 </div>
               </TabsContent>
@@ -423,8 +443,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
               <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-sm font-medium text-[var(--text-primary)]">用我自己的 key 玩</h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">开启后填写 API Key，仅保存在本地浏览器</p>
+                    <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.title")}</h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.description")}</p>
                   </div>
                   <Switch
                     checked={isCustomKeyEnabled}
@@ -442,12 +462,12 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                   {/* 2. LLM Keys — at least one required */}
                   <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
                     <div>
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">语言模型 Key</h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">至少配置 Zenmux 或百炼其一，用于对局与人物生成</p>
+                      <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.llmKey.title")}</h3>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.llmKey.description")}</p>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="zenmux-key" className="text-xs">Zenmux API Key</Label>
+                      <Label htmlFor="zenmux-key" className="text-xs">{t("customKey.zenmux.label")}</Label>
                      
                       <div className="flex gap-2">
                         <Input
@@ -455,7 +475,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           name="wolfcha-zenmux-api-key"
                           type={showZenmuxKey ? "text" : "password"}
                           autoComplete="new-password"
-                          placeholder="请输入 Zenmux API Key"
+                          placeholder={t("customKey.zenmux.placeholder")}
                           value={zenmuxKey}
                           onChange={(e) => {
                             setZenmuxKeyState(e.target.value);
@@ -468,26 +488,26 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           variant="outline"
                           size="sm"
                           onClick={() => setShowZenmuxKey((v) => !v)}
-                          aria-label={showZenmuxKey ? "隐藏 Zenmux API Key" : "显示 Zenmux API Key"}
+                          aria-label={showZenmuxKey ? t("customKey.zenmux.hide") : t("customKey.zenmux.show")}
                         >
                           {showZenmuxKey ? <EyeSlash size={16} /> : <Eye size={16} />}
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleValidateZenmux} disabled={isValidatingZenmux || !zenmuxKey.trim() || (!!validatedKeys.zenmux && validatedKeys.zenmux === zenmuxKey.trim())}>
-                          {isValidatingZenmux ? "验证中" : validatedKeys.zenmux && validatedKeys.zenmux === zenmuxKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : "验证"}
+                          {isValidatingZenmux ? t("customKey.validating") : validatedKeys.zenmux && validatedKeys.zenmux === zenmuxKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : t("customKey.validate")}
                         </Button>
                       </div>
                       <a href="https://zenmux.ai/invite/DMMBVZ" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border-2 border-[var(--color-accent)] bg-[var(--color-accent-bg)] px-2.5 py-2 transition-all hover:shadow-md">
                         <img src="/sponsor/zenmux.png" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-medium text-[var(--text-primary)]">获取 Zenmux Key</span>
-                          <span className="text-[11px] text-[var(--text-muted)] ml-1.5">支持国内外大部分模型</span>
+                          <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.zenmux.get")}</span>
+                          <span className="text-[11px] text-[var(--text-muted)] ml-1.5">{t("customKey.zenmux.note")}</span>
                         </div>
                         <ArrowRight size={14} className="shrink-0 text-[var(--color-accent)]" />
                       </a>
                     </div>
 
                     <div className="border-t border-[var(--border-color)] pt-3 space-y-2">
-                      <Label htmlFor="dashscope-key" className="text-xs">百炼 API Key</Label>
+                      <Label htmlFor="dashscope-key" className="text-xs">{t("customKey.dashscope.label")}</Label>
                      
                       <div className="flex gap-2">
                         <Input
@@ -495,7 +515,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           name="wolfcha-dashscope-api-key"
                           type={showDashscopeKey ? "text" : "password"}
                           autoComplete="new-password"
-                          placeholder="可选：百炼（DeepSeek / Qwen / Kimi）"
+                          placeholder={t("customKey.dashscope.placeholder")}
                           value={dashscopeKey}
                           onChange={(e) => {
                             setDashscopeKeyState(e.target.value);
@@ -508,20 +528,20 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                           variant="outline"
                           size="sm"
                           onClick={() => setShowDashscopeKey((v) => !v)}
-                          aria-label={showDashscopeKey ? "隐藏百炼 API Key" : "显示百炼 API Key"}
+                          aria-label={showDashscopeKey ? t("customKey.dashscope.hide") : t("customKey.dashscope.show")}
                         >
                           {showDashscopeKey ? <EyeSlash size={16} /> : <Eye size={16} />}
                         </Button>
                         <Button type="button" variant="outline" size="sm" onClick={handleValidateDashscope} disabled={isValidatingDashscope || !dashscopeKey.trim() || (!!validatedKeys.dashscope && validatedKeys.dashscope === dashscopeKey.trim())}>
-                          {isValidatingDashscope ? "验证中" : validatedKeys.dashscope && validatedKeys.dashscope === dashscopeKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : "验证"}
+                          {isValidatingDashscope ? t("customKey.validating") : validatedKeys.dashscope && validatedKeys.dashscope === dashscopeKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : t("customKey.validate")}
                         </Button>
                       </div>
 
                       <a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
                         <img src="/sponsor/bailian.png" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
                         <div className="min-w-0 flex-1">
-                          <span className="text-xs font-medium text-[var(--text-primary)]">获取百炼 Key</span>
-                          <span className="text-[11px] text-[var(--text-muted)] ml-1.5">DeepSeek / Qwen / Kimi 等</span>
+                          <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.dashscope.get")}</span>
+                          <span className="text-[11px] text-[var(--text-muted)] ml-1.5">{t("customKey.dashscope.note")}</span>
                         </div>
                         <ArrowRight size={14} className="shrink-0 text-[var(--text-muted)]" />
                       </a>
@@ -532,35 +552,35 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                   {availableModelPool.length > 0 && (
                     <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
                       <div>
-                        <h3 className="text-sm font-medium text-[var(--text-primary)]">模型配置</h3>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">人物生成、每日总结与 AI 玩家抽选</p>
+                        <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.modelConfig.title")}</h3>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.modelConfig.description")}</p>
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                          <Label htmlFor="generator-model" className="text-xs">人物生成模型</Label>
+                          <Label htmlFor="generator-model" className="text-xs">{t("customKey.modelConfig.generator")}</Label>
                           <Select
                             value={availableModelPool.some((r) => r.model === generatorModel) ? generatorModel : ""}
                             onValueChange={(v) => setGeneratorModelState(v)}
                           >
-                            <SelectTrigger id="generator-model"><SelectValue placeholder="选择模型" /></SelectTrigger>
+                            <SelectTrigger id="generator-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : "百炼"} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-1.5">
-                          <Label htmlFor="summary-model" className="text-xs">每日总结模型</Label>
+                          <Label htmlFor="summary-model" className="text-xs">{t("customKey.modelConfig.summary")}</Label>
                           <Select
                             value={availableModelPool.some((r) => r.model === summaryModel) ? summaryModel : ""}
                             onValueChange={(v) => setSummaryModelState(v)}
                           >
-                            <SelectTrigger id="summary-model"><SelectValue placeholder="选择模型" /></SelectTrigger>
+                            <SelectTrigger id="summary-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : "百炼"} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -568,8 +588,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-xs">AI 玩家候选</Label>
-                        <p className="text-xs text-[var(--text-muted)]">从中抽取 AI 玩家，可多选</p>
+                        <Label className="text-xs">{t("customKey.modelConfig.candidates")}</Label>
+                        <p className="text-xs text-[var(--text-muted)]">{t("customKey.modelConfig.candidatesDesc")}</p>
                         <DropdownMenu open={isModelSelectorOpen} onOpenChange={setIsModelSelectorOpen}>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -580,8 +600,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                               <CaretDown size={16} className={`shrink-0 transition-transform ${isModelSelectorOpen ? "rotate-180" : ""}`} />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
-                            {availableModelPool.map((r) => (
+                        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                            {playerModelPool.map((r) => (
                               <DropdownMenuCheckboxItem
                                 key={`${r.provider}:${r.model}`}
                                 checked={selectedModels.includes(r.model)}
@@ -594,7 +614,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                               >
                                 <img src={getModelLogoPath(r)} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
                                 <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">{r.model}</span>
-                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({r.provider === "zenmux" ? "Zenmux" : "百炼"})</span>
+                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")})</span>
                               </DropdownMenuCheckboxItem>
                             ))}
                           </DropdownMenuContent>
@@ -606,27 +626,27 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                   {/* 4. Voice — optional Minimax */}
                   <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
                     <div>
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">语音与音效（可选）</h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">配置 Minimax 后可启用语音播报与音效</p>
+                      <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.voice.title")}</h3>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.voice.description")}</p>
                     </div>
                     <a href="https://platform.minimaxi.com/subscribe/coding-plan?code=I6GrZd4xLt&source=link" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
                       <img src="/sponsor/minimax.png" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
                       <div className="min-w-0 flex-1">
-                        <span className="text-xs font-medium text-[var(--text-primary)]">获取 Minimax Key</span>
-                        <span className="text-[11px] text-[var(--text-muted)] ml-1.5">语音与音效</span>
+                        <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.minimax.get")}</span>
+                        <span className="text-[11px] text-[var(--text-muted)] ml-1.5">{t("customKey.minimax.note")}</span>
                       </div>
                       <ArrowRight size={14} className="shrink-0 text-[var(--text-muted)]" />
                     </a>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor="minimax-key" className="text-xs">Minimax API Key</Label>
+                        <Label htmlFor="minimax-key" className="text-xs">{t("customKey.minimax.keyLabel")}</Label>
                         <div className="flex gap-2">
                           <Input
                             id="minimax-key"
                             name="wolfcha-minimax-api-key"
                             type={showMinimaxKey ? "text" : "password"}
                             autoComplete="new-password"
-                            placeholder="可选"
+                            placeholder={t("customKey.optionalPlaceholder")}
                             value={minimaxKey}
                             onChange={(e) => setMinimaxKeyState(e.target.value)}
                             className="flex-1"
@@ -636,21 +656,21 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                             variant="outline"
                             size="sm"
                             onClick={() => setShowMinimaxKey((v) => !v)}
-                            aria-label={showMinimaxKey ? "隐藏 Minimax API Key" : "显示 Minimax API Key"}
+                            aria-label={showMinimaxKey ? t("customKey.minimax.hide") : t("customKey.minimax.show")}
                           >
                             {showMinimaxKey ? <EyeSlash size={16} /> : <Eye size={16} />}
                           </Button>
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="minimax-group" className="text-xs">Minimax Group ID</Label>
+                        <Label htmlFor="minimax-group" className="text-xs">{t("customKey.minimax.groupLabel")}</Label>
                         <div className="flex gap-2">
                           <Input
                             id="minimax-group"
                             name="wolfcha-minimax-group-id"
                             type={showMinimaxGroupId ? "text" : "password"}
                             autoComplete="new-password"
-                            placeholder="可选"
+                            placeholder={t("customKey.optionalPlaceholder")}
                             value={minimaxGroupId}
                             onChange={(e) => setMinimaxGroupIdState(e.target.value)}
                             className="flex-1"
@@ -660,7 +680,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
                             variant="outline"
                             size="sm"
                             onClick={() => setShowMinimaxGroupId((v) => !v)}
-                            aria-label={showMinimaxGroupId ? "隐藏 Minimax Group ID" : "显示 Minimax Group ID"}
+                            aria-label={showMinimaxGroupId ? t("customKey.minimax.hideGroup") : t("customKey.minimax.showGroup")}
                           >
                             {showMinimaxGroupId ? <EyeSlash size={16} /> : <Eye size={16} />}
                           </Button>
@@ -671,8 +691,8 @@ import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, type Mode
 
                   {/* 5. Actions */}
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={handleClearKeys} className="flex-1">清除</Button>
-                    <Button type="button" onClick={handleSaveKeys} className="flex-1">保存</Button>
+                    <Button type="button" variant="outline" onClick={handleClearKeys} className="flex-1">{t("customKey.actions.clear")}</Button>
+                    <Button type="button" onClick={handleSaveKeys} className="flex-1">{t("customKey.actions.save")}</Button>
                   </div>
                 </>
               )}

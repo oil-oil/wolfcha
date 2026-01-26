@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { translateAuthError } from "@/lib/auth-errors";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ interface AccountModalProps {
 }
 
 export function AccountModal({ open, onOpenChange }: AccountModalProps) {
+  const t = useTranslations();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,17 +34,17 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
 
     // Validation
     if (!newPassword.trim()) {
-      toast.error("请输入新密码");
+      toast.error(t("accountModal.errors.newPasswordRequired"));
       return;
     }
 
     if (newPassword.length < 6) {
-      toast.error("密码长度至少为 6 位");
+      toast.error(t("accountModal.errors.passwordTooShort"));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error("两次输入的密码不一致");
+      toast.error(t("accountModal.errors.passwordMismatch"));
       return;
     }
 
@@ -55,9 +57,11 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
       });
 
       if (error) {
-        toast.error("修改失败", { description: translateAuthError(error.message) });
+        toast.error(t("accountModal.toasts.updateFail.title"), {
+          description: translateAuthError(error.message),
+        });
       } else {
-        toast.success("密码已更新");
+        toast.success(t("accountModal.toasts.updateSuccess"));
         // Reset form
         setCurrentPassword("");
         setNewPassword("");
@@ -65,7 +69,9 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
         onOpenChange(false);
       }
     } catch (err) {
-      toast.error("修改失败", { description: "发生未知错误" });
+      toast.error(t("accountModal.toasts.updateFail.title"), {
+        description: t("accountModal.toasts.updateFail.description"),
+      });
     } finally {
       setLoading(false);
     }
@@ -77,20 +83,20 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Key size={20} />
-            修改密码
+            {t("accountModal.title")}
           </DialogTitle>
           <DialogDescription>
-            修改您的账户密码。密码长度至少为 6 位。
+            {t("accountModal.description")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleUpdatePassword} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="new-password">新密码</Label>
+            <Label htmlFor="new-password">{t("accountModal.fields.newPassword")}</Label>
             <Input
               id="new-password"
               type="password"
-              placeholder="请输入新密码"
+              placeholder={t("accountModal.placeholders.newPassword")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               disabled={loading}
@@ -100,11 +106,11 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirm-password">确认新密码</Label>
+            <Label htmlFor="confirm-password">{t("accountModal.fields.confirmPassword")}</Label>
             <Input
               id="confirm-password"
               type="password"
-              placeholder="请再次输入新密码"
+              placeholder={t("accountModal.placeholders.confirmPassword")}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
@@ -121,14 +127,14 @@ export function AccountModal({ open, onOpenChange }: AccountModalProps) {
               disabled={loading}
               className="flex-1"
             >
-              取消
+              {t("accountModal.actions.cancel")}
             </Button>
             <Button
               type="submit"
               disabled={loading}
               className="flex-1"
             >
-              {loading ? "更新中..." : "更新密码"}
+              {loading ? t("accountModal.actions.updating") : t("accountModal.actions.update")}
             </Button>
           </div>
         </form>

@@ -7,6 +7,7 @@ import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type { GameState, Phase, Player, Role } from "@/types/game";
 import { createInitialGameState } from "@/lib/game-master";
+import { getI18n } from "@/i18n/translator";
 
 // ============ 基础状态 Atoms ============
 
@@ -79,29 +80,32 @@ export interface PhaseConfig {
 export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   LOBBY: {
     phase: "LOBBY",
-    description: "准备开始",
+    description: "phase.lobby.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   SETUP: {
     phase: "SETUP",
-    description: "生成角色中...",
+    description: "phase.setup.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   NIGHT_START: {
     phase: "NIGHT_START",
-    description: "夜晚降临",
+    description: "phase.nightStart.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   NIGHT_GUARD_ACTION: {
     phase: "NIGHT_GUARD_ACTION",
-    description: "守卫行动中",
-    humanDescription: (hp) => hp?.role === "Guard" ? "选择要保护的玩家" : "守卫行动中",
+    description: "phase.nightGuard.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "Guard" ? t("phase.nightGuard.human") : t("phase.nightGuard.description");
+    },
     requiresHumanInput: (hp) => hp?.alive && hp?.role === "Guard" || false,
     canSelectPlayer: (hp, target, gs) => {
       if (!hp || hp.role !== "Guard" || !target.alive) return false;
@@ -113,20 +117,26 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   NIGHT_WOLF_ACTION: {
     phase: "NIGHT_WOLF_ACTION",
-    description: "狼人行动中",
-    humanDescription: (hp) => hp?.role === "Werewolf" ? "选择击杀目标" : "狼人行动中",
+    description: "phase.nightWolf.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "Werewolf" ? t("phase.nightWolf.human") : t("phase.nightWolf.description");
+    },
     requiresHumanInput: (hp) => hp?.alive && hp?.role === "Werewolf" || false,
     canSelectPlayer: (hp, target) => {
-      if (!hp || hp.role !== "Werewolf" || !target.alive || target.isHuman) return false;
-      // 狼人只能击杀好人阵营
-      return target.alignment === "village";
+      if (!hp || hp.role !== "Werewolf" || !target.alive) return false;
+      // 狼人可以刀任何存活玩家（包括队友和自己）
+      return true;
     },
     actionType: "night_action",
   },
   NIGHT_WITCH_ACTION: {
     phase: "NIGHT_WITCH_ACTION",
-    description: "女巫行动中",
-    humanDescription: (hp) => hp?.role === "Witch" ? "是否使用药水？" : "女巫行动中",
+    description: "phase.nightWitch.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "Witch" ? t("phase.nightWitch.human") : t("phase.nightWitch.description");
+    },
     requiresHumanInput: (hp, gs) => {
       if (!hp?.alive || hp?.role !== "Witch") return false;
       return !gs.roleAbilities.witchHealUsed || !gs.roleAbilities.witchPoisonUsed;
@@ -141,8 +151,11 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   NIGHT_SEER_ACTION: {
     phase: "NIGHT_SEER_ACTION",
-    description: "预言家行动中",
-    humanDescription: (hp) => hp?.role === "Seer" ? "选择查验目标" : "预言家行动中",
+    description: "phase.nightSeer.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "Seer" ? t("phase.nightSeer.human") : t("phase.nightSeer.description");
+    },
     requiresHumanInput: (hp) => hp?.alive && hp?.role === "Seer" || false,
     canSelectPlayer: (hp, target, gs) => {
       if (!hp || hp.role !== "Seer" || !target.alive || target.isHuman) return false;
@@ -154,46 +167,61 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   NIGHT_RESOLVE: {
     phase: "NIGHT_RESOLVE",
-    description: "天亮了",
+    description: "phase.nightResolve.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   DAY_START: {
     phase: "DAY_START",
-    description: "白天开始",
+    description: "phase.dayStart.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   DAY_BADGE_SIGNUP: {
     phase: "DAY_BADGE_SIGNUP",
-    description: "警徽竞选报名",
-    humanDescription: (hp, gs) => hp?.alive && typeof gs.badge.signup?.[hp.playerId] !== "boolean" ? "是否竞选警长" : "警徽竞选报名",
+    description: "phase.badgeSignup.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      return hp?.alive && typeof gs.badge.signup?.[hp.playerId] !== "boolean"
+        ? t("phase.badgeSignup.human")
+        : t("phase.badgeSignup.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.badge.signup?.[hp.playerId] !== "boolean" || false,
     canSelectPlayer: () => false,
     actionType: "special",
   },
   DAY_BADGE_SPEECH: {
     phase: "DAY_BADGE_SPEECH",
-    description: "警徽竞选发言",
-    humanDescription: (hp, gs) => gs.currentSpeakerSeat === hp?.seat ? "轮到你发言" : "警徽竞选发言",
+    description: "phase.badgeSpeech.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      return gs.currentSpeakerSeat === hp?.seat
+        ? t("phase.speechYourTurn")
+        : t("phase.badgeSpeech.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.alive && gs.currentSpeakerSeat === hp?.seat || false,
     canSelectPlayer: () => false,
     actionType: "speech",
   },
   DAY_BADGE_ELECTION: {
     phase: "DAY_BADGE_ELECTION",
-    description: "警徽评选",
+    description: "phase.badgeElection.description",
     humanDescription: (hp, gs) => {
+      const { t } = getI18n();
       const candidates = gs.badge.candidates || [];
-      if (hp && candidates.includes(hp.seat)) return "你是候选人，无需投票";
-      return hp?.alive && typeof gs.badge.votes[hp.playerId] !== "number" ? "投票选警徽" : "警徽评选";
+      if (candidates.length === 0) return t("phase.badgeElection.description");
+      if (hp && candidates.includes(hp.seat)) return t("phase.badgeElection.noVote");
+      return hp?.alive && typeof gs.badge.votes[hp.playerId] !== "number"
+        ? t("phase.badgeElection.human")
+        : t("phase.badgeElection.description");
     },
     requiresHumanInput: (hp, gs) => {
       if (!hp?.alive) return false;
       // 候选人不需要投票
       const candidates = gs.badge.candidates || [];
+      if (candidates.length === 0) return false;
       if (candidates.includes(hp.seat)) return false;
       return typeof gs.badge.votes[hp.playerId] !== "number";
     },
@@ -202,6 +230,7 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
       if (target.isHuman) return false;
       // 候选人不能投票
       const candidates = gs.badge.candidates || [];
+      if (candidates.length === 0) return false;
       if (candidates.includes(hp.seat)) return false;
       if (typeof gs.badge.votes[hp.playerId] === "number") return false;
       if (candidates.length > 0 && !candidates.includes(target.seat)) return false;
@@ -211,36 +240,66 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   DAY_PK_SPEECH: {
     phase: "DAY_PK_SPEECH",
-    description: "PK发言",
-    humanDescription: (hp, gs) => gs.currentSpeakerSeat === hp?.seat ? "轮到你发言" : "PK发言",
+    description: "phase.pkSpeech.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      return gs.currentSpeakerSeat === hp?.seat ? t("phase.speechYourTurn") : t("phase.pkSpeech.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.alive && gs.currentSpeakerSeat === hp?.seat || false,
     canSelectPlayer: () => false,
     actionType: "speech",
   },
   DAY_SPEECH: {
     phase: "DAY_SPEECH",
-    description: "发言阶段",
-    humanDescription: (hp, gs) => gs.currentSpeakerSeat === hp?.seat ? "轮到你发言" : "发言阶段",
+    description: "phase.daySpeech.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      return gs.currentSpeakerSeat === hp?.seat ? t("phase.speechYourTurn") : t("phase.daySpeech.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.alive && gs.currentSpeakerSeat === hp?.seat || false,
     canSelectPlayer: () => false,
     actionType: "speech",
   },
   DAY_LAST_WORDS: {
     phase: "DAY_LAST_WORDS",
-    description: "遗言阶段",
+    description: "phase.lastWords.description",
     requiresHumanInput: (hp, gs) => gs.currentSpeakerSeat === hp?.seat || false,
     canSelectPlayer: () => false,
     actionType: "speech",
   },
   DAY_VOTE: {
     phase: "DAY_VOTE",
-    description: "投票阶段",
-    requiresHumanInput: (hp, gs) => hp?.alive && typeof gs.votes[hp?.playerId || ""] !== "number" || false,
+    description: "phase.dayVote.description",
+    humanDescription: (hp, gs) => {
+      const { t } = getI18n();
+      // PK投票时，参与PK的人不能投票
+      if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
+        if (hp && gs.pkTargets.includes(hp.seat)) {
+          return t("phase.dayVote.noVotePk");
+        }
+      }
+      return hp?.alive && typeof gs.votes[hp?.playerId || ""] !== "number"
+        ? t("phase.dayVote.human")
+        : t("phase.dayVote.description");
+    },
+    requiresHumanInput: (hp, gs) => {
+      if (!hp?.alive) return false;
+      // PK投票时，参与PK的人不需要投票
+      if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
+        if (gs.pkTargets.includes(hp.seat)) return false;
+      }
+      return typeof gs.votes[hp?.playerId || ""] !== "number";
+    },
     canSelectPlayer: (hp, target, gs) => {
       if (!hp?.alive || target.isHuman || !target.alive) return false;
       if (typeof gs.votes[hp.playerId] === "number") return false;
+      // PK投票时，参与PK的人不能投票
       if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
+        if (gs.pkTargets.includes(hp.seat)) return false;
         return gs.pkTargets.includes(target.seat);
+      }
+      if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length === 0) {
+        return false;
       }
       return true;
     },
@@ -248,15 +307,18 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   DAY_RESOLVE: {
     phase: "DAY_RESOLVE",
-    description: "处决结算",
+    description: "phase.dayResolve.description",
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
   },
   BADGE_TRANSFER: {
     phase: "BADGE_TRANSFER",
-    description: "警长移交警徽",
-    humanDescription: () => "选择移交警徽的对象",
+    description: "phase.badgeTransfer.description",
+    humanDescription: () => {
+      const { t } = getI18n();
+      return t("phase.badgeTransfer.human");
+    },
     requiresHumanInput: (hp, gs) => {
       // 只有当人类玩家是死亡的警长时才需要输入
       const sheriffSeat = gs.badge.holderSeat;
@@ -273,8 +335,11 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   HUNTER_SHOOT: {
     phase: "HUNTER_SHOOT",
-    description: "猎人开枪",
-    humanDescription: (hp) => hp?.role === "Hunter" ? "选择开枪目标" : "猎人开枪",
+    description: "phase.hunterShoot.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "Hunter" ? t("phase.hunterShoot.human") : t("phase.hunterShoot.description");
+    },
     requiresHumanInput: (hp, gs) => hp?.role === "Hunter" && gs.roleAbilities.hunterCanShoot || false,
     canSelectPlayer: (hp, target) => {
       if (!hp || hp.role !== "Hunter" || !target.alive || target.isHuman) return false;
@@ -284,8 +349,11 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
   },
   GAME_END: {
     phase: "GAME_END",
-    description: "游戏结束",
-    humanDescription: (_, gs) => gs.winner === "village" ? "好人胜利" : "狼人胜利",
+    description: "phase.gameEnd.description",
+    humanDescription: (_, gs) => {
+      const { t } = getI18n();
+      return gs.winner === "village" ? t("phase.gameEnd.villageWin") : t("phase.gameEnd.wolfWin");
+    },
     requiresHumanInput: () => false,
     canSelectPlayer: () => false,
     actionType: "none",
@@ -300,6 +368,7 @@ export const currentPhaseConfigAtom = atom((get) => {
 
 // 当前阶段描述
 export const phaseDescriptionAtom = atom((get) => {
+  const { t } = getI18n();
   const gameState = get(gameStateAtom);
   const humanPlayer = get(humanPlayerAtom);
   const config = PHASE_CONFIGS[gameState.phase];
@@ -307,7 +376,8 @@ export const phaseDescriptionAtom = atom((get) => {
   if (config.humanDescription) {
     return config.humanDescription(humanPlayer, gameState);
   }
-  return config.description;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return t(config.description as any);
 });
 
 // 是否需要人类输入

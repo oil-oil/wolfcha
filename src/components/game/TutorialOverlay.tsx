@@ -14,6 +14,7 @@ import {
 } from "@/components/icons/FlatIcons";
 import type { Phase, Role } from "@/types/game";
 import { Switch } from "@/components/ui/switch";
+import { useTranslations } from "next-intl";
 
 export type TutorialKind = "night_intro" | "day_intro" | "role";
 
@@ -31,95 +32,13 @@ interface TutorialOverlayProps {
   onAutoPromptChange?: (enabled: boolean) => void;
 }
 
-// Role content configuration
-const ROLE_CONFIG: Record<Role, {
-  title: string;
-  desc: string;
-  points: string[];
-  action: string;
-  tips: string[];
-  accent: string;
-  bg: string;
-  Icon: React.ComponentType<{ size?: number; className?: string }>;
-}> = {
-  Werewolf: {
-    title: "狼人",
-    desc: "你的目标是消灭所有好人",
-    points: [
-      "夜晚与其他狼人商议，选择一名好人击杀",
-      "白天伪装成好人，误导其他玩家的判断",
-    ],
-    action: "点击好人头像选择击杀目标",
-    tips: ["和队友配合好", "说话要像好人，但别太完美"],
-    accent: "var(--color-wolf)",
-    bg: "var(--color-wolf-bg)",
-    Icon: WerewolfIcon,
-  },
-  Seer: {
-    title: "预言家",
-    desc: "你可以查验玩家的真实身份",
-    points: [
-      "夜晚查验一名玩家，系统告诉你是好人还是狼人",
-      "白天通过发言传递查验信息，引导投票",
-    ],
-    action: "点击玩家头像进行查验",
-    tips: ["慢慢建立信任再公布信息", "先让别人相信你是预言家"],
-    accent: "var(--color-seer)",
-    bg: "var(--color-seer-bg)",
-    Icon: SeerIcon,
-  },
-  Witch: {
-    title: "女巫",
-    desc: "你有解药和毒药各一瓶",
-    points: [
-      "解药：可以救活当晚被狼人击杀的玩家（一次）",
-      "毒药：可以毒杀任意一名玩家（一次）",
-    ],
-    action: "选择救人、毒人或跳过",
-    tips: ["药很珍贵，不要随便用", "信息不够时等一等"],
-    accent: "var(--color-witch)",
-    bg: "var(--color-witch-bg)",
-    Icon: WitchIcon,
-  },
-  Hunter: {
-    title: "猎人",
-    desc: "你出局时可以开枪带走一人",
-    points: [
-      "夜晚不需要行动，等待天亮",
-      "当你死亡或被放逐时，可以开枪带走一人",
-    ],
-    action: "点击玩家头像开枪",
-    tips: ["不要轻易暴露身份", "出局前想清楚谁最可疑"],
-    accent: "var(--color-hunter)",
-    bg: "var(--color-hunter-bg)",
-    Icon: HunterIcon,
-  },
-  Guard: {
-    title: "守卫",
-    desc: "你可以保护玩家免受狼人击杀",
-    points: [
-      "夜晚守护一名玩家，他当晚不会被狼人击杀",
-      "不能连续两晚守护同一人",
-    ],
-    action: "点击玩家头像进行守护",
-    tips: ["守住关键时刻比守关键人更重要", "不要暴露守了谁"],
-    accent: "var(--color-guard)",
-    bg: "var(--color-guard-bg)",
-    Icon: GuardIcon,
-  },
-  Villager: {
-    title: "村民",
-    desc: "你没有特殊能力，但判断同样重要",
-    points: [
-      "夜晚不需要行动，等待天亮",
-      "白天认真听发言，找出逻辑漏洞，投票可疑的人",
-    ],
-    action: "投票时点击玩家头像",
-    tips: ["说话要有依据", "多听多想"],
-    accent: "var(--color-villager)",
-    bg: "var(--color-villager-bg)",
-    Icon: VillagerIcon,
-  },
+const ROLE_META: Record<Role, { accent: string; bg: string; Icon: React.ComponentType<{ size?: number; className?: string }> }> = {
+  Werewolf: { accent: "var(--color-wolf)", bg: "var(--color-wolf-bg)", Icon: WerewolfIcon },
+  Seer: { accent: "var(--color-seer)", bg: "var(--color-seer-bg)", Icon: SeerIcon },
+  Witch: { accent: "var(--color-witch)", bg: "var(--color-witch-bg)", Icon: WitchIcon },
+  Hunter: { accent: "var(--color-hunter)", bg: "var(--color-hunter-bg)", Icon: HunterIcon },
+  Guard: { accent: "var(--color-guard)", bg: "var(--color-guard-bg)", Icon: GuardIcon },
+  Villager: { accent: "var(--color-villager)", bg: "var(--color-villager-bg)", Icon: VillagerIcon },
 };
 
 export function TutorialOverlay({
@@ -129,6 +48,7 @@ export function TutorialOverlay({
   autoPromptEnabled,
   onAutoPromptChange,
 }: TutorialOverlayProps) {
+  const t = useTranslations();
   const [renderTutorial, setRenderTutorial] = useState<TutorialPayload | null>(tutorial);
 
   useEffect(() => {
@@ -143,12 +63,16 @@ export function TutorialOverlay({
     if (renderTutorial.kind === "night_intro") {
       return {
         icon: NightIcon,
-        title: "夜晚我们可以做什么？",
+        title: t("tutorialOverlay.nightIntro.title"),
         body: (
           <div className="space-y-4">
-            <p>夜晚只有<strong>狼人和神职</strong>会行动，村民与猎人等待天亮。</p>
-            <p>系统会依次提示对应职业睁眼。轮到你时，屏幕会显示你的职业立绘。</p>
-            <p className="text-amber-300/90">操作方式：点击玩家头像选择目标，再点击确认即可。</p>
+            <p>
+              {t.rich("tutorialOverlay.nightIntro.line1", {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
+            </p>
+            <p>{t("tutorialOverlay.nightIntro.line2")}</p>
+            <p className="text-amber-300/90">{t("tutorialOverlay.nightIntro.line3")}</p>
           </div>
         ),
         accent: "var(--color-accent-light)",
@@ -159,16 +83,16 @@ export function TutorialOverlay({
     if (renderTutorial.kind === "day_intro") {
       return {
         icon: DayIcon,
-        title: "白天我们做什么？",
+        title: t("tutorialOverlay.dayIntro.title"),
         body: (
           <div className="space-y-4">
-            <p>白天所有存活的玩家都会参与，通过发言和投票找出狼人。</p>
+            <p>{t("tutorialOverlay.dayIntro.line1")}</p>
             <div className="space-y-2">
-              <p><strong>① 公布昨夜结果</strong> - 系统公布谁出局了</p>
-              <p><strong>② 依次发言</strong> - 轮到你时说出推理和怀疑</p>
-              <p><strong>③ 投票放逐</strong> - 得票最多的人出局</p>
+              <p><strong>{t("tutorialOverlay.dayIntro.step1.title")}</strong> - {t("tutorialOverlay.dayIntro.step1.desc")}</p>
+              <p><strong>{t("tutorialOverlay.dayIntro.step2.title")}</strong> - {t("tutorialOverlay.dayIntro.step2.desc")}</p>
+              <p><strong>{t("tutorialOverlay.dayIntro.step3.title")}</strong> - {t("tutorialOverlay.dayIntro.step3.desc")}</p>
             </div>
-            <p className="text-amber-300/90">发言时说出你的推理依据，好人要团结起来找到真正的狼人。</p>
+            <p className="text-amber-300/90">{t("tutorialOverlay.dayIntro.line3")}</p>
           </div>
         ),
         accent: "var(--color-gold)",
@@ -177,16 +101,32 @@ export function TutorialOverlay({
     }
 
     // Role tutorial
-    const role = renderTutorial.role ? ROLE_CONFIG[renderTutorial.role] : ROLE_CONFIG.Villager;
+    const roleKey = renderTutorial.role ?? "Villager";
+    const roleLabelMap: Record<Role, string> = {
+      Werewolf: t("roles.werewolf"),
+      Seer: t("roles.seer"),
+      Witch: t("roles.witch"),
+      Hunter: t("roles.hunter"),
+      Guard: t("roles.guard"),
+      Villager: t("roles.villager"),
+    };
+    const roleDataMap = t.raw("tutorialOverlay.roles" as any) as Record<Role, {
+      desc: string;
+      points: string[];
+      action: string;
+      tips: string[];
+    }>;
+    const roleData = roleDataMap[roleKey];
+    const roleMeta = ROLE_META[roleKey];
     return {
-      icon: role.Icon,
-      title: `${role.title}可以做什么？`,
+      icon: roleMeta.Icon,
+      title: t("tutorialOverlay.roleTitle", { role: roleLabelMap[roleKey] }),
       body: (
         <div className="space-y-4">
-          <p className="text-white/90">{role.desc}</p>
+          <p className="text-white/90">{roleData.desc}</p>
           
           <div className="space-y-2">
-            {role.points.map((point, i) => (
+            {roleData.points.map((point, i) => (
               <p key={i} className="flex items-start gap-2">
                 <span className="text-amber-300/90 shrink-0">•</span>
                 <span>{point}</span>
@@ -195,23 +135,23 @@ export function TutorialOverlay({
           </div>
 
           <p className="text-amber-300/90 font-medium">
-            操作：{role.action}
+            {t("tutorialOverlay.actionLabel")}{roleData.action}
           </p>
 
-          {role.tips.length > 0 && (
+          {roleData.tips.length > 0 && (
             <div className="pt-2 border-t border-white/10 space-y-1">
-              <p className="text-white/60 text-xs uppercase tracking-wider">提示</p>
-              {role.tips.map((tip, i) => (
+              <p className="text-white/60 text-xs uppercase tracking-wider">{t("tutorialOverlay.tipsLabel")}</p>
+              {roleData.tips.map((tip, i) => (
                 <p key={i} className="text-white/70 text-sm">• {tip}</p>
               ))}
             </div>
           )}
         </div>
       ),
-      accent: role.accent,
-      bg: role.bg,
+      accent: roleMeta.accent,
+      bg: roleMeta.bg,
     };
-  }, [renderTutorial]);
+  }, [renderTutorial, t]);
 
   if (!renderTutorial || !content) return null;
 
@@ -285,7 +225,7 @@ export function TutorialOverlay({
                     <IconComponent size={28} style={{ color: content.accent }} />
                   </div>
                   <div>
-                    <div className="text-xs uppercase tracking-[0.3em] text-white/55">Guide</div>
+                    <div className="text-xs uppercase tracking-[0.3em] text-white/55">{t("tutorialOverlay.guideLabel")}</div>
                     <div className="text-2xl font-bold text-white font-serif">{content.title}</div>
                   </div>
                 </div>
@@ -304,7 +244,7 @@ export function TutorialOverlay({
                           checked={!autoPromptEnabled}
                           onCheckedChange={(checked) => onAutoPromptChange(!checked)}
                         />
-                        <span>不再自动提示</span>
+                        <span>{t("tutorialOverlay.autoPromptOff")}</span>
                       </>
                     )}
                   </div>
@@ -313,7 +253,7 @@ export function TutorialOverlay({
                     className="px-5 py-2 rounded-lg text-sm font-semibold text-white/90 bg-white/10 hover:bg-white/15 border border-white/15 transition-colors"
                     style={{ boxShadow: `0 10px 24px rgba(0,0,0,0.35), 0 0 0 2px ${content.accent}22` }}
                   >
-                    我知道了
+                    {t("tutorialOverlay.confirm")}
                   </button>
                 </div>
               </div>

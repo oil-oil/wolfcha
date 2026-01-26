@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { NotePencil, Trash } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
 
 export function Notebook() {
+  const t = useTranslations();
   const [content, setContent] = useState("");
 
   // Load from local storage on mount
@@ -20,7 +22,7 @@ export function Notebook() {
   };
 
   const clearNotes = () => {
-    if (confirm("确定要清空笔记吗？")) {
+    if (confirm(t("notebook.clearConfirm"))) {
       setContent("");
       localStorage.removeItem("wolfcha-notebook");
     }
@@ -31,19 +33,19 @@ export function Notebook() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
         <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
           <NotePencil size={16} />
-          <span>笔记本</span>
+          <span>{t("notebook.title")}</span>
         </div>
         <button 
           onClick={clearNotes}
           className="p-1 cursor-pointer hover:bg-[var(--bg-hover)] rounded text-[var(--text-muted)] hover:text-[var(--color-danger)] transition-colors"
-          title="清空笔记"
+          title={t("notebook.clear")}
         >
           <Trash size={14} />
         </button>
       </div>
       <textarea
         className="flex-1 w-full p-3 resize-none bg-transparent border-none outline-none text-sm leading-relaxed text-[var(--text-primary)] placeholder-[var(--text-muted)]"
-        placeholder="在这里记录游戏线索..."
+        placeholder={t("notebook.placeholder")}
         value={content}
         onChange={handleChange}
         spellCheck={false}

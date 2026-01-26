@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "@phosphor-icons/react";
 import type { Player } from "@/types/game";
@@ -13,6 +13,7 @@ import {
   GuardIcon
 } from "@/components/icons/FlatIcons";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
+import { useTranslations } from "next-intl";
 
 interface PlayerDetailModalProps {
   player: Player | null;
@@ -38,18 +39,10 @@ const getRoleIcon = (role: string, size: number = 20) => {
   }
 };
 
-const getRoleName = (role: string) => {
-  switch (role) {
-    case "Werewolf": return "狼人";
-    case "Seer": return "预言家";
-    case "Witch": return "女巫";
-    case "Hunter": return "猎人";
-    case "Guard": return "守卫";
-    default: return "村民";
-  }
-};
+// getRoleName is defined inside the component to use i18n translations
 
 export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGenshinMode = false }: PlayerDetailModalProps) {
+  const t = useTranslations();
   const [renderPlayer, setRenderPlayer] = useState<Player | null>(player);
 
   useEffect(() => {
@@ -68,6 +61,24 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
   const canSeeRole = isMe || isWolfTeammate || !renderPlayer.alive;
   const isIdentityReady = isMe ? !!renderPlayer.displayName?.trim() : !!persona;
   const avatarSrc = getPlayerAvatarUrl(renderPlayer, isGenshinMode);
+  const roleLabels = useMemo<Record<string, string>>(() => ({
+    Werewolf: t("roles.werewolf"),
+    Seer: t("roles.seer"),
+    Witch: t("roles.witch"),
+    Hunter: t("roles.hunter"),
+    Guard: t("roles.guard"),
+    Villager: t("roles.villager"),
+  }), [t]);
+  const strategyLabels = useMemo<Record<string, string>>(() => ({
+    aggressive: t("persona.strategy.aggressive"),
+    safe: t("persona.strategy.safe"),
+    balanced: t("persona.strategy.balanced"),
+  }), [t]);
+  const getRoleName = (role: string) => roleLabels[role] ?? t("roles.villager");
+  const getStrategyLabel = (strategy?: string) => {
+    if (!strategy) return strategyLabels.balanced;
+    return strategyLabels[strategy] ?? strategyLabels.balanced;
+  };
   const showModelTag = !!modelLabel && isGenshinMode && !renderPlayer.isHuman;
 
   return (
@@ -122,20 +133,26 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                   )}
                   {!renderPlayer.alive && (
                     <div className="absolute inset-0 flex items-center justify-center z-20">
-                      <span className="text-white font-bold text-sm bg-black/50 px-2 py-1 rounded">已出局</span>
+                      <span className="text-white font-bold text-sm bg-black/50 px-2 py-1 rounded">{t("playerDetail.out")}</span>
                     </div>
                   )}
                 </div>
 
                 {/* 座位号 + 名字 */}
                 <div className="flex items-center justify-center gap-2 mb-1">
-                  <span className="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded">{renderPlayer.seat + 1}号</span>
-                  {isMe && <span className="text-xs font-bold bg-[var(--color-accent)] text-white px-2 py-0.5 rounded">YOU</span>}
+                  <span className="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded">
+                    {t("voteResult.seatLabel", { seat: renderPlayer.seat + 1 })}
+                  </span>
+                  {isMe && (
+                    <span className="text-xs font-bold bg-[var(--color-accent)] text-white px-2 py-0.5 rounded">
+                      {t("playerDetail.you")}
+                    </span>
+                  )}
                 </div>
                 <h2 className="text-xl font-black text-[var(--text-primary)]">{renderPlayer.displayName}</h2>
                 {showModelTag && (
                   <div className="mt-1 text-xs font-semibold text-[var(--text-muted)]">
-                    模型：{modelLabel}
+                    {t("playerDetail.model", { model: modelLabel })}
                   </div>
                 )}
                 
@@ -162,14 +179,14 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                         {persona.gender}
                       </span>
                       <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">
-                        {persona.age}岁
+                        {t("playerDetail.age", { age: persona.age })}
                       </span>
                       {modelLabel && (
                         <span
                           className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 font-medium max-w-full truncate"
                           title={modelLabel}
                         >
-                          模型：{modelLabel}
+                          {t("playerDetail.model", { model: modelLabel })}
                         </span>
                       )}
                       <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-medium">
@@ -188,7 +205,9 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                     {/* 说话风格 */}
                     {persona.voiceRules && persona.voiceRules.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">说话风格</h4>
+                        <h4 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                          {t("playerDetail.voiceStyle")}
+                        </h4>
                         <ul className="text-sm text-[var(--text-secondary)] space-y-1">
                           {persona.voiceRules.map((rule, i) => (
                             <li key={i} className="flex items-start gap-2">
@@ -206,7 +225,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                 {/* 人类玩家没有 persona */}
                 {isMe && !persona && (
                   <div className="text-center py-4 text-[var(--text-muted)] text-sm">
-                    这是你的角色
+                    {t("playerDetail.selfRole")}
                   </div>
                 )}
               </div>

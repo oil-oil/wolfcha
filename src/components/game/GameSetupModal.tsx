@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -11,6 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { DifficultyLevel } from "@/types/game";
 import { SoundSettingsSection } from "@/components/game/SettingsModal";
+import { useTranslations } from "next-intl";
 
 interface GameSetupModalProps {
   open: boolean;
@@ -29,19 +31,6 @@ interface GameSetupModalProps {
   onAiVoiceEnabledChange: (value: boolean) => void;
 }
 
-const DIFFICULTY_OPTIONS: Array<{ value: DifficultyLevel; label: string; description: string }> = [
-  { value: "easy", label: "新手局", description: "轻松氛围，适合初次体验" },
-  { value: "normal", label: "标准局", description: "均衡推理，逻辑与表演平衡" },
-  { value: "hard", label: "高阶局", description: "深度对抗，推理更复杂" },
-];
-
-const PLAYER_COUNT_OPTIONS: Array<{ value: number; label: string; description: string; roles: string }> = [
-  { value: 8, label: "8人局", description: "3狼 3神 2民", roles: "神职：预言家、女巫、猎人" },
-  { value: 9, label: "9人局", description: "3狼 3神 3民", roles: "神职：预言家、女巫、猎人" },
-  { value: 10, label: "10人局", description: "3狼 4神 3民", roles: "神职：预言家、女巫、猎人、守卫" },
-  { value: 11, label: "11人局", description: "4狼 4神 3民", roles: "神职：预言家、女巫、猎人、守卫" },
-  { value: 12, label: "12人局", description: "4狼 4神 4民", roles: "神职：预言家、女巫、猎人、守卫" },
-];
 
 export function GameSetupModal({
   open,
@@ -59,25 +48,41 @@ export function GameSetupModal({
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
 }: GameSetupModalProps) {
+  const t = useTranslations();
+  
+  const DIFFICULTY_OPTIONS = [
+    { value: "easy" as DifficultyLevel, label: t("difficulty.easy"), description: t("gameSetup.difficulty.easyDesc") },
+    { value: "normal" as DifficultyLevel, label: t("difficulty.normal"), description: t("gameSetup.difficulty.normalDesc") },
+    { value: "hard" as DifficultyLevel, label: t("difficulty.hard"), description: t("gameSetup.difficulty.hardDesc") },
+  ];
+
+  const PLAYER_COUNT_OPTIONS = [
+    { value: 8, label: t("gameSetup.playerCount.8.title"), description: t("gameSetup.playerCount.8.description"), roles: t("gameSetup.playerCount.8.roles") },
+    { value: 9, label: t("gameSetup.playerCount.9.title"), description: t("gameSetup.playerCount.9.description"), roles: t("gameSetup.playerCount.9.roles") },
+    { value: 10, label: t("gameSetup.playerCount.10.title"), description: t("gameSetup.playerCount.10.description"), roles: t("gameSetup.playerCount.10.roles") },
+    { value: 11, label: t("gameSetup.playerCount.11.title"), description: t("gameSetup.playerCount.11.description"), roles: t("gameSetup.playerCount.11.roles") },
+    { value: 12, label: t("gameSetup.playerCount.12.title"), description: t("gameSetup.playerCount.12.description"), roles: t("gameSetup.playerCount.12.roles") },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-serif text-[var(--text-primary)]">游戏设置</DialogTitle>
+          <DialogTitle className="font-serif text-[var(--text-primary)]">{t("gameSetup.title")}</DialogTitle>
           <DialogDescription className="text-[var(--text-muted)]">
-            在开局前调整难度与人数
+            {t("gameSetup.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <div className="text-sm font-medium text-[var(--text-primary)]">难度</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.difficultyLabel")}</div>
             <Select
               value={difficulty}
               onValueChange={(value) => onDifficultyChange(value as DifficultyLevel)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="选择难度" />
+                <SelectValue placeholder={t("gameSetup.selectDifficulty")} />
               </SelectTrigger>
               <SelectContent>
                 {DIFFICULTY_OPTIONS.map((option) => (
@@ -93,13 +98,13 @@ export function GameSetupModal({
           </div>
 
           <div className="space-y-2">
-            <div className="text-sm font-medium text-[var(--text-primary)]">人数</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.playerCountLabel")}</div>
             <Select
               value={String(playerCount)}
               onValueChange={(value) => onPlayerCountChange(Number(value))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="选择人数" />
+                <SelectValue placeholder={t("gameSetup.selectPlayerCount")} />
               </SelectTrigger>
               <SelectContent>
                 {PLAYER_COUNT_OPTIONS.map((option) => (
@@ -116,16 +121,16 @@ export function GameSetupModal({
 
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-[var(--text-primary)]">大模型原神模式</div>
+            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.genshinMode.title")}</div>
             <div className="text-xs text-[var(--text-muted)]">
-              默认情况下会为每位 AI 生成接近真实用户的角色背景与名字。开启后不再生成角色背景与名字，直接使用模型原名；如有重名会自动在后面加序号
+              {t("gameSetup.genshinMode.description")}
             </div>
             </div>
             <Switch className="shrink-0 mt-1" checked={isGenshinMode} onCheckedChange={onGenshinModeChange} />
           </div>
 
           <div className="border-t border-[var(--border-color)] pt-4">
-            <div className="text-sm font-medium text-[var(--text-primary)] mb-3">声音</div>
+            <div className="text-sm font-medium text-[var(--text-primary)] mb-3">{t("gameSetup.soundLabel")}</div>
             <SoundSettingsSection
               bgmVolume={bgmVolume}
               isSoundEnabled={isSoundEnabled}

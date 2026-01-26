@@ -4,6 +4,7 @@
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Microphone, SpinnerGap, StopCircle } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type RecorderStatus = "idle" | "recording" | "transcribing";
 
@@ -124,22 +125,21 @@ function WaveBars({ tone }: { tone: "gold" | "danger" }) {
   );
 }
 
-export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>(function VoiceRecorder(
-  { disabled, isNight, onTranscript },
-  ref
-) {
-  const [status, setStatus] = useState<RecorderStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [seconds, setSeconds] = useState(0);
+export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>(
+  function VoiceRecorder({ disabled = false, isNight = false, onTranscript }, ref) {
+    const t = useTranslations();
+    const [status, setStatus] = useState<RecorderStatus>("idle");
+    const [error, setError] = useState<string | null>(null);
+    const [seconds, setSeconds] = useState(0);
 
-  const timerRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const stopRequestedRef = useRef(false);
-  const releaseStreamTimerRef = useRef<number | null>(null);
+    const timerRef = useRef<number | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const chunksRef = useRef<BlobPart[]>([]);
+    const stopRequestedRef = useRef(false);
+    const releaseStreamTimerRef = useRef<number | null>(null);
 
-  const isRecording = status === "recording";
+    const isRecording = status === "recording";
   const isBusy = status !== "idle";
   const sttEnabled = false;
   const sttDisabled = disabled || !sttEnabled;
@@ -193,7 +193,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
   useEffect(() => {
     if (!sttEnabled) {
-      setError("语音识别暂不可用");
+      setError(t("voiceRecorder.errors.micUnavailable"));
     }
     return () => {
       cleanupMedia();
@@ -224,7 +224,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         scheduleReleaseStream();
       })
       .catch((e) => {
-        setError(e instanceof Error ? e.message : "无法打开麦克风");
+        setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
       });
   }, [acquireStream, canUse, scheduleReleaseStream, status, sttDisabled]);
 
@@ -269,7 +269,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       };
 
       recorder.onerror = () => {
-        setError("录音失败，请重试");
+        setError(t("voiceRecorder.errors.recordFailed"));
         setStatus("idle");
         cleanupMedia();
       };
@@ -281,7 +281,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
 
         if (blob.size === 0) {
           setStatus("idle");
-          setError("没有录到声音");
+          setError(t("voiceRecorder.errors.noAudio"));
           return;
         }
 
@@ -304,12 +304,12 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
           const json = (await resp.json()) as any;
           const transcript = typeof json?.text === "string" ? json.text.trim() : "";
           if (!transcript) {
-            setError("没有识别到内容");
+            setError(t("voiceRecorder.errors.noTranscript"));
           } else {
             onTranscript(transcript);
           }
         } catch (e) {
-          setError(e instanceof Error ? e.message : "语音识别失败");
+          setError(e instanceof Error ? e.message : t("voiceRecorder.errors.sttFailed"));
         } finally {
           setStatus("idle");
           scheduleReleaseStream();
@@ -324,7 +324,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
       }, 1000);
     } catch (e) {
       setStatus("idle");
-      setError(e instanceof Error ? e.message : "无法打开麦克风");
+      setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
       cleanupMedia();
       scheduleReleaseStream();
     }
@@ -384,16 +384,16 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         className={buttonClassName}
         title={
           isRecording
-            ? "停止录音"
+            ? t("voiceRecorder.actions.stop")
             : sttEnabled
-              ? "语音输入"
-              : "语音识别暂不可用"
+              ? t("voiceRecorder.actions.voiceInput")
+              : t("voiceRecorder.errors.micUnavailable")
         }
       >
         {status === "transcribing" ? (
           <>
             <SpinnerGap size={14} className="animate-spin" weight="bold" />
-            识别中
+            {t("voiceRecorder.status.transcribing")}
           </>
         ) : isRecording ? (
           <>
@@ -404,7 +404,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
         ) : (
           <>
             <Microphone size={14} weight="fill" />
-            长按 / 语音输入
+            {t("voiceRecorder.actions.holdToTalk")}
           </>
         )}
       </button>

@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, HourglassSimple } from "@phosphor-icons/react";
 import type { GameState, Player } from "@/types/game";
+import { useTranslations } from "next-intl";
 
 interface VotingProgressProps {
   gameState: GameState;
@@ -10,6 +11,7 @@ interface VotingProgressProps {
 }
 
 export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) {
+  const t = useTranslations();
   const alivePlayers = gameState.players.filter(p => p.alive);
   const aliveById = new Set(alivePlayers.map((p) => p.playerId));
   const aliveBySeat = new Set(alivePlayers.map((p) => p.seat));
@@ -71,7 +73,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
           />
         </div>
         <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">
-          {votedCount}/{totalVoters} 已投票
+          {t("votingProgress.votedCount", { voted: votedCount, total: totalVoters })}
         </span>
       </div>
 
@@ -92,7 +94,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 min-w-[80px]">
                     <span className="text-sm font-bold text-[var(--color-danger)]">
-                      {Number(targetSeat) + 1}号
+                      {t("voteResult.seatLabel", { seat: Number(targetSeat) + 1 })}
                     </span>
                     <span className="text-xs text-[var(--text-secondary)] truncate max-w-[80px]">
                       {target?.displayName}
@@ -102,7 +104,9 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
                     layout
                     className="text-xs font-semibold text-[var(--color-accent)] whitespace-nowrap"
                   >
-                    总票数 {voteCount % 1 === 0 ? voteCount : voteCount.toFixed(1)}
+                  {t("votingProgress.totalVotes", {
+                    count: voteCount % 1 === 0 ? voteCount : voteCount.toFixed(1),
+                  })}
                   </motion.span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
@@ -121,7 +125,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
                         }`}
                       >
                         <CheckCircle size={10} weight="fill" />
-                        {voter.seat + 1}号
+                        {t("voteResult.seatLabel", { seat: voter.seat + 1 })}
                       </motion.span>
                     ))}
                   </AnimatePresence>
@@ -137,7 +141,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
               className="flex items-center justify-center gap-2 py-3 text-sm text-[var(--text-muted)]"
             >
               <HourglassSimple size={16} className="animate-pulse" />
-              等待投票中...
+              {t("votingProgress.waiting")}
             </motion.div>
           )}
         </AnimatePresence>
@@ -146,7 +150,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
       {/* 未投票玩家 */}
       {votedCount < totalVoters && votedCount > 0 && (
         <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-          <span>等待中:</span>
+          <span>{t("votingProgress.waitingLabel")}</span>
           <div className="flex gap-1 flex-wrap">
             {eligibleVoters
               .filter(p => votes[p.playerId] === undefined)
@@ -159,7 +163,7 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
                       : "bg-[var(--bg-hover)]"
                   }`}
                 >
-                  {p.seat + 1}号{p.isHuman ? "(你)" : ""}
+                  {t("voteResult.seatLabel", { seat: p.seat + 1 })}{p.isHuman ? t("votingProgress.youSuffix") : ""}
                 </span>
               ))}
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { useAtom } from "jotai";
 import { motion, AnimatePresence } from "framer-motion";
 import { gameStateAtom } from "@/store/game-machine";
@@ -16,7 +17,8 @@ import {
   type SmartJumpResult,
 } from "@/lib/SmartJumpManager";
 import { PhaseManager } from "@/game/core/PhaseManager";
-import { DEFAULT_VOICE_ID, resolveVoiceId, VOICE_PRESETS } from "@/lib/voice-constants";
+import { DEFAULT_VOICE_ID, resolveVoiceId, VOICE_PRESETS, ENGLISH_VOICE_PRESETS, type AppLocale } from "@/lib/voice-constants";
+import { getLocale } from "@/i18n/locale-store";
 import { aiLogger } from "@/lib/ai-logger";
 
 type AILogEntry = {
@@ -65,41 +67,53 @@ const ALL_PHASES: Phase[] = [
 // 所有可用的角色
 const ALL_ROLES: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
 
-// 阶段中文名
-const PHASE_NAMES: Record<Phase, string> = {
-  LOBBY: "大厅",
-  SETUP: "设置中",
-  NIGHT_START: "夜晚开始",
-  NIGHT_GUARD_ACTION: "守卫行动",
-  NIGHT_WOLF_ACTION: "狼人出刀",
-  NIGHT_WITCH_ACTION: "女巫行动",
-  NIGHT_SEER_ACTION: "预言家查验",
-  NIGHT_RESOLVE: "夜晚结算",
-  DAY_START: "白天开始",
-  DAY_BADGE_SIGNUP: "警徽竞选报名",
-  DAY_BADGE_SPEECH: "警徽竞选发言",
-  DAY_BADGE_ELECTION: "警徽评选",
-  DAY_SPEECH: "发言阶段",
-  DAY_PK_SPEECH: "PK 发言",
-  DAY_LAST_WORDS: "遗言阶段",
-  DAY_VOTE: "投票阶段",
-  DAY_RESOLVE: "投票结算",
-  BADGE_TRANSFER: "警长移交警徽",
-  HUNTER_SHOOT: "猎人开枪",
-  GAME_END: "游戏结束",
+// Helper to get phase name with i18n
+const usePhaseNames = () => {
+  const t = useTranslations();
+  return useMemo(() => ({
+    LOBBY: t("devConsole.phases.LOBBY"),
+    SETUP: t("devConsole.phases.SETUP"),
+    NIGHT_START: t("devConsole.phases.NIGHT_START"),
+    NIGHT_GUARD_ACTION: t("devConsole.phases.NIGHT_GUARD_ACTION"),
+    NIGHT_WOLF_ACTION: t("devConsole.phases.NIGHT_WOLF_ACTION"),
+    NIGHT_WITCH_ACTION: t("devConsole.phases.NIGHT_WITCH_ACTION"),
+    NIGHT_SEER_ACTION: t("devConsole.phases.NIGHT_SEER_ACTION"),
+    NIGHT_RESOLVE: t("devConsole.phases.NIGHT_RESOLVE"),
+    DAY_START: t("devConsole.phases.DAY_START"),
+    DAY_BADGE_SIGNUP: t("devConsole.phases.DAY_BADGE_SIGNUP"),
+    DAY_BADGE_SPEECH: t("devConsole.phases.DAY_BADGE_SPEECH"),
+    DAY_BADGE_ELECTION: t("devConsole.phases.DAY_BADGE_ELECTION"),
+    DAY_SPEECH: t("devConsole.phases.DAY_SPEECH"),
+    DAY_PK_SPEECH: t("devConsole.phases.DAY_PK_SPEECH"),
+    DAY_LAST_WORDS: t("devConsole.phases.DAY_LAST_WORDS"),
+    DAY_VOTE: t("devConsole.phases.DAY_VOTE"),
+    DAY_RESOLVE: t("devConsole.phases.DAY_RESOLVE"),
+    BADGE_TRANSFER: t("devConsole.phases.BADGE_TRANSFER"),
+    HUNTER_SHOOT: t("devConsole.phases.HUNTER_SHOOT"),
+    GAME_END: t("devConsole.phases.GAME_END"),
+  } as Record<Phase, string>), [t]);
 };
 
-// 角色中文名
-const ROLE_NAMES: Record<Role, string> = {
-  Villager: "村民",
-  Werewolf: "狼人",
-  Seer: "预言家",
-  Witch: "女巫",
-  Hunter: "猎人",
-  Guard: "守卫",
+// Helper to get role name with i18n
+const useRoleNames = () => {
+  const t = useTranslations();
+  return useMemo(() => ({
+    Villager: t("devConsole.roles.Villager"),
+    Werewolf: t("devConsole.roles.Werewolf"),
+    Seer: t("devConsole.roles.Seer"),
+    Witch: t("devConsole.roles.Witch"),
+    Hunter: t("devConsole.roles.Hunter"),
+    Guard: t("devConsole.roles.Guard"),
+  } as Record<Role, string>), [t]);
 };
 
-const formatPlayerLabel = (p: Player) => `${p.seat + 1}号 ${p.displayName}${p.alive ? "" : "（死）"}`;
+// Helper to format player label with i18n
+const useFormatPlayerLabel = () => {
+  const t = useTranslations();
+  return useCallback((p: Player) => 
+    t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName }) + (p.alive ? "" : t("devConsole.playerDead"))
+  , [t]);
+};
 
 type TabType = "global" | "players" | "actions" | "inspector" | "tts";
 
@@ -109,7 +123,8 @@ interface DevConsoleProps {
 }
 
 function TTSTab() {
-  const [text, setText] = useState("你好，我是狼人杀AI。现在进行语音连通性测试。");
+  const t = useTranslations();
+  const [text, setText] = useState(t("devConsole.ttsTest.defaultText"));
   const [voiceId, setVoiceId] = useState<string>(DEFAULT_VOICE_ID.female);
   const [status, setStatus] = useState<number | null>(null);
   const [contentType, setContentType] = useState<string>("");
@@ -174,24 +189,24 @@ function TTSTab() {
 
   return (
     <div className="space-y-3">
-      <Section title="MiniMax TTS 测试">
+      <Section title={t("devConsole.ttsTest.title")}>
         <div className="space-y-2">
           <div className="text-xs text-gray-400">
-            用于验证 /api/tts 是否返回可播放音频（audio/mpeg）。如果这里返回 JSON/错误，说明 MiniMax 未接通或 voiceId/鉴权有问题。
+            {t("devConsole.ttsTest.description")}
           </div>
 
           <input
             value={voiceId}
             onChange={(e) => setVoiceId(e.target.value)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400"
-            placeholder="voiceId (例如 female-shaonv)"
+            placeholder={t("devConsole.ttsTest.voiceIdPlaceholder")}
           />
 
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400 min-h-[88px]"
-            placeholder="输入要转语音的文本"
+            placeholder={t("devConsole.ttsTest.textPlaceholder")}
           />
 
           <button
@@ -204,12 +219,12 @@ function TTSTab() {
                 : "bg-yellow-600 hover:bg-yellow-500 text-white"
             }`}
           >
-            {isLoading ? "请求中…" : "发送并播放"}
+            {isLoading ? t("devConsole.ttsTest.loading") : t("devConsole.ttsTest.send")}
           </button>
         </div>
       </Section>
 
-      <Section title="响应信息">
+      <Section title={t("devConsole.ttsTest.responseTitle")}>
         <div className="space-y-2 text-xs">
           <div className="bg-gray-800 rounded px-3 py-2">
             <span className="text-gray-400">Status:</span> <span className="text-white">{status ?? "-"}</span>
@@ -232,7 +247,7 @@ function TTSTab() {
                   el.play().catch((e) => setError(`Audio playback error: ${String(e)}`));
                 }}
               >
-                点击播放（用于排除自动播放限制）
+                {t("devConsole.ttsTest.playButton")}
               </button>
               <a
                 className="block bg-gray-800 rounded px-3 py-2 text-blue-300 hover:text-blue-200 underline"
@@ -240,7 +255,7 @@ function TTSTab() {
                 target="_blank"
                 rel="noreferrer"
               >
-                打开音频链接（用于手动验证是否能播放/下载）
+                {t("devConsole.ttsTest.openAudio")}
               </a>
             </div>
           )}
@@ -261,6 +276,8 @@ function TTSTab() {
 }
 
 export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
+  const t = useTranslations();
+  const phaseNames = usePhaseNames();
   const [gameState, setGameState] = useAtom(gameStateAtom);
   const [activeTab, setActiveTab] = useState<TabType>("global");
 
@@ -561,7 +578,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
           .filter((f) => filledData[f] === undefined || filledData[f] === "");
 
         if (missingFields.length > 0) {
-          setJumpFormError("请先完成所有补全项后再确认跳转");
+          setJumpFormError(t("devConsole.jumpDialog.fillError"));
           return;
         }
 
@@ -579,7 +596,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
     setMissingTasks([]);
     setFilledData({});
     setJumpFormError("");
-  }, [pendingJumpTarget, gameState, setGameState, missingTasks, filledData, jumpAnalysis?.direction]);
+  }, [pendingJumpTarget, gameState, setGameState, missingTasks, filledData, jumpAnalysis?.direction, t]);
 
   const randomFillMissingTasks = useCallback(() => {
     if (missingTasks.length === 0) return;
@@ -790,11 +807,11 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
   };
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: "global", label: "全局", icon: <Wrench size={16} /> },
-    { id: "players", label: "玩家", icon: <Users size={16} /> },
-    { id: "actions", label: "动作", icon: <Crosshair size={16} /> },
-    { id: "tts", label: "TTS", icon: <SpeakerHigh size={16} /> },
-    { id: "inspector", label: "状态", icon: <Code size={16} /> },
+    { id: "global", label: t("devConsole.tabs.global"), icon: <Wrench size={16} /> },
+    { id: "players", label: t("devConsole.tabs.players"), icon: <Users size={16} /> },
+    { id: "actions", label: t("devConsole.tabs.actions"), icon: <Crosshair size={16} /> },
+    { id: "tts", label: t("devConsole.tabs.tts"), icon: <SpeakerHigh size={16} /> },
+    { id: "inspector", label: t("devConsole.tabs.inspector"), icon: <Code size={16} /> },
   ];
 
   return (
@@ -811,7 +828,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-800/50">
             <div className="flex items-center gap-2">
               <Wrench size={20} className="text-yellow-400" />
-              <span className="font-bold text-white">开发者控制台</span>
+            <span className="font-bold text-white">{t("devConsole.title")}</span>
             </div>
             <button
               onClick={onClose}
@@ -899,10 +916,15 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                 )}
                 <div>
                   <div className="font-bold text-white">
-                    {jumpAnalysis.direction === "backward" ? "状态回滚" : "前跳补全"}
+                    {jumpAnalysis.direction === "backward"
+                      ? t("devConsole.jumpDialog.backward")
+                      : t("devConsole.jumpDialog.forward")}
                   </div>
                   <div className="text-xs text-gray-400">
-                    跳转至第 {pendingJumpTarget.day} 天 · {PHASE_NAMES[pendingJumpTarget.phase]}
+                    {t("devConsole.jumpDialog.jumpTo", {
+                      day: pendingJumpTarget.day,
+                      phase: phaseNames[pendingJumpTarget.phase],
+                    })}
                   </div>
                 </div>
               </div>
@@ -923,12 +945,16 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                     <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 text-blue-400 text-sm font-medium mb-2">
                         <Warning size={16} />
-                        将复活 {jumpAnalysis.playersToRevive.length} 名玩家
+                        {t("devConsole.jumpDialog.revivePlayers", {
+                          count: jumpAnalysis.playersToRevive.length,
+                        })}
                       </div>
                       <div className="text-xs text-gray-300">
                         {jumpAnalysis.playersToRevive.map((seat) => {
                           const p = gameState.players.find((x) => x.seat === seat);
-                          return p ? `${seat + 1}号 ${p.displayName}` : `${seat + 1}号`;
+                          return p
+                            ? t("devConsole.playerLabel", { seat: seat + 1, name: p.displayName })
+                            : t("devConsole.seatOnly", { seat: seat + 1 });
                         }).join("、")}
                       </div>
                     </div>
@@ -937,12 +963,15 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                     <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 text-purple-400 text-sm font-medium mb-2">
                         <Lightning size={16} />
-                        将恢复技能
+                        {t("devConsole.jumpDialog.restoreAbilities")}
                       </div>
                       <div className="text-xs text-gray-300">
                         {jumpAnalysis.abilitiesToRestore.map((a) => 
-                          a === "witchHealUsed" ? "女巫解药" : 
-                          a === "witchPoisonUsed" ? "女巫毒药" : a
+                          a === "witchHealUsed"
+                            ? t("devConsole.jumpDialog.witchHeal")
+                            : a === "witchPoisonUsed"
+                              ? t("devConsole.jumpDialog.witchPoison")
+                              : a
                         ).join("、")}
                       </div>
                     </div>
@@ -951,7 +980,9 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                     <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3">
                       <div className="flex items-center gap-2 text-red-400 text-sm font-medium">
                         <Warning size={16} />
-                        将清除第 {jumpAnalysis.daysToClean.join("、")} 天的历史记录
+                        {t("devConsole.jumpDialog.clearDays", {
+                          days: jumpAnalysis.daysToClean.join("、"),
+                        })}
                       </div>
                     </div>
                   )}
@@ -962,7 +993,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
               {jumpAnalysis.direction === "forward" && missingTasks.length > 0 && (
                 <div className="space-y-3">
                   <div className="text-sm text-gray-300 mb-2">
-                    跳转将跳过以下决策点，请选择如何处理：
+                    {t("devConsole.jumpDialog.forwardHint")}
                   </div>
                   {jumpFormError && (
                     <div className="bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2 text-sm text-red-300">
@@ -986,7 +1017,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                           }}
                           className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-400"
                         >
-                          <option value="">-- 请选择 --</option>
+                          <option value="">{t("devConsole.jumpDialog.selectPlaceholder")}</option>
                           {task.options.map((opt, i) => (
                             <option
                               key={i}
@@ -1006,7 +1037,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
               {/* 无需特殊处理的情况 */}
               {jumpAnalysis.direction === "forward" && missingTasks.length === 0 && (
                 <div className="text-sm text-gray-400 text-center py-4">
-                  此跳转无需补全数据，可直接执行。
+                  {t("devConsole.jumpDialog.noFillNeeded")}
                 </div>
               )}
             </div>
@@ -1017,21 +1048,23 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
                 onClick={cancelJump}
                 className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors"
               >
-                取消
+                {t("devConsole.jumpDialog.cancel")}
               </button>
               {missingTasks.length > 0 && (
                 <button
                   onClick={randomFillMissingTasks}
                   className="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium transition-colors"
                 >
-                  一键随机补全
+                  {t("devConsole.jumpDialog.randomFill")}
                 </button>
               )}
               <button
                 onClick={confirmJump}
                 className="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium transition-colors"
               >
-                {jumpAnalysis.direction === "backward" ? "确认回滚" : "确认跳转"}
+                {jumpAnalysis.direction === "backward"
+                  ? t("devConsole.jumpDialog.confirmRollback")
+                  : t("devConsole.jumpDialog.confirmJump")}
               </button>
             </div>
           </motion.div>
@@ -1053,6 +1086,9 @@ function GlobalTab({
   jumpToPhase: (phase: Phase) => void;
   setDay: (day: number) => void;
 }) {
+  const t = useTranslations();
+  const phaseNames = usePhaseNames();
+  const formatPlayerLabel = useFormatPlayerLabel();
   const actionDays = useMemo(() => {
     const days = new Set<number>();
     Object.keys(gameState.nightHistory || {}).forEach((d) => days.add(Number(d)));
@@ -1063,15 +1099,15 @@ function GlobalTab({
   }, [gameState.nightHistory, gameState.voteHistory]);
 
   const getSeatLabel = (seat: number | undefined) => {
-    if (seat === undefined) return "无";
+    if (seat === undefined) return t("devConsole.none");
     const p = gameState.players.find((x) => x.seat === seat);
-    return p ? formatPlayerLabel(p) : `${seat + 1}号`;
+    return p ? formatPlayerLabel(p) : t("devConsole.seatOnly", { seat: seat + 1 });
   };
 
   const getDeathReasonLabel = (reason: "wolf" | "poison" | "milk") => {
-    if (reason === "wolf") return "狼刀";
-    if (reason === "poison") return "女巫毒";
-    return "毒奶";
+    if (reason === "wolf") return t("devConsole.deathReason.wolf");
+    if (reason === "poison") return t("devConsole.deathReason.poison");
+    return t("devConsole.deathReason.milk");
   };
 
   const getVoteLine = (voterId: string, targetSeat: number) => {
@@ -1087,39 +1123,41 @@ function GlobalTab({
     });
     return Object.entries(counts)
       .sort((a, b) => Number(b[1]) - Number(a[1]))
-      .map(([seatStr, c]) => `${getSeatLabel(Number(seatStr))}: ${c}票`);
+      .map(([seatStr, c]) => `${getSeatLabel(Number(seatStr))}: ${c}${t("devConsole.voteCountSuffix")}`);
   };
 
   return (
     <div className="space-y-4">
       {/* 当前状态 */}
-      <Section title="当前状态">
+      <Section title={t("devConsole.currentState")}>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="bg-gray-800 rounded px-3 py-2">
-            <span className="text-gray-400">阶段:</span>{" "}
-            <span className="text-yellow-400">{PHASE_NAMES[gameState.phase]}</span>
+            <span className="text-gray-400">{t("devConsole.labels.phase")}</span>{" "}
+            <span className="text-yellow-400">{phaseNames[gameState.phase]}</span>
           </div>
           <div className="bg-gray-800 rounded px-3 py-2">
-            <span className="text-gray-400">天数:</span>{" "}
-            <span className="text-blue-400">第 {gameState.day} 天</span>
+            <span className="text-gray-400">{t("devConsole.labels.day")}</span>{" "}
+            <span className="text-blue-400">{t("devConsole.dayLabel", { day: gameState.day })}</span>
           </div>
           <div className="bg-gray-800 rounded px-3 py-2">
-            <span className="text-gray-400">存活:</span>{" "}
+            <span className="text-gray-400">{t("devConsole.labels.alive")}</span>{" "}
             <span className="text-green-400">
               {gameState.players.filter((p) => p.alive).length}/{gameState.players.length}
             </span>
           </div>
           <div className="bg-gray-800 rounded px-3 py-2">
-            <span className="text-gray-400">发言者:</span>{" "}
+            <span className="text-gray-400">{t("devConsole.labels.speaker")}</span>{" "}
             <span className="text-purple-400">
-              {gameState.currentSpeakerSeat !== null ? `${gameState.currentSpeakerSeat + 1}号` : "无"}
+              {gameState.currentSpeakerSeat !== null
+                ? t("devConsole.seatOnly", { seat: gameState.currentSpeakerSeat + 1 })
+                : t("devConsole.none")}
             </span>
           </div>
         </div>
       </Section>
 
       {/* 游戏暂停控制 */}
-      <Section title="游戏控制">
+      <Section title={t("devConsole.gameControl")}>
         <button
           onClick={togglePause}
           className={`w-full px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
@@ -1131,24 +1169,24 @@ function GlobalTab({
           {gameState.isPaused ? (
             <>
               <Play size={18} weight="fill" />
-              继续游戏
+              {t("devConsole.resume")}
             </>
           ) : (
             <>
               <Pause size={18} weight="fill" />
-              暂停游戏
+              {t("devConsole.pause")}
             </>
           )}
         </button>
         {gameState.isPaused && (
           <div className="mt-2 text-xs text-yellow-400 bg-yellow-900/20 border border-yellow-600/30 rounded px-3 py-2">
-            ⚠️ 游戏已暂停，所有AI行动和流程已停止
+            {t("devConsole.pausedWarning")}
           </div>
         )}
       </Section>
 
       {/* 阶段跳转 */}
-      <Section title="阶段跳转">
+      <Section title={t("devConsole.phaseJump")}>
         <select
           value={gameState.phase}
           onChange={(e) => jumpToPhase(e.target.value as Phase)}
@@ -1156,14 +1194,14 @@ function GlobalTab({
         >
           {ALL_PHASES.map((phase) => (
             <option key={phase} value={phase}>
-              {PHASE_NAMES[phase]} ({phase})
+              {phaseNames[phase]} ({phase})
             </option>
           ))}
         </select>
       </Section>
 
       {/* 天数修改 */}
-      <Section title="天数修改">
+      <Section title={t("devConsole.dayModify")}>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setDay(gameState.day - 1)}
@@ -1187,9 +1225,9 @@ function GlobalTab({
       </Section>
 
       {/* 全场动作信息记录 */}
-      <Section title="全场动作信息记录">
+      <Section title={t("devConsole.actionRecords")}>
         {actionDays.length === 0 ? (
-          <div className="text-xs text-gray-400">暂无记录（需要至少经历一次夜晚结算或投票）</div>
+          <div className="text-xs text-gray-400">{t("devConsole.actionRecordsEmpty")}</div>
         ) : (
           <div className="space-y-3">
             {actionDays.map((day) => {
@@ -1199,71 +1237,91 @@ function GlobalTab({
 
               return (
                 <div key={day} className="bg-gray-800/60 rounded-lg border border-gray-700 p-3">
-                  <div className="text-sm font-semibold text-white mb-2">第 {day} 天</div>
+                  <div className="text-sm font-semibold text-white mb-2">
+                    {t("devConsole.dayLabel", { day })}
+                  </div>
 
                   <div className="space-y-1 text-xs">
                     <div className="text-gray-300">
-                      <span className="text-gray-400">守卫守护:</span> {getSeatLabel(night?.guardTarget)}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.guardProtect")}</span>{" "}
+                      {getSeatLabel(night?.guardTarget)}
                     </div>
                     <div className="text-gray-300">
-                      <span className="text-gray-400">狼人出刀:</span> {getSeatLabel(night?.wolfTarget)}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.wolfTarget")}</span>{" "}
+                      {getSeatLabel(night?.wolfTarget)}
                     </div>
                     <div className="text-gray-300">
-                      <span className="text-gray-400">女巫救人:</span> {night?.witchSave ? "是" : "否"}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.witchSave")}</span>{" "}
+                      {night?.witchSave ? t("devConsole.yes") : t("devConsole.no")}
                     </div>
                     <div className="text-gray-300">
-                      <span className="text-gray-400">女巫毒人:</span> {getSeatLabel(night?.witchPoison)}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.witchPoison")}</span>{" "}
+                      {getSeatLabel(night?.witchPoison)}
                     </div>
                     <div className="text-gray-300">
-                      <span className="text-gray-400">预言家查验:</span> {getSeatLabel(night?.seerTarget)}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.seerCheck")}</span>{" "}
+                      {getSeatLabel(night?.seerTarget)}
                       {night?.seerResult ? (
-                        <span className="text-gray-400">（结果: {night.seerResult.isWolf ? "狼人" : "好人"}）</span>
+                        <span className="text-gray-400">
+                          {t("devConsole.actionRecordDetails.seerResult", {
+                            alignment: night.seerResult.isWolf
+                              ? t("devConsole.wolf")
+                              : t("devConsole.good"),
+                          })}
+                        </span>
                       ) : null}
                     </div>
 
                     <div className="text-gray-300">
-                      <span className="text-gray-400">夜晚死亡:</span>{" "}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.nightDeaths")}</span>{" "}
                       {!night?.deaths || night.deaths.length === 0
-                        ? "无"
+                        ? t("devConsole.none")
                         : night.deaths
                             .map((d) => `${getSeatLabel(d.seat)}（${getDeathReasonLabel(d.reason)}）`)
                             .join("，")}
                     </div>
 
                     <div className="text-gray-300">
-                      <span className="text-gray-400">猎人开枪(夜):</span>{" "}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.hunterShotNight")}</span>{" "}
                       {night?.hunterShot
                         ? `${getSeatLabel(night.hunterShot.hunterSeat)} → ${getSeatLabel(night.hunterShot.targetSeat)}`
-                        : "无"}
+                        : t("devConsole.none")}
                     </div>
                   </div>
 
                   <div className="mt-3">
-                    <div className="text-xs font-semibold text-gray-300 mb-1">白天处决</div>
+                    <div className="text-xs font-semibold text-gray-300 mb-1">
+                      {t("devConsole.actionRecordDetails.dayExecution")}
+                    </div>
                     {!dayRecord ? (
-                      <div className="text-xs text-gray-400">无</div>
+                      <div className="text-xs text-gray-400">{t("devConsole.none")}</div>
                     ) : dayRecord.voteTie ? (
-                      <div className="text-xs text-gray-200">平票，无人出局</div>
+                      <div className="text-xs text-gray-200">
+                        {t("devConsole.actionRecordDetails.voteTieNoElim")}
+                      </div>
                     ) : dayRecord.executed ? (
                       <div className="text-xs text-gray-200">
-                        {getSeatLabel(dayRecord.executed.seat)}（{dayRecord.executed.votes}票）
+                        {getSeatLabel(dayRecord.executed.seat)}（{dayRecord.executed.votes}
+                        {t("devConsole.voteCountSuffix")}）
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-400">无</div>
+                      <div className="text-xs text-gray-400">{t("devConsole.none")}</div>
                     )}
 
                     <div className="mt-2 text-xs text-gray-300">
-                      <span className="text-gray-400">猎人开枪(日):</span>{" "}
+                      <span className="text-gray-400">{t("devConsole.actionRecordDetails.hunterShotDay")}</span>{" "}
                       {dayRecord?.hunterShot
                         ? `${getSeatLabel(dayRecord.hunterShot.hunterSeat)} → ${getSeatLabel(dayRecord.hunterShot.targetSeat)}`
-                        : "无"}
+                        : t("devConsole.none")}
                     </div>
                   </div>
 
                   <div className="mt-3">
-                    <div className="text-xs font-semibold text-gray-300 mb-1">投票信息</div>
+                    <div className="text-xs font-semibold text-gray-300 mb-1">
+                      {t("devConsole.actionRecordDetails.voteInfo")}
+                    </div>
                     {!votes || Object.keys(votes).length === 0 ? (
-                      <div className="text-xs text-gray-400">无</div>
+                      <div className="text-xs text-gray-400">{t("devConsole.none")}</div>
                     ) : (
                       <div className="space-y-2">
                         <div className="space-y-1">
@@ -1303,6 +1361,9 @@ function PlayersTab({
   setPlayerRole: (seat: number, role: Role) => void;
   setPlayerAlive: (seat: number, alive: boolean) => void;
 }) {
+  const t = useTranslations();
+  const roleNames = useRoleNames();
+  const formatPlayerLabel = useFormatPlayerLabel();
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [isPromptDialogOpen, setIsPromptDialogOpen] = useState(false);
   const [promptActiveTab, setPromptActiveTab] = useState<"prompt" | "speech">("prompt");
@@ -1315,7 +1376,7 @@ function PlayersTab({
     const phase = gameState.phase;
     const prompt = phaseManager.getPrompt(phase, { state: gameState }, player);
     if (prompt) return prompt.system;
-    return "未找到对应阶段的提示词。";
+    return t("devConsole.promptNotFound");
   };
 
   useEffect(() => {
@@ -1345,7 +1406,7 @@ function PlayersTab({
   }, [isPromptDialogOpen, selectedPlayer]);
 
   const speechItems = useMemo(() => {
-    if (!selectedPlayer) return [] as Array<{ id: string; label: string; lines: string[] }>;
+    if (!selectedPlayer) return [] as Array<{ id: string; label: string; lines: string[]; day: number }>;
     const items = aiLogs
       .filter((x) => x?.type === "speech" && x.request?.player?.playerId === selectedPlayer.playerId)
       .sort((a, b) => a.timestamp - b.timestamp)
@@ -1356,12 +1417,14 @@ function PlayersTab({
         const dayMatch = user.match(/第\s*(\d+)\s*天/);
         const day = dayMatch ? Number(dayMatch[1]) : NaN;
 
-        let phaseLabel = "未知阶段";
-        if (system.includes("遗言")) phaseLabel = "遗言";
-        else if (user.includes("夜晚")) phaseLabel = "夜晚";
-        else if (user.includes("白天")) phaseLabel = "白天";
+        let phaseLabel = t("devConsole.speechPhase.unknown");
+        if (system.includes("遗言")) phaseLabel = t("devConsole.speechPhase.lastWords");
+        else if (user.includes("夜晚")) phaseLabel = t("devConsole.speechPhase.night");
+        else if (user.includes("白天")) phaseLabel = t("devConsole.speechPhase.day");
 
-        const label = Number.isFinite(day) ? `第${day}天 · ${phaseLabel}` : phaseLabel;
+        const label = Number.isFinite(day)
+          ? t("devConsole.dayPhaseLabel", { day, phase: phaseLabel })
+          : phaseLabel;
 
         const content = entry.response?.content ?? "";
         let lines: string[] = [];
@@ -1381,17 +1444,14 @@ function PlayersTab({
           lines = [content];
         }
 
-        return { id: entry.id, label, lines };
+        return { id: entry.id, label, lines, day };
       });
 
     return items.filter((x) => {
-      const m = x.label.match(/第(\d+)天/);
-      if (!m) return true;
-      const d = Number(m[1]);
-      if (!Number.isFinite(d)) return true;
-      return d <= gameState.day;
+      if (!Number.isFinite(x.day)) return true;
+      return (x.day as number) <= gameState.day;
     });
-  }, [aiLogs, selectedPlayer, gameState.day]);
+  }, [aiLogs, selectedPlayer, gameState.day, t]);
   return (
     <div className="space-y-2">
       {gameState.players.map((player) => (
@@ -1417,7 +1477,7 @@ function PlayersTab({
               </span>
               {player.isHuman && (
                 <span className="px-1.5 py-0.5 bg-green-600 rounded text-[10px] text-white">
-                  人类
+                  {t("devConsole.human")}
                 </span>
               )}
             </div>
@@ -1429,11 +1489,11 @@ function PlayersTab({
                   : "bg-green-600 hover:bg-green-500 text-white"
               }`}
             >
-              {player.alive ? "击杀" : "复活"}
+              {player.alive ? t("devConsole.kill") : t("devConsole.revive")}
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">角色:</span>
+            <span className="text-xs text-gray-400">{t("devConsole.roleLabel")}</span>
             <select
               value={player.role}
               onChange={(e) => setPlayerRole(player.seat, e.target.value as Role)}
@@ -1441,7 +1501,7 @@ function PlayersTab({
             >
               {ALL_ROLES.map((role) => (
                 <option key={role} value={role}>
-                  {ROLE_NAMES[role]}
+                  {roleNames[role]}
                 </option>
               ))}
             </select>
@@ -1450,7 +1510,7 @@ function PlayersTab({
                 player.alignment === "wolf" ? "bg-red-600" : "bg-blue-600"
               }`}
             >
-              {player.alignment === "wolf" ? "狼" : "好"}
+              {player.alignment === "wolf" ? t("devConsole.wolf") : t("devConsole.good")}
             </span>
             <button
               onClick={() => {
@@ -1459,7 +1519,7 @@ function PlayersTab({
                 setPromptActiveTab("prompt");
               }}
               className="p-1.5 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
-              title="查看提示词"
+              title={t("devConsole.viewPrompt")}
             >
               <ChatDots size={16} />
             </button>
@@ -1472,7 +1532,10 @@ function PlayersTab({
           <div className="bg-gray-900 rounded-lg p-4 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-white">
-                {selectedPlayer.seat + 1}号 {selectedPlayer.displayName}
+                {t("devConsole.playerLabel", {
+                  seat: selectedPlayer.seat + 1,
+                  name: selectedPlayer.displayName,
+                })}
               </h3>
               <button
                 onClick={() => setIsPromptDialogOpen(false)}
@@ -1491,7 +1554,7 @@ function PlayersTab({
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
-                提示词
+                {t("devConsole.promptTab")}
               </button>
               <button
                 onClick={() => setPromptActiveTab("speech")}
@@ -1501,7 +1564,7 @@ function PlayersTab({
                     : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                 }`}
               >
-                发言
+                {t("devConsole.speechTab")}
               </button>
             </div>
 
@@ -1509,21 +1572,25 @@ function PlayersTab({
               <>
                 {/* 显示玩家使用的 model */}
                 <div className="mb-3 p-2 bg-gray-800/50 rounded border border-gray-700">
-                  <span className="text-xs text-gray-400">Model: </span>
+                  <span className="text-xs text-gray-400">{t("devConsole.modelLabel")}</span>
                   <span className="text-xs text-blue-400 font-mono">
-                    {selectedPlayer.agentProfile?.modelRef?.model || (selectedPlayer.isHuman ? "人类玩家" : "未知")}
+                    {selectedPlayer.agentProfile?.modelRef?.model ||
+                      (selectedPlayer.isHuman ? t("devConsole.humanPlayer") : t("devConsole.unknown"))}
                   </span>
                 </div>
                 <div className="mb-3 p-2 bg-gray-800/50 rounded border border-gray-700">
-                  <span className="text-xs text-gray-400">MiniMax 音色: </span>
+                  <span className="text-xs text-gray-400">{t("devConsole.voicePresetLabel")}</span>
                   <span className="text-xs text-yellow-400 font-mono">
                     {(() => {
+                      const locale = getLocale() as AppLocale;
                       const voiceId = resolveVoiceId(
                         selectedPlayer.agentProfile?.persona?.voiceId,
                         selectedPlayer.agentProfile?.persona?.gender,
-                        selectedPlayer.agentProfile?.persona?.age
+                        selectedPlayer.agentProfile?.persona?.age,
+                        locale
                       );
-                      const preset = VOICE_PRESETS.find((p) => p.id === voiceId);
+                      const presets = locale === "en" ? ENGLISH_VOICE_PRESETS : VOICE_PRESETS;
+                      const preset = presets.find((p) => p.id === voiceId);
                       return preset ? `${preset.name} (${preset.id})` : voiceId;
                     })()}
                   </span>
@@ -1536,12 +1603,14 @@ function PlayersTab({
 
             {promptActiveTab === "speech" && (
               <div className="space-y-3">
-                {isLoadingLogs && <div className="text-sm text-gray-400">正在加载日志…</div>}
+                {isLoadingLogs && <div className="text-sm text-gray-400">{t("devConsole.loadingLogs")}</div>}
                 {!isLoadingLogs && logsError && (
-                  <div className="text-sm text-red-400">加载失败：{logsError}</div>
+                  <div className="text-sm text-red-400">
+                    {t("devConsole.loadFailed", { error: logsError })}
+                  </div>
                 )}
                 {!isLoadingLogs && !logsError && speechItems.length === 0 && (
-                  <div className="text-sm text-gray-400">暂无该玩家的发言日志</div>
+                  <div className="text-sm text-gray-400">{t("devConsole.noSpeechLogs")}</div>
                 )}
 
                 {speechItems.map((item, idx) => (
@@ -1583,6 +1652,8 @@ function ActionsTab({
   forceVote: (voterId: string, targetSeat: number) => void;
   setSheriff: (seat: number | null) => void;
 }) {
+  const t = useTranslations();
+  const formatPlayerLabel = useFormatPlayerLabel();
   const [selectedVoter, setSelectedVoter] = useState<string>("");
   const [selectedTarget, setSelectedTarget] = useState<number>(0);
 
@@ -1592,10 +1663,10 @@ function ActionsTab({
   return (
     <div className="space-y-4">
       {/* 夜间行动 */}
-      <Section title="夜间行动">
+      <Section title={t("devConsole.nightActions")}>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">守卫目标:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.guardTarget")}</span>
             <select
               value={gameState.nightActions.guardTarget ?? ""}
               onChange={(e) =>
@@ -1603,7 +1674,7 @@ function ActionsTab({
               }
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">无</option>
+              <option value="">{t("devConsole.none")}</option>
               {allPlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
                   {formatPlayerLabel(p)}
@@ -1612,7 +1683,7 @@ function ActionsTab({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">狼刀目标:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.wolfTarget")}</span>
             <select
               value={gameState.nightActions.wolfTarget ?? ""}
               onChange={(e) =>
@@ -1620,7 +1691,7 @@ function ActionsTab({
               }
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">无</option>
+              <option value="">{t("devConsole.none")}</option>
               {allPlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
                   {formatPlayerLabel(p)}
@@ -1629,7 +1700,7 @@ function ActionsTab({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">女巫救人:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.witchSave")}</span>
             <button
               onClick={() => setNightAction("witchSave", !gameState.nightActions.witchSave)}
               className={`px-3 py-1 rounded text-xs ${
@@ -1638,11 +1709,11 @@ function ActionsTab({
                   : "bg-gray-700 text-gray-400"
               }`}
             >
-              {gameState.nightActions.witchSave ? "是" : "否"}
+              {gameState.nightActions.witchSave ? t("devConsole.yes") : t("devConsole.no")}
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">女巫毒人:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.witchPoison")}</span>
             <select
               value={gameState.nightActions.witchPoison ?? ""}
               onChange={(e) =>
@@ -1650,7 +1721,7 @@ function ActionsTab({
               }
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">无</option>
+              <option value="">{t("devConsole.none")}</option>
               {allPlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
                   {formatPlayerLabel(p)}
@@ -1659,7 +1730,7 @@ function ActionsTab({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">预言家查验:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.seerCheck")}</span>
             <select
               value={gameState.nightActions.seerTarget ?? ""}
               onChange={(e) => {
@@ -1683,7 +1754,7 @@ function ActionsTab({
               }}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">无</option>
+              <option value="">{t("devConsole.none")}</option>
               {allPlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
                   {formatPlayerLabel(p)}
@@ -1695,15 +1766,15 @@ function ActionsTab({
       </Section>
 
       {/* 发言控制 */}
-      <Section title="发言控制">
+      <Section title={t("devConsole.speechControl")}>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 w-20">下一位发言:</span>
+          <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.nextSpeaker")}</span>
           <select
             value={gameState.nextSpeakerSeatOverride ?? ""}
             onChange={(e) => setNextSpeaker(e.target.value ? parseInt(e.target.value) : null)}
             className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
           >
-            <option value="">无</option>
+            <option value="">{t("devConsole.none")}</option>
             {allPlayers.map((p) => (
               <option key={p.seat} value={p.seat}>
                 {formatPlayerLabel(p)}
@@ -1714,24 +1785,24 @@ function ActionsTab({
       </Section>
 
       {/* 警长控制 */}
-      <Section title="警长控制">
+      <Section title={t("devConsole.badgeControl")}>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">当前警长:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.currentBadge")}</span>
             <span className="text-sm text-yellow-400">
               {gameState.badge.holderSeat !== null
                 ? formatPlayerLabel(allPlayers.find((p) => p.seat === gameState.badge.holderSeat)!)
-                : "无"}
+                : t("devConsole.none")}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-20">设置警长:</span>
+            <span className="text-xs text-gray-400 w-20">{t("devConsole.actions.setBadge")}</span>
             <select
               value={gameState.badge.holderSeat ?? ""}
               onChange={(e) => setSheriff(e.target.value ? parseInt(e.target.value) : null)}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">无（移除警长）</option>
+              <option value="">{t("devConsole.actions.clearBadgeOption")}</option>
               {alivePlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
                   {formatPlayerLabel(p)}
@@ -1744,14 +1815,14 @@ function ActionsTab({
               onClick={() => setSheriff(null)}
               className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-white text-xs"
             >
-              移除警长身份
+              {t("devConsole.removeBadge")}
             </button>
           )}
         </div>
       </Section>
 
       {/* 投票控制 */}
-      <Section title="投票控制">
+      <Section title={t("devConsole.voteControl")}>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <select
@@ -1759,10 +1830,10 @@ function ActionsTab({
               onChange={(e) => setSelectedVoter(e.target.value)}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-xs"
             >
-              <option value="">选择投票人</option>
+              <option value="">{t("devConsole.selectVoter")}</option>
               {alivePlayers.map((p) => (
                 <option key={p.playerId} value={p.playerId}>
-                  {p.seat + 1}号 {p.displayName}
+                  {t("devConsole.playerLabel", { seat: p.seat + 1, name: p.displayName })}
                 </option>
               ))}
             </select>
@@ -1774,7 +1845,7 @@ function ActionsTab({
             >
               {alivePlayers.map((p) => (
                 <option key={p.seat} value={p.seat}>
-                  {p.seat + 1}号
+                  {t("devConsole.seatOnly", { seat: p.seat + 1 })}
                 </option>
               ))}
             </select>
@@ -1786,24 +1857,28 @@ function ActionsTab({
               }}
               className="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-white text-xs"
             >
-              投票
+              {t("devConsole.vote")}
             </button>
           </div>
           <button
             onClick={clearVotes}
             className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-white text-xs"
           >
-            清空所有投票
+            {t("devConsole.clearVotes")}
           </button>
           {/* 当前投票情况 */}
           {Object.keys(gameState.votes).length > 0 && (
             <div className="mt-2 p-2 bg-gray-800 rounded text-xs">
-              <div className="text-gray-400 mb-1">当前投票:</div>
+              <div className="text-gray-400 mb-1">{t("devConsole.currentVotes")}</div>
               {Object.entries(gameState.votes).map(([voterId, targetSeat]) => {
                 const voter = gameState.players.find((p) => p.playerId === voterId);
                 return (
                   <div key={voterId} className="text-gray-300">
-                    {voter?.seat !== undefined ? voter.seat + 1 : "?"}号 → {targetSeat + 1}号
+                    {voter?.seat !== undefined
+                      ? t("devConsole.seatOnly", { seat: voter.seat + 1 })
+                      : "?"}
+                    {" → "}
+                    {t("devConsole.seatOnly", { seat: targetSeat + 1 })}
                   </div>
                 );
               })}
@@ -1817,6 +1892,7 @@ function ActionsTab({
 
 // ============ 状态检视 Tab ============
 function InspectorTab({ gameState }: { gameState: GameState }) {
+  const t = useTranslations();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(["root"]));
 
   const toggleExpand = (key: string) => {
@@ -1862,7 +1938,7 @@ function InspectorTab({ gameState }: { gameState: GameState }) {
         }}
         className="w-full px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white text-xs"
       >
-        复制完整状态到剪贴板
+        {t("devConsole.copyState")}
       </button>
     </div>
   );
@@ -1880,6 +1956,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // ============ 悬浮入口按钮 ============
 export function DevModeButton({ onClick }: { onClick: () => void }) {
+  const t = useTranslations();
   const showDevTools =
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
 
@@ -1889,7 +1966,7 @@ export function DevModeButton({ onClick }: { onClick: () => void }) {
     <button
       onClick={onClick}
       className="fixed bottom-5 right-5 z-[99] w-12 h-12 rounded-full bg-yellow-500 hover:bg-yellow-400 shadow-lg flex items-center justify-center transition-all hover:scale-110"
-      title="开发者模式"
+      title={t("devConsole.devMode")}
     >
       <Wrench size={24} className="text-gray-900" />
     </button>

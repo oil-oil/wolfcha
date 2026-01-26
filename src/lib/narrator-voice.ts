@@ -3,8 +3,13 @@
  * 使用 MiniMax TTS 生成游戏旁白语音
  */
 
-// 旁白音色 ID - Chinese (Mandarin)_Mature_Woman
+import type { AppLocale } from "./voice-constants";
+
+// 旁白音色 ID - Chinese
 export const NARRATOR_VOICE_ID = "Chinese (Mandarin)_Mature_Woman";
+
+// 旁白音色 ID - English
+export const NARRATOR_VOICE_ID_EN = "Serene_Woman";
 
 // 旁白语音文本定义
 export const NARRATOR_TEXTS = {
@@ -48,6 +53,56 @@ export const NARRATOR_TEXTS = {
 
 export type NarratorTextKey = keyof typeof NARRATOR_TEXTS;
 
+// English Narrator Texts
+export const NARRATOR_TEXTS_EN: Record<NarratorTextKey, string> = {
+  // Night phases
+  nightFall: "Night has fallen, please close your eyes",
+  guardWake: "Guard, please open your eyes",
+  guardClose: "Guard, please close your eyes",
+  wolfWake: "Werewolves, please open your eyes",
+  wolfClose: "Werewolves, please close your eyes",
+  witchWake: "Witch, please open your eyes",
+  witchClose: "Witch, please close your eyes",
+  seerWake: "Seer, please open your eyes",
+  seerClose: "Seer, please close your eyes",
+  
+  // Day phases
+  dayBreak: "Dawn has broken, please open your eyes",
+  peacefulNight: "Last night was peaceful",
+  discussionStart: "Discussion begins",
+  voteStart: "Discussion ends, voting begins",
+  
+  // Badge phases
+  badgeSpeechStart: "Sheriff election begins",
+  badgeElectionStart: "Sheriff voting begins",
+  
+  // Player elimination (1-10)
+  playerDied1: "Player 1 has been eliminated",
+  playerDied2: "Player 2 has been eliminated",
+  playerDied3: "Player 3 has been eliminated",
+  playerDied4: "Player 4 has been eliminated",
+  playerDied5: "Player 5 has been eliminated",
+  playerDied6: "Player 6 has been eliminated",
+  playerDied7: "Player 7 has been eliminated",
+  playerDied8: "Player 8 has been eliminated",
+  playerDied9: "Player 9 has been eliminated",
+  playerDied10: "Player 10 has been eliminated",
+  
+  // Results
+  villageWin: "The village wins",
+  wolfWin: "The werewolves win",
+};
+
+// Get narrator voice ID by locale
+export const getNarratorVoiceId = (locale: AppLocale = "zh"): string => {
+  return locale === "en" ? NARRATOR_VOICE_ID_EN : NARRATOR_VOICE_ID;
+};
+
+// Get narrator text by locale
+export const getNarratorText = (key: NarratorTextKey, locale: AppLocale = "zh"): string => {
+  return locale === "en" ? NARRATOR_TEXTS_EN[key] : NARRATOR_TEXTS[key];
+};
+
 // 根据座位号获取出局语音 key
 export const getPlayerDiedKey = (seat: number): NarratorTextKey | null => {
   const seatNumber = seat + 1; // seat 是 0-indexed
@@ -57,15 +112,15 @@ export const getPlayerDiedKey = (seat: number): NarratorTextKey | null => {
   return null;
 };
 
-// 旁白音频文件路径映射
-export const getNarratorAudioPath = (key: NarratorTextKey): string => {
-  return `/audio/narrator/${key}.mp3`;
+// 旁白音频文件路径映射 (支持多语言)
+export const getNarratorAudioPath = (key: NarratorTextKey, locale: AppLocale = "zh"): string => {
+  return `/audio/narrator/${locale}/${key}.mp3`;
 };
 
 // 检查旁白音频是否存在（用于前端）
-export const checkNarratorAudioExists = async (key: NarratorTextKey): Promise<boolean> => {
+export const checkNarratorAudioExists = async (key: NarratorTextKey, locale: AppLocale = "zh"): Promise<boolean> => {
   try {
-    const response = await fetch(getNarratorAudioPath(key), { method: "HEAD" });
+    const response = await fetch(getNarratorAudioPath(key, locale), { method: "HEAD" });
     return response.ok;
   } catch {
     return false;

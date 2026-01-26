@@ -2,6 +2,8 @@
 
 import { CheckCircle } from "@phosphor-icons/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 
 interface PlayerCountSelectorProps {
   open: boolean;
@@ -10,49 +12,13 @@ interface PlayerCountSelectorProps {
   onChange: (value: number) => void;
 }
 
-const PLAYER_COUNT_OPTIONS: Array<{
+type PlayerCountOption = {
   count: number;
   title: string;
   subtitle: string;
   description: string;
   roles: string;
-}> = [
-  {
-    count: 8,
-    title: "8人局",
-    subtitle: "紧凑对局",
-    description: "3狼 3神 2民",
-    roles: "神职：预言家、女巫、猎人",
-  },
-  {
-    count: 9,
-    title: "9人局",
-    subtitle: "经典入门",
-    description: "3狼 3神 3民",
-    roles: "神职：预言家、女巫、猎人",
-  },
-  {
-    count: 10,
-    title: "10人局",
-    subtitle: "标准配置",
-    description: "3狼 4神 3民",
-    roles: "神职：预言家、女巫、猎人、守卫",
-  },
-  {
-    count: 11,
-    title: "11人局",
-    subtitle: "加速博弈",
-    description: "4狼 4神 3民",
-    roles: "神职：预言家、女巫、猎人、守卫",
-  },
-  {
-    count: 12,
-    title: "12人局",
-    subtitle: "经典满配",
-    description: "4狼 4神 4民",
-    roles: "神职：预言家、女巫、猎人、守卫",
-  },
-];
+};
 
 export function PlayerCountSelector({
   open,
@@ -60,18 +26,56 @@ export function PlayerCountSelector({
   value,
   onChange,
 }: PlayerCountSelectorProps) {
+  const t = useTranslations();
+  const options = useMemo<PlayerCountOption[]>(() => ([
+    {
+      count: 8,
+      title: t("playerCount.options.8.title"),
+      subtitle: t("playerCount.options.8.subtitle"),
+      description: t("playerCount.options.8.description"),
+      roles: t("playerCount.options.8.roles"),
+    },
+    {
+      count: 9,
+      title: t("playerCount.options.9.title"),
+      subtitle: t("playerCount.options.9.subtitle"),
+      description: t("playerCount.options.9.description"),
+      roles: t("playerCount.options.9.roles"),
+    },
+    {
+      count: 10,
+      title: t("playerCount.options.10.title"),
+      subtitle: t("playerCount.options.10.subtitle"),
+      description: t("playerCount.options.10.description"),
+      roles: t("playerCount.options.10.roles"),
+    },
+    {
+      count: 11,
+      title: t("playerCount.options.11.title"),
+      subtitle: t("playerCount.options.11.subtitle"),
+      description: t("playerCount.options.11.description"),
+      roles: t("playerCount.options.11.roles"),
+    },
+    {
+      count: 12,
+      title: t("playerCount.options.12.title"),
+      subtitle: t("playerCount.options.12.subtitle"),
+      description: t("playerCount.options.12.description"),
+      roles: t("playerCount.options.12.roles"),
+    },
+  ]), [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="wc-difficulty-dialog">
         <DialogHeader>
-          <DialogTitle className="font-serif text-[var(--text-primary)]">玩家数量</DialogTitle>
+          <DialogTitle className="font-serif text-[var(--text-primary)]">{t("playerCount.title")}</DialogTitle>
           <DialogDescription className="text-[var(--text-muted)]">
-            选择对局人数与标准职位配置
+            {t("playerCount.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="wc-difficulty-grid">
-          {PLAYER_COUNT_OPTIONS.map((option) => {
+          {options.map((option) => {
             const active = option.count === value;
             return (
               <button
@@ -88,7 +92,7 @@ export function PlayerCountSelector({
                     <div className="wc-difficulty-subtitle">{option.subtitle}</div>
                   </div>
                   <div className="wc-difficulty-pill">
-                    <span>{option.count}人</span>
+                    <span>{t("playerCount.countLabel", { count: option.count })}</span>
                     {active ? <CheckCircle size={16} weight="fill" /> : null}
                   </div>
                 </div>
@@ -100,7 +104,7 @@ export function PlayerCountSelector({
         </div>
 
         <div className="wc-difficulty-footer">
-          仅调整人数与职位配置，玩法流程保持一致。
+          {t("playerCount.footer")}
         </div>
       </DialogContent>
     </Dialog>
