@@ -7,6 +7,34 @@ const LOCALE_PREFIX = "/zh";
 
 const hasZhPrefix = (pathname: string) => /^\/zh(\/|$)/.test(pathname);
 
+const readLocaleFromStorage = (): AppLocale | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === "zh" || raw === "en") return raw;
+  } catch {
+    // Ignore storage errors
+  }
+  return null;
+};
+
+const readLocaleFromCookie = (): AppLocale | null => {
+  if (typeof document === "undefined") return null;
+  try {
+    const parts = document.cookie.split(";");
+    for (const part of parts) {
+      const [keyRaw, valueRaw] = part.split("=");
+      const key = keyRaw?.trim();
+      if (key !== STORAGE_KEY) continue;
+      const value = (valueRaw ?? "").trim();
+      if (value === "zh" || value === "en") return value;
+    }
+  } catch {
+    // Ignore cookie errors
+  }
+  return null;
+};
+
 const stripLocalePrefix = (pathname: string) => {
   return pathname.replace(/^\/zh(\/|$)/, "/");
 };
@@ -23,13 +51,30 @@ const getLocaleFromPathname = (pathname: string): AppLocale => {
   return hasZhPrefix(pathname) ? "zh" : "en";
 };
 
-export const getLocale = (): AppLocale => {
+const resolvePreferredLocale = (): AppLocale => {
   if (typeof window !== "undefined") {
     try {
       const urlLocale = getLocaleFromPathname(window.location.pathname);
-      if (urlLocale !== currentLocale) {
-        currentLocale = urlLocale;
-      }
+      if (urlLocale === "zh") return "zh";
+    } catch {
+      // Ignore URL errors
+    }
+  }
+
+  const stored = readLocaleFromStorage();
+  if (stored) return stored;
+
+  const cookie = readLocaleFromCookie();
+  if (cookie) return cookie;
+
+  return currentLocale;
+};
+
+export const getLocale = (): AppLocale => {
+  if (typeof window !== "undefined") {
+    try {
+      const preferred = resolvePreferredLocale();
+      if (preferred !== currentLocale) currentLocale = preferred;
     } catch {
       // Ignore URL errors
     }
@@ -74,8 +119,8 @@ export const subscribeLocale = (listener: (locale: AppLocale) => void): (() => v
 export const loadLocaleFromStorage = (): AppLocale => {
   if (typeof window === "undefined") return currentLocale;
   try {
-    const urlLocale = getLocaleFromPathname(window.location.pathname);
-    currentLocale = urlLocale;
+    const preferred = resolvePreferredLocale();
+    currentLocale = preferred;
   } catch {
     // Ignore storage errors
   }

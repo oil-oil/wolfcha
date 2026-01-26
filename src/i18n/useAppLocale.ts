@@ -9,10 +9,8 @@ export function useAppLocale() {
 
   useEffect(() => {
     const stored = loadLocaleFromStorage();
-    if (stored !== locale) {
-      setLocaleState(stored);
-    }
-  }, [locale]);
+    setLocaleState(stored);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeLocale((next) => setLocaleState(next));

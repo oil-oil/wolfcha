@@ -12,13 +12,13 @@ type I18nProviderProps = {
 
 export function I18nProvider({ children }: I18nProviderProps) {
   const [locale, setLocale] = useState<AppLocale>(defaultLocale);
+  const [isLocaleReady, setIsLocaleReady] = useState(false);
 
   useEffect(() => {
     const stored = loadLocaleFromStorage();
-    if (stored !== locale) {
-      setLocale(stored);
-    }
-  }, [locale]);
+    setLocale(stored);
+    setIsLocaleReady(true);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeLocale((next) => setLocale(next));
@@ -26,11 +26,12 @@ export function I18nProvider({ children }: I18nProviderProps) {
   }, []);
 
   useEffect(() => {
+    if (!isLocaleReady) return;
     setLocaleStore(locale);
     if (typeof document !== "undefined") {
       document.documentElement.lang = localeToHtmlLang[locale];
     }
-  }, [locale]);
+  }, [isLocaleReady, locale]);
 
   const messages = useMemo(() => getMessages(locale), [locale]);
 
