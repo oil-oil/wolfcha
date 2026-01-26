@@ -1,7 +1,8 @@
- "use client";
- 
- import React from "react";
- import { AnimatePresence, motion } from "framer-motion";
+"use client";
+
+import React from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useTranslations } from "next-intl";
  
 export type NightActionOverlayType = "wolf" | "witch-save" | "witch-poison" | "hunter" | "seer";
  
@@ -14,6 +15,7 @@ export type NightActionOverlayType = "wolf" | "witch-save" | "witch-poison" | "h
  }
  
  export function NightActionOverlay({ overlay }: NightActionOverlayProps) {
+  const t = useTranslations();
   const target = overlay?.target;
    return (
      <AnimatePresence>
@@ -107,9 +109,9 @@ export type NightActionOverlayType = "wolf" | "witch-save" | "witch-poison" | "h
                 />
               )}
               <div className="wc-night-action-target__text">
-                <span className="wc-night-action-target__label">目标</span>
+                <span className="wc-night-action-target__label">{t("nightActionOverlay.target")}</span>
                 <span className="wc-night-action-target__name">
-                  {target.seat + 1}号 {target.name}
+                  {t("mentions.playerLabel", { seat: target.seat + 1, name: target.name })}
                 </span>
               </div>
             </div>

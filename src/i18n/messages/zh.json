@@ -1591,6 +1591,28 @@
     "copyState": "复制完整状态到剪贴板",
     "devMode": "开发者模式"
   },
+  "smartJump": {
+    "nightGuardAction": "第 {day} 夜 守卫保护目标",
+    "nightWolfAction": "第 {day} 夜 狼人击杀目标",
+    "nightWitchSave": "第 {day} 夜 女巫是否使用解药",
+    "nightWitchPoison": "第 {day} 夜 女巫是否使用毒药",
+    "nightSeerAction": "第 {day} 夜 预言家查验目标",
+    "dayVoteResult": "第 {day} 天投票结果",
+    "guardAction": "守卫保护目标",
+    "wolfAction": "狼人击杀目标",
+    "witchSave": "女巫是否使用解药",
+    "witchSaveNo": "不使用解药",
+    "witchSaveYes": "使用解药",
+    "witchPoison": "女巫是否使用毒药",
+    "witchPoisonNo": "不使用毒药",
+    "witchPoisonTarget": "毒杀 {seat}号 {name}",
+    "seerAction": "预言家查验目标",
+    "voteAction": "投票处决目标",
+    "voteTie": "平票（无人出局）"
+  },
+  "nightActionOverlay": {
+    "target": "目标"
+  },
   "api": {
     "errors": {
       "batchNoStream": "批量请求不支持 stream=true",

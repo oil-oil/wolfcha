@@ -1591,6 +1591,28 @@
     "copyState": "Copy full state to clipboard",
     "devMode": "Developer mode"
   },
+  "smartJump": {
+    "nightGuardAction": "Night {day} Guard protect target",
+    "nightWolfAction": "Night {day} Werewolf kill target",
+    "nightWitchSave": "Night {day} Witch use antidote?",
+    "nightWitchPoison": "Night {day} Witch use poison?",
+    "nightSeerAction": "Night {day} Seer check target",
+    "dayVoteResult": "Day {day} vote result",
+    "guardAction": "Guard protect target",
+    "wolfAction": "Werewolf kill target",
+    "witchSave": "Witch use antidote?",
+    "witchSaveNo": "Don't use antidote",
+    "witchSaveYes": "Use antidote",
+    "witchPoison": "Witch use poison?",
+    "witchPoisonNo": "Don't use poison",
+    "witchPoisonTarget": "Poison Seat {seat} {name}",
+    "seerAction": "Seer check target",
+    "voteAction": "Vote execution target",
+    "voteTie": "Tie (no one eliminated)"
+  },
+  "nightActionOverlay": {
+    "target": "Target"
+  },
   "api": {
     "errors": {
       "batchNoStream": "Batch request does not support stream=true",
