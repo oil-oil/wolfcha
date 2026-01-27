@@ -240,7 +240,6 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen-plus-2025-12-01" },
   { provider: "dashscope", model: "Moonshot-Kimi-K2-Instruct" },
-  { provider: "dashscope", model: "qwen3-next-80b-a3b-instruct" },
   { provider: "dashscope", model: "qwen3-max" },
 
   // Zenmux models
