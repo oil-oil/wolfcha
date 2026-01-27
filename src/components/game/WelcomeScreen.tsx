@@ -214,6 +214,7 @@ export function WelcomeScreen({
 }: WelcomeScreenProps) {
   const t = useTranslations();
   const { locale } = useAppLocale();
+  const discordInviteUrl = "https://discord.gg/ETkdZWgy";
   const sponsorEmail = "zhihuang.oiloil@gmail.com";
   const sponsorMailto = useMemo(() => {
     const subject = t("welcome.sponsor.mailSubject");
@@ -248,6 +249,10 @@ export function WelcomeScreen({
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("normal");
   const [playerCount, setPlayerCount] = useState(10);
   const [githubStars, setGithubStars] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (locale === "en") setIsGroupOpen(false);
+  }, [locale]);
 
   const [customKeyEnabled, setCustomKeyEnabled] = useState(() => isCustomKeyEnabled());
 
@@ -348,6 +353,17 @@ export function WelcomeScreen({
   const canConfirm = useMemo(() => {
     return !!humanName.trim() && !isLoading && !isTransitioning && !creditsLoading;
   }, [humanName, isLoading, isTransitioning, creditsLoading]);
+
+  const isAnyModalOpen =
+    isSetupOpen ||
+    isAuthOpen ||
+    isShareOpen ||
+    isAccountOpen ||
+    isUserProfileOpen ||
+    isSponsorOpen ||
+    isGroupOpen ||
+    isMobileMenuOpen ||
+    isDevConsoleOpen;
 
   const difficultyLabel = useMemo(() => {
     const labels: Record<DifficultyLevel, string> = {
@@ -502,6 +518,27 @@ export function WelcomeScreen({
       });
   };
 
+  const handleOpenGroup = () => {
+    if (locale === "en") {
+      if (typeof window !== "undefined") {
+        window.open(discordInviteUrl, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+    setIsGroupOpen(true);
+  };
+
+  const groupIcon =
+    locale === "en" ? (
+      <img
+        src="/Discord-Symbol-Blurple.svg"
+        alt="Discord"
+        className="h-4 w-4"
+      />
+    ) : (
+      <Users size={16} />
+    );
+
   return (
     <>
     <div className="wc-contract-screen selection:bg-[var(--color-accent)] selection:text-white">
@@ -550,7 +587,13 @@ export function WelcomeScreen({
         totalReferrals={totalReferrals}
       />
 
-      <Dialog open={isGroupOpen} onOpenChange={setIsGroupOpen}>
+      <Dialog
+        open={locale === "en" ? false : isGroupOpen}
+        onOpenChange={(open) => {
+          if (locale === "en") return;
+          setIsGroupOpen(open);
+        }}
+      >
         <DialogContent className="max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -778,10 +821,10 @@ export function WelcomeScreen({
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsGroupOpen(true)}
+            onClick={handleOpenGroup}
             className="h-8 text-xs gap-2"
           >
-            <Users size={16} />
+            {groupIcon}
             {t("welcome.group.title")}
           </Button>
 
@@ -849,10 +892,10 @@ export function WelcomeScreen({
           <Button
             type="button"
             variant="outline"
-            onClick={() => setIsGroupOpen(true)}
+            onClick={handleOpenGroup}
             className="h-8 text-xs gap-2"
           >
-            <Users size={16} />
+            {groupIcon}
             {t("welcome.group.short")}
           </Button>
           <Button
@@ -965,6 +1008,13 @@ export function WelcomeScreen({
                   type="text"
                   value={mounted ? humanName : ""}
                   onChange={(e) => setHumanName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    if (e.nativeEvent.isComposing) return;
+                    if (isAnyModalOpen) return;
+                    e.preventDefault();
+                    void handleConfirm();
+                  }}
                   placeholder={t("welcome.signature.placeholder")}
                   className="wc-signature-input"
                   autoComplete="off"

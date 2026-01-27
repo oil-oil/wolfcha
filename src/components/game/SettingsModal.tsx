@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GameState } from "@/types/game";
 import { aiLogger } from "@/lib/ai-logger";
 import { useTranslations } from "next-intl";
+import { useAppLocale } from "@/i18n/useAppLocale";
 
 interface SoundSettingsSectionProps {
   bgmVolume: number;
@@ -113,6 +114,8 @@ export function SettingsModal({
   onAutoAdvanceDialogueEnabledChange,
 }: SettingsModalProps) {
   const t = useTranslations();
+  const { locale } = useAppLocale();
+  const discordInviteUrl = "https://discord.gg/ETkdZWgy";
   const [view, setView] = useState<"settings" | "about">("settings");
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [aiLogs, setAiLogs] = useState<unknown[]>([]);
@@ -226,17 +229,27 @@ export function SettingsModal({
               <div className="text-sm font-medium text-[var(--text-primary)]">{t("settings.about.group.title")}</div>
               <div className="text-xs text-[var(--text-muted)] mt-1">{t("settings.about.group.description")}</div>
               <div className="mt-3 flex items-center justify-center">
-                {groupImgOk !== false && (
-                  <img
-                    src="/group.png"
-                    alt={t("settings.about.group.alt")}
-                    className="w-full max-w-[260px] max-h-[34vh] sm:max-w-[300px] sm:max-h-[42vh] rounded-md border-2 border-[var(--border-color)] bg-white object-contain"
-                    onLoad={() => setGroupImgOk(true)}
-                    onError={() => setGroupImgOk(false)}
-                  />
-                )}
-                {groupImgOk === false && (
-                  <div className="text-xs text-[var(--text-muted)]">{t("settings.about.group.missing")}</div>
+                {locale === "en" ? (
+                  <Button asChild variant="outline">
+                    <a href={discordInviteUrl} target="_blank" rel="noopener noreferrer">
+                      Discord
+                    </a>
+                  </Button>
+                ) : (
+                  <>
+                    {groupImgOk !== false && (
+                      <img
+                        src="/group.png"
+                        alt={t("settings.about.group.alt")}
+                        className="w-full max-w-[260px] max-h-[34vh] sm:max-w-[300px] sm:max-h-[42vh] rounded-md border-2 border-[var(--border-color)] bg-white object-contain"
+                        onLoad={() => setGroupImgOk(true)}
+                        onError={() => setGroupImgOk(false)}
+                      />
+                    )}
+                    {groupImgOk === false && (
+                      <div className="text-xs text-[var(--text-muted)]">{t("settings.about.group.missing")}</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -596,56 +596,55 @@ export function DialogArea({
 
   // 智能滚动逻辑
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isManualScrollLocked, setIsManualScrollLocked] = useState(false);
+  const manualScrollLockRef = useRef(false);
+  const userScrollIntentRef = useRef(false);
+  const userScrollIntentTimeoutRef = useRef<number | null>(null);
+  const userInteractionSuppressRef = useRef(false);
+  const userInteractionSuppressTimeoutRef = useRef<number | null>(null);
+  const wasAwayFromBottomRef = useRef(false);
+  const unlockBlockedUntilRef = useRef(0);
+  const lockedScrollTopRef = useRef(0);
+  const userScrolledDuringTypingRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
   const prevMessageCountRef = useRef(visibleMessages.length);
-  const scrollThreshold = 24; // 距离底部多少像素算"在底部"
   const isAutoScrollingRef = useRef(false);
-  const userScrollTimeoutRef = useRef<number | null>(null);
-  const isUserScrollingRef = useRef(false);
-
-  // 检测用户是否在底部
-  const checkIfAtBottom = useCallback((): boolean => {
-    if (historyRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = historyRef.current;
-      const nearBottom = scrollHeight - scrollTop - clientHeight < scrollThreshold;
-      setIsAtBottom(nearBottom);
-      if (nearBottom) {
-        setUnreadCount(0);
-        setIsFollowing(true);
-      }
-      return nearBottom;
-    }
-    return true;
-  }, []);
 
   useEffect(() => {
-    onAtBottomChange?.(isAtBottom);
-  }, [isAtBottom, onAtBottomChange]);
+    if (isTyping) {
+      userScrolledDuringTypingRef.current = false;
+    }
+  }, [isTyping]);
 
-  // 滚动到底部
+  useEffect(() => {
+    onAtBottomChange?.(!isManualScrollLocked);
+  }, [isManualScrollLocked, onAtBottomChange]);
+
+  // 滚动到底部（用户主动点击时调用，解除锁定）
   const scrollToBottom = useCallback(() => {
     if (historyRef.current) {
       const container = historyRef.current;
       
       isAutoScrollingRef.current = true;
-      setIsFollowing(true);
-      // 先立即滚动到底部
+      manualScrollLockRef.current = false;
+      wasAwayFromBottomRef.current = false;
+      userScrolledDuringTypingRef.current = false;
+      setIsManualScrollLocked(false);
+      setUnreadCount(0);
+      setIsAtBottom(true);
+      
       container.scrollTo({
         top: container.scrollHeight,
         behavior: "smooth",
       });
       
-      setUnreadCount(0);
-      
-      // 等待滚动动画完成后再次确认位置并设置状态
       setTimeout(() => {
         if (container) {
           container.scrollTop = container.scrollHeight;
-          setIsAtBottom(true);
         }
         isAutoScrollingRef.current = false;
-      }, 300); // 等待平滑滚动动画完成
+      }, 300);
     }
   }, []);
 
@@ -654,28 +653,169 @@ export function DialogArea({
     const container = historyRef.current;
     if (!container) return;
 
-    const handleScroll = () => {
-      if (isAutoScrollingRef.current) {
-        checkIfAtBottom();
-        return;
+    lastScrollTopRef.current = container.scrollTop;
+
+    const lockManualScroll = () => {
+      manualScrollLockRef.current = true;
+      setIsManualScrollLocked(true);
+
+      if (historyRef.current) {
+        lockedScrollTopRef.current = historyRef.current.scrollTop;
       }
 
-      isUserScrollingRef.current = true;
-      if (userScrollTimeoutRef.current) {
-        window.clearTimeout(userScrollTimeoutRef.current);
-      }
-      userScrollTimeoutRef.current = window.setTimeout(() => {
-        isUserScrollingRef.current = false;
-      }, 140);
-      const nearBottom = checkIfAtBottom();
-      if (!nearBottom) {
-        setIsFollowing(false);
+      unlockBlockedUntilRef.current = Date.now() + 700;
+
+      if (isAutoScrollingRef.current) {
+        isAutoScrollingRef.current = false;
       }
     };
 
+    const markUserIntent = (event: Event) => {
+      userScrollIntentRef.current = true;
+      if (userScrollIntentTimeoutRef.current) {
+        window.clearTimeout(userScrollIntentTimeoutRef.current);
+      }
+      userScrollIntentTimeoutRef.current = window.setTimeout(() => {
+        userScrollIntentRef.current = false;
+      }, 600);
+
+      if (!(event instanceof WheelEvent)) {
+        userInteractionSuppressRef.current = true;
+        if (userInteractionSuppressTimeoutRef.current) {
+          window.clearTimeout(userInteractionSuppressTimeoutRef.current);
+        }
+        userInteractionSuppressTimeoutRef.current = window.setTimeout(() => {
+          userInteractionSuppressRef.current = false;
+        }, 900);
+
+        lockManualScroll();
+        wasAwayFromBottomRef.current = true;
+        if (isTyping) {
+          userScrolledDuringTypingRef.current = true;
+        }
+        return;
+      }
+
+      if (isAutoScrollingRef.current) {
+        lockManualScroll();
+        return;
+      }
+
+      if (event instanceof WheelEvent) {
+        if (event.deltaY < 0) {
+          lockManualScroll();
+          if (isTyping) {
+            userScrolledDuringTypingRef.current = true;
+          }
+        }
+        return;
+      }
+    };
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+
+      if (manualScrollLockRef.current) {
+        const isUserActive = userScrollIntentRef.current || userInteractionSuppressRef.current;
+        if (isUserActive) {
+          lockedScrollTopRef.current = scrollTop;
+        } else if (Math.abs(scrollTop - lockedScrollTopRef.current) > 1) {
+          const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+          const isTrulyAtBottom = distanceToBottom <= 0.5;
+          if (isTrulyAtBottom) {
+            manualScrollLockRef.current = false;
+            wasAwayFromBottomRef.current = false;
+            userScrolledDuringTypingRef.current = false;
+            setIsManualScrollLocked(false);
+            setUnreadCount(0);
+            return;
+          }
+
+          isAutoScrollingRef.current = true;
+          container.scrollTop = lockedScrollTopRef.current;
+          window.setTimeout(() => {
+            isAutoScrollingRef.current = false;
+          }, 0);
+          return;
+        }
+      }
+
+      const prevTop = lastScrollTopRef.current;
+      const scrolledUp = scrollTop < prevTop - 0.5;
+      lastScrollTopRef.current = scrollTop;
+
+      if (isAutoScrollingRef.current && !userScrollIntentRef.current) {
+        if (!scrolledUp) {
+          return;
+        }
+
+        lockManualScroll();
+      }
+
+      const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+      const isTrulyAtBottom = distanceToBottom <= 0.5;
+      
+      setIsAtBottom(distanceToBottom < 24);
+
+      if (isTrulyAtBottom) {
+        userScrolledDuringTypingRef.current = false;
+        if (manualScrollLockRef.current) {
+          manualScrollLockRef.current = false;
+          setIsManualScrollLocked(false);
+        }
+        wasAwayFromBottomRef.current = false;
+        setUnreadCount(0);
+      }
+
+      if (!isTrulyAtBottom) {
+        wasAwayFromBottomRef.current = true;
+      }
+
+      if (scrolledUp) {
+        lockManualScroll();
+        wasAwayFromBottomRef.current = true;
+        if (isTyping) {
+          userScrolledDuringTypingRef.current = true;
+        }
+        return;
+      }
+
+      if (manualScrollLockRef.current) {
+        if (isTrulyAtBottom) {
+          manualScrollLockRef.current = false;
+          wasAwayFromBottomRef.current = false;
+          userScrolledDuringTypingRef.current = false;
+          setIsManualScrollLocked(false);
+          setUnreadCount(0);
+        }
+        return;
+      }
+
+      if (!isTrulyAtBottom) {
+        manualScrollLockRef.current = true;
+        setIsManualScrollLocked(true);
+      }
+    };
+
+    container.addEventListener("wheel", markUserIntent, { passive: true });
+    container.addEventListener("touchstart", markUserIntent, { passive: true });
+    container.addEventListener("pointerdown", markUserIntent, { passive: true });
+    container.addEventListener("mousedown", markUserIntent, { passive: true });
     container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [checkIfAtBottom]);
+    return () => {
+      container.removeEventListener("wheel", markUserIntent);
+      container.removeEventListener("touchstart", markUserIntent);
+      container.removeEventListener("pointerdown", markUserIntent);
+      container.removeEventListener("mousedown", markUserIntent);
+      container.removeEventListener("scroll", handleScroll);
+      if (userScrollIntentTimeoutRef.current) {
+        window.clearTimeout(userScrollIntentTimeoutRef.current);
+      }
+      if (userInteractionSuppressTimeoutRef.current) {
+        window.clearTimeout(userInteractionSuppressTimeoutRef.current);
+      }
+    };
+  }, [isTyping]);
 
   // 处理新消息到来
   useEffect(() => {
@@ -684,37 +824,50 @@ export function DialogArea({
     
     if (newCount > prevCount) {
       const addedCount = newCount - prevCount;
-      
-      if (isFollowing && !isUserScrollingRef.current) {
-        // 用户在底部，自动滚动
+
+      const shouldAutoFollow =
+        isAtBottom &&
+        !userInteractionSuppressRef.current &&
+        !userScrolledDuringTypingRef.current;
+
+      if (shouldAutoFollow) {
+        manualScrollLockRef.current = false;
+        setIsManualScrollLocked(false);
+        setUnreadCount(0);
+        // 未锁定，自动滚动到底部
         requestAnimationFrame(() => {
-          if (historyRef.current) {
+          if (historyRef.current && !userInteractionSuppressRef.current && !userScrolledDuringTypingRef.current) {
             isAutoScrollingRef.current = true;
             historyRef.current.scrollTop = historyRef.current.scrollHeight;
             window.setTimeout(() => {
               isAutoScrollingRef.current = false;
-            }, 120);
+            }, 100);
           }
         });
       } else {
-        // 用户在查看历史，累加未读数
+        // 已锁定，累加未读数
         setUnreadCount((prev) => prev + addedCount);
       }
     }
     
     prevMessageCountRef.current = newCount;
-  }, [visibleMessages.length, isFollowing]);
+  }, [visibleMessages.length, isAtBottom, isManualScrollLocked]);
 
   // 对话内容更新时也检查是否需要滚动
   useEffect(() => {
-    if (isFollowing && historyRef.current && !isUserScrollingRef.current) {
-      isAutoScrollingRef.current = true;
-      historyRef.current.scrollTop = historyRef.current.scrollHeight;
-      window.setTimeout(() => {
-        isAutoScrollingRef.current = false;
-      }, 120);
-    }
-  }, [displayedText, isFollowing]);
+    if (isTyping) return;
+    if (!isAtBottom) return;
+    if (userScrolledDuringTypingRef.current) return;
+    if (manualScrollLockRef.current) return;
+    if (userInteractionSuppressRef.current) return;
+    if (!historyRef.current) return;
+
+    isAutoScrollingRef.current = true;
+    historyRef.current.scrollTop = historyRef.current.scrollHeight;
+    window.setTimeout(() => {
+      isAutoScrollingRef.current = false;
+    }, 100);
+  }, [isTyping, isAtBottom]);
 
   // 空状态
   if (gameState.messages.length === 0 && !currentDialogue) {
@@ -947,10 +1100,6 @@ export function DialogArea({
 
       {/* 下方：对话框 - 固定在底部 */}
       <div className="wc-dialog-bottom mt-auto shrink-0 px-4 lg:px-6 pb-4 lg:pb-6 pt-0">
-        {/* 移动端立绘放在消息框上方 */}
-        <div className="wc-dialog-portrait-mobile md:hidden">
-          {portraitNode}
-        </div>
         {/* 投票进度 */}
         {(gameState.phase === "DAY_VOTE" || gameState.phase === "DAY_BADGE_ELECTION") && (
           <div className="mb-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3">
@@ -1404,9 +1553,23 @@ export function DialogArea({
                   onClick={handleAdvance}
                 >
                     {currentSpeaker?.player && (
-                      <div className="text-base font-bold text-[var(--color-gold)] mb-2 font-serif tracking-wide">
-                        {currentSpeaker.player.displayName}
-                      </div>
+                      <>
+                        <div className="md:hidden flex items-center gap-2 mb-2">
+                          <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-black/10">
+                            <img
+                              src={getPlayerAvatarUrl(currentSpeaker.player, isGenshinMode)}
+                              alt={currentSpeaker.player.displayName}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="text-sm font-semibold text-[var(--color-gold)]">
+                            {currentSpeaker.player.displayName}
+                          </div>
+                        </div>
+                        <div className="hidden md:block text-base font-bold text-[var(--color-gold)] mb-2 font-serif tracking-wide">
+                          {currentSpeaker.player.displayName}
+                        </div>
+                      </>
                     )}
                     
                     {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}

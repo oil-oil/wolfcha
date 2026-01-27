@@ -155,7 +155,6 @@ export default function Home() {
     handleHumanBadgeTransfer,
     handleNextRound,
     waitingForNextRound,
-    scrollToBottom,
     advanceSpeech,
   } = useGameLogic();
   const { settings, setBgmVolume, setSoundEnabled, setAiVoiceEnabled, setGenshinMode, setAutoAdvanceDialogueEnabled } = useSettings();
@@ -910,12 +909,6 @@ export default function Home() {
   }, [gameState.phase, humanPlayer, isRoleActionForHuman, openTutorial]);
 
   // API Key 检查（现在由服务端管理，此检查已不再需要）
-
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [gameState.messages, scrollToBottom]);
-
   useEffect(() => {
     if (showTable) return;
     queueMicrotask(() => {
