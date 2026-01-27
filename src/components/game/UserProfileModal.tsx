@@ -101,6 +101,7 @@ import {
     dashscope: "",
   });
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+  const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("1");
   const [isPurchasing, setIsPurchasing] = useState(false);
 
    const displayCredits = useMemo(() => {
@@ -497,7 +498,11 @@ import {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setPurchaseQuantity((prev) => Math.max(1, prev - 1))}
+                      onClick={() => {
+                        const newVal = Math.max(1, purchaseQuantity - 1);
+                        setPurchaseQuantity(newVal);
+                        setPurchaseQuantityInput(newVal.toString());
+                      }}
                       disabled={purchaseQuantity <= 1}
                       className="h-9 w-9 p-0"
                     >
@@ -507,11 +512,29 @@ import {
                       type="number"
                       min={1}
                       max={100}
-                      value={purchaseQuantity}
+                      value={purchaseQuantityInput}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (!isNaN(val)) {
-                          setPurchaseQuantity(Math.max(1, val));
+                        const inputValue = e.target.value;
+                        setPurchaseQuantityInput(inputValue);
+                        // Allow empty input for better UX
+                        if (inputValue === "") {
+                          return;
+                        }
+                        const val = parseInt(inputValue, 10);
+                        if (!isNaN(val) && val >= 1) {
+                          setPurchaseQuantity(Math.min(100, Math.max(1, val)));
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const inputValue = e.target.value;
+                        if (inputValue === "" || isNaN(parseInt(inputValue, 10))) {
+                          setPurchaseQuantityInput("1");
+                          setPurchaseQuantity(1);
+                        } else {
+                          const val = parseInt(inputValue, 10);
+                          const clampedVal = Math.min(100, Math.max(1, val));
+                          setPurchaseQuantityInput(clampedVal.toString());
+                          setPurchaseQuantity(clampedVal);
                         }
                       }}
                       className="h-9 w-20 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -520,7 +543,12 @@ import {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setPurchaseQuantity((prev) => prev + 1)}
+                      onClick={() => {
+                        const newVal = Math.min(100, purchaseQuantity + 1);
+                        setPurchaseQuantity(newVal);
+                        setPurchaseQuantityInput(newVal.toString());
+                      }}
+                      disabled={purchaseQuantity >= 100}
                       className="h-9 w-9 p-0"
                     >
                       <Plus size={16} />
