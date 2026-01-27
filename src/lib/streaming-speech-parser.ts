@@ -42,18 +42,14 @@ export class StreamingSpeechParser {
 
     this.accumulatedContent += chunk;
 
-    // 只在检测到段落真正结束时触发：引号后跟逗号或右括号
-    const hasSegmentEnd = 
-      chunk.includes('",') || 
-      chunk.includes('"]') ||
-      chunk.includes('" ,') ||
-      chunk.includes('" ]');
+    // 流式响应里，分隔符（比如 "] 或 ",）可能会被拆分到不同 chunk。
+    // 为了保证增量输出，只要 chunk 看起来包含了新字符串内容，就触发一次防抖解析。
+    const hasArrayStart = this.accumulatedContent.includes("[");
+    const likelyHasNewStringContent = chunk.includes('"') || chunk.includes("\n");
 
-    if (hasSegmentEnd) {
-      // 使用防抖，避免过于频繁的解析
+    if (hasArrayStart && likelyHasNewStringContent) {
       if (!this.pendingEmit) {
         this.pendingEmit = true;
-        // 延迟 50ms 执行，批量处理
         this.emitTimeout = setTimeout(() => {
           this.pendingEmit = false;
           this.tryExtractSegments();
@@ -141,53 +137,84 @@ export class StreamingSpeechParser {
 
   /**
    * 从流式内容中提取完整的字符串段落
-   * 只匹配 JSON 数组中的元素，排除对象键
+   * 支持多个 JSON 数组（每行一个数组）和单个数组中的多个元素
    */
   private extractSegmentsFromStream(): number {
     let extractedCount = 0;
 
     try {
-      // 尝试找到 JSON 数组的开始
-      const arrayMatch = this.accumulatedContent.match(/\[\s*("(?:\\.|[^"\\])*"(?:\s*,\s*"(?:\\.|[^"\\])*")*)/);
-      if (!arrayMatch) return 0;
-      
-      const arrayContent = arrayMatch[1];
-      // 匹配数组中的字符串元素
-      const stringMatches = arrayContent.match(/"(?:\\.|[^"\\])*"/g);
+      const validSegments: string[] = [];
+      let arrayDepth = 0;
+      let inString = false;
+      let escapeNext = false;
+      let currentString = "";
 
-      if (stringMatches) {
-        const validSegments: string[] = [];
+      for (let i = 0; i < this.accumulatedContent.length; i++) {
+        const ch = this.accumulatedContent[i];
 
-        for (const match of stringMatches) {
-          try {
-            const parsed = JSON.parse(match);
-            if (typeof parsed === "string") {
-              const cleaned = parsed.trim();
-              // 只接受长度大于 5 的字符串作为有效段落（排除短字符串噪音）
-              if (cleaned && cleaned.length > 5) {
-                validSegments.push(cleaned);
+        if (inString) {
+          if (escapeNext) {
+            escapeNext = false;
+            currentString += ch;
+            continue;
+          }
+          if (ch === "\\") {
+            escapeNext = true;
+            currentString += ch;
+            continue;
+          }
+          if (ch === '"') {
+            inString = false;
+            try {
+              const parsed = JSON.parse('"' + currentString + '"');
+              if (typeof parsed === "string") {
+                const cleaned = parsed.trim();
+                if (arrayDepth > 0 && cleaned && cleaned.length > 5) {
+                  validSegments.push(cleaned);
+                }
               }
+            } catch {
+              // ignore
             }
-          } catch {
-            // 忽略解析错误
+            currentString = "";
+            continue;
           }
+
+          currentString += ch;
+          continue;
         }
 
-        // 发送新的段落（只发送尚未处理的）
-        for (const segment of validSegments) {
-          if (!this.processedSegments.has(segment)) {
-            this.processedSegments.add(segment);
-            this.emittedSegmentsList.push(segment);
-            if (this.onSegmentReceived) {
-              this.onSegmentReceived(segment, this.emittedSegmentsList.length - 1);
-            }
-            extractedCount++;
-          }
+        if (ch === '"') {
+          inString = true;
+          escapeNext = false;
+          currentString = "";
+          continue;
         }
 
-        if (extractedCount > 0 && this.onProgress) {
-          this.onProgress(this.processedSegments.size);
+        if (ch === "[") {
+          arrayDepth++;
+          continue;
         }
+        if (ch === "]" && arrayDepth > 0) {
+          arrayDepth--;
+          continue;
+        }
+      }
+
+      // 发送新的段落（只发送尚未处理的）
+      for (const segment of validSegments) {
+        if (!this.processedSegments.has(segment)) {
+          this.processedSegments.add(segment);
+          this.emittedSegmentsList.push(segment);
+          if (this.onSegmentReceived) {
+            this.onSegmentReceived(segment, this.emittedSegmentsList.length - 1);
+          }
+          extractedCount++;
+        }
+      }
+
+      if (extractedCount > 0 && this.onProgress) {
+        this.onProgress(this.processedSegments.size);
       }
     } catch (error) {
       console.warn("Stream extraction error:", error);

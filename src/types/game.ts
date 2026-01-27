@@ -222,7 +222,6 @@ export const SUMMARY_MODEL = "google/gemini-2.5-flash-lite";
 export const AVAILABLE_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen-plus" },
-  { provider: "dashscope", model: "Moonshot-Kimi-K2-Instruct" },
   { provider: "dashscope", model: "qwen3-max" },
 
   { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
@@ -245,7 +244,6 @@ export const ALL_MODELS: ModelRef[] = [
   // Dashscope models
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen-plus-2025-12-01" },
-  { provider: "dashscope", model: "Moonshot-Kimi-K2-Instruct" },
   { provider: "dashscope", model: "qwen3-max" },
 
   // Zenmux models

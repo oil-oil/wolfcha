@@ -145,10 +145,13 @@ export function useGameLogic() {
     advanceSpeechQueue,
     clearSpeechQueue,
     resetDialogueState,
+    setPrefetchedSpeech,
+    consumePrefetchedSpeech,
     markCurrentSegmentCommitted,
     isCurrentSegmentCommitted,
     markCurrentSegmentCompleted,
     isCurrentSegmentCompleted,
+    shouldAutoAdvanceToNextAI,
   } = dialogue;
 
   // ============================================
@@ -535,6 +538,8 @@ export function useGameLogic() {
     initStreamingSpeechQueue,
     appendToSpeechQueue,
     finalizeSpeechQueue,
+    setPrefetchedSpeech,
+    consumePrefetchedSpeech,
     setAfterLastWords: (cb) => { afterLastWordsRef.current = cb; },
   });
 
@@ -1400,78 +1405,20 @@ export function useGameLogic() {
     else if (gameState.phase === "NIGHT_WOLF_ACTION" && humanPlayer.role === "Werewolf") {
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
       const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
-      const existingVotes: Record<string, number> = { ...(currentState.nightActions.wolfVotes || {}) };
-      existingVotes[humanPlayer.playerId] = targetSeat;
-
-      currentState = {
-        ...currentState,
-        nightActions: { ...currentState.nightActions, wolfVotes: existingVotes, wolfTarget: undefined },
-      };
-      setDialogue(t("speakers.system"), t("gameLogicMessages.youVotedAttack", { seat: targetSeat + 1, name: targetPlayer?.displayName || "" }), false);
-      setGameState(currentState);
-
-      // AI 狼人投票（并发执行）
-      const aiWolves = wolves.filter((w) => !w.isHuman);
-      if (aiWolves.length > 0) {
-        setIsWaitingForAI(true);
-        try {
-          const { generateWolfAction } = await import("@/lib/game-master");
-          
-          // 并发执行所有 AI 狼人的投票
-          const votePromises = aiWolves.map(async (w) => {
-            const voteSeat = await generateWolfAction(currentState, w, existingVotes);
-            return { playerId: w.playerId, voteSeat };
-          });
-          
-          const voteResults = await Promise.all(votePromises);
-          
-          for (const { playerId, voteSeat } of voteResults) {
-            existingVotes[playerId] = voteSeat;
-          }
-          currentState = {
-            ...currentState,
-            nightActions: { ...currentState.nightActions, wolfVotes: existingVotes },
-          };
-          setGameState(currentState);
-        } catch (error) {
-          console.error("[wolfcha] AI wolf vote failed:", error);
-          // On error, AI wolves follow human's choice
-          for (const w of aiWolves) {
-            if (existingVotes[w.playerId] === undefined) {
-              existingVotes[w.playerId] = targetSeat;
-            }
-          }
-          currentState = {
-            ...currentState,
-            nightActions: { ...currentState.nightActions, wolfVotes: existingVotes },
-          };
-          setGameState(currentState);
-          toast.error(t("gameLogicMessages.teammateTimeout"), { description: t("gameLogicMessages.aiFollowsYou") });
-        } finally {
-          setIsWaitingForAI(false);
-        }
-      }
-
-      const chosenSeat = computeUniqueTopSeat(existingVotes);
-      if (chosenSeat === null) {
-        currentState = {
-          ...currentState,
-          nightActions: { ...currentState.nightActions, wolfVotes: {} },
-        };
-        setGameState(currentState);
-        setDialogue(t("speakers.system"), t("gameLogicMessages.wolfTieVote"), false);
-        toast.warning(t("gameLogicMessages.wolfTieTitle"), { description: t("gameLogicMessages.wolfTieDesc") });
-        return;
+      
+      // 简化逻辑：人类狼人决定目标，其他AI狼人自动达成共识
+      const wolfVotes: Record<string, number> = {};
+      for (const wolf of wolves) {
+        wolfVotes[wolf.playerId] = targetSeat;
       }
 
       currentState = {
         ...currentState,
-        nightActions: { ...currentState.nightActions, wolfVotes: existingVotes, wolfTarget: chosenSeat },
+        nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: targetSeat },
       };
       
-      // 添加狼队达成一致的确认消息
-      const chosenTarget = currentState.players.find((p) => p.seat === chosenSeat);
-      setDialogue(t("speakers.system"), t("gameLogicMessages.wolfDecided", { seat: chosenSeat + 1, name: chosenTarget?.displayName || "" }), false);
+      // 显示狼队达成一致的确认消息
+      setDialogue(t("speakers.system"), t("gameLogicMessages.wolfDecided", { seat: targetSeat + 1, name: targetPlayer?.displayName || "" }), false);
       setGameState(currentState);
 
       await delay(800);
@@ -1592,7 +1539,7 @@ export function useGameLogic() {
   }, [badgePhase]);
 
   /** 推进发言 */
-  const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean }> => {
+  const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean; shouldAutoAdvanceToNextAI: boolean }> => {
     if (gameStateRef.current.phase.includes("NIGHT")) {
       const cont = nightContinueRef.current;
       if (cont) {
@@ -1601,18 +1548,18 @@ export function useGameLogic() {
         setIsWaitingForAI(false);
         setWaitingForNextRound(false);
         await cont(gameStateRef.current);
-        return { finished: true, shouldAdvanceToNextSpeaker: false };
+        return { finished: true, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
       }
-      return { finished: false, shouldAdvanceToNextSpeaker: false };
+      return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
     const queue = getSpeechQueue();
     if (!queue) {
-      return { finished: false, shouldAdvanceToNextSpeaker: false };
+      return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
     if (queue.isStreaming && !isCurrentSegmentCompleted()) {
-      return { finished: false, shouldAdvanceToNextSpeaker: false };
+      return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
     const { segments, currentIndex, player, afterSpeech } = queue;
@@ -1649,22 +1596,23 @@ export function useGameLogic() {
     }
 
     const result = advanceSpeechQueue();
-    if (!result) return { finished: false, shouldAdvanceToNextSpeaker: false };
+    if (!result) return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
 
     if (!result.finished) {
-      return { finished: false, shouldAdvanceToNextSpeaker: false };
+      return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
     setIsWaitingForAI(false);
 
     if (result.afterSpeech) {
       await result.afterSpeech(nextState);
-      return { finished: true, shouldAdvanceToNextSpeaker: false };
+      // 如果下一个发言者是AI，返回标志让调用方知道可以自动推进
+      return { finished: true, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: result.shouldAutoAdvanceToNextAI ?? false };
     }
 
     // 不设置 waitingForNextRound，直接返回 shouldAdvanceToNextSpeaker: true
     // 让调用方立即调用 handleNextRound，避免单条消息时需要按两次回车的问题
-    return { finished: true, shouldAdvanceToNextSpeaker: true };
+    return { finished: true, shouldAdvanceToNextSpeaker: true, shouldAutoAdvanceToNextAI: false };
   }, [clearDialogue, setIsWaitingForAI, setWaitingForNextRound, getSpeechQueue, advanceSpeechQueue, setGameState, isCurrentSegmentCommitted, markCurrentSegmentCommitted, isCurrentSegmentCompleted]);
 
   /** 切换暂停 */
@@ -1711,5 +1659,6 @@ export function useGameLogic() {
     togglePause,
     markCurrentSegmentCompleted,
     isCurrentSegmentCompleted,
+    shouldAutoAdvanceToNextAI,
   };
 }

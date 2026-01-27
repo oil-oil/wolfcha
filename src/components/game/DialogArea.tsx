@@ -143,6 +143,26 @@ function renderPlayerMentions(
   return parts.length > 0 ? parts : text;
 }
 
+// Streaming text: treat *...* as italic and @N号 as mentions so italics show while typing
+function renderStreamingMarkdown(
+  text: string,
+  players: Player[],
+  isNight: boolean,
+  isGenshinMode: boolean
+): React.ReactNode {
+  const parts = text.split(/\*/);
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const segment = renderPlayerMentions(parts[i], players, isNight, isGenshinMode);
+    if (i % 2 === 1) {
+      out.push(<em key={`em-${i}`}>{segment}</em>);
+    } else {
+      out.push(<React.Fragment key={`n-${i}`}>{segment}</React.Fragment>);
+    }
+  }
+  return out.length > 0 ? out : text;
+}
+
 function renderMentionsInMarkdownChildren(
   children: React.ReactNode,
   players: Player[],
@@ -366,6 +386,7 @@ export function DialogArea({
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+  const historyContentRef = useRef<HTMLDivElement>(null);
   const lastPortraitPlayerRef = useRef<Player | null>(null);
   const voiceRecorderRef = useRef<VoiceRecorderHandle | null>(null);
 
@@ -817,6 +838,41 @@ export function DialogArea({
     };
   }, [isTyping]);
 
+  useEffect(() => {
+    const container = historyRef.current;
+    const content = historyContentRef.current;
+    if (!container || !content || typeof ResizeObserver === "undefined") return;
+
+    let frameId: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (!isAtBottom) return;
+      if (manualScrollLockRef.current) return;
+      if (userInteractionSuppressRef.current) return;
+      if (userScrolledDuringTypingRef.current) return;
+
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+
+      frameId = requestAnimationFrame(() => {
+        if (!historyRef.current) return;
+        isAutoScrollingRef.current = true;
+        historyRef.current.scrollTop = historyRef.current.scrollHeight;
+        window.setTimeout(() => {
+          isAutoScrollingRef.current = false;
+        }, 60);
+      });
+    });
+
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+      if (frameId) {
+        cancelAnimationFrame(frameId);
+      }
+    };
+  }, [isAtBottom]);
+
   // 处理新消息到来
   useEffect(() => {
     const newCount = visibleMessages.length;
@@ -1038,41 +1094,43 @@ export function DialogArea({
           <div className="wc-dialog-history flex-1 min-w-0 min-h-0 relative">
             <motion.div 
               ref={historyRef}
-              className="absolute inset-0 overflow-y-scroll pb-4"
+              className="absolute inset-0 overflow-y-scroll pb-4 scrollbar-hide"
               style={{
                 scrollbarGutter: "stable",
                 overflowAnchor: "none",
               }}
               layoutScroll
             >
-              <LayoutGroup>
-                <AnimatePresence initial={false}>
-                  {visibleMessages.map((msg, index) => {
-                    const prevMsg = visibleMessages[index - 1];
-                    const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
-                    const key = msg.id || `${msg.playerId}:${msg.timestamp}:${index}`;
-                    return (
-                      <motion.div
-                        key={key}
-                        layout
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                      >
-                        <ChatMessageItem 
-                          msg={msg} 
-                          players={gameState.players}
-                          humanPlayerId={humanPlayer?.playerId}
-                          showDivider={showDivider}
-                          isNight={isNight}
-                          isGenshinMode={isGenshinMode}
-                        />
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
-              </LayoutGroup>
+              <div ref={historyContentRef}>
+                <LayoutGroup>
+                  <AnimatePresence initial={false}>
+                    {visibleMessages.map((msg, index) => {
+                      const prevMsg = visibleMessages[index - 1];
+                      const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
+                      const key = msg.id || `${msg.playerId}:${msg.timestamp}:${index}`;
+                      return (
+                        <motion.div
+                          key={key}
+                          layout
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                        >
+                          <ChatMessageItem 
+                            msg={msg} 
+                            players={gameState.players}
+                            humanPlayerId={humanPlayer?.playerId}
+                            showDivider={showDivider}
+                            isNight={isNight}
+                            isGenshinMode={isGenshinMode}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </LayoutGroup>
+              </div>
             </motion.div>
             
             {/* 新消息提示：底部分割线 + 文案 */}
@@ -1590,10 +1648,10 @@ export function DialogArea({
                       </>
                     )}
                     
-                    {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大 */}
+                    {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大；流式时也用 * 渲染斜体 */}
                     <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 pr-1 whitespace-pre-wrap break-words">
                       {isTyping ? (
-                        renderPlayerMentions(
+                        renderStreamingMarkdown(
                           waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText,
                           gameState.players,
                           isNight,

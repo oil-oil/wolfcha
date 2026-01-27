@@ -157,6 +157,7 @@ export default function Home() {
     waitingForNextRound,
     advanceSpeech,
     markCurrentSegmentCompleted,
+    shouldAutoAdvanceToNextAI,
   } = useGameLogic();
   const { settings, setBgmVolume, setSoundEnabled, setAiVoiceEnabled, setGenshinMode, setSpectatorMode, setAutoAdvanceDialogueEnabled } = useSettings();
   const { bgmVolume, isSoundEnabled, isAiVoiceEnabled, isGenshinMode, isSpectatorMode, isAutoAdvanceDialogueEnabled } = settings;
@@ -724,6 +725,7 @@ export default function Home() {
   const lastAutoAdvanceSignatureRef = useRef<string | null>(null);
   const prevIsTypingRef = useRef<boolean>(false);
   const autoAdvanceDelayMs = 2500;
+  const autoAdvanceDelayMsForAI = 500; // 下一个发言者是AI时使用更短的延迟
   
   // Track when typing finishes to trigger auto-advance
   useEffect(() => {
@@ -756,7 +758,8 @@ export default function Home() {
       if (lastAutoAdvanceSignatureRef.current === signature) return;
       lastAutoAdvanceSignatureRef.current = signature;
 
-      const delayMs = currentDialogue.isStreaming ? autoAdvanceDelayMs : autoAdvanceDelayMs;
+      // 如果下一个发言者是AI，使用更短的延迟实现无缝衔接
+      const delayMs = shouldAutoAdvanceToNextAI() ? autoAdvanceDelayMsForAI : autoAdvanceDelayMs;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
       }, delayMs);
@@ -767,9 +770,11 @@ export default function Home() {
       const signature = `NEXT::${gameState.phase}::${gameState.day}::${String(gameState.currentSpeakerSeat ?? "")}`;
       if (lastAutoAdvanceSignatureRef.current === signature) return;
       lastAutoAdvanceSignatureRef.current = signature;
+      // 如果下一个发言者是AI，使用更短的延迟
+      const delayMs = shouldAutoAdvanceToNextAI() ? autoAdvanceDelayMsForAI : 1500;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
-      }, 1500);
+      }, delayMs);
     }
 
     return () => {
@@ -794,6 +799,7 @@ export default function Home() {
     isSettingsOpen,
     isWaitingForAI,
     waitingForNextRound,
+    shouldAutoAdvanceToNextAI,
   ]);
 
   useEffect(() => {

@@ -1254,6 +1254,7 @@
   "dayPhase": {
     "organizing": "（正在组织语言…）",
     "interrupted": "（话音被打断了）",
+    "timeout": "我没啥想说的",
     "lastWordsSystem": "请 {seat}号 {name} 发表遗言",
     "lastWordsPrompt": "请你发表遗言（{seat}号 {name}）"
   },

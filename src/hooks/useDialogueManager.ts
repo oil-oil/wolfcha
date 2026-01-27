@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import type { Player } from "@/types/game";
+import type { Player, Phase } from "@/types/game";
 
 export interface DialogueState {
   speaker: string;
@@ -19,6 +19,24 @@ export interface SpeechQueueState {
   committedIndices?: Set<number>; // 已提交到历史记录的段落索引
   completedIndices?: Set<number>; // 已完成显示的段落索引
   awaitingNextSegment?: boolean; // 已触发推进，等待下一段
+  shouldAutoAdvanceToNextAI?: boolean; // 下一个发言者是AI，应该自动推进
+}
+
+export interface PrefetchedSpeech {
+  playerId: string;
+  phase: Phase;
+  day: number;
+  messageCount: number;
+  segments: string[];
+  isComplete: boolean;
+  createdAt: number;
+}
+
+export interface PrefetchCriteria {
+  playerId: string;
+  phase: Phase;
+  day: number;
+  messageCount: number;
 }
 
 /**
@@ -30,6 +48,7 @@ export function useDialogueManager() {
   const [isWaitingForAI, setIsWaitingForAI] = useState(false);
   const [waitingForNextRound, setWaitingForNextRound] = useState(false);
   const speechQueueRef = useRef<SpeechQueueState | null>(null);
+  const prefetchedSpeechRef = useRef<PrefetchedSpeech | null>(null);
 
   /** 设置对话内容 */
   const setDialogue = useCallback((speaker: string, text: string, isStreaming = false) => {
@@ -93,9 +112,10 @@ export function useDialogueManager() {
     } else {
       // 所有段落已完成
       const afterSpeech = queue.afterSpeech;
+      const shouldAutoAdvanceToNextAI = queue.shouldAutoAdvanceToNextAI ?? false;
       speechQueueRef.current = null;
       clearDialogue();
-      return { finished: true, afterSpeech };
+      return { finished: true, afterSpeech, shouldAutoAdvanceToNextAI };
     }
   }, [clearDialogue]);
 
@@ -188,12 +208,42 @@ export function useDialogueManager() {
   }, []);
 
   /** 标记流式发言队列已完成接收 */
-  const finalizeSpeechQueue = useCallback(() => {
+  const finalizeSpeechQueue = useCallback((options?: { nextSpeakerIsAI?: boolean }) => {
     const queue = speechQueueRef.current;
     if (!queue) return;
 
     queue.isStreaming = false;
     queue.isFinalized = true;
+    queue.shouldAutoAdvanceToNextAI = options?.nextSpeakerIsAI ?? false;
+  }, []);
+
+  /** 设置预加载发言缓存 */
+  const setPrefetchedSpeech = useCallback((prefetch: PrefetchedSpeech | null) => {
+    prefetchedSpeechRef.current = prefetch;
+  }, []);
+
+  /** 消费预加载发言缓存（匹配元数据后清除） */
+  const consumePrefetchedSpeech = useCallback((criteria: PrefetchCriteria) => {
+    const prefetch = prefetchedSpeechRef.current;
+    if (!prefetch) return null;
+
+    const matches =
+      prefetch.playerId === criteria.playerId &&
+      prefetch.phase === criteria.phase &&
+      prefetch.day === criteria.day &&
+      criteria.messageCount >= prefetch.messageCount;
+
+    if (!matches) {
+      prefetchedSpeechRef.current = null;
+      return null;
+    }
+
+    if (!prefetch.isComplete || prefetch.segments.length === 0) {
+      return null;
+    }
+
+    prefetchedSpeechRef.current = null;
+    return prefetch.segments;
   }, []);
 
   /** 重置所有对话状态 */
@@ -202,6 +252,14 @@ export function useDialogueManager() {
     setIsWaitingForAI(false);
     setWaitingForNextRound(false);
     speechQueueRef.current = null;
+    prefetchedSpeechRef.current = null;
+  }, []);
+
+  /** 检查下一个发言者是否是AI（用于自动推进时减少延迟） */
+  const shouldAutoAdvanceToNextAI = useCallback(() => {
+    const queue = speechQueueRef.current;
+    if (!queue) return false;
+    return queue.shouldAutoAdvanceToNextAI ?? false;
   }, []);
 
   return {
@@ -225,9 +283,12 @@ export function useDialogueManager() {
     advanceSpeechQueue,
     clearSpeechQueue,
     resetDialogueState,
+    setPrefetchedSpeech,
+    consumePrefetchedSpeech,
     markCurrentSegmentCommitted,
     isCurrentSegmentCommitted,
     markCurrentSegmentCompleted,
     isCurrentSegmentCompleted,
+    shouldAutoAdvanceToNextAI,
   };
 }

@@ -183,49 +183,29 @@ export class NightPhase extends GamePhase {
 
       let wolfVotes: Record<string, number> = {};
       try {
-        for (let round = 1; round <= GAME_CONFIG.MAX_REVOTE_COUNT; round++) {
-          wolfVotes = {};
-          
-          // 并发执行所有狼人的投票决策
-          const votePromises = wolves.map(async (wolf) => {
-            const targetSeat = await generateWolfAction(currentState, wolf, {});
-            return { playerId: wolf.playerId, targetSeat };
-          });
-          
-          const voteResults = await Promise.all(votePromises);
-          
-          await runtime.waitForUnpause();
-          if (!runtime.isTokenValid(runtime.token)) return currentState;
-          
-          for (const { playerId, targetSeat } of voteResults) {
-            wolfVotes[playerId] = targetSeat;
-          }
-
-          const chosenSeat = computeUniqueTopSeat(wolfVotes);
-          currentState = {
-            ...currentState,
-            nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: chosenSeat ?? undefined },
-          };
-          runtime.setGameState(currentState);
-
-          if (chosenSeat !== null) break;
-          await delay(600);
+        // 简化逻辑：第一个狼人决定目标，其他狼人自动达成共识
+        const firstWolf = wolves[0];
+        const targetSeat = await generateWolfAction(currentState, firstWolf, {});
+        
+        await runtime.waitForUnpause();
+        if (!runtime.isTokenValid(runtime.token)) return currentState;
+        
+        // 所有狼人投票给同一个目标
+        for (const wolf of wolves) {
+          wolfVotes[wolf.playerId] = targetSeat;
         }
+
+        currentState = {
+          ...currentState,
+          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: targetSeat },
+        };
+        runtime.setGameState(currentState);
       } catch (error) {
         console.error("[wolfcha] AI wolf vote failed:", error);
         const villagers = currentState.players.filter((p) => p.alive && p.alignment === "village");
         const fallbackSeat = villagers.length > 0
           ? villagers[Math.floor(Math.random() * villagers.length)].seat
           : 0;
-        currentState = {
-          ...currentState,
-          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: fallbackSeat },
-        };
-        runtime.setGameState(currentState);
-      }
-
-      if (currentState.nightActions.wolfTarget === undefined) {
-        const fallbackSeat = pickRandomFromTie(wolfVotes);
         currentState = {
           ...currentState,
           nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: fallbackSeat },

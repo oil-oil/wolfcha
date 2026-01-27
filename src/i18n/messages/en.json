@@ -1254,6 +1254,7 @@
   "dayPhase": {
     "organizing": "(Gathering thoughts...)",
     "interrupted": "(Interrupted)",
+    "timeout": "I have nothing to say",
     "lastWordsSystem": "Seat {seat} {name}, please give your last words",
     "lastWordsPrompt": "Please deliver your last words (Seat {seat} {name})"
   },
