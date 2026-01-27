@@ -12,6 +12,7 @@ export interface StartGameOptions {
   difficulty?: DifficultyLevel;
   playerCount?: number;
   isGenshinMode?: boolean;
+  isSpectatorMode?: boolean;
 }
 
 export type Phase =
@@ -122,6 +123,7 @@ export interface GameState {
   isPaused?: boolean;
   scenario?: GameScenario;
   isGenshinMode?: boolean;
+  isSpectatorMode?: boolean;
   difficulty: DifficultyLevel;
   players: Player[];
   events: GameEvent[];

@@ -20,6 +20,7 @@ export function useTypewriter({
 }: UseTypewriterOptions) {
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [completedText, setCompletedText] = useState<string | null>(null);
   const indexRef = useRef(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -38,6 +39,7 @@ export function useTypewriter({
       queueMicrotask(() => {
         setDisplayedText(next);
         setIsTyping(false);
+        setCompletedText(next);
       });
       return;
     }
@@ -49,11 +51,13 @@ export function useTypewriter({
     queueMicrotask(() => {
       setDisplayedText("");
       setIsTyping(true);
+      setCompletedText(null);
     });
 
     const typeNextChunk = () => {
       if (indexRef.current >= text.length) {
         setIsTyping(false);
+        setCompletedText(text);
         onComplete?.();
         return;
       }
@@ -81,5 +85,5 @@ export function useTypewriter({
     };
   }, [text, speed, enabled, onComplete]);
 
-  return { displayedText, isTyping, reset };
+  return { displayedText, isTyping, completedText, reset };
 }

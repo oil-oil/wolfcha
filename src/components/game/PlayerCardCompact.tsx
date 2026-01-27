@@ -30,8 +30,6 @@ interface PlayerCardCompactProps {
   isInSelectionPhase?: boolean;
 }
 
-const revealedAvatarIds = new Set<string>();
-
 export function PlayerCardCompact({
   player,
   isSpeaking,
@@ -58,30 +56,23 @@ export function PlayerCardCompact({
   const isMe = player.isHuman;
   const isReady = isMe ? !!player.displayName?.trim() : !!player.agentProfile?.persona;
   const isDisabledInSelection = isInSelectionPhase && !canClick && isReady && !isDead;
-  const hasRevealedAvatar = revealedAvatarIds.has(player.playerId);
 
   const prevAliveRef = useRef<boolean>(player.alive);
+  const prevIsReadyRef = useRef<boolean | null>(null);
   const [deathPulse, setDeathPulse] = useState(false);
-  const [hasRevealed, setHasRevealed] = useState(false);
   const [revealPop, setRevealPop] = useState(false);
 
   useEffect(() => {
-    if (isReady && !hasRevealed) {
-      setHasRevealed(true);
-      // 触发放大动画效果
-      if (!revealedAvatarIds.has(player.playerId)) {
-        setRevealPop(true);
-        const timer = window.setTimeout(() => setRevealPop(false), 600);
-        return () => window.clearTimeout(timer);
-      }
+    const wasReady = prevIsReadyRef.current;
+    prevIsReadyRef.current = isReady;
+    
+    // 当从 loading 变为 ready 时触发动画（首次渲染时 wasReady 为 null，不触发）
+    if (isReady && wasReady === false) {
+      setRevealPop(true);
+      const timer = window.setTimeout(() => setRevealPop(false), 600);
+      return () => window.clearTimeout(timer);
     }
-  }, [isReady, hasRevealed, player.playerId]);
-
-  useEffect(() => {
-    if (isReady && !revealedAvatarIds.has(player.playerId)) {
-      revealedAvatarIds.add(player.playerId);
-    }
-  }, [isReady, player.playerId]);
+  }, [isReady]);
 
   useEffect(() => {
     const prevAlive = prevAliveRef.current;
@@ -215,7 +206,7 @@ export function PlayerCardCompact({
           {isReady ? (
             <motion.div
               key="avatar-image"
-              initial={hasRevealedAvatar ? false : { opacity: 0, scale: 0.8, filter: "blur(8px)" }}
+              initial={{ opacity: 0, scale: 0.8, filter: "blur(8px)" }}
               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="w-full h-full"
@@ -422,7 +413,7 @@ export function PlayerCardCompact({
       
       {/* 边框高亮流光 (Highlight border on ready) */}
       <AnimatePresence>
-        {isReady && !hasRevealed && (
+        {revealPop && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

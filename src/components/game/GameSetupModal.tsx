@@ -23,12 +23,16 @@ interface GameSetupModalProps {
   onPlayerCountChange: (value: number) => void;
   isGenshinMode: boolean;
   onGenshinModeChange: (value: boolean) => void;
+  isSpectatorMode: boolean;
+  onSpectatorModeChange: (value: boolean) => void;
   bgmVolume: number;
   isSoundEnabled: boolean;
   isAiVoiceEnabled: boolean;
+  isAutoAdvanceDialogueEnabled: boolean;
   onBgmVolumeChange: (value: number) => void;
   onSoundEnabledChange: (value: boolean) => void;
   onAiVoiceEnabledChange: (value: boolean) => void;
+  onAutoAdvanceDialogueEnabledChange: (value: boolean) => void;
 }
 
 
@@ -41,12 +45,16 @@ export function GameSetupModal({
   onPlayerCountChange,
   isGenshinMode,
   onGenshinModeChange,
+  isSpectatorMode,
+  onSpectatorModeChange,
   bgmVolume,
   isSoundEnabled,
   isAiVoiceEnabled,
+  isAutoAdvanceDialogueEnabled,
   onBgmVolumeChange,
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
+  onAutoAdvanceDialogueEnabledChange,
 }: GameSetupModalProps) {
   const t = useTranslations();
   
@@ -129,15 +137,27 @@ export function GameSetupModal({
             <Switch className="shrink-0 mt-1" checked={isGenshinMode} onCheckedChange={onGenshinModeChange} />
           </div>
 
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-[var(--text-primary)]">{t("gameSetup.spectatorMode.title")}</div>
+            <div className="text-xs text-[var(--text-muted)]">
+              {t("gameSetup.spectatorMode.description")}
+            </div>
+            </div>
+            <Switch className="shrink-0 mt-1" checked={isSpectatorMode} onCheckedChange={onSpectatorModeChange} />
+          </div>
+
           <div className="border-t border-[var(--border-color)] pt-4">
             <div className="text-sm font-medium text-[var(--text-primary)] mb-3">{t("gameSetup.soundLabel")}</div>
             <SoundSettingsSection
               bgmVolume={bgmVolume}
               isSoundEnabled={isSoundEnabled}
               isAiVoiceEnabled={isAiVoiceEnabled}
+              isAutoAdvanceDialogueEnabled={isAutoAdvanceDialogueEnabled}
               onBgmVolumeChange={onBgmVolumeChange}
               onSoundEnabledChange={onSoundEnabledChange}
               onAiVoiceEnabledChange={onAiVoiceEnabledChange}
+              onAutoAdvanceDialogueEnabledChange={onAutoAdvanceDialogueEnabledChange}
             />
           </div>
         </div>

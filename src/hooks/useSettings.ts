@@ -28,6 +28,10 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, isGenshinMode: value }));
   }, [setSettings]);
 
+  const setSpectatorMode = useCallback((value: boolean) => {
+    setSettings((prev) => ({ ...prev, isSpectatorMode: value }));
+  }, [setSettings]);
+
   return {
     settings,
     isLoaded,
@@ -35,6 +39,7 @@ export function useSettings() {
     setSoundEnabled,
     setAiVoiceEnabled,
     setGenshinMode,
+    setSpectatorMode,
     setAutoAdvanceDialogueEnabled,
   };
 }

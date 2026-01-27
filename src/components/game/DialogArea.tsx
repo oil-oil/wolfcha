@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useMemo, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle, Prohibit } from "@phosphor-icons/react";
@@ -1032,30 +1032,44 @@ export function DialogArea({
 
           {/* 右侧：聊天历史记录 */}
           <div className="wc-dialog-history flex-1 min-w-0 min-h-0 relative">
-            <div 
+            <motion.div 
               ref={historyRef}
               className="absolute inset-0 overflow-y-scroll pb-4"
               style={{
                 scrollbarGutter: "stable",
                 overflowAnchor: "none",
               }}
+              layoutScroll
             >
-              {visibleMessages.map((msg, index) => {
-                const prevMsg = visibleMessages[index - 1];
-                const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
-                return (
-                  <ChatMessageItem 
-                    key={msg.id || `${msg.playerId}:${msg.timestamp}:${index}`} 
-                    msg={msg} 
-                    players={gameState.players}
-                    humanPlayerId={humanPlayer?.playerId}
-                    showDivider={showDivider}
-                    isNight={isNight}
-                    isGenshinMode={isGenshinMode}
-                  />
-                );
-              })}
-            </div>
+              <LayoutGroup>
+                <AnimatePresence initial={false}>
+                  {visibleMessages.map((msg, index) => {
+                    const prevMsg = visibleMessages[index - 1];
+                    const showDivider = index > 0 && !msg.isSystem && !prevMsg?.isSystem && prevMsg?.playerId !== msg.playerId;
+                    const key = msg.id || `${msg.playerId}:${msg.timestamp}:${index}`;
+                    return (
+                      <motion.div
+                        key={key}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      >
+                        <ChatMessageItem 
+                          msg={msg} 
+                          players={gameState.players}
+                          humanPlayerId={humanPlayer?.playerId}
+                          showDivider={showDivider}
+                          isNight={isNight}
+                          isGenshinMode={isGenshinMode}
+                        />
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </LayoutGroup>
+            </motion.div>
             
             {/* 新消息提示：底部分割线 + 文案 */}
             <AnimatePresence>

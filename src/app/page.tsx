@@ -156,9 +156,10 @@ export default function Home() {
     handleNextRound,
     waitingForNextRound,
     advanceSpeech,
+    markCurrentSegmentCompleted,
   } = useGameLogic();
-  const { settings, setBgmVolume, setSoundEnabled, setAiVoiceEnabled, setGenshinMode, setAutoAdvanceDialogueEnabled } = useSettings();
-  const { bgmVolume, isSoundEnabled, isAiVoiceEnabled, isGenshinMode, isAutoAdvanceDialogueEnabled } = settings;
+  const { settings, setBgmVolume, setSoundEnabled, setAiVoiceEnabled, setGenshinMode, setSpectatorMode, setAutoAdvanceDialogueEnabled } = useSettings();
+  const { bgmVolume, isSoundEnabled, isAiVoiceEnabled, isGenshinMode, isSpectatorMode, isAutoAdvanceDialogueEnabled } = settings;
   const shouldUseAiVoice = isSoundEnabled && isAiVoiceEnabled && bgmVolume > 0;
   const {
     state: tutorialState,
@@ -640,11 +641,18 @@ export default function Home() {
     return Math.min(60, Math.max(10, Math.round(raw)));
   }, [currentDialogue, gameState.players]);
 
-  const { displayedText, isTyping } = useTypewriter({
+  const { displayedText, isTyping, completedText } = useTypewriter({
     text: currentDialogue?.text || "",
     speed: typewriterSpeed,
     enabled: !!currentDialogue?.isStreaming,
   });
+
+  useEffect(() => {
+    if (!currentDialogue?.isStreaming) return;
+    if (!completedText) return;
+    if (completedText !== currentDialogue.text) return;
+    markCurrentSegmentCompleted();
+  }, [completedText, currentDialogue, markCurrentSegmentCompleted]);
 
   // Enter/Right key to advance AI speech or move to next round
   useEffect(() => {
@@ -714,7 +722,15 @@ export default function Home() {
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const lastAutoAdvanceSignatureRef = useRef<string | null>(null);
+  const prevIsTypingRef = useRef<boolean>(false);
+  const autoAdvanceDelayMs = 2500;
+  
+  // Track when typing finishes to trigger auto-advance
   useEffect(() => {
+    const wasTyping = prevIsTypingRef.current;
+    prevIsTypingRef.current = isTyping;
+    
+    // Clear any existing timeout when dependencies change
     if (autoAdvanceTimeoutRef.current !== null) {
       window.clearTimeout(autoAdvanceTimeoutRef.current);
       autoAdvanceTimeoutRef.current = null;
@@ -729,16 +745,21 @@ export default function Home() {
     if (isWaitingForAI) return;
 
     if (currentDialogue) {
-      const isDialogueComplete =
-        !currentDialogue.isStreaming || displayedText === currentDialogue.text;
-      if (!isDialogueComplete) return;
+      if (currentDialogue.isStreaming) {
+        if (isTyping) return;
+        if (completedText !== currentDialogue.text) return;
+      }
 
-      const signature = `DIALOGUE::${currentDialogue.speaker}::${currentDialogue.text}`;
+      const signature = currentDialogue.isStreaming
+        ? `DIALOGUE_DONE::${currentDialogue.speaker}::${completedText}`
+        : `DIALOGUE::${currentDialogue.speaker}::${currentDialogue.text}`;
       if (lastAutoAdvanceSignatureRef.current === signature) return;
       lastAutoAdvanceSignatureRef.current = signature;
+
+      const delayMs = currentDialogue.isStreaming ? autoAdvanceDelayMs : autoAdvanceDelayMs;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
-      }, 520);
+      }, delayMs);
       return;
     }
 
@@ -748,7 +769,7 @@ export default function Home() {
       lastAutoAdvanceSignatureRef.current = signature;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
-      }, 520);
+      }, 1500);
     }
 
     return () => {
@@ -759,7 +780,8 @@ export default function Home() {
     };
   }, [
     currentDialogue,
-    displayedText,
+    isTyping,
+    completedText,
     gameState.currentSpeakerSeat,
     gameState,
     gameState.day,
@@ -1208,18 +1230,22 @@ export default function Home() {
               setHumanName={setHumanName}
               onStart={(options) => {
                 setAiVoiceEnabled(false);
-                startGame({ ...(options ?? {}), isGenshinMode });
+                startGame({ ...(options ?? {}), isGenshinMode, isSpectatorMode });
               }}
               onAbort={restartGame}
               isLoading={isLoading}
               isGenshinMode={isGenshinMode}
               onGenshinModeChange={setGenshinMode}
+              isSpectatorMode={isSpectatorMode}
+              onSpectatorModeChange={setSpectatorMode}
               bgmVolume={bgmVolume}
               isSoundEnabled={isSoundEnabled}
               isAiVoiceEnabled={isAiVoiceEnabled}
+              isAutoAdvanceDialogueEnabled={isAutoAdvanceDialogueEnabled}
               onBgmVolumeChange={setBgmVolume}
               onSoundEnabledChange={setSoundEnabled}
               onAiVoiceEnabledChange={setAiVoiceEnabled}
+              onAutoAdvanceDialogueEnabledChange={setAutoAdvanceDialogueEnabled}
             />
           </motion.div>
         ) : (
@@ -1601,6 +1627,7 @@ export default function Home() {
         onClose={() => setDetailPlayer(null)}
         humanPlayer={humanPlayer}
         isGenshinMode={gameState?.isGenshinMode ?? isGenshinMode}
+        isSpectatorMode={gameState?.isSpectatorMode ?? false}
       />
 
       <SettingsModal

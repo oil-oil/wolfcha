@@ -17,6 +17,8 @@ export interface SpeechQueueState {
   isStreaming?: boolean; // 是否正在流式接收中
   isFinalized?: boolean; // 流式接收是否已完成
   committedIndices?: Set<number>; // 已提交到历史记录的段落索引
+  completedIndices?: Set<number>; // 已完成显示的段落索引
+  awaitingNextSegment?: boolean; // 已触发推进，等待下一段
 }
 
 /**
@@ -51,6 +53,8 @@ export function useDialogueManager() {
       currentIndex: 0,
       player,
       afterSpeech,
+      completedIndices: new Set(),
+      awaitingNextSegment: false,
     };
 
     if (normalizedSegments.length > 0) {
@@ -75,7 +79,7 @@ export function useDialogueManager() {
     const nextIndex = queue.currentIndex + 1;
     if (nextIndex < queue.segments.length) {
       // 还有更多段落
-      speechQueueRef.current = { ...queue, currentIndex: nextIndex };
+      speechQueueRef.current = { ...queue, currentIndex: nextIndex, awaitingNextSegment: false };
       setCurrentDialogue({
         speaker: queue.player.displayName,
         text: queue.segments[nextIndex],
@@ -84,6 +88,7 @@ export function useDialogueManager() {
       return { finished: false, segment: queue.segments[nextIndex] };
     } else if (queue.isStreaming && !queue.isFinalized) {
       // 流式未完成，等待更多段落
+      queue.awaitingNextSegment = true;
       return { finished: false, waiting: true };
     } else {
       // 所有段落已完成
@@ -112,6 +117,8 @@ export function useDialogueManager() {
       isStreaming: true,
       isFinalized: false,
       committedIndices: new Set(),
+      completedIndices: new Set(),
+      awaitingNextSegment: false,
     };
   }, []);
 
@@ -132,6 +139,23 @@ export function useDialogueManager() {
     return queue.committedIndices?.has(queue.currentIndex) ?? false;
   }, []);
 
+  /** 标记当前段落已完成显示 */
+  const markCurrentSegmentCompleted = useCallback(() => {
+    const queue = speechQueueRef.current;
+    if (!queue) return;
+    if (!queue.completedIndices) {
+      queue.completedIndices = new Set();
+    }
+    queue.completedIndices.add(queue.currentIndex);
+  }, []);
+
+  /** 检查当前段落是否已完成显示 */
+  const isCurrentSegmentCompleted = useCallback(() => {
+    const queue = speechQueueRef.current;
+    if (!queue) return false;
+    return queue.completedIndices?.has(queue.currentIndex) ?? false;
+  }, []);
+
   /** 向流式发言队列追加段落 */
   const appendToSpeechQueue = useCallback((segment: string) => {
     const queue = speechQueueRef.current;
@@ -140,17 +164,21 @@ export function useDialogueManager() {
     const trimmed = segment.trim();
     if (!trimmed) return;
 
+    // 在添加新段落前检查是否在等待下一段
+    // 如果 currentIndex 指向当前最后一个段落，说明用户在等待
+    const isFirstSegment = queue.segments.length === 0;
+    const isCurrentCompleted = queue.completedIndices?.has(queue.currentIndex) ?? false;
+    const isAwaitingNext = queue.awaitingNextSegment === true;
+    
     queue.segments.push(trimmed);
 
-    // 如果这是第一个段落，或者用户正在等待下一段（currentIndex >= segments.length - 1）
-    // 则立即显示新段落
-    const shouldDisplayImmediately = 
-      queue.segments.length === 1 || 
-      queue.currentIndex >= queue.segments.length - 1;
+    // 如果这是第一个段落，或者用户正在等待下一段，则立即显示新段落
+    const shouldDisplayImmediately = isFirstSegment || (isAwaitingNext && isCurrentCompleted);
 
     if (shouldDisplayImmediately) {
       // 更新 currentIndex 指向新段落
       queue.currentIndex = queue.segments.length - 1;
+      queue.awaitingNextSegment = false;
       setCurrentDialogue({
         speaker: queue.player.displayName,
         text: trimmed,
@@ -199,5 +227,7 @@ export function useDialogueManager() {
     resetDialogueState,
     markCurrentSegmentCommitted,
     isCurrentSegmentCommitted,
+    markCurrentSegmentCompleted,
+    isCurrentSegmentCompleted,
   };
 }

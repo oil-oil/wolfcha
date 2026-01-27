@@ -191,12 +191,16 @@ interface WelcomeScreenProps {
   isLoading: boolean;
   isGenshinMode: boolean;
   onGenshinModeChange: (value: boolean) => void;
+  isSpectatorMode: boolean;
+  onSpectatorModeChange: (value: boolean) => void;
   bgmVolume: number;
   isSoundEnabled: boolean;
   isAiVoiceEnabled: boolean;
+  isAutoAdvanceDialogueEnabled: boolean;
   onBgmVolumeChange: (value: number) => void;
   onSoundEnabledChange: (value: boolean) => void;
   onAiVoiceEnabledChange: (value: boolean) => void;
+  onAutoAdvanceDialogueEnabledChange: (value: boolean) => void;
 }
 
 export function WelcomeScreen({
@@ -207,12 +211,16 @@ export function WelcomeScreen({
   isLoading,
   isGenshinMode,
   onGenshinModeChange,
+  isSpectatorMode,
+  onSpectatorModeChange,
   bgmVolume,
   isSoundEnabled,
   isAiVoiceEnabled,
+  isAutoAdvanceDialogueEnabled,
   onBgmVolumeChange,
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
+  onAutoAdvanceDialogueEnabledChange,
 }: WelcomeScreenProps) {
   const t = useTranslations();
   const { locale } = useAppLocale();
@@ -558,12 +566,16 @@ export function WelcomeScreen({
         onPlayerCountChange={setPlayerCount}
         isGenshinMode={isGenshinMode}
         onGenshinModeChange={onGenshinModeChange}
+        isSpectatorMode={isSpectatorMode}
+        onSpectatorModeChange={onSpectatorModeChange}
         bgmVolume={bgmVolume}
         isSoundEnabled={isSoundEnabled}
         isAiVoiceEnabled={isAiVoiceEnabled}
+        isAutoAdvanceDialogueEnabled={isAutoAdvanceDialogueEnabled}
         onBgmVolumeChange={onBgmVolumeChange}
         onSoundEnabledChange={onSoundEnabledChange}
         onAiVoiceEnabledChange={onAiVoiceEnabledChange}
+        onAutoAdvanceDialogueEnabledChange={onAutoAdvanceDialogueEnabledChange}
       />
       <AuthModal open={isAuthOpen} onOpenChange={setIsAuthOpen} />
       <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />

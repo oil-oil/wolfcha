@@ -362,6 +362,10 @@
     "genshinMode": {
       "title": "Model original mode",
       "description": "By default, each AI gets a realistic persona and name. When enabled, persona and names are not generated; the model's original name is used with numeric suffixes for duplicates."
+    },
+    "spectatorMode": {
+      "title": "Spectator Mode",
+      "description": "Watch AI players only, without participating. Tap player cards to reveal their true role"
     }
   }
   ,
