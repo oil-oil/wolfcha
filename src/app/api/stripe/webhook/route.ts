@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     const userId = session.metadata?.user_id;
     const quantity = parseInt(session.metadata?.quantity || "0", 10);
 
-    if (!userId || quantity < 1) {
+    if (!userId || quantity < 10) {
       console.log(`[Stripe Webhook] Skipping - invalid metadata: userId=${userId}, quantity=${quantity}`);
       return NextResponse.json({ received: true });
     }
