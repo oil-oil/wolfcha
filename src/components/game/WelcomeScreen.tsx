@@ -223,6 +223,7 @@ export function WelcomeScreen({
 
   const {
     user,
+    session,
     credits,
     referralCode,
     totalReferrals,
@@ -231,6 +232,7 @@ export function WelcomeScreen({
     signOut,
     isPasswordRecovery,
     clearPasswordRecovery,
+    fetchCredits,
   } = useCredits();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -537,6 +539,8 @@ export function WelcomeScreen({
         onShareInvite={() => setIsShareOpen(true)}
         onSignOut={signOut}
         onCustomKeyEnabledChange={setCustomKeyEnabled}
+        accessToken={session?.access_token}
+        onCreditsChange={fetchCredits}
       />
       <ResetPasswordModal 
         open={isPasswordRecovery} 

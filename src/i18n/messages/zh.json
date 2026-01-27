@@ -1840,7 +1840,21 @@
     "dailyBonus": "每天上线可领 2 局，记得常来呀~",
     "tabs": {
       "profile": "信息",
-      "custom": "用我自己的 key 玩"
+      "custom": "用我自己的 key 玩",
+      "payAsYouGo": "按需购买"
+    },
+    "payAsYouGo": {
+      "title": "购买游戏额度",
+      "description": "无需订阅，按需购买单次游戏额度。每个额度可进行一局游戏。",
+      "pricePerGame": "每局 ${price}",
+      "quantity": "购买数量",
+      "quantityPlaceholder": "输入数量",
+      "total": "合计",
+      "purchase": "立即购买",
+      "minQuantity": "最少购买 1 次",
+      "maxQuantity": "最多购买 100 次",
+      "redirecting": "正在跳转到 Stripe...",
+      "error": "创建支付链接失败"
     },
     "selectModel": "选择模型",
     "modelJoiner": "、",

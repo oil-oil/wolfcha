@@ -1847,7 +1847,21 @@
     "dailyBonus": "Claim 2 free games daily. Come back often!",
     "tabs": {
       "profile": "Profile",
-      "custom": "Use my own key"
+      "custom": "Use my own key",
+      "payAsYouGo": "Pay as you go"
+    },
+    "payAsYouGo": {
+      "title": "Buy Game Credits",
+      "description": "Purchase single-game credits without a subscription. Each credit grants one game session.",
+      "pricePerGame": "${price} per game",
+      "quantity": "Quantity",
+      "quantityPlaceholder": "Enter quantity",
+      "total": "Total",
+      "purchase": "Purchase",
+      "minQuantity": "Minimum 1 credit",
+      "maxQuantity": "Maximum 100 credits",
+      "redirecting": "Redirecting to Stripe...",
+      "error": "Failed to create payment link"
     },
     "selectModel": "Select model",
     "modelJoiner": ", ",

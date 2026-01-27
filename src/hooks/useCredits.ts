@@ -151,6 +151,7 @@ export function useCredits() {
 
   return {
     user,
+    session,
     credits,
     referralCode,
     totalReferrals,
