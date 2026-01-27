@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     const userId = session.metadata?.user_id;
     const quantity = parseInt(session.metadata?.quantity || "0", 10);
 
-    if (!userId || quantity < 1) {
+    if (!userId || quantity < 2) {
       // No valid metadata - likely a test event or external checkout
       return NextResponse.json({ received: true });
     }

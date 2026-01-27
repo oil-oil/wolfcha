@@ -100,8 +100,8 @@ import {
     zenmux: "",
     dashscope: "",
   });
-  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
-  const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("1");
+  const [purchaseQuantity, setPurchaseQuantity] = useState(2);
+  const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("2");
   const [isPurchasing, setIsPurchasing] = useState(false);
 
    const displayCredits = useMemo(() => {
@@ -373,7 +373,7 @@ import {
   };
 
   const handlePurchase = async () => {
-    if (isPurchasing || purchaseQuantity < 1 || !accessToken) return;
+    if (isPurchasing || purchaseQuantity < 2 || !accessToken) return;
     setIsPurchasing(true);
     try {
       const response = await fetch("/api/stripe/payment-link", {
@@ -499,18 +499,18 @@ import {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const newVal = Math.max(1, purchaseQuantity - 1);
+                        const newVal = Math.max(2, purchaseQuantity - 1);
                         setPurchaseQuantity(newVal);
                         setPurchaseQuantityInput(newVal.toString());
                       }}
-                      disabled={purchaseQuantity <= 1}
+                      disabled={purchaseQuantity <= 2}
                       className="h-9 w-9 p-0"
                     >
                       <Minus size={16} />
                     </Button>
                     <Input
                       type="number"
-                      min={1}
+                      min={2}
                       max={100}
                       value={purchaseQuantityInput}
                       onChange={(e) => {
@@ -521,18 +521,18 @@ import {
                           return;
                         }
                         const val = parseInt(inputValue, 10);
-                        if (!isNaN(val) && val >= 1) {
-                          setPurchaseQuantity(Math.min(100, Math.max(1, val)));
+                        if (!isNaN(val) && val >= 2) {
+                          setPurchaseQuantity(Math.min(100, Math.max(2, val)));
                         }
                       }}
                       onBlur={(e) => {
                         const inputValue = e.target.value;
                         if (inputValue === "" || isNaN(parseInt(inputValue, 10))) {
-                          setPurchaseQuantityInput("1");
-                          setPurchaseQuantity(1);
+                          setPurchaseQuantityInput("2");
+                          setPurchaseQuantity(2);
                         } else {
                           const val = parseInt(inputValue, 10);
-                          const clampedVal = Math.min(100, Math.max(1, val));
+                          const clampedVal = Math.min(100, Math.max(2, val));
                           setPurchaseQuantityInput(clampedVal.toString());
                           setPurchaseQuantity(clampedVal);
                         }

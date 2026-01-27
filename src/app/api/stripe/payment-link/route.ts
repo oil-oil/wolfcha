@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
 
     const { quantity } = await request.json();
 
-    if (!quantity || quantity < 1) {
+    if (!quantity || quantity < 2) {
       return NextResponse.json(
-        { error: "Invalid quantity. Must be at least 1." },
+        { error: "Invalid quantity. Must be at least 2." },
         { status: 400 }
       );
     }
