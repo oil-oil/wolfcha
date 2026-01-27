@@ -71,11 +71,28 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
     );
     if (allowedPool.length === 0) return defaultPool;
 
-    // Filter by user's selected models
+    // Filter by user's selected models - STRICTLY respect user selection
     const selectedModels = getSelectedModels();
     if (selectedModels.length === 0) return allowedPool;
+    
+    // Only use models the user explicitly selected
     const selectedPool = allowedPool.filter((ref) => selectedModels.includes(ref.model));
-    return selectedPool.length > 0 ? selectedPool : allowedPool;
+    
+    // If user selected models but none are in allowedPool, try to find them in fullPool
+    // This handles cases where user selected models from a different provider
+    if (selectedPool.length === 0) {
+      const fullSelectedPool = filterPlayerModels(
+        fullPool.filter((ref) => selectedModels.includes(ref.model) && allowedProviders.has(ref.provider))
+      );
+      if (fullSelectedPool.length > 0) return fullSelectedPool;
+      
+      // Last resort: only return models that user actually selected, even if empty
+      // This prevents using models the user didn't choose
+      console.warn("[sampleModelRefs] User selected models not found in allowed pool:", selectedModels);
+    }
+    
+    // Return only user-selected models, never fall back to all models
+    return selectedPool.length > 0 ? selectedPool : allowedPool.slice(0, 1);
   })();
 
   if (!Number.isFinite(count) || count <= 0) return [];

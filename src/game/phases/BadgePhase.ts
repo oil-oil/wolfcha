@@ -94,7 +94,7 @@ export class BadgePhase extends GamePhase {
     const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
-    const todayTranscript = buildTodayTranscript(state, 6000);
+    const todayTranscript = buildTodayTranscript(state, 1500);
 
     const { t } = getI18n();
     const cacheableContent = t("prompts.badge.signup.base", {
@@ -152,7 +152,7 @@ export class BadgePhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const todayTranscript = buildTodayTranscript(state, 6000);
+    const todayTranscript = buildTodayTranscript(state, 1500);
 
     const user = t("prompts.badge.transfer.user", {
       context,

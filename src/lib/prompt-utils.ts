@@ -154,6 +154,7 @@ export const buildDailySummariesSection = (state: GameState): string => {
   if (entries.length === 0) return "";
 
   const lines: string[] = [];
+  const separator = t("promptUtils.gameContext.semicolon");
   for (const { day, bullets } of entries.sort((a, b) => a.day - b.day)) {
     const summaryTexts = bullets
       .filter((x): x is string => typeof x === "string")
@@ -162,8 +163,8 @@ export const buildDailySummariesSection = (state: GameState): string => {
 
     if (summaryTexts.length === 0) continue;
 
-    // Narrative from LLM
-    const fullSummary = summaryTexts.join(" ");
+    const fullSummary = summaryTexts.join(separator);
+    
     // Append structured vote_data so "who voted for whom" is never lost
     const voteData = state.dailySummaryVoteData?.[day];
     const voteText = voteData ? formatVoteDataForHistory(voteData) : "";
@@ -264,10 +265,13 @@ export const buildTodayTranscript = (
   });
 
   const formatMessage = (m: typeof slice[0]) => {
+    const player = state.players.find((p) => p.playerId === m.playerId);
+    // Only use seat number for prompt, no player name (to anonymize for model)
+    const speaker = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : m.playerName;
     const isAlive = playerAliveMap.get(m.playerId) ?? true;
     const statusLabel = isAlive ? "" : t("promptUtils.gameContext.eliminated");
     const lastWordsLabel = m.isLastWords ? t("promptUtils.gameContext.lastWordsLabel") : "";
-    return `${lastWordsLabel}${m.playerName}${statusLabel}: ${m.content}`;
+    return `${lastWordsLabel}${speaker}${statusLabel}: ${m.content}`;
   };
 
   // Last words are always preserved (they're important)
@@ -287,12 +291,16 @@ export const buildTodayTranscript = (
       : summaryBullets || [];
   
   if (summaryItems.length > 0) {
-    // Use more summary items (up to 8), preserve more info
-    const summaryText = summaryItems
-      .map((s) => String(s).trim())
-      .filter(Boolean)
-      .slice(0, 8)
-      .join(t("promptUtils.gameContext.semicolon"));
+    const separator = t("promptUtils.gameContext.semicolon");
+    const maxSummaryChars = Math.min(1200, Math.max(300, Math.floor(maxChars * 0.4)));
+    let summaryText = "";
+    for (const item of summaryItems) {
+      const clean = String(item).trim();
+      if (!clean) continue;
+      const candidate = summaryText ? `${summaryText}${separator}${clean}` : clean;
+      if (candidate.length > maxSummaryChars) break;
+      summaryText = candidate;
+    }
     const header = `<early_summary>${summaryText}</early_summary>\n<recent_speech>\n`;
     const footer = `\n</recent_speech>`;
     
