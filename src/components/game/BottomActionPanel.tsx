@@ -199,6 +199,25 @@ export function BottomActionPanel({
           )
         )}
 
+        {/* 猎人弃枪 */}
+        {phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter" && !isWaitingForAI && selectedSeat === null && (
+          <motion.div
+            key="hunter-pass"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="wc-bottom-action-row flex gap-2 w-full items-center"
+          >
+            <button
+              onClick={onConfirmAction}
+              className={`inline-flex items-center justify-center gap-2 h-10 text-sm font-medium rounded-sm cursor-pointer active:scale-[0.98] transition-all duration-150 flex-1 ${neutralButtonClass}`}
+            >
+              <X size={16} />
+              {t("bottomAction.pass")}
+            </button>
+          </motion.div>
+        )}
+
         {/* 游戏结束 */}
         {phase === "GAME_END" && (
           <motion.div

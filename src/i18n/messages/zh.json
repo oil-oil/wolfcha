@@ -1085,6 +1085,9 @@
       "hint": "点击玩家卡片选择移交对象",
       "tear": "撕毁警徽（不移交）"
     },
+    "hunter": {
+      "skipShoot": "不开枪"
+    },
     "nightAction": {
       "wolfAwake": "狼人请睁眼",
       "wolfActing": "狼人正在选择目标",

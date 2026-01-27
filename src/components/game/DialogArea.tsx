@@ -975,6 +975,9 @@ export function DialogArea({
     && humanPlayer
     && gameState.badge.holderSeat === humanPlayer.seat
     && selectedSeat === null;
+  const showHunterPassOption = phase === "HUNTER_SHOOT"
+    && humanPlayer?.role === "Hunter"
+    && selectedSeat === null;
   const showActionConfirm = (() => {
     const badgeCandidates = gameState.badge.candidates || [];
     const humanIsCandidate = humanPlayer && badgeCandidates.includes(humanPlayer.seat);
@@ -1014,6 +1017,7 @@ export function DialogArea({
     || showBadgeSignup
     || showBadgeSignupWaiting
     || showBadgeTransferOption
+    || showHunterPassOption
     || showActionConfirm
     || showWitchPanel
     || showHumanInput
@@ -1616,7 +1620,22 @@ export function DialogArea({
                         </>
                       ) : null}
                     </div>
-                    <div className="h-7 flex items-center justify-end">
+                    <div className="flex items-center justify-end gap-3">
+                      {showHunterPassOption && !isTyping && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConfirmAction?.();
+                          }}
+                          className="wc-action-btn wc-action-btn--danger text-sm h-9 px-4"
+                          type="button"
+                        >
+                          {t("dialog.hunter.skipShoot" as any)}
+                          <CaretRight size={14} weight="bold" />
+                        </button>
+                      )}
+
+                      <div className="h-7 flex items-center justify-end">
                       <AnimatePresence initial={false}>
                         {!isTyping && needsManualContinue ? (
                           <motion.div
@@ -1645,6 +1664,7 @@ export function DialogArea({
                           <div key="placeholder" className="h-7" />
                         )}
                       </AnimatePresence>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

@@ -1085,6 +1085,12 @@ export default function Home() {
       await handleHumanBadgeTransfer(0); // 0表示撕毁警徽
       return;
     }
+
+    // 特殊处理：猎人弃枪（当在猎人开枪阶段且没有选择目标时）
+    if (phase === "HUNTER_SHOOT" && selectedSeat === null && humanPlayer?.role === "Hunter") {
+      await handleNightAction(-1);
+      return;
+    }
     
     if (selectedSeat === null) return;
     

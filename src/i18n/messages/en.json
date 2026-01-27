@@ -1085,6 +1085,9 @@
       "hint": "Tap a player card to select a transfer target",
       "tear": "Tear the badge (no transfer)"
     },
+    "hunter": {
+      "skipShoot": "Skip"
+    },
     "nightAction": {
       "wolfAwake": "Werewolves, open your eyes",
       "wolfActing": "Werewolves are choosing a target",
