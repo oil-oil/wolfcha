@@ -963,7 +963,7 @@
         "task": "【Task】\nSheriff election: choose a player to receive the badge.\nGood team: prioritize the most trustworthy, leader-like, and clear speaker.\nWolf team: prioritize wolf teammates or easily controlled targets.\nDo not rely only on recent speech or the last speaker; consider overall performance.\nOnly output the seat number. No analysis or roleplay.\n\nOptions: {options}\n",
         "contextHeader": "Day {day} Sheriff election",
         "contextWolves": "Wolf teammates: {list}",
-        "contextRecent": "Recent speech (excerpt):\n{text}",
+        "contextRecent": "Badge speeches:\n{text}",
         "user": "{context}\n\nWhich seat do you vote for sheriff?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
       },
       "transfer": {

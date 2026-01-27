@@ -42,6 +42,7 @@ export class BadgePhase extends GamePhase {
   private buildBadgeElectionPrompt(state: GameContext["state"], player: Player): PromptResult {
     const { t } = getI18n();
     const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
+    const candidateSet = new Set(candidates);
     const alivePlayers = state.players
       .filter((p) => p.alive && p.playerId !== player.playerId)
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
@@ -72,15 +73,23 @@ export class BadgePhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const recent = state.messages
-      .slice(-6)
+    const seatByPlayerId = new Map(state.players.map((p) => [p.playerId, p.seat] as const));
+    const badgeSpeechText = state.messages
+      .filter((m) => m.day === state.day)
+      .filter((m) => !m.isSystem)
+      .filter((m) => m.phase === "DAY_BADGE_SPEECH" || m.phase === "DAY_PK_SPEECH")
+      .filter((m) => {
+        if (candidateSet.size === 0) return true;
+        const seat = seatByPlayerId.get(m.playerId);
+        return typeof seat === "number" && candidateSet.has(seat);
+      })
       .map((m) => `${m.playerName}: ${m.content}`)
       .join("\n");
 
     const liteContextLines = [
       t("prompts.badge.election.contextHeader", { day: state.day }),
       wolfMates ? t("prompts.badge.election.contextWolves", { list: wolfMates }) : "",
-      recent ? t("prompts.badge.election.contextRecent", { text: recent }) : "",
+      badgeSpeechText ? t("prompts.badge.election.contextRecent", { text: badgeSpeechText }) : "",
     ].filter(Boolean);
 
     const user = t("prompts.badge.election.user", { context: liteContextLines.join("\n\n") });
