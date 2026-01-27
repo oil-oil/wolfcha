@@ -1858,8 +1858,9 @@
       "quantityPlaceholder": "Enter quantity",
       "total": "Total",
       "purchase": "Purchase",
-      "minQuantity": "Minimum 1 credit",
+      "minQuantity": "Minimum 10 credits",
       "maxQuantity": "Maximum 100 credits",
+      "minQuantityHint": "Minimum purchase is 10 credits per transaction",
       "redirecting": "Redirecting to Stripe...",
       "error": "Failed to create payment link"
     },

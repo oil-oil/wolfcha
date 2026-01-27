@@ -1851,8 +1851,9 @@
       "quantityPlaceholder": "输入数量",
       "total": "合计",
       "purchase": "立即购买",
-      "minQuantity": "最少购买 1 次",
+      "minQuantity": "最少购买 10 次",
       "maxQuantity": "最多购买 100 次",
+      "minQuantityHint": "每次购买最少需要 10 个额度",
       "redirecting": "正在跳转到 Stripe...",
       "error": "创建支付链接失败"
     },
