@@ -141,12 +141,22 @@ export function useSpecialEvents(
     let currentState = transitionPhase(state, "GAME_END");
     currentState = { ...currentState, winner };
 
-    const roleReveal = currentState.players
-      .map((p) => texts.t("specialEvents.roleRevealItem", { seat: p.seat + 1, name: p.displayName, role: getRoleName(p.role) }))
-      .join(" | ");
-
     currentState = addSystemMessage(currentState, winner === "village" ? texts.systemMessages.villageWin : texts.systemMessages.wolfWin);
-    currentState = addSystemMessage(currentState, texts.t("specialEvents.roleRevealLine", { list: roleReveal }));
+    const roleRevealPayload = {
+      title: texts.t("specialEvents.roleRevealTitle"),
+      players: currentState.players
+        .slice()
+        .sort((a, b) => a.seat - b.seat)
+        .map((p) => ({
+          playerId: p.playerId,
+          seat: p.seat,
+          name: p.displayName,
+          role: p.role,
+          isHuman: p.isHuman,
+          modelRef: p.agentProfile?.modelRef,
+        })),
+    };
+    currentState = addSystemMessage(currentState, `[ROLE_REVEAL]${JSON.stringify(roleRevealPayload)}`);
     setDialogue(texts.speakerHost, winner === "village" ? texts.t("specialEvents.villageWinLine") : texts.t("specialEvents.wolfWinLine"), false);
 
     setGameState(currentState);

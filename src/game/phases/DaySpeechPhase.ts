@@ -170,6 +170,7 @@ export class DaySpeechPhase extends GamePhase {
     const systemParts: SystemPromptPart[] = [
       { text: baseCacheable, cacheable: true, ttl: "1h" },
       { text: taskSection },
+      { text: roleKnowHow },
       { text: guidelinesSection, cacheable: true, ttl: "1h" },
     ];
     const system = buildSystemTextFromParts(systemParts);
@@ -318,6 +319,20 @@ export class DaySpeechPhase extends GamePhase {
       currentSheriffSeat !== null ? currentState.players.find((p) => p.seat === currentSheriffSeat) : null;
     const deadSheriff = sheriffPlayer && !sheriffPlayer.alive ? sheriffPlayer : null;
 
+    const resolveStartSeat = (speechState: GameState): number | null => {
+      const aliveSeats = speechState.players
+        .filter((p) => p.alive)
+        .map((p) => p.seat)
+        .sort((a, b) => a - b);
+      if (aliveSeats.length === 0) return null;
+
+      const sheriffSeat = speechState.badge.holderSeat;
+      if (typeof sheriffSeat === "number" && aliveSeats.includes(sheriffSeat)) {
+        return sheriffSeat;
+      }
+      return aliveSeats[0];
+    };
+
     if (deadSheriff) {
       await runtime.onBadgeTransfer(currentState, deadSheriff, async (afterTransferState) => {
         if (wolfVictim?.role === "Hunter" && afterTransferState.roleAbilities.hunterCanShoot) {
@@ -337,18 +352,10 @@ export class DaySpeechPhase extends GamePhase {
         await playNarrator("discussionStart");
 
         const alivePlayers = speechState.players.filter((p) => p.alive);
-        const sheriffSeat = speechState.badge.holderSeat;
-        const nonSheriffPlayers =
-          sheriffSeat !== null ? alivePlayers.filter((p) => p.seat !== sheriffSeat) : alivePlayers;
-        const startSeat =
-          nonSheriffPlayers.length > 0
-            ? nonSheriffPlayers[Math.floor(Math.random() * nonSheriffPlayers.length)].seat
-            : alivePlayers.length > 0
-              ? alivePlayers[0].seat
-              : null;
+        const startSeat = resolveStartSeat(speechState);
         const firstSpeaker =
           startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
-        const speechDirection = this.resolveSpeechDirection(speechState, startSeat);
+        const speechDirection: "clockwise" = "clockwise";
         speechState = {
           ...speechState,
           daySpeechStartSeat: startSeat,
@@ -388,18 +395,10 @@ export class DaySpeechPhase extends GamePhase {
     await playNarrator("discussionStart");
 
     const alivePlayers = speechState.players.filter((p) => p.alive);
-    const sheriffSeat = speechState.badge.holderSeat;
-    const nonSheriffPlayers =
-      sheriffSeat !== null ? alivePlayers.filter((p) => p.seat !== sheriffSeat) : alivePlayers;
-    const startSeat =
-      nonSheriffPlayers.length > 0
-        ? nonSheriffPlayers[Math.floor(Math.random() * nonSheriffPlayers.length)].seat
-        : alivePlayers.length > 0
-          ? alivePlayers[0].seat
-          : null;
+    const startSeat = resolveStartSeat(speechState);
     const firstSpeaker =
       startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
-    const speechDirection = this.resolveSpeechDirection(speechState, startSeat);
+    const speechDirection: "clockwise" = "clockwise";
     speechState = {
       ...speechState,
       daySpeechStartSeat: startSeat,
@@ -455,9 +454,6 @@ export class DaySpeechPhase extends GamePhase {
         return null;
       };
 
-      const sheriffSeat = state.badge.holderSeat;
-      const isSheriffAlive =
-        sheriffSeat !== null && state.players.some((p) => p.seat === sheriffSeat && p.alive);
       const isDaySpeech = state.phase === "DAY_SPEECH";
 
       let nextSeat: number | null;
@@ -465,21 +461,12 @@ export class DaySpeechPhase extends GamePhase {
         nextSeat = getNextPkSeat();
       } else if (state.phase === "DAY_BADGE_SPEECH") {
         nextSeat = getNextCandidateSeat();
-      } else if (isDaySpeech && isSheriffAlive) {
-        const direction = state.speechDirection ?? "clockwise";
-        nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
       } else {
         const direction = state.speechDirection ?? "clockwise";
         nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
       }
 
       const startSeat = state.daySpeechStartSeat;
-      const sheriffHasSpoken = state.currentSpeakerSeat === sheriffSeat;
-
-      if (isDaySpeech && sheriffHasSpoken) {
-        await runtime.onStartVote(state, runtime.token);
-        return;
-      }
 
       if (nextSeat === null) {
         if (state.phase === "DAY_PK_SPEECH") {
@@ -488,17 +475,6 @@ export class DaySpeechPhase extends GamePhase {
         }
         if (state.phase === "DAY_BADGE_SPEECH") {
           await runtime.onBadgeSpeechEnd(state);
-          return;
-        }
-        if (isDaySpeech && isSheriffAlive && !sheriffHasSpoken) {
-          const currentState = { ...state, currentSpeakerSeat: sheriffSeat };
-          runtime.setGameState(currentState);
-          const sheriffPlayer = currentState.players.find((p) => p.seat === sheriffSeat);
-          if (sheriffPlayer && !sheriffPlayer.isHuman) {
-            await runtime.runAISpeech(currentState, sheriffPlayer);
-          } else if (sheriffPlayer?.isHuman) {
-            runtime.setDialogue(speakerHint, uiText.yourTurn, false);
-          }
           return;
         }
         await runtime.onStartVote(state, runtime.token);
@@ -512,17 +488,6 @@ export class DaySpeechPhase extends GamePhase {
         }
         if (state.phase === "DAY_BADGE_SPEECH") {
           await runtime.onBadgeSpeechEnd(state);
-          return;
-        }
-        if (isDaySpeech && isSheriffAlive && !sheriffHasSpoken) {
-          const currentState = { ...state, currentSpeakerSeat: sheriffSeat };
-          runtime.setGameState(currentState);
-          const sheriffPlayer = currentState.players.find((p) => p.seat === sheriffSeat);
-          if (sheriffPlayer && !sheriffPlayer.isHuman) {
-            await runtime.runAISpeech(currentState, sheriffPlayer);
-          } else if (sheriffPlayer?.isHuman) {
-            runtime.setDialogue(speakerHint, uiText.yourTurn, false);
-          }
           return;
         }
         await runtime.onStartVote(state, runtime.token);
