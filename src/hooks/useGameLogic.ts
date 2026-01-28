@@ -34,7 +34,7 @@ import {
   generateDailySummary,
   getNextAliveSeat,
 } from "@/lib/game-master";
-import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs } from "@/lib/character-generator";
+import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs, type GeneratedCharacter } from "@/lib/character-generator";
 import { getSystemMessages } from "@/lib/game-texts";
 import { getRandomScenario } from "@/lib/scenarios";
 import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
@@ -943,6 +943,7 @@ export function useGameLogic() {
       playerCount = 10,
       isGenshinMode = false,
       isSpectatorMode = false,
+      customCharacters = [],
     } = options ?? {};
 
     const totalPlayers = playerCount;
@@ -1009,10 +1010,12 @@ export function useGameLogic() {
       const aiModelRefs = sampleModelRefs(isSpectatorMode ? totalPlayers : totalPlayers - 1);
       const initialPlayers: Player[] = Array.from({ length: totalPlayers }).map((_, seat) => {
         const isHuman = !isSpectatorMode && seat === humanSeat;
+        const playerId = makeId();
         return {
-          playerId: makeId(),
+          playerId,
           seat,
           displayName: isHuman ? (humanName || "你") : "",
+          avatarSeed: playerId,
           alive: true,
           role: "Villager" as Role,
           alignment: "village",
@@ -1036,11 +1039,95 @@ export function useGameLogic() {
       setGameStarted(true);
       setShowTable(true);
 
-      let characters = [];
+      let characters: GeneratedCharacter[] = [];
       let genshinModelRefs: ModelRef[] | undefined = undefined;
       const numAiPlayers = isSpectatorMode ? totalPlayers : totalPlayers - 1;
 
-      if (isGenshinMode) {
+      // Convert custom characters to GeneratedCharacter format
+      const customCharsToUse = customCharacters.slice(0, numAiPlayers);
+      const customGeneratedCharacters: GeneratedCharacter[] = customCharsToUse.map((cc) => ({
+        displayName: cc.display_name,
+        persona: {
+          styleLabel: cc.style_label || "",
+          voiceRules: cc.style_label?.trim() ? [cc.style_label.trim()] : ["concise"],
+          mbti: cc.mbti || "",
+          gender: cc.gender,
+          age: cc.age,
+          basicInfo: cc.basic_info?.trim() || undefined,
+          voiceId: undefined,
+        },
+        avatarSeed: cc.avatar_seed || undefined,
+      }));
+
+      const applyCustomCharactersToState = (customList: GeneratedCharacter[]) => {
+        if (customList.length === 0) return;
+        const seatMap = new Map<number, { character: GeneratedCharacter; index: number }>();
+        customList.forEach((character, index) => {
+          const seat = aiSeatOrder[index] ?? index + 1;
+          if (Number.isFinite(seat)) {
+            seatMap.set(seat, { character, index });
+          }
+        });
+        if (seatMap.size === 0) return;
+        setGameState((prev) => {
+          const nextPlayers = prev.players.map((pl) => {
+            const match = seatMap.get(pl.seat);
+            if (!match || pl.isHuman) return pl;
+            return {
+              ...pl,
+              displayName: match.character.displayName,
+              avatarSeed: match.character.avatarSeed ?? pl.avatarSeed ?? pl.playerId,
+              agentProfile: {
+                modelRef: aiModelRefs[match.index] ?? getRandomModelRef(),
+                persona: match.character.persona,
+              },
+            };
+          });
+          return { ...prev, players: nextPlayers };
+        });
+      };
+
+      // Use custom characters if provided, otherwise generate
+      const hasCustomCharacters = customGeneratedCharacters.length > 0;
+
+      if (hasCustomCharacters) {
+        applyCustomCharactersToState(customGeneratedCharacters);
+        // Fill remaining slots with generated characters if needed
+        const remainingCount = numAiPlayers - customGeneratedCharacters.length;
+        if (remainingCount > 0) {
+          const extraCharacters = await generateCharacters(remainingCount, scenario, {});
+          characters = [...customGeneratedCharacters, ...extraCharacters];
+        } else {
+          characters = customGeneratedCharacters;
+        }
+        
+        // Custom characters appear immediately (no delay), generated ones animate in
+        const customCount = customGeneratedCharacters.length;
+        characters.forEach((character, index) => {
+          const seat = aiSeatOrder[index] ?? index + 1;
+          const isCustom = index < customCount;
+          const delay = isCustom ? 0 : 200 + (index - customCount) * 180;
+          
+          window.setTimeout(() => {
+            setGameState((prev) => {
+              const nextPlayers = prev.players.map((pl) => {
+                if (pl.seat !== seat) return pl;
+                if (pl.isHuman) return pl;
+                return {
+                  ...pl,
+                  displayName: character.displayName,
+                  avatarSeed: character.avatarSeed ?? pl.avatarSeed ?? pl.playerId,
+                  agentProfile: {
+                    modelRef: aiModelRefs[index] ?? getRandomModelRef(),
+                    persona: character.persona,
+                  },
+                };
+              });
+              return { ...prev, players: nextPlayers };
+            });
+          }, delay);
+        });
+      } else if (isGenshinMode) {
         genshinModelRefs = buildGenshinModelRefs(numAiPlayers);
         characters = await generateGenshinModeCharacters(numAiPlayers, genshinModelRefs);
         
@@ -1055,6 +1142,7 @@ export function useGameLogic() {
                 return {
                   ...pl,
                   displayName: character.displayName,
+                  avatarSeed: pl.avatarSeed ?? pl.playerId,
                   agentProfile: {
                     modelRef: genshinModelRefs![index] ?? getRandomModelRef(),
                     persona: character.persona,
@@ -1091,6 +1179,7 @@ export function useGameLogic() {
                   return {
                     ...pl,
                     displayName: character.displayName,
+                  avatarSeed: pl.avatarSeed ?? pl.playerId,
                     agentProfile: {
                       modelRef: aiModelRefs[index] ?? getRandomModelRef(),
                       persona: character.persona,

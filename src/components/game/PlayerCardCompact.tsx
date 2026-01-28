@@ -126,7 +126,7 @@ export function PlayerCardCompact({
   const isModelAvatar = isGenshinMode && !player.isHuman;
   const avatarSrc = isModelAvatar
     ? getModelLogoUrl(player.agentProfile?.modelRef)
-    : buildSimpleAvatarUrl(player.playerId, {
+    : buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, {
         gender: player.agentProfile?.persona?.gender,
       });
   const avatarClassName = cn(

@@ -1449,6 +1449,7 @@
     },
     "persona": {
       "section": "【角色设定】\n性格: {styleLabel}\n说话习惯: {voiceRules}\n风格: {riskLabel}",
+      "basicInfo": "背景: {basicInfo}",
       "riskAggressive": "激进型，喜欢主动质疑",
       "riskSafe": "保守型，喜欢观察",
       "riskBalanced": "平衡型"
@@ -1960,6 +1961,79 @@
       "validateFailed": "验证失败",
       "validateFailedDesc": "请检查当前API Key 是否填写错误或是否有充足额度。",
       "cleared": "已清除 API Key"
+    }
+  },
+  "customCharacter": {
+    "title": "自定义角色",
+    "createTitle": "创建角色",
+    "editTitle": "编辑角色",
+    "description": "已创建 {count}/{max} 个角色",
+    "createDescription": "创建一个属于你的游戏角色",
+    "editDescription": "修改角色信息",
+    "emptyState": "还没有自定义角色，点击添加按钮创建",
+    "selectionHint": "已选择 {count} 个角色参战（点击选择/取消）",
+    "noInfo": "未设置",
+    "addNew": "添加",
+    "mbtiNotSet": "不设置",
+    "ageUnit": "岁",
+    "limitReached": "已达上限",
+    "randomizeAvatar": "换一个头像",
+    "entryButton": "自定义角色",
+    "entryHint": "创建你的专属角色",
+    "gender": {
+      "male": "男",
+      "female": "女",
+      "nonbinary": "其他"
+    },
+    "fields": {
+      "displayName": "名称",
+      "gender": "性别",
+      "age": "年龄",
+      "basicInfo": "背景介绍",
+      "styleLabel": "说话风格"
+    },
+    "placeholders": {
+      "displayName": "角色名称（1-20字）",
+      "basicInfo": "简单描述角色的背景（可选）",
+      "styleLabel": "如：话痨、高冷、沉稳（可选）"
+    },
+    "actions": {
+      "create": "创建角色",
+      "saving": "保存中...",
+      "import": "导入角色",
+      "aiPrompt": "AI 生成角色",
+      "viewDetail": "查看详情"
+    },
+    "import": {
+      "title": "导入角色",
+      "description": "把 JSON 粘贴到下面，确认后会按剩余名额导入。",
+      "placeholder": "粘贴 JSON（数组 / 单个对象 / {\"characters\": [...]} 都支持）",
+      "hint": "剩余可导入名额：{count}",
+      "confirm": "开始导入"
+    },
+    "aiPrompt": {
+      "title": "AI 生成角色",
+      "description": "复制下面的提示词发给 AI，让它生成可导入的角色 JSON。",
+      "copy": "复制提示词"
+    },
+    "detail": {
+      "title": "角色详情",
+      "description": "这里展示该角色的完整信息，并支持复制 JSON。",
+      "copyJson": "复制 JSON"
+    },
+    "errors": {
+      "nameRequired": "请输入角色名称",
+      "importInvalid": "JSON 格式不正确"
+    },
+    "toast": {
+      "createSuccess": "角色创建成功",
+      "updateSuccess": "角色更新成功",
+      "deleteSuccess": "角色已删除",
+      "importSuccess": "已导入 {count} 个角色",
+      "importPartial": "已导入 {imported} 个，跳过 {skipped} 个",
+      "importFailed": "导入失败",
+      "copied": "已复制到剪贴板",
+      "copyFailed": "复制失败"
     }
   }
 }

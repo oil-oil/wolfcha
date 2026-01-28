@@ -19,6 +19,7 @@ import { getI18n } from "@/i18n/translator";
 export interface GeneratedCharacter {
   displayName: string;
   persona: Persona;
+  avatarSeed?: string;
 }
 
 export interface GeneratedCharacters {

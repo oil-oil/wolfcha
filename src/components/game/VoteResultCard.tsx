@@ -24,7 +24,7 @@ interface VoteResultCardProps {
 const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) =>
   isGenshinMode && !player.isHuman
     ? getModelLogoUrl(player.agentProfile?.modelRef)
-    : buildSimpleAvatarUrl(player.playerId, { gender: player.agentProfile?.persona?.gender });
+    : buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, { gender: player.agentProfile?.persona?.gender });
 
 export function VoteResultCard({
   title,

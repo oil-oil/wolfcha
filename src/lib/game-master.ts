@@ -235,12 +235,14 @@ export function setupPlayers(
   for (let seat = 0; seat < totalPlayers; seat++) {
     const role = assignedRoles[seat];
     const alignment: Alignment = role === "Werewolf" ? "wolf" : "village";
+    const playerId = getPlayerIdForSeat(seat);
 
     if (seat === humanSeat) {
       players.push({
-        playerId: getPlayerIdForSeat(seat),
+        playerId,
         seat,
         displayName: humanName.trim() || fallbackHumanName,
+        avatarSeed: playerId,
         alive: true,
         role,
         alignment,
@@ -257,9 +259,10 @@ export function setupPlayers(
       const modelRef = modelRefs?.[safeCharIndex] ?? getRandomModelRef();
 
       players.push({
-        playerId: getPlayerIdForSeat(seat),
+        playerId,
         seat,
         displayName: character.displayName,
+        avatarSeed: character.avatarSeed ?? playerId,
         alive: true,
         role,
         alignment,

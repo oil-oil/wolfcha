@@ -35,7 +35,7 @@ interface RoleRevealHistoryCardProps {
 const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) =>
   isGenshinMode && !player.isHuman
     ? getModelLogoUrl(player.agentProfile?.modelRef)
-    : buildSimpleAvatarUrl(player.playerId, { gender: player.agentProfile?.persona?.gender });
+    : buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, { gender: player.agentProfile?.persona?.gender });
 
 const ROLE_META: Record<Role, { Icon: ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
   Werewolf: { Icon: WerewolfIcon, color: "var(--color-wolf)", bg: "var(--color-wolf-bg)" },

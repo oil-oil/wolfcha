@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical, Users } from "@phosphor-icons/react";
+import { FingerprintSimple, PawPrint, Sparkle, Wrench, GearSix, UserCircle, GithubLogo, Star, EnvelopeSimple, Handshake, DotsThreeOutlineVertical, Users, UsersFour } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +18,8 @@ import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
+import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
+import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom } from "@/store/settings";
 import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
@@ -258,6 +260,10 @@ export function WelcomeScreen({
   const [isGroupOpen, setIsGroupOpen] = useState(false);
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCustomCharacterOpen, setIsCustomCharacterOpen] = useState(false);
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<Set<string>>(new Set());
+  
+  const customCharacters = useCustomCharacters(user);
   const [difficulty, setDifficulty] = useAtom(difficultyAtom);
   const [playerCount, setPlayerCount] = useAtom(playerCountAtom);
   const [githubStars, setGithubStars] = useState<number | null>(null);
@@ -375,6 +381,7 @@ export function WelcomeScreen({
     isSponsorOpen ||
     isGroupOpen ||
     isMobileMenuOpen ||
+    isCustomCharacterOpen ||
     isDevConsoleOpen;
 
   const difficultyLabel = useMemo(() => {
@@ -501,7 +508,28 @@ export function WelcomeScreen({
       // 传递开发模式配置
       const roles = devTab === "roles" && roleConfigValid ? (fixedRoles as Role[]) : undefined;
       const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
-      void onStart({ fixedRoles: roles, devPreset: preset, difficulty, playerCount });
+      
+      // Get selected custom characters
+      const selectedCustomChars = customCharacters.characters
+        .filter(c => selectedCharacterIds.has(c.id))
+        .map(c => ({
+          id: c.id,
+          display_name: c.display_name,
+          gender: c.gender,
+          age: c.age,
+          mbti: c.mbti,
+          basic_info: c.basic_info,
+          style_label: c.style_label,
+          avatar_seed: c.avatar_seed,
+        }));
+      
+      void onStart({ 
+        fixedRoles: roles, 
+        devPreset: preset, 
+        difficulty, 
+        playerCount,
+        customCharacters: selectedCustomChars,
+      });
     }, 800);
 
     if (hasUserKey) {
@@ -603,6 +631,19 @@ export function WelcomeScreen({
         onOpenChange={setIsShareOpen}
         referralCode={referralCode}
         totalReferrals={totalReferrals}
+      />
+      <CustomCharacterModal
+        open={isCustomCharacterOpen}
+        onOpenChange={setIsCustomCharacterOpen}
+        characters={customCharacters.characters}
+        loading={customCharacters.loading}
+        canAddMore={customCharacters.canAddMore}
+        remainingSlots={customCharacters.remainingSlots}
+        selectedIds={selectedCharacterIds}
+        onSelectionChange={setSelectedCharacterIds}
+        onCreateCharacter={customCharacters.createCharacter}
+        onUpdateCharacter={customCharacters.updateCharacter}
+        onDeleteCharacter={customCharacters.deleteCharacter}
       />
 
       <Dialog
@@ -1054,6 +1095,29 @@ export function WelcomeScreen({
               </div>
             </div>
           </div>
+
+
+          {/* Custom Character Entry */}
+          {user && (
+            <button
+              type="button"
+              onClick={() => setIsCustomCharacterOpen(true)}
+              className="mt-6 mx-auto flex items-center gap-2 px-3 py-1.5 rounded-md border-2 border-dashed border-[var(--border-color)] text-xs text-[var(--text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+            >
+              <UsersFour size={14} />
+              <span>{t("customCharacter.entryButton")}</span>
+              {selectedCharacterIds.size > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white text-[10px] font-medium">
+                  {selectedCharacterIds.size}
+                </span>
+              )}
+              {customCharacters.characters.length > 0 && selectedCharacterIds.size === 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-[var(--text-muted)]/20 text-[var(--text-muted)] text-[10px] font-medium">
+                  {customCharacters.characters.length}
+                </span>
+              )}
+            </button>
+          )}
 
           <div className="mt-8 flex flex-col items-center gap-3">
             <div className="wc-seal-hint">

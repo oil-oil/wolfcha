@@ -16,6 +16,7 @@ type MentionCandidate = {
   seat: number;
   displayName: string;
   playerId: string;
+  avatarSeed?: string;
   gender?: Gender;
   modelRef?: ModelRef;
 };
@@ -62,6 +63,7 @@ function createSuggestionItems(players: Player[]) {
         seat: p.seat,
         displayName: p.displayName,
         playerId: p.playerId,
+        avatarSeed: p.avatarSeed,
         gender: p.agentProfile?.persona?.gender,
         modelRef: p.agentProfile?.modelRef,
       }))
@@ -149,7 +151,7 @@ function renderSuggestionList(isGenshinMode: boolean, onOpenChange?: (open: bool
           const avatarUrl =
             isGenshinMode && item.modelRef
               ? getModelLogoUrl(item.modelRef)
-              : buildSimpleAvatarUrl(item.playerId, { gender: item.gender });
+              : buildSimpleAvatarUrl(item.avatarSeed ?? item.playerId, { gender: item.gender });
           
           const avatar = document.createElement("img");
           avatar.src = avatarUrl;

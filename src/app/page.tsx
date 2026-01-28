@@ -74,7 +74,7 @@ const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) => {
   if (isModelAvatar) {
     return getModelLogoUrl(player.agentProfile?.modelRef);
   }
-  return buildSimpleAvatarUrl(player.playerId, {
+  return buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, {
     gender: player.agentProfile?.persona?.gender,
   });
 };

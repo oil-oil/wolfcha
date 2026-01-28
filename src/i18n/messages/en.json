@@ -1449,6 +1449,7 @@
     },
     "persona": {
       "section": "【Persona】\nPersonality: {styleLabel}\nSpeaking habits: {voiceRules}\nStyle: {riskLabel}",
+      "basicInfo": "Background: {basicInfo}",
       "riskAggressive": "Aggressive; likes to challenge",
       "riskSafe": "Cautious; prefers to observe",
       "riskBalanced": "Balanced"
@@ -1960,6 +1961,79 @@
       "validateFailed": "Validation failed",
       "validateFailedDesc": "Check if the API Key is correct or has sufficient credits.",
       "cleared": "API Key cleared"
+    }
+  },
+  "customCharacter": {
+    "title": "Custom Characters",
+    "createTitle": "Create Character",
+    "editTitle": "Edit Character",
+    "description": "{count}/{max} characters created",
+    "createDescription": "Create your own game character",
+    "editDescription": "Modify character info",
+    "emptyState": "No custom characters yet. Click to add one.",
+    "selectionHint": "{count} character(s) selected to join (click to select/deselect)",
+    "noInfo": "Not set",
+    "addNew": "Add",
+    "mbtiNotSet": "Not set",
+    "ageUnit": " yrs",
+    "limitReached": "Limit reached",
+    "randomizeAvatar": "Randomize avatar",
+    "entryButton": "Custom Characters",
+    "entryHint": "Create your own characters",
+    "gender": {
+      "male": "Male",
+      "female": "Female",
+      "nonbinary": "Other"
+    },
+    "fields": {
+      "displayName": "Name",
+      "gender": "Gender",
+      "age": "Age",
+      "basicInfo": "Background",
+      "styleLabel": "Speech style"
+    },
+    "placeholders": {
+      "displayName": "Character name (1-20 chars)",
+      "basicInfo": "Brief character background (optional)",
+      "styleLabel": "e.g., talkative, cold, calm (optional)"
+    },
+    "actions": {
+      "create": "Create Character",
+      "saving": "Saving...",
+      "import": "Import Characters",
+      "aiPrompt": "AI Generate Characters",
+      "viewDetail": "View details"
+    },
+    "import": {
+      "title": "Import characters",
+      "description": "Paste JSON below. We'll import up to your remaining slots.",
+      "placeholder": "Paste JSON (array / single object / {\"characters\": [...]} are supported)",
+      "hint": "Remaining import slots: {count}",
+      "confirm": "Import"
+    },
+    "aiPrompt": {
+      "title": "AI generate characters",
+      "description": "Copy this prompt and ask an AI to generate importable character JSON.",
+      "copy": "Copy prompt"
+    },
+    "detail": {
+      "title": "Character details",
+      "description": "View full info and copy JSON for this character.",
+      "copyJson": "Copy JSON"
+    },
+    "errors": {
+      "nameRequired": "Please enter a character name",
+      "importInvalid": "Invalid JSON format"
+    },
+    "toast": {
+      "createSuccess": "Character created",
+      "updateSuccess": "Character updated",
+      "deleteSuccess": "Character deleted",
+      "importSuccess": "Imported {count} characters",
+      "importPartial": "Imported {imported}, skipped {skipped}",
+      "importFailed": "Import failed",
+      "copied": "Copied to clipboard",
+      "copyFailed": "Copy failed"
     }
   }
 }

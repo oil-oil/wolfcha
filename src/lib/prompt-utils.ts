@@ -101,11 +101,15 @@ export const buildPersonaSection = (player: Player, isGenshinMode: boolean = fal
   const { persona } = player.agentProfile;
   const separator = t("promptUtils.gameContext.listSeparator");
 
-  return t("promptUtils.persona.section", {
+  const base = t("promptUtils.persona.section", {
     styleLabel: persona.styleLabel,
     voiceRules: persona.voiceRules.join(separator),
     riskLabel: t("promptUtils.persona.riskBalanced")
   });
+  const extraInfo = persona.basicInfo?.trim()
+    ? `\n${t("promptUtils.persona.basicInfo", { basicInfo: persona.basicInfo.trim() })}`
+    : "";
+  return `${base}${extraInfo}`;
 };
 
 export const buildAliveCountsSection = (state: GameState): string => {

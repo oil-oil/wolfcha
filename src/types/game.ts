@@ -6,6 +6,17 @@ export type SpeechDirection = "clockwise" | "counterclockwise";
 
 export type DevPreset = "MILK_POISON_TEST" | "LAST_WORDS_TEST";
 
+export interface CustomCharacterData {
+  id: string;
+  display_name: string;
+  gender: "male" | "female" | "nonbinary";
+  age: number;
+  mbti: string;
+  basic_info?: string;
+  style_label?: string;
+  avatar_seed?: string;
+}
+
 export interface StartGameOptions {
   fixedRoles?: Role[];
   devPreset?: DevPreset;
@@ -13,6 +24,7 @@ export interface StartGameOptions {
   playerCount?: number;
   isGenshinMode?: boolean;
   isSpectatorMode?: boolean;
+  customCharacters?: CustomCharacterData[];
 }
 
 export type Phase =
@@ -61,6 +73,7 @@ export interface Persona {
   mbti: string;
   gender: "male" | "female" | "nonbinary";
   age: number;
+  basicInfo?: string;
   voiceId?: string;
   relationships?: string[];
   logicStyle?: string;
@@ -78,6 +91,7 @@ export interface Player {
   playerId: string;
   seat: number;
   displayName: string;
+  avatarSeed?: string;
   alive: boolean;
   role: Role;
   alignment: Alignment;
