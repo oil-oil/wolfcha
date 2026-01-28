@@ -723,28 +723,42 @@ export default function Home() {
 
   const autoAdvanceTimeoutRef = useRef<number | null>(null);
   const lastAutoAdvanceSignatureRef = useRef<string | null>(null);
-  const prevIsTypingRef = useRef<boolean>(false);
   const autoAdvanceDelayMs = 2500;
-  const autoAdvanceDelayMsForAI = 500; // 下一个发言者是AI时使用更短的延迟
   
   // Track when typing finishes to trigger auto-advance
   useEffect(() => {
-    const wasTyping = prevIsTypingRef.current;
-    prevIsTypingRef.current = isTyping;
-    
-    // Clear any existing timeout when dependencies change
-    if (autoAdvanceTimeoutRef.current !== null) {
-      window.clearTimeout(autoAdvanceTimeoutRef.current);
-      autoAdvanceTimeoutRef.current = null;
-    }
+    const clearAutoAdvanceTimeout = () => {
+      if (autoAdvanceTimeoutRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+    };
 
-    if (!isAutoAdvanceDialogueEnabled) return;
-    if (isRoleRevealOpen) return;
-    if (isSettingsOpen) return;
-    if (isNotebookOpen) return;
+    if (!isAutoAdvanceDialogueEnabled) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
+    if (isRoleRevealOpen) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
+    if (isSettingsOpen) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
+    if (isNotebookOpen) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
     const needsHumanActionNow = PHASE_CONFIGS[gameState.phase].requiresHumanInput(humanPlayer, gameState);
-    if (needsHumanActionNow) return;
-    if (isWaitingForAI) return;
+    if (needsHumanActionNow) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
+    if (isWaitingForAI) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
 
     if (currentDialogue) {
       if (currentDialogue.isStreaming) {
@@ -755,11 +769,13 @@ export default function Home() {
       const signature = currentDialogue.isStreaming
         ? `DIALOGUE_DONE::${currentDialogue.speaker}::${completedText}`
         : `DIALOGUE::${currentDialogue.speaker}::${currentDialogue.text}`;
+
       if (lastAutoAdvanceSignatureRef.current === signature) return;
       lastAutoAdvanceSignatureRef.current = signature;
 
-      // 如果下一个发言者是AI，使用更短的延迟实现无缝衔接
-      const delayMs = shouldAutoAdvanceToNextAI() ? autoAdvanceDelayMsForAI : autoAdvanceDelayMs;
+      clearAutoAdvanceTimeout();
+
+      const delayMs = autoAdvanceDelayMs;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
       }, delayMs);
@@ -770,19 +786,14 @@ export default function Home() {
       const signature = `NEXT::${gameState.phase}::${gameState.day}::${String(gameState.currentSpeakerSeat ?? "")}`;
       if (lastAutoAdvanceSignatureRef.current === signature) return;
       lastAutoAdvanceSignatureRef.current = signature;
-      // 如果下一个发言者是AI，使用更短的延迟
-      const delayMs = shouldAutoAdvanceToNextAI() ? autoAdvanceDelayMsForAI : 1500;
+
+      clearAutoAdvanceTimeout();
+
+      const delayMs = 1500;
       autoAdvanceTimeoutRef.current = window.setTimeout(() => {
         void handleAdvanceDialogue();
       }, delayMs);
     }
-
-    return () => {
-      if (autoAdvanceTimeoutRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimeoutRef.current);
-        autoAdvanceTimeoutRef.current = null;
-      }
-    };
   }, [
     currentDialogue,
     isTyping,
@@ -799,8 +810,16 @@ export default function Home() {
     isSettingsOpen,
     isWaitingForAI,
     waitingForNextRound,
-    shouldAutoAdvanceToNextAI,
   ]);
+
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimeoutRef.current !== null) {
+        window.clearTimeout(autoAdvanceTimeoutRef.current);
+        autoAdvanceTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!showTable) return;

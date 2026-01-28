@@ -90,6 +90,11 @@ export function useGameLogic() {
   const [showTable, setShowTable] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production") return;
+    void aiLogger.clearLogs();
+  }, []);
+
   // ============================================
   // 流程控制
   // ============================================
