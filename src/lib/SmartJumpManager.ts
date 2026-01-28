@@ -7,6 +7,7 @@
 
 import type { GameState, Phase, Player, Role } from "@/types/game";
 import { getI18n } from "@/i18n/translator";
+import { addSystemMessage, checkWinCondition } from "@/lib/game-master";
 
 // ============ 阶段顺序定义 ============
 
@@ -731,6 +732,38 @@ function estimateTimestamp(target: JumpTarget): number {
   return baseTime + dayOffset + phaseOffset;
 }
 
+function ensureRoleRevealForGameEnd(state: GameState): GameState {
+  if (state.phase !== "GAME_END") return state;
+
+  let nextState = state;
+  const winner = nextState.winner ?? checkWinCondition(nextState);
+  if (winner && nextState.winner !== winner) {
+    nextState = { ...nextState, winner };
+  }
+
+  const hasRoleReveal = nextState.messages.some(
+    (m) => typeof m.content === "string" && m.content.startsWith("[ROLE_REVEAL]")
+  );
+  if (hasRoleReveal) return nextState;
+
+  const { t } = getI18n();
+  const roleRevealPayload = {
+    title: t("specialEvents.roleRevealTitle"),
+    players: nextState.players
+      .slice()
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => ({
+        playerId: p.playerId,
+        seat: p.seat,
+        name: p.displayName,
+        role: p.role,
+        isHuman: p.isHuman,
+        modelRef: p.agentProfile?.modelRef,
+      })),
+  };
+  return addSystemMessage(nextState, `[ROLE_REVEAL]${JSON.stringify(roleRevealPayload)}`);
+}
+
 // ============ 状态修复 - 前跳（自动补全） ============
 
 /** 执行前跳修复（自动模式） */
@@ -772,6 +805,33 @@ export function applyForwardJumpAuto(
   // 更新阶段和天数
   newState.phase = target.phase;
   newState.day = target.day;
+
+  if (target.phase === "GAME_END") {
+    const winner = newState.winner ?? checkWinCondition(newState);
+    if (winner) {
+      newState.winner = winner;
+    }
+
+    const hasRoleReveal = newState.messages.some((m) => typeof m.content === "string" && m.content.startsWith("[ROLE_REVEAL]"));
+    if (!hasRoleReveal) {
+      const { t } = getI18n();
+      const roleRevealPayload = {
+        title: t("specialEvents.roleRevealTitle"),
+        players: newState.players
+          .slice()
+          .sort((a, b) => a.seat - b.seat)
+          .map((p) => ({
+            playerId: p.playerId,
+            seat: p.seat,
+            name: p.displayName,
+            role: p.role,
+            isHuman: p.isHuman,
+            modelRef: p.agentProfile?.modelRef,
+          })),
+      };
+      newState = addSystemMessage(newState, `[ROLE_REVEAL]${JSON.stringify(roleRevealPayload)}`);
+    }
+  }
 
   newState = recomputeRoleAbilities(newState);
   return newState;
@@ -1032,6 +1092,8 @@ export function applySmartJump(
     newState = applyForwardJumpAuto(normalizedState, target, analysis);
   }
 
+  newState = ensureRoleRevealForGameEnd(newState);
+
   // 更新 devMutationId 触发副作用
   newState.devMutationId = (currentState.devMutationId ?? 0) + 1;
   newState.devPhaseJump = { to: target.phase, ts: Date.now() };
@@ -1265,6 +1327,9 @@ export function applySmartJumpWithFilledData(
   newState = recomputeRoleAbilities(newState);
   newState.phase = target.phase;
   newState.day = target.day;
+
+  newState = ensureRoleRevealForGameEnd(newState);
+
   newState.devMutationId = (currentState.devMutationId ?? 0) + 1;
   newState.devPhaseJump = { to: target.phase, ts: Date.now() };
 

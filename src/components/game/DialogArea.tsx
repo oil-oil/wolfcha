@@ -13,6 +13,7 @@ import { TalkingAvatar } from "./TalkingAvatar";
 import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { VoteResultCard } from "./VoteResultCard";
+import { RoleRevealHistoryCard, type RoleRevealEntry } from "@/components/game/RoleRevealHistoryCard";
 import LoadingMiniGame from "./MiniGame/LoadingMiniGame";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
 import { cn } from "@/lib/utils";
@@ -1770,6 +1771,37 @@ function ChatMessageItem({
   const isSystem = msg.isSystem;
 
   if (isSystem) {
+    // 检查是否是身份揭晓消息
+    if (msg.content.startsWith('[ROLE_REVEAL]')) {
+      try {
+        const jsonData = msg.content.substring('[ROLE_REVEAL]'.length);
+        const revealData = JSON.parse(jsonData) as { title?: string; players?: RoleRevealEntry[] };
+        const entries = Array.isArray(revealData.players) && revealData.players.length > 0
+          ? revealData.players
+          : players
+              .slice()
+              .sort((a, b) => a.seat - b.seat)
+              .map((p) => ({
+                playerId: p.playerId,
+                seat: p.seat,
+                name: p.displayName,
+                role: p.role,
+                isHuman: p.isHuman,
+                modelRef: p.agentProfile?.modelRef,
+              }));
+        return (
+          <RoleRevealHistoryCard
+            title={revealData.title || t("specialEvents.roleRevealTitle")}
+            entries={entries}
+            players={players}
+            isNight={isNight}
+            isGenshinMode={isGenshinMode}
+          />
+        );
+      } catch (e) {
+        console.error('Failed to parse role reveal:', e);
+      }
+    }
     // 检查是否是投票结果消息
     if (msg.content.startsWith('[VOTE_RESULT]')) {
       try {
