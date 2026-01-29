@@ -445,8 +445,10 @@ alive_count: ${alivePlayers.length}
   context += `\n\n<alive_players>\n${playerList}\n</alive_players>`;
 
   const wolfFriendlyFireNote = t("promptUtils.gameContext.wolfFriendlyFireNote");
-  const peacefulNightNote = t("promptUtils.gameContext.peacefulNightNote");
   const phaseOrderNote = t("promptUtils.gameContext.phaseOrderNote");
+  
+  // Check if guard exists in this game
+  const hasGuard = state.players.some(p => p.role === "Guard");
   
   // Check if it's a peaceful night (no deaths today)
   const nightHistory = state.nightHistory?.[state.day];
@@ -460,6 +462,10 @@ alive_count: ${alivePlayers.length}
   // Build rules text with phase order note always included
   let rulesText = wolfFriendlyFireNote;
   if (isPeacefulNight) {
+    // Use different peaceful night note based on whether guard exists
+    const peacefulNightNote = hasGuard 
+      ? t("promptUtils.gameContext.peacefulNightNote")
+      : t("promptUtils.gameContext.peacefulNightNoteNoGuard");
     rulesText += `\n${peacefulNightNote}`;
   }
   rulesText += `\n${phaseOrderNote}`;
