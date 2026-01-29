@@ -483,7 +483,19 @@ export function useGameLogic() {
   });
 
   const { endGame, resolveNight } = specialEvents;
-  endGameRef.current = endGame;
+
+  const endGameSafely = useCallback(
+    async (state: GameState, winner: "village" | "wolf") => {
+      clearSpeechQueue();
+      clearDialogue();
+      setIsWaitingForAI(false);
+      setWaitingForNextRound(false);
+      await endGame(state, winner);
+    },
+    [clearDialogue, clearSpeechQueue, endGame, setIsWaitingForAI, setWaitingForNextRound]
+  );
+
+  endGameRef.current = endGameSafely;
   resolveNightRef.current = resolveNight;
 
   // ============================================
@@ -709,7 +721,7 @@ export function useGameLogic() {
 
             const winnerAfterTransfer = checkWinCondition(afterTransferState);
             if (winnerAfterTransfer) {
-              await endGame(afterTransferState, winnerAfterTransfer);
+              await endGameSafely(afterTransferState, winnerAfterTransfer);
               return;
             }
 
@@ -734,7 +746,7 @@ export function useGameLogic() {
         // 检查胜负
         const winnerAfterLastWords = checkWinCondition(s);
         if (winnerAfterLastWords) {
-          await endGame(s, winnerAfterLastWords);
+          await endGameSafely(s, winnerAfterLastWords);
           return;
         }
 
@@ -1616,7 +1628,7 @@ export function useGameLogic() {
 
       const winner = checkWinCondition(currentState);
       if (winner) {
-        await endGame(currentState, winner);
+        await endGameSafely(currentState, winner);
         return;
       }
 
@@ -1640,6 +1652,13 @@ export function useGameLogic() {
 
   /** 推进发言 */
   const advanceSpeech = useCallback(async (): Promise<{ finished: boolean; shouldAdvanceToNextSpeaker: boolean; shouldAutoAdvanceToNextAI: boolean }> => {
+    if (gameStateRef.current.phase === "GAME_END" || gameStateRef.current.winner) {
+      clearSpeechQueue();
+      clearDialogue();
+      setIsWaitingForAI(false);
+      setWaitingForNextRound(false);
+      return { finished: true, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
+    }
     if (gameStateRef.current.phase.includes("NIGHT")) {
       const cont = nightContinueRef.current;
       if (cont) {
@@ -1713,7 +1732,7 @@ export function useGameLogic() {
     // 不设置 waitingForNextRound，直接返回 shouldAdvanceToNextSpeaker: true
     // 让调用方立即调用 handleNextRound，避免单条消息时需要按两次回车的问题
     return { finished: true, shouldAdvanceToNextSpeaker: true, shouldAutoAdvanceToNextAI: false };
-  }, [clearDialogue, setIsWaitingForAI, setWaitingForNextRound, getSpeechQueue, advanceSpeechQueue, setGameState, isCurrentSegmentCommitted, markCurrentSegmentCommitted, isCurrentSegmentCompleted]);
+  }, [clearDialogue, clearSpeechQueue, setIsWaitingForAI, setWaitingForNextRound, getSpeechQueue, advanceSpeechQueue, setGameState, isCurrentSegmentCommitted, markCurrentSegmentCommitted, isCurrentSegmentCompleted]);
 
   /** 切换暂停 */
   const togglePause = useCallback(() => {

@@ -474,33 +474,17 @@ export class DaySpeechPhase extends GamePhase {
         return;
       }
 
-      // Build a set of players who have already spoken in DAY_SPEECH phase only
-      // (excludes badge election speeches which happen before "开始自由发言")
+      // Build a set of players who have already spoken in DAY_SPEECH only
+      // (avoid relying on system message text and exclude badge/PK/last words)
       const getTodaySpeakers = (): Set<number> => {
-        const systemMessages = getSystemMessages();
-        // Find the index of "开始自由发言" (dayDiscussion) message
-        let daySpeechStartIndex = -1;
-        for (let i = state.messages.length - 1; i >= 0; i--) {
-          const m = state.messages[i];
-          if (m.isSystem && (m.content === "开始自由发言" || m.content === "Free discussion begins" || m.content === systemMessages.dayDiscussion)) {
-            daySpeechStartIndex = i;
-            break;
-          }
-        }
-        // If no dayDiscussion message found, fall back to dayStartIndex
-        if (daySpeechStartIndex === -1) {
-          daySpeechStartIndex = getDayStartIndex(state);
-        }
-        
         const spokenSeats = new Set<number>();
-        for (let i = daySpeechStartIndex; i < state.messages.length; i++) {
-          const m = state.messages[i];
-          if (!m.isSystem && m.playerId) {
-            const player = state.players.find((p) => p.playerId === m.playerId);
-            if (player) {
-              spokenSeats.add(player.seat);
-            }
-          }
+        for (const m of state.messages) {
+          if (m.isSystem) continue;
+          if (m.day !== state.day) continue;
+          if (m.phase !== "DAY_SPEECH") continue;
+          if (!m.playerId) continue;
+          const player = state.players.find((p) => p.playerId === m.playerId);
+          if (player) spokenSeats.add(player.seat);
         }
         return spokenSeats;
       };
@@ -552,14 +536,35 @@ export class DaySpeechPhase extends GamePhase {
         return;
       }
 
-      // FIX: Prevent duplicate speeches - check if this player has already spoken today
+      // Prevent duplicate speeches - skip already-spoken seats instead of jumping to vote
       if (isDaySpeech) {
         const todaySpeakers = getTodaySpeakers();
         if (todaySpeakers.has(nextSeat)) {
-          // This player has already spoken, go to vote
-          // This is a safeguard to prevent infinite loops
-          await runtime.onStartVote(state, runtime.token);
-          return;
+          const direction = state.speechDirection ?? "clockwise";
+          const excludeSheriff = isSheriffAlive;
+          let candidate = nextSeat;
+          let attempts = 0;
+          while (attempts < state.players.length) {
+            const nextCandidate = getNextAliveSeat(state, candidate, excludeSheriff, direction);
+            if (nextCandidate === null) break;
+            // If we're about to loop back to the start, schedule sheriff as the final speaker.
+            if (
+              isSheriffAlive &&
+              nextCandidate === state.daySpeechStartSeat &&
+              candidate !== sheriffSeat
+            ) {
+              candidate = sheriffSeat;
+            } else {
+              candidate = nextCandidate;
+            }
+            if (!todaySpeakers.has(candidate)) break;
+            attempts += 1;
+          }
+          nextSeat = candidate;
+          if (todaySpeakers.has(nextSeat)) {
+            await runtime.onStartVote(state, runtime.token);
+            return;
+          }
         }
       }
 
