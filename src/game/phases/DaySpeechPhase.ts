@@ -398,10 +398,16 @@ export class DaySpeechPhase extends GamePhase {
     await playNarrator("discussionStart");
 
     const alivePlayers = speechState.players.filter((p) => p.alive);
-    const startSeat = resolveStartSeat(speechState);
+    const speechDirection: "clockwise" = "clockwise";
+    const sheriffSeat = speechState.badge.holderSeat;
+    const isSheriffAlive =
+      typeof sheriffSeat === "number" && alivePlayers.some((p) => p.seat === sheriffSeat);
+
+    const startSeat = isSheriffAlive
+      ? getNextAliveSeat(speechState, sheriffSeat, true, speechDirection)
+      : resolveStartSeat(speechState);
     const firstSpeaker =
       startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
-    const speechDirection: "clockwise" = "clockwise";
     speechState = {
       ...speechState,
       daySpeechStartSeat: startSeat,
