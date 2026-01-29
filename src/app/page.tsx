@@ -33,6 +33,8 @@ import { PHASE_CONFIGS } from "@/store/game-machine";
 import { getI18n } from "@/i18n/translator";
 import { getSystemMessages, getSystemPatterns } from "@/lib/game-texts";
 import { useTranslations } from "next-intl";
+import { useAtom } from "jotai";
+import { BADGE_TRANSFER_TORN } from "@/lib/game-master";
 
 // Components
 import { WelcomeScreen } from "@/components/game/WelcomeScreen";
@@ -1114,7 +1116,7 @@ export default function Home() {
     
     // 特殊处理：撕毁警徽（当在警徽移交阶段且没有选择目标时）
     if (phase === "BADGE_TRANSFER" && selectedSeat === null && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat) {
-      await handleHumanBadgeTransfer(0); // 0表示撕毁警徽
+      await handleHumanBadgeTransfer(BADGE_TRANSFER_TORN);
       return;
     }
 

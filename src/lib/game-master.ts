@@ -1155,6 +1155,8 @@ export async function generateAIVote(
 /** Sentinel for abstain when AI fails to vote or parse. Counting logic skips -1 via aliveBySeat.has(seat). */
 export const BADGE_VOTE_ABSTAIN = -1;
 
+export const BADGE_TRANSFER_TORN = -1;
+
 /**
  * 使用 SUMMARY_MODEL 一次性判断所有玩家是否上警
  * 基于玩家的背景信息和第一晚的操作信息来决策
@@ -1415,6 +1417,11 @@ export async function generateBadgeTransfer(
   const alivePlayers = state.players.filter(
     (p) => p.alive && p.playerId !== player.playerId
   );
+  const confirmedWolfSeats = new Set(
+    (state.nightActions.seerHistory || [])
+      .filter((x) => x && x.isWolf)
+      .map((x) => x.targetSeat)
+  );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
 
@@ -1442,17 +1449,34 @@ export async function generateBadgeTransfer(
     },
   });
 
-  const match = cleanedTransfer.match(/\d+/);
+  const validSeats = alivePlayers.map((p) => p.seat);
+  const pickFallbackSeat = (): number => {
+    if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.size > 0) {
+      const safeSeats = validSeats.filter((s) => !confirmedWolfSeats.has(s));
+      if (safeSeats.length > 0) {
+        return safeSeats[Math.floor(Math.random() * safeSeats.length)];
+      }
+      return BADGE_TRANSFER_TORN;
+    }
+    return validSeats[Math.floor(Math.random() * validSeats.length)];
+  };
+
+  const match = cleanedTransfer.match(/-?\d+/);
   if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
+    const parsed = Number.parseInt(match[0], 10);
+    if (parsed === 0) {
+      return BADGE_TRANSFER_TORN;
+    }
+    const seat = parsed - 1;
     if (validSeats.includes(seat)) {
+      if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.has(seat)) {
+        return pickFallbackSeat();
+      }
       return seat;
     }
   }
 
-  // 随机选择一个存活玩家
-  return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+  return pickFallbackSeat();
 }
 
 export async function generateSeerAction(

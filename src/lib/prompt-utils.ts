@@ -392,9 +392,23 @@ export const buildGameContext = (
     for (const [day, history] of Object.entries(state.nightHistory || {})) {
       if (history.wolfTarget === p.seat) { cause = t("promptUtils.gameContext.deathCauseWolf"); deathDay = Number(day); }
       if (history.witchPoison === p.seat) { cause = t("promptUtils.gameContext.deathCausePoison"); deathDay = Number(day); }
+      if (Array.isArray(history.deaths)) {
+        const match = history.deaths.find((d) => d.seat === p.seat);
+        if (match) {
+          cause =
+            match.reason === "wolf"
+              ? t("promptUtils.gameContext.deathCauseWolf")
+              : match.reason === "poison"
+                ? t("promptUtils.gameContext.deathCausePoison")
+                : t("promptUtils.gameContext.deathCauseDeath");
+          deathDay = Number(day);
+        }
+      }
+      if (history.hunterShot?.targetSeat === p.seat) { cause = t("promptUtils.gameContext.deathCauseDeath"); deathDay = Number(day); }
     }
     for (const [day, history] of Object.entries(state.dayHistory || {})) {
       if (history.executed?.seat === p.seat) { cause = t("promptUtils.gameContext.deathCauseVote"); deathDay = Number(day); }
+      if (history.hunterShot?.targetSeat === p.seat) { cause = t("promptUtils.gameContext.deathCauseDeath"); deathDay = Number(day); }
     }
     return `{seat: ${p.seat + 1}, name: ${p.displayName}, day: ${deathDay}, cause: ${cause}}`;
   });
