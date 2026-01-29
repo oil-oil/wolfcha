@@ -18,6 +18,7 @@ import {
   addSystemMessage,
   checkWinCondition,
   getNextAliveSeat,
+  getSpeakingOrder,
   killPlayer,
   transitionPhase,
 } from "@/lib/game-master";
@@ -111,13 +112,31 @@ export class DaySpeechPhase extends GamePhase {
 
     const totalSpeakers = validSpeakers.length;
     
-    // Recalculate speak order based on valid speakers only
-    const spokenPlayers = validSpeakers.filter(
-      (p) => todaySpeakers.has(p.playerId) && p.playerId !== player.playerId
-    );
-    const unspokenPlayers = validSpeakers.filter(
-      (p) => !todaySpeakers.has(p.playerId) && p.playerId !== player.playerId
-    );
+    // 获取完整的发言顺序（从起始座位开始，警长最后）
+    const startSeat = state.daySpeechStartSeat ?? 0;
+    const sheriffSeat = state.badge.holderSeat;
+    const isSheriffAlive = sheriffSeat !== null && 
+      state.players.some((p) => p.seat === sheriffSeat && p.alive);
+    const fullSpeakingOrder = getSpeakingOrder(state, startSeat, isSheriffAlive);
+    
+    // 根据发言顺序，找出当前玩家在顺序中的位置
+    const playerIndex = fullSpeakingOrder.indexOf(player.seat);
+    
+    // 已发言玩家：在当前玩家之前的所有玩家（按发言顺序）
+    const spokenSeats = playerIndex > 0 ? fullSpeakingOrder.slice(0, playerIndex) : [];
+    // 未发言玩家：在当前玩家之后的所有玩家（按发言顺序）
+    const unspokenSeats = playerIndex >= 0 ? fullSpeakingOrder.slice(playerIndex + 1) : [];
+    
+    // 过滤出有效的发言者（针对竞选/PK阶段）
+    const validSpeakerSeats = new Set(validSpeakers.map(p => p.seat));
+    const spokenPlayers = spokenSeats
+      .filter(seat => validSpeakerSeats.has(seat))
+      .map(seat => state.players.find(p => p.seat === seat)!)
+      .filter(Boolean);
+    const unspokenPlayers = unspokenSeats
+      .filter(seat => validSpeakerSeats.has(seat))
+      .map(seat => state.players.find(p => p.seat === seat)!)
+      .filter(Boolean);
 
     const speakOrder = spokenPlayers.length + 1;
     const isFirstSpeaker = speakOrder === 1;
@@ -129,7 +148,12 @@ export class DaySpeechPhase extends GamePhase {
     } else if (isLastSpeaker) {
       speakOrderHint = t("prompts.daySpeech.speakOrder.last", { speakOrder, totalSpeakers });
     } else {
-      const spokenList = spokenPlayers.map((p) => t("ui.seatNumber", { seat: p.seat + 1 })).join(t("common.listSeparator"));
+      // 标记已过麦的玩家（在顺序中应该已发言但实际没有发言记录）
+      const spokenList = spokenPlayers.map((p) => {
+        const hasSpoken = todaySpeakers.has(p.playerId);
+        const seatLabel = t("ui.seatNumber", { seat: p.seat + 1 });
+        return hasSpoken ? seatLabel : t("prompts.daySpeech.speakOrder.skipped", { seat: seatLabel });
+      }).join(t("common.listSeparator"));
       const unspokenList = unspokenPlayers.map((p) => t("ui.seatNumber", { seat: p.seat + 1 })).join(t("common.listSeparator"));
       speakOrderHint = t("prompts.daySpeech.speakOrder.middle", { speakOrder, totalSpeakers, spokenList: spokenList || t("common.none"), unspokenList: unspokenList || t("common.none") });
     }
@@ -162,7 +186,13 @@ export class DaySpeechPhase extends GamePhase {
       : isCampaignSpeech 
         ? t("prompts.daySpeech.task.campaign") 
         : t("prompts.daySpeech.task.dayDiscussion");
-    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" });
+    
+    // Add last words strategy for werewolves
+    const lastWordsStrategy = isLastWords && player.role === "Werewolf" 
+      ? "\n" + t("prompts.daySpeech.task.lastWordsWerewolfStrategy")
+      : "";
+    
+    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" }) + lastWordsStrategy;
     const roleHintLine = player.role === "Werewolf" ? t("prompts.daySpeech.roleHints.werewolf") : player.role === "Seer" ? t("prompts.daySpeech.roleHints.seer") : "";
     const guidelinesSection = isGenshinMode
       ? t("prompts.daySpeech.guidelines.genshin")
@@ -319,23 +349,6 @@ export class DaySpeechPhase extends GamePhase {
       currentSheriffSeat !== null ? currentState.players.find((p) => p.seat === currentSheriffSeat) : null;
     const deadSheriff = sheriffPlayer && !sheriffPlayer.alive ? sheriffPlayer : null;
 
-    const resolveStartSeat = (speechState: GameState, options?: { preferSheriff?: boolean }): number | null => {
-      const aliveSeats = speechState.players
-        .filter((p) => p.alive)
-        .map((p) => p.seat)
-        .sort((a, b) => a - b);
-      if (aliveSeats.length === 0) return null;
-
-      const preferSheriff = options?.preferSheriff !== false;
-      if (preferSheriff) {
-        const sheriffSeat = speechState.badge.holderSeat;
-        if (typeof sheriffSeat === "number" && aliveSeats.includes(sheriffSeat)) {
-          return sheriffSeat;
-        }
-      }
-      return aliveSeats[0];
-    };
-
     if (deadSheriff) {
       await runtime.onBadgeTransfer(currentState, deadSheriff, async (afterTransferState) => {
         if (wolfVictim?.role === "Hunter" && afterTransferState.roleAbilities.hunterCanShoot) {
@@ -355,10 +368,24 @@ export class DaySpeechPhase extends GamePhase {
         await playNarrator("discussionStart");
 
         const alivePlayers = speechState.players.filter((p) => p.alive);
-        const startSeat = resolveStartSeat(speechState, { preferSheriff: false });
+        const speechDirection: "clockwise" = "clockwise";
+        
+        // 判断警徽是否移交成功
+        const newSheriffSeat = speechState.badge.holderSeat;
+        const isNewSheriffAlive = newSheriffSeat !== null && 
+          alivePlayers.some((p) => p.seat === newSheriffSeat);
+        
+        let startSeat: number | null;
+        if (isNewSheriffAlive) {
+          // 警徽移交成功：从新警长下一位开始，新警长最后发言
+          startSeat = getNextAliveSeat(speechState, newSheriffSeat, true, speechDirection);
+        } else {
+          // 警徽撕毁：从死者下一位开始
+          startSeat = getNextAliveSeat(speechState, deadSheriff.seat, false, speechDirection);
+        }
+        
         const firstSpeaker =
           startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
-        const speechDirection: "clockwise" = "clockwise";
         speechState = {
           ...speechState,
           daySpeechStartSeat: startSeat,
@@ -403,9 +430,20 @@ export class DaySpeechPhase extends GamePhase {
     const isSheriffAlive =
       typeof sheriffSeat === "number" && alivePlayers.some((p) => p.seat === sheriffSeat);
 
-    const startSeat = isSheriffAlive
-      ? getNextAliveSeat(speechState, sheriffSeat, true, speechDirection)
-      : resolveStartSeat(speechState);
+    // 确定发言起始位置
+    let startSeat: number | null;
+    if (isSheriffAlive) {
+      // 有警长存活：从警长下一位开始，警长最后发言
+      startSeat = getNextAliveSeat(speechState, sheriffSeat, true, speechDirection);
+    } else if (wolfVictim) {
+      // 无警长但有死者：从死者下一位开始
+      startSeat = getNextAliveSeat(speechState, wolfVictim.seat, false, speechDirection);
+    } else {
+      // 无警长无死者（和平夜）：从最小座位号开始
+      const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
+      startSeat = aliveSeats[0] ?? null;
+    }
+    
     const firstSpeaker =
       startSeat !== null ? alivePlayers.find((p) => p.seat === startSeat) || null : null;
     speechState = {

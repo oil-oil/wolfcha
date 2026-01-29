@@ -445,8 +445,27 @@ alive_count: ${alivePlayers.length}
   context += `\n\n<alive_players>\n${playerList}\n</alive_players>`;
 
   const wolfFriendlyFireNote = t("promptUtils.gameContext.wolfFriendlyFireNote");
-  if (wolfFriendlyFireNote) {
-    context += `\n\n<rules>\n${wolfFriendlyFireNote}\n</rules>`;
+  const peacefulNightNote = t("promptUtils.gameContext.peacefulNightNote");
+  const phaseOrderNote = t("promptUtils.gameContext.phaseOrderNote");
+  
+  // Check if it's a peaceful night (no deaths today)
+  const nightHistory = state.nightHistory?.[state.day];
+  const isPeacefulNight = !options?.excludePendingDeaths && 
+    state.phase.includes("DAY") && 
+    nightHistory && 
+    !nightHistory.wolfTarget && 
+    !nightHistory.witchPoison && 
+    (!nightHistory.deaths || nightHistory.deaths.length === 0);
+  
+  // Build rules text with phase order note always included
+  let rulesText = wolfFriendlyFireNote;
+  if (isPeacefulNight) {
+    rulesText += `\n${peacefulNightNote}`;
+  }
+  rulesText += `\n${phaseOrderNote}`;
+  
+  if (rulesText) {
+    context += `\n\n<rules>\n${rulesText}\n</rules>`;
   }
 
   const summarySection = buildDailySummariesSection(state);

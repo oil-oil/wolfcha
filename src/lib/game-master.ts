@@ -430,6 +430,79 @@ export function getNextAliveSeat(
   return nextSeat ?? sortedSeats[0];
 }
 
+/**
+ * 计算完整的发言顺序列表
+ * @param state 游戏状态
+ * @param startSeat 起始座位号（从该座位开始发言）
+ * @param sheriffLast 警长是否最后发言（默认 true）
+ * @returns 按发言顺序排列的座位号数组
+ */
+export function getSpeakingOrder(
+  state: GameState,
+  startSeat: number,
+  sheriffLast = true
+): number[] {
+  const sheriffSeat = state.badge.holderSeat;
+  const alivePlayers = state.players.filter((p) => p.alive);
+  const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
+  
+  if (aliveSeats.length === 0) return [];
+  
+  // 找到起始座位在排序列表中的索引
+  const startIndex = aliveSeats.indexOf(startSeat);
+  if (startIndex === -1) return aliveSeats;
+  
+  // 从起始座位开始，按顺时针顺序排列
+  const order: number[] = [];
+  for (let i = 0; i < aliveSeats.length; i++) {
+    const seat = aliveSeats[(startIndex + i) % aliveSeats.length];
+    // 如果警长最后发言，先跳过警长
+    if (sheriffLast && seat === sheriffSeat) continue;
+    order.push(seat);
+  }
+  
+  // 如果警长最后发言且警长存活，将警长添加到最后
+  if (sheriffLast && sheriffSeat !== null && aliveSeats.includes(sheriffSeat)) {
+    order.push(sheriffSeat);
+  }
+  
+  return order;
+}
+
+/**
+ * 计算发言起始座位
+ * @param state 游戏状态
+ * @param options.deadSeat 死者座位（用于确定从死者下一位开始）
+ * @param options.hasSheriff 是否有存活警长（默认自动检测）
+ * @returns 起始座位号
+ */
+export function resolveSpeechStartSeat(
+  state: GameState,
+  options?: { deadSeat?: number; hasSheriff?: boolean }
+): number | null {
+  const alivePlayers = state.players.filter((p) => p.alive);
+  const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
+  
+  if (aliveSeats.length === 0) return null;
+  
+  const sheriffSeat = state.badge.holderSeat;
+  const isSheriffAlive = options?.hasSheriff ?? 
+    (sheriffSeat !== null && aliveSeats.includes(sheriffSeat));
+  
+  // 场上存在警长：从警长下一位开始
+  if (isSheriffAlive && sheriffSeat !== null) {
+    return getNextAliveSeat(state, sheriffSeat, true, "clockwise");
+  }
+  
+  // 无警长但有死者：从死者下一位开始
+  if (options?.deadSeat !== undefined) {
+    return getNextAliveSeat(state, options.deadSeat, false, "clockwise");
+  }
+  
+  // 默认：从最小座位号开始
+  return aliveSeats[0];
+}
+
 export function tallyVotes(state: GameState): { seat: number; count: number } | null {
   const voteCounts: Record<number, number> = {};
   const sheriffSeat = state.badge.holderSeat;
