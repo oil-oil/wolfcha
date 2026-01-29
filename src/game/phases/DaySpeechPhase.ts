@@ -467,9 +467,10 @@ export class DaySpeechPhase extends GamePhase {
       const sheriffSeat = state.badge.holderSeat;
       const isSheriffAlive = typeof sheriffSeat === "number" && state.players.some((p) => p.seat === sheriffSeat && p.alive);
 
-      // FIX: If the current speaker is the sheriff in DAY_SPEECH, go to vote immediately
-      // Sheriff is always the last speaker, so after sheriff speaks, we should transition to vote
-      if (isDaySpeech && isSheriffAlive && state.currentSpeakerSeat === sheriffSeat) {
+      // Check if sheriff has spoken as the final speaker
+      // Only transition to vote if sheriff spoke AND is not the starting speaker (meaning everyone else already spoke)
+      const sheriffIsStartSpeaker = state.daySpeechStartSeat === sheriffSeat;
+      if (isDaySpeech && isSheriffAlive && state.currentSpeakerSeat === sheriffSeat && !sheriffIsStartSpeaker) {
         await runtime.onStartVote(state, runtime.token);
         return;
       }
@@ -500,8 +501,24 @@ export class DaySpeechPhase extends GamePhase {
         if (isDaySpeech && isSheriffAlive) {
           nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
           // If we're about to loop back to the start, schedule sheriff as the final speaker.
-          if (nextSeat !== null && nextSeat === state.daySpeechStartSeat && state.currentSpeakerSeat !== sheriffSeat) {
-            nextSeat = sheriffSeat;
+          // When sheriff is the starting speaker, check if nextSeat would loop back to a position
+          // that would mean all non-sheriff players have spoken.
+          if (sheriffIsStartSpeaker) {
+            // When sheriff started, check if we've looped back to the first non-sheriff speaker
+            const nonSheriffAliveSeats = state.players
+              .filter((p) => p.alive && p.seat !== sheriffSeat)
+              .map((p) => p.seat)
+              .sort((a, b) => a - b);
+            const firstNonSheriffSeat = nonSheriffAliveSeats[0];
+            if (nextSeat !== null && nextSeat === firstNonSheriffSeat && state.currentSpeakerSeat !== sheriffSeat) {
+              // All non-sheriff players have spoken, now it's sheriff's turn as final speaker
+              nextSeat = sheriffSeat;
+            }
+          } else {
+            // Normal case: sheriff is not the starting speaker
+            if (nextSeat !== null && nextSeat === state.daySpeechStartSeat && state.currentSpeakerSeat !== sheriffSeat) {
+              nextSeat = sheriffSeat;
+            }
           }
         } else {
           nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
@@ -523,7 +540,12 @@ export class DaySpeechPhase extends GamePhase {
         return;
       }
 
-      if (startSeat !== null && nextSeat === startSeat) {
+      // Check if we've completed a full round of speeches
+      const shouldTransitionToVote = (isDaySpeech && isSheriffAlive && sheriffIsStartSpeaker)
+        ? (nextSeat === sheriffSeat && state.currentSpeakerSeat === sheriffSeat) // Sheriff spoke last after being first
+        : (startSeat !== null && nextSeat === startSeat); // Normal loop detection
+
+      if (shouldTransitionToVote) {
         if (state.phase === "DAY_PK_SPEECH") {
           await runtime.onPkSpeechEnd(state);
           return;

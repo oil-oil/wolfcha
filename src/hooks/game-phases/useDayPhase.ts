@@ -124,8 +124,21 @@ export function useDayPhase(
       }
     } else if (isDaySpeech && isSheriffAlive) {
       nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
-      if (nextSeat === null && state.currentSpeakerSeat !== sheriffSeat) {
-        nextSeat = sheriffSeat;
+      const sheriffIsStartSpeaker = state.daySpeechStartSeat === sheriffSeat;
+      if (sheriffIsStartSpeaker) {
+        // When sheriff started, check if we've looped back to the first non-sheriff speaker
+        const nonSheriffAliveSeats = state.players
+          .filter((p) => p.alive && p.seat !== sheriffSeat)
+          .map((p) => p.seat)
+          .sort((a, b) => a - b);
+        const firstNonSheriffSeat = nonSheriffAliveSeats[0];
+        if (nextSeat !== null && nextSeat === firstNonSheriffSeat && state.currentSpeakerSeat !== sheriffSeat) {
+          nextSeat = sheriffSeat;
+        }
+      } else {
+        if (nextSeat === null && state.currentSpeakerSeat !== sheriffSeat) {
+          nextSeat = sheriffSeat;
+        }
       }
     } else {
       nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
