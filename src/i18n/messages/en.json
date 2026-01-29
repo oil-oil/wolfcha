@@ -2014,7 +2014,7 @@
     },
     "aiPrompt": {
       "title": "AI generate characters",
-      "description": "Copy this prompt and ask an AI to generate importable character JSON.",
+      "description": "Copy this prompt and send it to any AI tool to generate importable character JSON.",
       "copy": "Copy prompt"
     },
     "detail": {

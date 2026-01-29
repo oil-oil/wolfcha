@@ -2014,7 +2014,7 @@
     },
     "aiPrompt": {
       "title": "AI 生成角色",
-      "description": "复制下面的提示词发给 AI，让它生成可导入的角色 JSON。",
+      "description": "复制下面的提示词发送给任意 AI 工具，让它生成可导入的角色 JSON。",
       "copy": "复制提示词"
     },
     "detail": {
