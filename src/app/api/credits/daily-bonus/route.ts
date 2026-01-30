@@ -3,7 +3,7 @@ import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
-const DAILY_BONUS_AMOUNT = 2;
+const DAILY_BONUS_AMOUNT = 1;
 const MAX_CREDITS = 10;
 
 export async function POST(request: Request) {

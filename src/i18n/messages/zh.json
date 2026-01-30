@@ -1888,7 +1888,7 @@
   "customKey": {
     "title": "用我自己的 key 玩",
     "description": "开启后填写 API Key，仅保存在本地浏览器",
-    "dailyBonus": "每天上线可领 2 局，记得常来呀~",
+    "dailyBonus": "每天上线可领 1 局，记得常来呀~",
     "tabs": {
       "profile": "信息",
       "custom": "用我自己的 key 玩",

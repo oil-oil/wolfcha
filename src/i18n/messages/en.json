@@ -1888,7 +1888,7 @@
   "customKey": {
     "title": "Use my own key",
     "description": "Enable to enter your API Key. Stored locally in browser only.",
-    "dailyBonus": "Claim 2 free games daily. Come back often!",
+    "dailyBonus": "Claim 1 free game daily. Come back often!",
     "tabs": {
       "profile": "Profile",
       "custom": "Use my own key",
