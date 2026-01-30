@@ -5,6 +5,11 @@ export const dynamic = "force-dynamic";
 
 const DAILY_BONUS_AMOUNT = 1;
 const MAX_CREDITS = 10;
+const DAILY_BONUS_REASON = {
+  firstDay: "first_day",
+  alreadyClaimed: "already_claimed",
+  maxCredits: "max_credits",
+} as const;
 
 export async function POST(request: Request) {
   try {
@@ -44,6 +49,7 @@ export async function POST(request: Request) {
     last_daily_bonus_at: string | null;
     created_at: string;
   };
+  const currentCredits = creditsRow.credits;
 
   // 获取今天的日期（UTC）
   const today = new Date().toISOString().split("T")[0];
@@ -55,9 +61,9 @@ export async function POST(request: Request) {
   if (createdDate === today) {
     return NextResponse.json({
       success: true,
-      credits: creditsRow.credits,
+      credits: currentCredits,
       bonusClaimed: false,
-      reason: "first_day",
+      reason: DAILY_BONUS_REASON.firstDay,
     });
   }
 
@@ -65,15 +71,24 @@ export async function POST(request: Request) {
   if (creditsRow.last_daily_bonus_at === today) {
     return NextResponse.json({
       success: true,
-      credits: creditsRow.credits,
+      credits: currentCredits,
       bonusClaimed: false,
-      reason: "already_claimed",
+      reason: DAILY_BONUS_REASON.alreadyClaimed,
+    });
+  }
+
+  if (currentCredits >= MAX_CREDITS) {
+    return NextResponse.json({
+      success: true,
+      credits: currentCredits,
+      bonusClaimed: false,
+      reason: DAILY_BONUS_REASON.maxCredits,
     });
   }
 
   // 计算新积分（最多10局）
-  const newCredits = Math.min(creditsRow.credits + DAILY_BONUS_AMOUNT, MAX_CREDITS);
-  const actualBonus = newCredits - creditsRow.credits;
+  const newCredits = Math.min(currentCredits + DAILY_BONUS_AMOUNT, MAX_CREDITS);
+  const actualBonus = newCredits - currentCredits;
 
   // 更新积分和签到日期
   const { error: updateError } = await supabaseAdmin
