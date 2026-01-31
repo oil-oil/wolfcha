@@ -46,9 +46,9 @@ function buildFaqJsonLd({
 export async function generateMetadata({
   params,
 }: {
-  params: { role: RoleLandingKey };
+  params: Promise<{ role: RoleLandingKey }>;
 }): Promise<Metadata> {
-  const { role } = params;
+  const { role } = await params;
   const data = getRoleLandingData(role);
   if (!data) {
     return {};
@@ -83,9 +83,9 @@ export async function generateMetadata({
 export default async function RoleLandingPage({
   params,
 }: {
-  params: { role: RoleLandingKey };
+  params: Promise<{ role: RoleLandingKey }>;
 }) {
-  const { role } = params;
+  const { role } = await params;
   const data = getRoleLandingData(role);
 
   if (!data) {
