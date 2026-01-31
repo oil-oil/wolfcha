@@ -110,14 +110,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to update referrer" }, { status: 500 });
   }
 
+  const recordPayload: Database["public"]["Tables"]["referral_records"]["Insert"] = {
+    referrer_id: referrerRow.id,
+    referred_id: user.id,
+    referral_code: referralCode,
+    credits_granted: creditsGranted,
+  };
   const { error: recordError } = await supabaseAdmin
     .from("referral_records")
-    .insert({
-      referrer_id: referrerRow.id,
-      referred_id: user.id,
-      referral_code: referralCode,
-      credits_granted: creditsGranted,
-    });
+    .insert(recordPayload as never);
 
   if (recordError) {
     console.error("Failed to insert referral record:", recordError);
