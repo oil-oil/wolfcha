@@ -42,6 +42,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      referral_records: {
+        Row: {
+          id: string;
+          referrer_id: string;
+          referred_id: string;
+          referral_code: string;
+          credits_granted: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          referrer_id: string;
+          referred_id: string;
+          referral_code: string;
+          credits_granted?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          referrer_id?: string;
+          referred_id?: string;
+          referral_code?: string;
+          credits_granted?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       sponsor_clicks: {
         Row: {
           id: string;

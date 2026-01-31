@@ -95,8 +95,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to read referrer" }, { status: 500 });
   }
 
+  const creditsGranted = 3;
   const referrerUpdatePayload: Partial<Database["public"]["Tables"]["user_credits"]["Row"]> = {
-    credits: referrerCreditsRow.credits + 3,
+    credits: referrerCreditsRow.credits + creditsGranted,
     total_referrals: referrerCreditsRow.total_referrals + 1,
     updated_at: new Date().toISOString(),
   };
@@ -107,6 +108,19 @@ export async function POST(request: Request) {
 
   if (referrerUpdateError) {
     return NextResponse.json({ error: "Failed to update referrer" }, { status: 500 });
+  }
+
+  const { error: recordError } = await supabaseAdmin
+    .from("referral_records")
+    .insert({
+      referrer_id: referrerRow.id,
+      referred_id: user.id,
+      referral_code: referralCode,
+      credits_granted: creditsGranted,
+    });
+
+  if (recordError) {
+    console.error("Failed to insert referral record:", recordError);
   }
 
   return NextResponse.json({ success: true });
