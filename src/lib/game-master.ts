@@ -783,9 +783,21 @@ export async function generateAISpeechSegments(
     const start = text.indexOf("[");
     const end = text.lastIndexOf("]");
     const slice = start >= 0 && end > start ? text.slice(start, end + 1) : text;
-    const matches = slice.match(/"(?:\\.|[^"\\])*"/g) ?? [];
     const out: string[] = [];
-    for (const m of matches) {
+    const regex = /"(?:\\.|[^"\\])*"/g;
+    let match: RegExpExecArray | null = null;
+    while ((match = regex.exec(slice)) !== null) {
+      const m = match[0];
+      const matchEndIndex = match.index + m.length;
+
+      let lookaheadIndex = matchEndIndex;
+      while (lookaheadIndex < slice.length && /\s/.test(slice[lookaheadIndex] ?? "")) {
+        lookaheadIndex++;
+      }
+
+      // If this string is immediately followed by ':' (after optional whitespace), it's a JSON object key.
+      if (slice[lookaheadIndex] === ":") continue;
+
       try {
         const s = JSON.parse(m);
         if (typeof s === "string") {
@@ -807,7 +819,13 @@ export async function generateAISpeechSegments(
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
 
       const out: string[] = [];
-      for (const v of Object.values(parsed as Record<string, unknown>)) {
+      const allowedKeys = new Set(["speech", "message", "content", "text", "value"]);
+      const reservedKeys = new Set(["analysis", "judgment", "judgement", "observation", "reasoning", "thought"]);
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        const loweredKey = k.toLowerCase();
+        if (reservedKeys.has(loweredKey)) continue;
+        if (!allowedKeys.has(loweredKey)) continue;
+
         if (typeof v === "string") {
           const cleaned = v.trim();
           if (cleaned) out.push(cleaned);

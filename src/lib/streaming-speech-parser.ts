@@ -166,13 +166,32 @@ export class StreamingSpeechParser {
           if (ch === '"') {
             inString = false;
             try {
+              let lookaheadIndex = i + 1;
+              while (
+                lookaheadIndex < this.accumulatedContent.length
+                && /\s/.test(this.accumulatedContent[lookaheadIndex] ?? "")
+              ) {
+                lookaheadIndex++;
+              }
+              const nextChar = this.accumulatedContent[lookaheadIndex];
+              const isJsonKey = nextChar === ":";
+
               const parsed = JSON.parse('"' + currentString + '"');
               if (typeof parsed === "string") {
                 const cleaned = parsed.trim();
                 // 过滤掉常见的 JSON 键名，只保留实际内容
                 const commonKeys = new Set(["message", "content", "text", "value", "speech", "speaker", "role", "type", "index", "id"]);
-                if (arrayDepth > 0 && cleaned && cleaned.length > 5 && !commonKeys.has(cleaned.toLowerCase())) {
-                    validSegments.push(cleaned);
+                const reservedKeys = new Set(["analysis", "judgment", "judgement", "observation", "reasoning", "thought"]);
+                const lowered = cleaned.toLowerCase();
+                if (
+                  arrayDepth > 0
+                  && !isJsonKey
+                  && cleaned
+                  && cleaned.length > 5
+                  && !commonKeys.has(lowered)
+                  && !reservedKeys.has(lowered)
+                ) {
+                  validSegments.push(cleaned);
                 }
               }
             } catch {
