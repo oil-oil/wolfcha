@@ -59,22 +59,40 @@ function sanitizeModelArtifacts(text: string): string {
     .trim();
 }
 
-function sanitizeSeatMentions(text: string, totalSeats: number): string {
+function sanitizeSeatMentions(text: string, players: Player[]): string {
   if (!text) return text;
+  const totalSeats = players.length;
   if (!Number.isFinite(totalSeats) || totalSeats <= 0) return text;
   const { t } = getI18n();
 
-  const replaceIfInvalid = (raw: string, numStr: string) => {
+  const formatSeatWithName = (
+    raw: string,
+    numStr: string,
+    prefix: string,
+    offset: number,
+    fullText: string
+  ) => {
     const n = Number.parseInt(numStr, 10);
     if (!Number.isFinite(n)) return raw;
     if (n < 1 || n > totalSeats) return t("gameMaster.invalidSeat");
-    return raw;
+    if (!prefix && fullText[offset - 1] === "@") return raw;
+    const player = players.find((p) => p.seat === n - 1);
+    if (!player?.displayName) return raw;
+    const after = fullText.slice(offset + raw.length);
+    const afterTrimmed = after.replace(/^\s+/, "");
+    if (afterTrimmed.startsWith(player.displayName)) return raw;
+    const label = t("mentions.playerLabel", { seat: n, name: player.displayName });
+    return `${prefix}${label}`;
   };
 
   // Handle @12 / @12号
-  let out = text.replace(/@(\d+)\s*号?/g, (m, numStr) => replaceIfInvalid(m, numStr));
+  let out = text.replace(/@(\d+)\s*号?/g, (m, numStr, offset, fullText) =>
+    formatSeatWithName(m, numStr, "@", offset as number, fullText)
+  );
   // Handle 12号
-  out = out.replace(/(\d+)\s*号/g, (m, numStr) => replaceIfInvalid(m, numStr));
+  out = out.replace(/(\d+)\s*号/g, (m, numStr, offset, fullText) =>
+    formatSeatWithName(m, numStr, "", offset as number, fullText)
+  );
   return out;
 }
 
@@ -701,7 +719,7 @@ export async function* generateAISpeechStream(
       yield chunk;
     }
 
-    const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players.length);
+    const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players);
     await aiLogger.log({
       type: "speech",
       request: { 
@@ -717,7 +735,7 @@ export async function* generateAISpeechStream(
       },
     });
   } catch (error) {
-    const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players.length);
+    const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players);
     await aiLogger.log({
       type: "speech",
       request: { 
@@ -818,7 +836,7 @@ export async function generateAISpeechSegments(
     }));
 
     const cleanedSpeech = sanitizeModelArtifacts(stripMarkdownCodeFences(result.content));
-    const sanitizedSpeech = sanitizeSeatMentions(cleanedSpeech, state.players.length);
+    const sanitizedSpeech = sanitizeSeatMentions(cleanedSpeech, state.players);
 
     await aiLogger.log({
       type: "speech",
@@ -941,7 +959,7 @@ export async function generateAISpeechSegmentsStream(
 
   const parser = new StreamingSpeechParser({
     onSegmentReceived: (segment, index) => {
-      const sanitized = sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players.length);
+      const sanitized = sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players);
       if (!emittedSegments.has(sanitized)) {
         emittedSegments.add(sanitized);
         options.onSegmentReceived?.(sanitized, emittedCount++);
@@ -981,7 +999,7 @@ export async function generateAISpeechSegmentsStream(
     // 注意：只有当 emittedSegments 也为空时才进行回退，避免重复发射
     if (segments.length === 0 && emittedSegments.size === 0) {
       const cleanedSpeech = sanitizeModelArtifacts(stripMarkdownCodeFences(accumulatedContent));
-      const sanitizedSpeech = sanitizeSeatMentions(cleanedSpeech, state.players.length);
+      const sanitizedSpeech = sanitizeSeatMentions(cleanedSpeech, state.players);
 
       // 尝试解析 JSON 数组
       const jsonMatch = sanitizedSpeech.match(/\[[\s\S]*\]/);
@@ -1067,7 +1085,7 @@ export async function generateAISpeechSegmentsStream(
 
     // Sanitize all segments
     const sanitizedSegments = segments.map((s) =>
-      sanitizeSeatMentions(sanitizeModelArtifacts(s), state.players.length)
+      sanitizeSeatMentions(sanitizeModelArtifacts(s), state.players)
     );
 
     await aiLogger.log({
@@ -1341,7 +1359,7 @@ export async function generateAIBadgeSignupBatch(
     const result = await generateCompletion({
       model: getSummaryModel(),
       messages,
-      temperature: GAME_TEMPERATURE.ACTION,
+      temperature: GAME_TEMPERATURE.BADGE_SIGNUP,
       response_format: { type: "json_object" },
     });
 

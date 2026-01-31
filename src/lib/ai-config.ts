@@ -41,4 +41,7 @@ export const GAME_TEMPERATURE = {
   // 稍微提高一点点(0.4)，让“蠢萌”或“冲动”角色的行为有概率出现，
   // 但主要还是依靠 Prompt 中的逻辑来驱动
   ACTION: AI_TEMPERATURE.LOGIC,
+
+  // Badge signup is an early-game "meta" decision; allow more variety.
+  BADGE_SIGNUP: AI_TEMPERATURE.BALANCED,
 } as const;

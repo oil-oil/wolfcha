@@ -5,6 +5,8 @@ const MODEL_LOGO_MAP: Array<{ match: RegExp; key: string }> = [
   { match: /deepseek/i, key: "deepseek" },
   { match: /claude/i, key: "claude" },
   { match: /qwen/i, key: "qwen" },
+  { match: /glm|z-ai/i, key: "glm" },
+  { match: /minimax/i, key: "minimax" },
   { match: /doubao/i, key: "doubao" },
   { match: /bytedance|seed/i, key: "bytedance" },
   { match: /openai|gpt/i, key: "openai" },

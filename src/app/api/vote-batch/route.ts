@@ -7,7 +7,8 @@ type VoteBatchRequest = {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
-  reasoning?: { enabled: boolean };
+  reasoning?: { enabled: boolean; effort?: "minimal" | "low" | "medium" | "high"; max_tokens?: number };
+  reasoning_effort?: "minimal" | "low" | "medium" | "high";
   response_format?: unknown;
   provider?: "zenmux" | "dashscope";
 };

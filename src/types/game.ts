@@ -239,6 +239,9 @@ export const AVAILABLE_MODELS: ModelRef[] = [
 
   { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
   { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
+  { provider: "zenmux", model: "z-ai/glm-4.7" },
+  {provider:"zenmux", model:"minimax/minimax-m2.1"},
+  
   { provider: "zenmux", model: "google/gemini-3-flash-preview" },
 ];
 
@@ -272,5 +275,7 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "zenmux", model: "anthropic/claude-opus-4.5" },
   { provider: "zenmux", model: "x-ai/grok-4" },
   { provider: "zenmux", model: "google/gemini-3-pro-preview" },
+  { provider: "zenmux", model: "z-ai/glm-4.7", temperature: 1 , reasoning: { enabled: false } },
+  { provider: "zenmux", model: "minimax/minimax-m2.1", temperature: 1 , reasoning: { enabled: false } },
 ];
 

@@ -137,13 +137,37 @@ function stripCacheControl(messages: unknown[]): unknown[] {
   });
 }
 
+// ZenMux reasoning: only enabled, effort, max_tokens (see docs.zenmux.ai/guide/advanced/reasoning.html)
+type ReasoningPayload = {
+  enabled: boolean;
+  effort?: "minimal" | "low" | "medium" | "high";
+  max_tokens?: number;
+};
+
+const ALLOWED_REASONING_EFFORT = new Set(["minimal", "low", "medium", "high"] as const);
+
+/** Build ZenMux request reasoning object (no unsupported fields like exclude). */
+function toZenMuxReasoning(
+  r: { enabled?: boolean; effort?: string; max_tokens?: number } | undefined
+): { enabled: boolean; effort?: string; max_tokens?: number } {
+  if (r?.enabled === true) {
+    return {
+      enabled: true,
+      ...(r.effort != null && { effort: r.effort }),
+      ...(typeof r.max_tokens === "number" && Number.isFinite(r.max_tokens) && { max_tokens: r.max_tokens }),
+    };
+  }
+  return { enabled: false };
+}
+
 type ChatRequestPayload = {
   model: string;
   messages: unknown[];
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
-  reasoning?: { enabled: boolean };
+  reasoning?: ReasoningPayload;
+  reasoning_effort?: "minimal" | "low" | "medium" | "high";
   response_format?: unknown;
   provider?: Provider;
 };
@@ -160,6 +184,7 @@ async function runBatchItem(
     max_tokens,
     stream,
     reasoning,
+    reasoning_effort,
     response_format,
     provider,
   } = payload;
@@ -291,10 +316,15 @@ async function runBatchItem(
     requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
   }
 
-  // Apply ModelRef.reasoning override when present; otherwise default off for speed
+  const reasoningEffort =
+    typeof reasoning_effort === "string" && ALLOWED_REASONING_EFFORT.has(reasoning_effort)
+      ? reasoning_effort
+      : undefined;
   const reasoningToUse = effectiveReasoning ?? reasoning;
-  if (reasoningToUse?.enabled === true) {
-    requestBody.reasoning = { ...reasoningToUse, exclude: true };
+  if (reasoningToUse !== undefined) {
+    requestBody.reasoning = toZenMuxReasoning(reasoningToUse);
+  } else if (reasoningEffort) {
+    requestBody.reasoning_effort = reasoningEffort;
   } else {
     requestBody.reasoning = { enabled: false };
   }
@@ -353,6 +383,7 @@ export async function POST(request: NextRequest) {
       max_tokens,
       stream,
       reasoning,
+      reasoning_effort,
       response_format,
       provider,
     } = body;
@@ -523,10 +554,15 @@ export async function POST(request: NextRequest) {
       requestBody.stream = true;
     }
 
-    // Apply ModelRef.reasoning override when present; otherwise default off for speed
+    const reasoningEffort =
+      typeof reasoning_effort === "string" && ALLOWED_REASONING_EFFORT.has(reasoning_effort)
+        ? reasoning_effort
+        : undefined;
     const reasoningToUse = effectiveReasoning ?? reasoning;
-    if (reasoningToUse?.enabled === true) {
-      requestBody.reasoning = { ...reasoningToUse, exclude: true };
+    if (reasoningToUse !== undefined) {
+      requestBody.reasoning = toZenMuxReasoning(reasoningToUse);
+    } else if (reasoningEffort) {
+      requestBody.reasoning_effort = reasoningEffort;
     } else {
       requestBody.reasoning = { enabled: false };
     }

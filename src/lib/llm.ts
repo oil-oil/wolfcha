@@ -78,12 +78,20 @@ export type ResponseFormat =
       };
     };
 
+// ZenMux reasoning: enabled, effort (minimal|low|medium|high), max_tokens (optional). No exclude.
+export interface ReasoningOptions {
+  enabled: boolean;
+  effort?: "minimal" | "low" | "medium" | "high";
+  max_tokens?: number;
+}
+
 export interface GenerateOptions {
   model: string;
   messages: LLMMessage[];
   temperature?: number;
   max_tokens?: number;
-  reasoning?: { enabled: boolean };
+  reasoning?: ReasoningOptions;
+  reasoning_effort?: "minimal" | "low" | "medium" | "high";
   response_format?: ResponseFormat;
 }
 
@@ -399,6 +407,7 @@ export async function generateCompletion(
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
         ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+        ...(options.reasoning_effort ? { reasoning_effort: options.reasoning_effort } : {}),
         ...(options.response_format ? { response_format: options.response_format } : {}),
       }),
     },
@@ -555,6 +564,7 @@ export async function* generateCompletionStream(
         max_tokens: maxTokens,
         stream: true,
         ...(options.reasoning ? { reasoning: options.reasoning } : {}),
+        ...(options.reasoning_effort ? { reasoning_effort: options.reasoning_effort } : {}),
         ...(options.response_format ? { response_format: options.response_format } : {}),
       }),
     },

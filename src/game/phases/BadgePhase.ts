@@ -107,24 +107,28 @@ export class BadgePhase extends GamePhase {
 
     const { t } = getI18n();
     
-    // 狼人动态指令注入：打破"纳什均衡"，强制分配悍跳位
+    // Wolf tactic hint injection: keep games varied and avoid rigid "scripts".
     let wolfTacticHint = "";
     if (player.role === "Werewolf") {
       const aliveWolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
-      // 使用 gameId + day 作为随机种子，确保同一局同一天选中同一个狼人
-      const seedHash = (state.gameId || "").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) + state.day;
-      const selectedWolfIndex = seedHash % aliveWolves.length;
-      const selectedWolf = aliveWolves[selectedWolfIndex];
-      
-      if (selectedWolf && selectedWolf.playerId === player.playerId) {
-        // 被选中的狼人：强制悍跳
-        wolfTacticHint = t("prompts.badge.signup.wolfTacticJump");
-      } else {
-        // 其他狼人：配合队友
-        const jumpWolfSeat = selectedWolf ? selectedWolf.seat + 1 : null;
-        wolfTacticHint = jumpWolfSeat 
-          ? t("prompts.badge.signup.wolfTacticSupport", { seat: jumpWolfSeat })
-          : t("prompts.badge.signup.wolfTacticObserve");
+      if (aliveWolves.length > 0) {
+        // Randomly decide whether to apply a "designated jumper" tactic this game.
+        // Keep the probability below 1 to avoid the same meta every game.
+        const enableDesignatedJump = Math.random() < 0.65;
+        if (enableDesignatedJump) {
+          const selectedWolf = aliveWolves[Math.floor(Math.random() * aliveWolves.length)];
+
+          if (selectedWolf && selectedWolf.playerId === player.playerId) {
+            wolfTacticHint = t("prompts.badge.signup.wolfTacticJump");
+          } else {
+            const jumpWolfSeat = selectedWolf ? selectedWolf.seat + 1 : null;
+            // Sometimes provide a lighter "observe" hint to keep behavior diverse.
+            const preferSupport = Math.random() < 0.7;
+            wolfTacticHint = jumpWolfSeat && preferSupport
+              ? t("prompts.badge.signup.wolfTacticSupport", { seat: jumpWolfSeat })
+              : t("prompts.badge.signup.wolfTacticObserve");
+          }
+        }
       }
     }
     
