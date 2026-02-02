@@ -22,7 +22,7 @@ import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom } from "@/store/settings";
-import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled, validateApiKeyBalance } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 
 type SponsorCardProps = {
@@ -518,6 +518,8 @@ export function WelcomeScreen({
     }
   };
 
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+
   const handleConfirm = async () => {
     if (!canConfirm) return;
     if (isStartingRef.current) return;
@@ -529,6 +531,38 @@ export function WelcomeScreen({
     }
 
     const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
+
+    if (hasUserKey) {
+      setIsValidatingKey(true);
+      try {
+        const validation = await validateApiKeyBalance();
+        if (!validation.valid) {
+          setIsValidatingKey(false);
+          const isQuotaError = validation.errorCode === "insufficient_quota";
+          if (isQuotaError) {
+            toast.error(t("welcome.toast.keyExhausted.title"), {
+              description: t("welcome.toast.keyExhausted.description"),
+              duration: 8000,
+            });
+          } else {
+            toast.error(t("welcome.toast.keyInvalid.title"), {
+              description: validation.error || t("welcome.toast.keyInvalid.description"),
+              duration: 6000,
+            });
+          }
+          setIsUserProfileOpen(true);
+          return;
+        }
+      } catch {
+        setIsValidatingKey(false);
+        toast.error(t("welcome.toast.keyValidationFailed.title"), {
+          description: t("welcome.toast.keyValidationFailed.description"),
+        });
+        return;
+      }
+      setIsValidatingKey(false);
+    }
+
     if (!hasUserKey && credits !== null && credits <= 0) {
       setIsShareOpen(true);
       toast(t("welcome.toast.noCredits.title"), { description: t("welcome.toast.noCredits.description") });

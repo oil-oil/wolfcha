@@ -118,6 +118,18 @@
       "creditFail": {
         "title": "Failed to deduct credits",
         "description": "Share an invite to earn more credits."
+      },
+      "keyExhausted": {
+        "title": "API Key balance exhausted",
+        "description": "Please top up at the respective platform (zenmux.ai or Alibaba Cloud Dashscope) before starting the game."
+      },
+      "keyInvalid": {
+        "title": "API Key validation failed",
+        "description": "Please check if your API Key is configured correctly."
+      },
+      "keyValidationFailed": {
+        "title": "Validation request failed",
+        "description": "Network error, please try again later."
       }
     },
     "dev": {
@@ -1889,7 +1901,11 @@
     "seerResultLabel": "Check result",
     "seerResultText": "Seat {seat} {name} is {result}",
     "werewolfResult": "werewolf",
-    "goodResult": "good"
+    "goodResult": "good",
+    "quotaExhausted": {
+      "title": "API Key balance exhausted",
+      "description": "Game cannot continue. Please top up at the respective platform and restart the game."
+    }
   },
   "customKey": {
     "title": "Use my own key",

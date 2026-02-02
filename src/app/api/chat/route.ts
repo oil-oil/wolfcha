@@ -214,6 +214,8 @@ async function runBatchItem(
     }
   }
 
+  const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim());
+
   const modelRefOverride = getModelRef(model);
   const normalizedTemperature =
     modelRefOverride?.temperature !== undefined
@@ -242,6 +244,9 @@ async function runBatchItem(
   }
 
   if (modelProvider === "dashscope") {
+    if (hasAnyCustomKeyHeader && !headerDashscopeKey) {
+      return { ok: false, status: 401, error: "已启用自定义 Key，但未提供百炼 API Key（已拒绝回退到系统 Key）" };
+    }
     const dashscopeApiKey = headerDashscopeKey || process.env.DASHSCOPE_API_KEY;
     if (!dashscopeApiKey) {
       return { ok: false, status: 500, error: "DASHSCOPE_API_KEY not configured on server" };
@@ -304,6 +309,10 @@ async function runBatchItem(
 
     const result = await response.json();
     return { ok: true, data: result };
+  }
+
+  if (hasAnyCustomKeyHeader && !headerApiKey) {
+    return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 Zenmux API Key（已拒绝回退到系统 Key）" };
   }
 
   const apiKey = headerApiKey || process.env.ZENMUX_API_KEY;
@@ -400,6 +409,7 @@ export async function POST(request: NextRequest) {
     }
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
+    const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim());
     const isDefaultModel = AVAILABLE_MODELS.some((ref) => ref.model === model);
 
     const modelRefOverride = getModelRef(model);
@@ -451,6 +461,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (modelProvider === "dashscope") {
+      if (hasAnyCustomKeyHeader && !headerDashscopeKey) {
+        return NextResponse.json(
+          { error: "已启用自定义 Key，但未提供百炼 API Key（已拒绝回退到系统 Key）" },
+          { status: 401 }
+        );
+      }
+
       const dashscopeApiKey = headerDashscopeKey || process.env.DASHSCOPE_API_KEY;
       if (!dashscopeApiKey) {
         return NextResponse.json(
@@ -532,6 +549,13 @@ export async function POST(request: NextRequest) {
 
       const result = await response.json();
       return NextResponse.json(result);
+    }
+
+    if (hasAnyCustomKeyHeader && !headerApiKey) {
+      return NextResponse.json(
+        { error: "已启用自定义 Key，但未提供 Zenmux API Key（已拒绝回退到系统 Key）" },
+        { status: 401 }
+      );
     }
 
     const apiKey = headerApiKey || process.env.ZENMUX_API_KEY;

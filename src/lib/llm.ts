@@ -125,6 +125,22 @@ function parseRetryAfterMs(response: Response): number | null {
   return diff > 0 ? diff : null;
 }
 
+const QUOTA_EXHAUSTED_MARKER = "[QUOTA_EXHAUSTED]";
+
+function isQuotaExhaustedError(status: number, errorText: string): boolean {
+  if (status === 402) return true;
+  const lower = errorText.toLowerCase();
+  return (
+    lower.includes("insufficient") ||
+    lower.includes("quota") ||
+    lower.includes("balance") ||
+    lower.includes("余额") ||
+    lower.includes("欠费") ||
+    lower.includes("arrearage") ||
+    (status === 401 && lower.includes("已启用自定义 key"))
+  );
+}
+
 function formatApiError(status: number, errorText: string): string {
   let msg = `API error: ${status}`;
   try {
@@ -136,11 +152,19 @@ function formatApiError(status: number, errorText: string): string {
     if (typeof detailsMsg === "string" && detailsMsg.trim()) {
       msg = `${msg} - ${detailsMsg.trim()}`;
     }
-    return msg;
   } catch {
     const trimmed = (errorText || "").trim();
-    return trimmed ? `${msg} - ${trimmed.slice(0, 600)}` : msg;
+    msg = trimmed ? `${msg} - ${trimmed.slice(0, 600)}` : msg;
   }
+
+  if (isQuotaExhaustedError(status, errorText)) {
+    return `${QUOTA_EXHAUSTED_MARKER} ${msg}`;
+  }
+  return msg;
+}
+
+export function isQuotaExhaustedMessage(message: string): boolean {
+  return message.includes(QUOTA_EXHAUSTED_MARKER);
 }
 
 async function sleep(ms: number): Promise<void> {

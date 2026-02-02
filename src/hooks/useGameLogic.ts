@@ -51,6 +51,7 @@ import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { isCustomKeyEnabled } from "@/lib/api-keys";
+import { isQuotaExhaustedMessage } from "@/lib/llm";
 import { aiLogger } from "@/lib/ai-logger";
 
 // 子模块
@@ -1293,7 +1294,12 @@ export function useGameLogic() {
       }
     } catch (error) {
       const msg = String(error);
-      if (msg.includes("ZenMux API error: 401") || msg.includes(" 401")) {
+      if (isQuotaExhaustedMessage(msg)) {
+        toast.error(t("gameLogicMessages.quotaExhausted.title"), {
+          description: t("gameLogicMessages.quotaExhausted.description"),
+          duration: 10000,
+        });
+      } else if (msg.includes("ZenMux API error: 401") || msg.includes(" 401")) {
         toast.error(t("gameLogicMessages.zenmux401"));
       } else {
         toast.error(t("gameLogicMessages.requestFailed"), { description: msg });

@@ -225,3 +225,57 @@ export function clearApiKeys() {
   window.localStorage.removeItem(VALIDATED_ZENMUX_KEY_STORAGE);
   window.localStorage.removeItem(VALIDATED_DASHSCOPE_KEY_STORAGE);
 }
+
+export interface KeyValidationResult {
+  valid: boolean;
+  error?: string;
+  errorCode?: string;
+}
+
+export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
+  if (!isCustomKeyEnabled()) {
+    return { valid: true };
+  }
+
+  const zenmuxKey = getZenmuxApiKey();
+  const dashscopeKey = getDashscopeApiKey();
+
+  if (!zenmuxKey && !dashscopeKey) {
+    return { valid: false, error: "未配置任何 API Key", errorCode: "no_key" };
+  }
+
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (zenmuxKey) {
+      headers["X-Zenmux-Api-Key"] = zenmuxKey;
+    }
+    if (dashscopeKey) {
+      headers["X-Dashscope-Api-Key"] = dashscopeKey;
+    }
+
+    const response = await fetch("/api/validate-key", {
+      method: "POST",
+      headers,
+    });
+
+    const data = await response.json();
+
+    if (data.valid) {
+      return { valid: true };
+    }
+
+    return {
+      valid: false,
+      error: data.error || "API Key 验证失败",
+      errorCode: data.errorCode || "unknown",
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: `验证请求失败: ${String(error)}`,
+      errorCode: "network_error",
+    };
+  }
+}

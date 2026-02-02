@@ -118,6 +118,18 @@
       "creditFail": {
         "title": "扣除额度失败",
         "description": "请分享邀请获取更多额度。"
+      },
+      "keyExhausted": {
+        "title": "API Key 余额已耗尽",
+        "description": "请前往对应平台（zenmux.ai 或阿里云百炼）充值后再开始游戏。"
+      },
+      "keyInvalid": {
+        "title": "API Key 验证失败",
+        "description": "请检查您的 API Key 是否正确配置。"
+      },
+      "keyValidationFailed": {
+        "title": "验证请求失败",
+        "description": "网络异常，请稍后重试。"
       }
     },
     "dev": {
@@ -1889,7 +1901,11 @@
     "seerResultLabel": "查验结果",
     "seerResultText": "{seat}号 {name} 是{result}",
     "werewolfResult": "狼人",
-    "goodResult": "好人"
+    "goodResult": "好人",
+    "quotaExhausted": {
+      "title": "API Key 余额已耗尽",
+      "description": "游戏无法继续，请前往对应平台充值后重新开始游戏。"
+    }
   },
   "customKey": {
     "title": "用我自己的 key 玩",
