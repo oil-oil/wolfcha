@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MarketingPageWrapper } from "@/components/seo/MarketingPageWrapper";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -14,11 +15,19 @@ import {
   modelLandingKeys,
   type ModelLandingKey,
 } from "@/components/seo/landing/modelLandingData";
+import {
+  getModelComparisonData,
+  modelComparisonKeys,
+  type ModelComparisonKey,
+} from "@/components/seo/landing/modelComparisonData";
 
 export const dynamicParams = false;
 
+// Generate params for both single model pages and comparison pages
 export function generateStaticParams() {
-  return modelLandingKeys.map((model) => ({ model }));
+  const singleModelParams = modelLandingKeys.map((model) => ({ model }));
+  const comparisonParams = modelComparisonKeys.map((comparison) => ({ model: comparison }));
+  return [...singleModelParams, ...comparisonParams];
 }
 
 function buildFaqJsonLd({
@@ -68,12 +77,66 @@ function buildSoftwareAppJsonLd({
   };
 }
 
+function buildComparisonJsonLd({
+  url,
+  modelA,
+  modelB,
+  description,
+}: {
+  url: string;
+  modelA: string;
+  modelB: string;
+  description: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    name: `${modelA} vs ${modelB} in Werewolf`,
+    description,
+    url,
+    articleSection: "AI Model Comparison",
+    about: [
+      { "@type": "Thing", name: modelA },
+      { "@type": "Thing", name: modelB },
+    ],
+  };
+}
+
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ model: ModelLandingKey }>;
+  params: Promise<{ model: string }>;
 }): Promise<Metadata> {
   const { model } = await params;
+  
+  // Check if it's a comparison page
+  const comparisonData = getModelComparisonData(model);
+  if (comparisonData) {
+    const canonical = `https://wolf-cha.com/models/${comparisonData.key}`;
+    const title = `${comparisonData.modelA.name} vs ${comparisonData.modelB.name} — AI Werewolf Comparison | Wolfcha`;
+    
+    return {
+      title,
+      description: comparisonData.heroDescription,
+      alternates: { canonical },
+      openGraph: {
+        title,
+        description: comparisonData.heroDescription,
+        url: canonical,
+        type: "article",
+        images: [
+          {
+            url: "https://wolf-cha.com/og-image.png",
+            width: 1200,
+            height: 630,
+            alt: "Wolfcha - AI Werewolf Game",
+          },
+        ],
+      },
+    };
+  }
+  
+  // Single model page
   const data = getModelLandingData(model);
   if (!data) {
     return {};
@@ -105,20 +168,185 @@ export async function generateMetadata({
   };
 }
 
-export default async function ModelLandingPage({
-  params,
-}: {
-  params: Promise<{ model: ModelLandingKey }>;
-}) {
-  const { model } = await params;
-  const data = getModelLandingData(model);
-
-  if (!data) {
-    notFound();
-  }
-
+// Comparison Page Component
+function ModelComparisonPage({ data }: { data: NonNullable<ReturnType<typeof getModelComparisonData>> }) {
   const canonical = `https://wolf-cha.com/models/${data.key}`;
+  
+  return (
+    <MarketingPageWrapper>
+      <JsonLd id={`faq-jsonld-${data.key}`} data={buildFaqJsonLd({ url: canonical, items: data.faqs })} />
+      <JsonLd
+        id={`comparison-jsonld-${data.key}`}
+        data={buildComparisonJsonLd({
+          url: canonical,
+          modelA: data.modelA.name,
+          modelB: data.modelB.name,
+          description: data.heroDescription,
+        })}
+      />
 
+      <LandingHero
+        title={data.title}
+        subtitle={data.tagline}
+        description={data.heroDescription}
+        primaryCta={{ href: "/", label: "Play now — free" }}
+        secondaryCta={{ href: "/ai-models", label: "All AI models" }}
+      />
+
+      {/* Model Overview Cards */}
+      <LandingSection
+        id="models-overview"
+        title="The contenders"
+        subtitle="Two AI models with distinct approaches to Werewolf."
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          {[data.modelA, data.modelB].map((model) => (
+            <Link
+              key={model.key}
+              href={`/models/${model.key}`}
+              className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6 transition-colors hover:bg-[var(--bg-hover)]"
+            >
+              <div className="flex items-center gap-4">
+                <Image src={model.logo} alt={model.name} width={48} height={48} />
+                <div>
+                  <div className="text-xl font-bold text-[var(--text-primary)]">{model.name}</div>
+                  <div className="text-sm text-[var(--text-muted)]">{model.company}</div>
+                </div>
+              </div>
+              <div className="mt-4 text-sm font-medium text-[var(--color-gold)]">{model.style}</div>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase text-[var(--text-muted)]">Strengths</div>
+                <ul className="mt-2 space-y-1">
+                  {model.strengths.map((s) => (
+                    <li key={s} className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                      <span className="text-green-500">✓</span> {s}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="mt-4">
+                <div className="text-xs font-semibold uppercase text-[var(--text-muted)]">Best roles</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {model.bestRoles.map((role) => (
+                    <span
+                      key={role}
+                      className="rounded-full bg-[var(--bg-secondary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
+                    >
+                      {role}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </LandingSection>
+
+      {/* Comparison Table */}
+      <LandingSection
+        id="comparison"
+        title="Head-to-head comparison"
+        subtitle="How they differ across key dimensions."
+      >
+        <div className="overflow-x-auto rounded-xl border border-[var(--border-color)]">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-[var(--border-color)] bg-[var(--bg-secondary)]">
+              <tr>
+                <th className="px-4 py-3 font-semibold text-[var(--text-primary)]">Trait</th>
+                <th className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Image src={data.modelA.logo} alt={data.modelA.name} width={20} height={20} />
+                    <span className="font-semibold text-[var(--text-primary)]">{data.modelA.name}</span>
+                  </div>
+                </th>
+                <th className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Image src={data.modelB.logo} alt={data.modelB.name} width={20} height={20} />
+                    <span className="font-semibold text-[var(--text-primary)]">{data.modelB.name}</span>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)] bg-[var(--bg-card)]">
+              {data.comparisonTable.map((row) => (
+                <tr key={row.trait}>
+                  <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{row.trait}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{row.modelA}</td>
+                  <td className="px-4 py-3 text-[var(--text-secondary)]">{row.modelB}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </LandingSection>
+
+      {/* Same Scenario Dialogues */}
+      <LandingSection
+        id="same-scenario"
+        title="Same scenario, different responses"
+        subtitle="See how each model reacts to identical situations."
+      >
+        <LandingDialogueExamples examples={data.sameScenarioDialogues} />
+      </LandingSection>
+
+      {/* Verdict */}
+      <LandingSection
+        id="verdict"
+        title="Which should you choose?"
+        subtitle="Recommendations based on your playstyle."
+      >
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6">
+            <div className="flex items-center gap-3">
+              <Image src={data.modelA.logo} alt={data.modelA.name} width={32} height={32} />
+              <div className="text-lg font-bold text-[var(--text-primary)]">Choose {data.modelA.name} if...</div>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-[var(--text-secondary)]">{data.verdict.pickA}</p>
+          </div>
+          <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6">
+            <div className="flex items-center gap-3">
+              <Image src={data.modelB.logo} alt={data.modelB.name} width={32} height={32} />
+              <div className="text-lg font-bold text-[var(--text-primary)]">Choose {data.modelB.name} if...</div>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-[var(--text-secondary)]">{data.verdict.pickB}</p>
+          </div>
+        </div>
+        <div className="mt-6 rounded-xl border border-[var(--color-gold)] bg-[var(--glass-bg)] p-6">
+          <div className="text-lg font-bold text-[var(--color-gold)]">The bottom line</div>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{data.verdict.summary}</p>
+        </div>
+      </LandingSection>
+
+      {/* FAQ */}
+      <LandingSection
+        id="faq"
+        title="Frequently asked questions"
+        subtitle={`Common questions about ${data.modelA.name} vs ${data.modelB.name}.`}
+      >
+        <LandingFaq items={data.faqs} />
+      </LandingSection>
+
+      {/* Related Links */}
+      <LandingSection id="related" title="Explore more" subtitle="Individual model profiles and other comparisons.">
+        <div className="grid gap-10 lg:grid-cols-2">
+          <LandingRelatedLinks title="Hub pages" links={data.related.hub} />
+          <LandingRelatedLinks title="Other models" links={data.related.models} />
+        </div>
+      </LandingSection>
+
+      <LandingCta
+        title="See these models compete"
+        description={`Start a game and watch ${data.modelA.name} and ${data.modelB.name} argue, bluff, and deduce in real-time.`}
+        primary={{ href: "/", label: "Play now — free" }}
+        secondary={{ href: "/ai-models", label: "Compare all models" }}
+      />
+    </MarketingPageWrapper>
+  );
+}
+
+// Single Model Page Component
+function SingleModelPage({ data }: { data: NonNullable<ReturnType<typeof getModelLandingData>> }) {
+  const canonical = `https://wolf-cha.com/models/${data.key}`;
   const relatedHub = data.related.hub;
   const relatedModels = data.related.models.filter((l) => l.href !== `/models/${data.key}`);
 
@@ -269,4 +497,26 @@ export default async function ModelLandingPage({
       />
     </MarketingPageWrapper>
   );
+}
+
+export default async function ModelPage({
+  params,
+}: {
+  params: Promise<{ model: string }>;
+}) {
+  const { model } = await params;
+  
+  // Check if it's a comparison page first
+  const comparisonData = getModelComparisonData(model);
+  if (comparisonData) {
+    return <ModelComparisonPage data={comparisonData} />;
+  }
+  
+  // Then check for single model page
+  const modelData = getModelLandingData(model);
+  if (modelData) {
+    return <SingleModelPage data={modelData} />;
+  }
+
+  notFound();
 }

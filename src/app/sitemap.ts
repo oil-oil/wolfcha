@@ -2,6 +2,9 @@ import { MetadataRoute } from "next";
 import { roleLandingKeys } from "@/components/seo/landing/roleLandingData";
 import { soloLandingKeys } from "@/components/seo/landing/soloLandingData";
 import { modelLandingKeys } from "@/components/seo/landing/modelLandingData";
+import { modelComparisonKeys } from "@/components/seo/landing/modelComparisonData";
+import { experienceLandingKeys } from "@/components/seo/landing/experienceLandingData";
+import { gameComparisonKeys } from "@/components/seo/landing/gameComparisonData";
 
 // Guide pages for SEO (18 individual guides + index)
 const guidePages = [
@@ -31,6 +34,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
   return [
+    // Home
     {
       url: baseUrl,
       lastModified,
@@ -43,6 +47,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.95,
     },
+    // Hub pages
     {
       url: `${baseUrl}/ai-werewolf`,
       lastModified,
@@ -67,32 +72,61 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.8,
     },
+    // Roles index page
+    {
+      url: `${baseUrl}/roles`,
+      lastModified,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    // Role landing pages (5)
     ...roleLandingKeys.map((role) => ({
       url: `${baseUrl}/roles/${role}`,
       lastModified,
       changeFrequency: "monthly" as const,
       priority: 0.75,
     })),
-    // Guide pages
+    // Guide pages (19)
     ...guidePages.map((guide) => ({
       url: guide ? `${baseUrl}/guides/${guide}` : `${baseUrl}/guides`,
       lastModified,
       changeFrequency: "monthly" as const,
-      priority: guide ? 0.7 : 0.8, // index gets higher priority
+      priority: guide ? 0.7 : 0.8,
     })),
-    // Solo landing pages
+    // Solo landing pages (10)
     ...soloLandingKeys.map((slug) => ({
       url: `${baseUrl}/${slug}`,
       lastModified,
       changeFrequency: "monthly" as const,
       priority: 0.75,
     })),
-    // Model landing pages
+    // Model landing pages (10)
     ...modelLandingKeys.map((model) => ({
       url: `${baseUrl}/models/${model}`,
       lastModified,
       changeFrequency: "monthly" as const,
       priority: 0.7,
+    })),
+    // Model comparison pages (10)
+    ...modelComparisonKeys.map((comparison) => ({
+      url: `${baseUrl}/models/${comparison}`,
+      lastModified,
+      changeFrequency: "monthly" as const,
+      priority: 0.65,
+    })),
+    // Experience landing pages (8)
+    ...experienceLandingKeys.map((slug) => ({
+      url: `${baseUrl}/${slug}`,
+      lastModified,
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
+    // Game comparison pages (8)
+    ...gameComparisonKeys.map((slug) => ({
+      url: `${baseUrl}/${slug}`,
+      lastModified,
+      changeFrequency: "monthly" as const,
+      priority: 0.65,
     })),
   ];
 }

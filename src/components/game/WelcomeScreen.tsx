@@ -519,8 +519,12 @@ export function WelcomeScreen({
   };
 
   const handleConfirm = async () => {
-    if (!canConfirm) return;
-    if (isStartingRef.current) return;
+    if (!canConfirm) {
+      return;
+    }
+    if (isStartingRef.current) {
+      return;
+    }
 
     if (!user) {
       setIsAuthOpen(true);
