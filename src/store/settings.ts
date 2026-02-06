@@ -1,6 +1,6 @@
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import type { DifficultyLevel } from "@/types/game";
+import type { DifficultyLevel, Role } from "@/types/game";
 
 export interface AudioSettings {
   bgmVolume: number;
@@ -68,6 +68,23 @@ export const playerCountAtom = atom(
     const prev = normalizePlayerCount(get(rawPlayerCountAtom));
     const next = typeof update === "function" ? update(prev) : update;
     set(rawPlayerCountAtom, normalizePlayerCount(next));
+  }
+);
+
+// Preferred role setting (empty string means random)
+const ALL_ROLES: Role[] = ["Villager", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Idiot"];
+
+const normalizePreferredRole = (value: string): Role | "" =>
+  ALL_ROLES.includes(value as Role) ? (value as Role) : "";
+
+const rawPreferredRoleAtom = atomWithStorage<Role | "">("wolfcha.settings.preferred_role", "");
+
+export const preferredRoleAtom = atom(
+  (get) => normalizePreferredRole(get(rawPreferredRoleAtom)),
+  (get, set, update: (Role | "") | ((prev: Role | "") => Role | "")) => {
+    const prev = normalizePreferredRole(get(rawPreferredRoleAtom));
+    const next = typeof update === "function" ? update(prev) : update;
+    set(rawPreferredRoleAtom, normalizePreferredRole(next));
   }
 );
 

@@ -41,7 +41,7 @@ export const DELAY_CONFIG = {
 export const ROLE_CONFIG = {
   /** 10人局角色配置 */
   STANDARD_ROLES: [
-    "Werewolf", "Werewolf", "Werewolf",
+    "Werewolf", "Werewolf", "WhiteWolfKing",
     "Seer",
     "Witch",
     "Hunter",
@@ -72,7 +72,7 @@ export const PHASE_CATEGORIES = {
     "DAY_RESOLVE",
   ] as const,
   SPEECH_PHASES: ["DAY_SPEECH", "DAY_LAST_WORDS", "DAY_BADGE_SPEECH", "DAY_PK_SPEECH"] as const,
-  SPECIAL_PHASES: ["BADGE_TRANSFER", "HUNTER_SHOOT", "GAME_END"] as const,
+  SPECIAL_PHASES: ["BADGE_TRANSFER", "HUNTER_SHOOT", "WHITE_WOLF_KING_BOOM", "GAME_END"] as const,
 } as const;
 
 import { getI18n } from "@/i18n/translator";
@@ -83,6 +83,8 @@ export function getRoleName(role: string): string {
   switch (role) {
     case "Werewolf":
       return t("roles.werewolf");
+    case "WhiteWolfKing":
+      return t("roles.whiteWolfKing");
     case "Seer":
       return t("roles.seer");
     case "Witch":
@@ -91,6 +93,8 @@ export function getRoleName(role: string): string {
       return t("roles.hunter");
     case "Guard":
       return t("roles.guard");
+    case "Idiot":
+      return t("roles.idiot");
     default:
       return t("roles.villager");
   }

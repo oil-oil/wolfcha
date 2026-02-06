@@ -6,6 +6,7 @@
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type { GameState, Phase, Player, Role } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { createInitialGameState } from "@/lib/game-master";
 import { getI18n } from "@/i18n/translator";
 
@@ -120,11 +121,11 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     description: "phase.nightWolf.description",
     humanDescription: (hp) => {
       const { t } = getI18n();
-      return hp?.role === "Werewolf" ? t("phase.nightWolf.human") : t("phase.nightWolf.description");
+      return hp ? isWolfRole(hp.role) ? t("phase.nightWolf.human") : t("phase.nightWolf.description") : t("phase.nightWolf.description");
     },
-    requiresHumanInput: (hp) => hp?.alive && hp?.role === "Werewolf" || false,
+    requiresHumanInput: (hp) => hp?.alive && isWolfRole(hp?.role ?? "Villager") || false,
     canSelectPlayer: (hp, target) => {
-      if (!hp || hp.role !== "Werewolf" || !target.alive) return false;
+      if (!hp || !isWolfRole(hp.role) || !target.alive) return false;
       // 狼人可以刀任何存活玩家（包括队友和自己）
       return true;
     },
@@ -284,6 +285,8 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     },
     requiresHumanInput: (hp, gs) => {
       if (!hp?.alive) return false;
+      // Revealed Idiot cannot vote
+      if (hp.role === "Idiot" && gs.roleAbilities.idiotRevealed) return false;
       // PK投票时，参与PK的人不需要投票
       if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
         if (gs.pkTargets.includes(hp.seat)) return false;
@@ -292,6 +295,8 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     },
     canSelectPlayer: (hp, target, gs) => {
       if (!hp?.alive || target.isHuman || !target.alive) return false;
+      // Revealed Idiot cannot vote
+      if (hp.role === "Idiot" && gs.roleAbilities.idiotRevealed) return false;
       if (typeof gs.votes[hp.playerId] === "number") return false;
       // PK投票时，参与PK的人不能投票
       if (gs.pkSource === "vote" && Array.isArray(gs.pkTargets) && gs.pkTargets.length > 0) {
@@ -343,6 +348,20 @@ export const PHASE_CONFIGS: Record<Phase, PhaseConfig> = {
     requiresHumanInput: (hp, gs) => hp?.role === "Hunter" && gs.roleAbilities.hunterCanShoot || false,
     canSelectPlayer: (hp, target) => {
       if (!hp || hp.role !== "Hunter" || !target.alive || target.isHuman) return false;
+      return true;
+    },
+    actionType: "night_action",
+  },
+  WHITE_WOLF_KING_BOOM: {
+    phase: "WHITE_WOLF_KING_BOOM",
+    description: "phase.whiteWolfKingBoom.description",
+    humanDescription: (hp) => {
+      const { t } = getI18n();
+      return hp?.role === "WhiteWolfKing" ? t("phase.whiteWolfKingBoom.human") : t("phase.whiteWolfKingBoom.description");
+    },
+    requiresHumanInput: (hp, gs) => hp?.role === "WhiteWolfKing" && hp?.alive && !gs.roleAbilities.whiteWolfKingBoomUsed || false,
+    canSelectPlayer: (hp, target) => {
+      if (!hp || hp.role !== "WhiteWolfKing" || !target.alive || target.isHuman) return false;
       return true;
     },
     actionType: "night_action",
@@ -486,7 +505,7 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   DAY_BADGE_SPEECH: ["DAY_BADGE_ELECTION"],
   DAY_BADGE_ELECTION: ["DAY_PK_SPEECH", "DAY_SPEECH"],
   DAY_PK_SPEECH: ["DAY_BADGE_ELECTION", "DAY_VOTE"],
-  DAY_SPEECH: ["DAY_VOTE"],
+  DAY_SPEECH: ["DAY_VOTE", "WHITE_WOLF_KING_BOOM"],
   DAY_VOTE: ["DAY_RESOLVE"],
   DAY_RESOLVE: ["DAY_PK_SPEECH", "DAY_LAST_WORDS", "BADGE_TRANSFER", "NIGHT_START", "GAME_END"],
   DAY_LAST_WORDS: ["NIGHT_START", "HUNTER_SHOOT", "BADGE_TRANSFER", "GAME_END"],
@@ -494,6 +513,7 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   // 特殊阶段
   BADGE_TRANSFER: ["DAY_LAST_WORDS", "HUNTER_SHOOT", "NIGHT_START", "DAY_SPEECH", "GAME_END"],
   HUNTER_SHOOT: ["DAY_START", "NIGHT_START", "BADGE_TRANSFER", "GAME_END"],
+  WHITE_WOLF_KING_BOOM: ["NIGHT_START", "GAME_END"],
   GAME_END: ["LOBBY"], // 允许重新开始
 };
 
@@ -547,6 +567,7 @@ export const roleNeedsActionAtom = atom((get) => {
       case "Guard":
         return true; // 守卫每晚都可以行动
       case "Werewolf":
+      case "WhiteWolfKing":
         return true; // 狼人每晚都要行动
       case "Witch":
         return !gameState.roleAbilities.witchHealUsed || !gameState.roleAbilities.witchPoisonUsed;

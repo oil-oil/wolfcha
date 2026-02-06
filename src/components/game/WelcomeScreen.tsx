@@ -21,7 +21,7 @@ import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits } from "@/hooks/useCredits";
-import { difficultyAtom, playerCountAtom } from "@/store/settings";
+import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
 import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 
@@ -110,12 +110,12 @@ function SponsorCard({
 function buildDefaultRoles(playerCount: number): Role[] {
   switch (playerCount) {
     case 8:
-      return ["Werewolf", "Werewolf", "Werewolf", "Seer", "Witch", "Hunter", "Villager", "Villager"];
+      return ["Werewolf", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Villager", "Villager"];
     case 9:
       return [
         "Werewolf",
         "Werewolf",
-        "Werewolf",
+        "WhiteWolfKing",
         "Seer",
         "Witch",
         "Hunter",
@@ -128,12 +128,12 @@ function buildDefaultRoles(playerCount: number): Role[] {
         "Werewolf",
         "Werewolf",
         "Werewolf",
-        "Werewolf",
+        "WhiteWolfKing",
         "Seer",
         "Witch",
         "Hunter",
         "Guard",
-        "Villager",
+        "Idiot",
         "Villager",
         "Villager",
       ];
@@ -142,12 +142,12 @@ function buildDefaultRoles(playerCount: number): Role[] {
         "Werewolf",
         "Werewolf",
         "Werewolf",
-        "Werewolf",
+        "WhiteWolfKing",
         "Seer",
         "Witch",
         "Hunter",
         "Guard",
-        "Villager",
+        "Idiot",
         "Villager",
         "Villager",
         "Villager",
@@ -157,7 +157,7 @@ function buildDefaultRoles(playerCount: number): Role[] {
       return [
         "Werewolf",
         "Werewolf",
-        "Werewolf",
+        "WhiteWolfKing",
         "Seer",
         "Witch",
         "Hunter",
@@ -170,12 +170,15 @@ function buildDefaultRoles(playerCount: number): Role[] {
 }
 
 function getRoleCountConfig(playerCount: number) {
-  const wolfCount = playerCount >= 11 ? 4 : 3;
+  const regularWolfCount = playerCount >= 11 ? 3 : 2;
+  const whiteWolfKingCount = 1;
+  const wolfCount = regularWolfCount + whiteWolfKingCount;
   const guardCount = playerCount >= 10 ? 1 : 0;
+  const idiotCount = playerCount >= 11 ? 1 : 0;
   const seerCount = 1;
   const witchCount = 1;
   const hunterCount = 1;
-  const godCount = seerCount + witchCount + hunterCount + guardCount;
+  const godCount = seerCount + witchCount + hunterCount + guardCount + idiotCount;
   const villagerCount = Math.max(0, playerCount - wolfCount - godCount);
   return {
     wolfCount,
@@ -183,6 +186,7 @@ function getRoleCountConfig(playerCount: number) {
     seerCount,
     witchCount,
     hunterCount,
+    idiotCount,
     villagerCount,
   };
 }
@@ -290,6 +294,7 @@ export function WelcomeScreen({
   const customCharacters = useCustomCharacters(user);
   const [difficulty, setDifficulty] = useAtom(difficultyAtom);
   const [playerCount, setPlayerCount] = useAtom(playerCountAtom);
+  const [preferredRole, setPreferredRole] = useAtom(preferredRoleAtom);
   const [githubStars, setGithubStars] = useState<number | null>(null);
 
   useEffect(() => {
@@ -344,15 +349,17 @@ export function WelcomeScreen({
   const showDevTools =
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
 
-  const roleOptions: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
+  const roleOptions: Role[] = ["Villager", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Idiot"];
   const roleLabels = useMemo<Record<Role, string>>(
     () => ({
       Villager: t("roles.villager"),
       Werewolf: t("roles.werewolf"),
+      WhiteWolfKing: t("roles.whiteWolfKing"),
       Seer: t("roles.seer"),
       Witch: t("roles.witch"),
       Hunter: t("roles.hunter"),
       Guard: t("roles.guard"),
+      Idiot: t("roles.idiot"),
     }),
     [t]
   );
@@ -388,6 +395,8 @@ export function WelcomeScreen({
       Witch: 0,
       Hunter: 0,
       Guard: 0,
+      Idiot: 0,
+      WhiteWolfKing: 0,
     };
     for (const r of fixedRoles) {
       counts[r as Role] += 1;
@@ -572,6 +581,7 @@ export function WelcomeScreen({
         difficulty,
         playerCount,
         customCharacters: selectedCustomChars,
+        preferredRole: preferredRole || undefined,
       });
     }, 800);
 
@@ -633,6 +643,8 @@ export function WelcomeScreen({
           onOpenChange={setIsSetupOpen}
           playerCount={playerCount}
           onPlayerCountChange={setPlayerCount}
+          preferredRole={preferredRole}
+          onPreferredRoleChange={setPreferredRole}
           isGenshinMode={isGenshinMode}
           onGenshinModeChange={onGenshinModeChange}
           isSpectatorMode={isSpectatorMode}

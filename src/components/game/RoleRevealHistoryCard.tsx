@@ -8,11 +8,13 @@ import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { useTranslations } from "next-intl";
 import {
   WerewolfIcon,
+  WhiteWolfKingIcon,
   SeerIcon,
   WitchIcon,
   HunterIcon,
   GuardIcon,
   VillagerIcon,
+  IdiotIcon,
 } from "@/components/icons/FlatIcons";
 
 export type RoleRevealEntry = {
@@ -39,10 +41,12 @@ const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) =>
 
 const ROLE_META: Record<Role, { Icon: ComponentType<{ size?: number; className?: string }>; color: string; bg: string }> = {
   Werewolf: { Icon: WerewolfIcon, color: "var(--color-wolf)", bg: "var(--color-wolf-bg)" },
+  WhiteWolfKing: { Icon: WhiteWolfKingIcon, color: "var(--color-wolf)", bg: "var(--color-wolf-bg)" },
   Seer: { Icon: SeerIcon, color: "var(--color-seer)", bg: "var(--color-seer-bg)" },
   Witch: { Icon: WitchIcon, color: "var(--color-witch)", bg: "var(--color-witch-bg)" },
   Hunter: { Icon: HunterIcon, color: "var(--color-hunter)", bg: "var(--color-hunter-bg)" },
   Guard: { Icon: GuardIcon, color: "var(--color-guard)", bg: "var(--color-guard-bg)" },
+  Idiot: { Icon: IdiotIcon, color: "var(--color-villager)", bg: "var(--color-villager-bg)" },
   Villager: { Icon: VillagerIcon, color: "var(--color-villager)", bg: "var(--color-villager-bg)" },
 };
 
@@ -56,10 +60,12 @@ export function RoleRevealHistoryCard({
   const t = useTranslations();
   const roleLabels: Record<Role, string> = {
     Werewolf: t("roles.werewolf"),
+    WhiteWolfKing: t("roles.whiteWolfKing"),
     Seer: t("roles.seer"),
     Witch: t("roles.witch"),
     Hunter: t("roles.hunter"),
     Guard: t("roles.guard"),
+    Idiot: t("roles.idiot"),
     Villager: t("roles.villager"),
   };
 

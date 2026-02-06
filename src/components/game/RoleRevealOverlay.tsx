@@ -4,11 +4,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   WerewolfIcon,
+  WhiteWolfKingIcon,
   SeerIcon,
   WitchIcon,
   HunterIcon,
   GuardIcon,
   VillagerIcon,
+  IdiotIcon,
   NightIcon,
 } from "@/components/icons/FlatIcons";
 import type { Phase, Player } from "@/types/game";
@@ -83,6 +85,26 @@ function getRoleMeta(role: Player["role"], t: ReturnType<typeof useTranslations>
         abilities: t.raw("roleReveal.roles.guard.abilities"),
         tips: t.raw("roleReveal.roles.guard.tips"),
       };
+    case "Idiot":
+      return {
+        title: t("roleReveal.roles.idiot.title"),
+        subtitle: t("roleReveal.roles.idiot.subtitle"),
+        color: "var(--color-villager)",
+        bg: "var(--color-villager-bg)",
+        Icon: IdiotIcon,
+        abilities: t.raw("roleReveal.roles.idiot.abilities"),
+        tips: t.raw("roleReveal.roles.idiot.tips"),
+      };
+    case "WhiteWolfKing":
+      return {
+        title: t("roleReveal.roles.whiteWolfKing.title"),
+        subtitle: t("roleReveal.roles.whiteWolfKing.subtitle"),
+        color: "var(--color-wolf)",
+        bg: "var(--color-wolf-bg)",
+        Icon: WhiteWolfKingIcon,
+        abilities: t.raw("roleReveal.roles.whiteWolfKing.abilities"),
+        tips: t.raw("roleReveal.roles.whiteWolfKing.tips"),
+      };
     default:
       return {
         title: t("roleReveal.roles.villager.title"),
@@ -101,6 +123,8 @@ function getNextStepText(role: Player["role"], phase: Phase, t: ReturnType<typeo
     switch (role) {
       case "Werewolf":
         return t("roleReveal.nextStep.werewolf");
+      case "WhiteWolfKing":
+        return t("roleReveal.nextStep.whiteWolfKing");
       case "Seer":
         return t("roleReveal.nextStep.seer");
       case "Witch":
@@ -109,6 +133,8 @@ function getNextStepText(role: Player["role"], phase: Phase, t: ReturnType<typeo
         return t("roleReveal.nextStep.guard");
       case "Hunter":
         return t("roleReveal.nextStep.hunter");
+      case "Idiot":
+        return t("roleReveal.nextStep.idiot");
       default:
         return t("roleReveal.nextStep.villager");
     }

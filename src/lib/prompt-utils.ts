@@ -1,4 +1,5 @@
 import type { DifficultyLevel, GameState, Player, DailySummaryVoteData } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
 import { getSystemMessages, getSystemPatterns } from "./game-texts";
@@ -13,6 +14,8 @@ export const getRoleText = (role: string) => {
   switch (role) {
     case "Werewolf":
       return t("promptUtils.roleText.werewolf");
+    case "WhiteWolfKing":
+      return t("promptUtils.roleText.whiteWolfKing");
     case "Seer":
       return t("promptUtils.roleText.seer");
     case "Witch":
@@ -21,6 +24,8 @@ export const getRoleText = (role: string) => {
       return t("promptUtils.roleText.hunter");
     case "Guard":
       return t("promptUtils.roleText.guard");
+    case "Idiot":
+      return t("promptUtils.roleText.idiot");
     default:
       return t("promptUtils.roleText.villager");
   }
@@ -31,6 +36,8 @@ export const getWinCondition = (role: string) => {
   switch (role) {
     case "Werewolf":
       return t("promptUtils.winCondition.werewolf");
+    case "WhiteWolfKing":
+      return t("promptUtils.winCondition.whiteWolfKing");
     case "Seer":
       return t("promptUtils.winCondition.seer");
     case "Witch":
@@ -39,6 +46,8 @@ export const getWinCondition = (role: string) => {
       return t("promptUtils.winCondition.hunter");
     case "Guard":
       return t("promptUtils.winCondition.guard");
+    case "Idiot":
+      return t("promptUtils.winCondition.idiot");
     default:
       return t("promptUtils.winCondition.villager");
   }
@@ -53,6 +62,8 @@ export const getRoleKnowHow = (role: string): string => {
   switch (role) {
     case "Werewolf":
       return t.raw("promptUtils.roleKnowHow.werewolf");
+    case "WhiteWolfKing":
+      return t.raw("promptUtils.roleKnowHow.whiteWolfKing");
     case "Seer":
       return t.raw("promptUtils.roleKnowHow.seer");
     case "Witch":
@@ -61,6 +72,8 @@ export const getRoleKnowHow = (role: string): string => {
       return t.raw("promptUtils.roleKnowHow.hunter");
     case "Guard":
       return t.raw("promptUtils.roleKnowHow.guard");
+    case "Idiot":
+      return t.raw("promptUtils.roleKnowHow.idiot");
     default:
       return t.raw("promptUtils.roleKnowHow.villager");
   }
@@ -106,8 +119,8 @@ export const buildSituationalStrategy = (state: GameState, player: Player): stri
     lines.push("</situational_tips>");
   }
   
-  if (player.role === "Werewolf") {
-    const aliveWolves = state.players.filter(p => p.role === "Werewolf" && p.alive);
+  if (isWolfRole(player.role)) {
+    const aliveWolves = state.players.filter(p => isWolfRole(p.role) && p.alive);
     const isLastWolf = aliveWolves.length === 1;
     
     lines.push("<situational_tips>");
@@ -170,7 +183,7 @@ export const buildDifficultySpeechHint = (_difficulty?: DifficultyLevel): string
 export const buildDifficultyDecisionHint = (_difficulty?: DifficultyLevel, role?: string): string => {
   const { t } = getI18n();
   const roleNote =
-    role === "Werewolf"
+    isWolfRole(role)
       ? t("promptUtils.difficultyDecision.roleNoteWerewolf")
       : t("promptUtils.difficultyDecision.roleNoteGood");
 
@@ -549,11 +562,11 @@ ${checks.join("\n")}
     }
   }
   
-  if (player.role === "Werewolf") {
+  if (isWolfRole(player.role)) {
     const teammates = state.players.filter(
-      (p) => p.role === "Werewolf" && p.alive && p.playerId !== player.playerId
+      (p) => isWolfRole(p.role) && p.alive && p.playerId !== player.playerId
     );
-    const allWolves = state.players.filter((p) => p.role === "Werewolf");
+    const allWolves = state.players.filter((p) => isWolfRole(p.role));
     const aliveWolves = allWolves.filter((p) => p.alive);
     const teammateList = teammates.length > 0 
       ? teammates.map((tm) => `${tm.seat + 1}号${tm.displayName}`).join("、")

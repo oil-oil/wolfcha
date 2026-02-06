@@ -6,6 +6,7 @@
  */
 
 import type { GameState, Phase, Player, Role } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { getI18n } from "@/i18n/translator";
 import { addSystemMessage, checkWinCondition } from "@/lib/game-master";
 
@@ -272,7 +273,7 @@ function analyzeForwardJump(
         });
       }
 
-      const wolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
+      const wolves = state.players.filter((p) => isWolfRole(p.role) && p.alive);
       const wolfTargetExisting =
         d === state.day
           ? (state.nightActions.wolfTarget ?? nightRecord.wolfTarget)
@@ -386,7 +387,7 @@ function createMissingTasksForWitch(state: GameState): MissingTask[] {
 
   const tasks: MissingTask[] = [];
 
-  const wolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
+  const wolves = state.players.filter((p) => isWolfRole(p.role) && p.alive);
   const wolfTargetForHeal =
     state.nightActions.wolfTarget ?? state.nightHistory?.[state.day]?.wolfTarget;
 
@@ -449,7 +450,7 @@ function createMissingTask(state: GameState, phase: Phase): MissingTask | null {
       };
     }
     case "NIGHT_WOLF_ACTION": {
-      const wolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
+      const wolves = state.players.filter((p) => isWolfRole(p.role) && p.alive);
       if (wolves.length === 0) return null;
       if (state.nightActions.wolfTarget !== undefined) return null;
       const { t } = getI18n();
@@ -901,7 +902,7 @@ function autoFillTask(state: GameState, task: MissingTask): GameState {
     const validTargets = alivePlayers.filter((p) => !p.isHuman && !checkedSeats.includes(p.seat));
     if (validTargets.length > 0) {
       const target = validTargets[Math.floor(Math.random() * validTargets.length)];
-      const isWolf = target.role === "Werewolf";
+      const isWolf = target.alignment === "wolf";
       const prev = (newState.nightHistory || {})[day] || {};
       newState.nightHistory = {
         ...(newState.nightHistory || {}),
@@ -992,7 +993,7 @@ function autoFillTask(state: GameState, task: MissingTask): GameState {
       );
       if (validTargets.length > 0) {
         const target = validTargets[Math.floor(Math.random() * validTargets.length)];
-        const isWolf = target.role === "Werewolf";
+        const isWolf = target.alignment === "wolf";
         newState.nightActions = {
           ...newState.nightActions,
           seerTarget: target.seat,
@@ -1185,7 +1186,7 @@ export function applySmartJumpWithFilledData(
       const seat = value as number;
       const targetPlayer = newState.players.find((p) => p.seat === seat);
       if (targetPlayer) {
-        const isWolf = targetPlayer.role === "Werewolf";
+        const isWolf = targetPlayer.alignment === "wolf";
         const prev = (newState.nightHistory || {})[day] || {};
         newState.nightHistory = {
           ...(newState.nightHistory || {}),
@@ -1254,7 +1255,7 @@ export function applySmartJumpWithFilledData(
         const seat = value as number;
         const targetPlayer = newState.players.find((p) => p.seat === seat);
         if (targetPlayer) {
-          const isWolf = targetPlayer.role === "Werewolf";
+          const isWolf = targetPlayer.alignment === "wolf";
           newState.nightActions = {
             ...newState.nightActions,
             seerTarget: seat,
@@ -1345,7 +1346,7 @@ function ensureNightResolvedForDay(state: GameState, day: number): GameState {
   const guard = state.players.find((p) => p.role === "Guard");
   const witch = state.players.find((p) => p.role === "Witch");
   const seer = state.players.find((p) => p.role === "Seer");
-  const wolves = state.players.filter((p) => p.role === "Werewolf");
+  const wolves = state.players.filter((p) => isWolfRole(p.role));
 
   const hasAliveGuard = guard ? aliveAtNightStart.has(guard.seat) : false;
   const hasAliveWitch = witch ? aliveAtNightStart.has(witch.seat) : false;
@@ -1500,7 +1501,7 @@ function ensureNightResolvedForDayFromHistory(state: GameState, day: number): Ga
   const guard = state.players.find((p) => p.role === "Guard");
   const witch = state.players.find((p) => p.role === "Witch");
   const seer = state.players.find((p) => p.role === "Seer");
-  const wolves = state.players.filter((p) => p.role === "Werewolf");
+  const wolves = state.players.filter((p) => isWolfRole(p.role));
 
   const hasAliveGuard = guard ? aliveAtNightStart.has(guard.seat) : false;
   const hasAliveWitch = witch ? aliveAtNightStart.has(witch.seat) : false;

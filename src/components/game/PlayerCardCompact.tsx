@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Microphone, Sparkle } from "@phosphor-icons/react";
 import type { Player, Role } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { cn } from "@/lib/utils";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { useTranslations } from "next-intl";
@@ -84,10 +85,10 @@ export function PlayerCardCompact({
     prevAliveRef.current = player.alive;
   }, [player.alive]);
   
-  const isWolfTeammate = humanPlayer?.role === "Werewolf" && 
-    player.role === "Werewolf" && 
+  const isWolfTeammate = humanPlayer && isWolfRole(humanPlayer.role) && 
+    isWolfRole(player.role) && 
     !player.isHuman;
-  const showWolfTeamBadge = humanPlayer?.role === "Werewolf" && player.role === "Werewolf";
+  const showWolfTeamBadge = humanPlayer && isWolfRole(humanPlayer.role) && isWolfRole(player.role);
   const selectionClass = (() => {
     if (!isSelected) return "";
     switch (selectionTone) {
@@ -116,6 +117,8 @@ export function PlayerCardCompact({
     Witch: t("roles.witch"),
     Hunter: t("roles.hunter"),
     Guard: t("roles.guard"),
+    Idiot: t("roles.idiot"),
+    WhiteWolfKing: t("roles.whiteWolfKing"),
     Villager: t("roles.villager"),
   }), [t]);
   const getRoleLabel = (role: Role) => roleLabels[role] ?? t("roles.villager");

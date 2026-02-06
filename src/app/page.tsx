@@ -29,6 +29,7 @@ import {
 import { useTypewriter } from "@/hooks/useTypewriter";
 import { useGameLogic } from "@/hooks/useGameLogic";
 import type { Player, Role } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { PHASE_CONFIGS } from "@/store/game-machine";
 import { getI18n } from "@/i18n/translator";
 import { getSystemMessages, getSystemPatterns } from "@/lib/game-texts";
@@ -156,6 +157,7 @@ export default function Home() {
     handleHumanVote,
     handleNightAction,
     handleHumanBadgeTransfer,
+    handleWhiteWolfKingBoom,
     handleNextRound,
     waitingForNextRound,
     advanceSpeech,
@@ -545,7 +547,7 @@ export default function Home() {
     if (!humanPlayer) return undefined;
     switch (gameState.phase) {
       case "NIGHT_WOLF_ACTION":
-        return humanPlayer.role === "Werewolf" ? "wolf" : undefined;
+        return isWolfRole(humanPlayer.role) ? "wolf" : undefined;
       case "NIGHT_SEER_ACTION":
         return humanPlayer.role === "Seer" ? "seer" : undefined;
       case "NIGHT_GUARD_ACTION":
@@ -1014,7 +1016,7 @@ export default function Home() {
     const last = lastNightActionRef.current;
     const role = humanPlayer?.role;
     const isHumanAlive = humanPlayer?.alive;
-    const canSeeWolf = role === "Werewolf" && isHumanAlive;
+    const canSeeWolf = isWolfRole(role as Role) && isHumanAlive;
     const canSeeWitch = role === "Witch" && isHumanAlive;
     const canSeeSeer = role === "Seer" && isHumanAlive;
     const canSeeHunter = role === "Hunter";
@@ -1137,7 +1139,8 @@ export default function Home() {
       phase === "NIGHT_SEER_ACTION" ||
       phase === "NIGHT_WOLF_ACTION" ||
       phase === "NIGHT_GUARD_ACTION" ||
-      phase === "HUNTER_SHOOT"
+      phase === "HUNTER_SHOOT" ||
+      phase === "WHITE_WOLF_KING_BOOM"
     ) {
       await handleNightAction(targetSeat);
     }
@@ -1557,6 +1560,7 @@ export default function Home() {
                       onNightAction={handleNightActionConfirm}
                       onBadgeSignup={handleBadgeSignup}
                       onRestart={restartGame}
+                      onWhiteWolfKingBoom={handleWhiteWolfKingBoom}
                     />
 
                     {/* 移动端玩家条 */}

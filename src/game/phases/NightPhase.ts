@@ -1,4 +1,5 @@
 import type { GameState, Player, Phase } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
@@ -167,7 +168,7 @@ export class NightPhase extends GamePhase {
     currentState = addSystemMessage(currentState, systemMessages.wolfActionStart);
     runtime.setGameState(currentState);
 
-    const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
+    const wolves = currentState.players.filter((p) => isWolfRole(p.role) && p.alive);
 
     if (wolves.length === 0) {
       runtime.setIsWaitingForAI(true);
@@ -327,7 +328,7 @@ export class NightPhase extends GamePhase {
     if (!runtime.isTokenValid(runtime.token)) return currentState;
 
     const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
-    const isWolf = targetPlayer?.role === "Werewolf";
+    const isWolf = targetPlayer ? targetPlayer.alignment === "wolf" : false;
 
     const seerHistory = currentState.nightActions.seerHistory || [];
     currentState = {
@@ -365,7 +366,7 @@ export class NightPhase extends GamePhase {
     currentState = await this.runWolfAction(currentState, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;
 
-    const humanWolf = currentState.players.find((p) => p.role === "Werewolf" && p.alive && p.isHuman);
+    const humanWolf = currentState.players.find((p) => isWolfRole(p.role) && p.alive && p.isHuman);
     if (humanWolf && currentState.nightActions.wolfTarget === undefined) {
       return;
     }
@@ -409,7 +410,7 @@ export class NightPhase extends GamePhase {
     let currentState = await this.runWolfAction(state, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;
 
-    const humanWolf = currentState.players.find((p) => p.role === "Werewolf" && p.alive && p.isHuman);
+    const humanWolf = currentState.players.find((p) => isWolfRole(p.role) && p.alive && p.isHuman);
     if (humanWolf && currentState.nightActions.wolfTarget === undefined) {
       return;
     }
@@ -513,7 +514,7 @@ export class NightPhase extends GamePhase {
     // 狼人可以刀任何存活玩家（包括队友和自己），但通常刀好人
     const alivePlayers = state.players.filter((p) => p.alive);
     const teammates = state.players.filter(
-      (p) => p.role === "Werewolf" && p.playerId !== player.playerId && p.alive
+      (p) => isWolfRole(p.role) && p.playerId !== player.playerId && p.alive
     );
 
     const teammateVotesStr = teammates
@@ -534,7 +535,7 @@ export class NightPhase extends GamePhase {
     const identitySection = t("prompts.night.wolf.base", {
       seat: player.seat + 1,
       name: player.displayName,
-      role: getRoleText("Werewolf"),
+      role: getRoleText(player.role),
     });
     const teammateLine = teammates.length > 0
       ? t("prompts.night.wolf.teammates", {
@@ -546,7 +547,7 @@ export class NightPhase extends GamePhase {
       })
       : t("prompts.night.wolf.solo");
     const cacheableRules = t("prompts.night.wolf.rules", {
-      winCondition: getWinCondition("Werewolf"),
+      winCondition: getWinCondition(player.role),
       difficultyHint,
     });
     const teammateVotesSection = teammateVotesStr

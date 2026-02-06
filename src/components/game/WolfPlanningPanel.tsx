@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Skull, HourglassSimple, CheckCircle, Target } from "@phosphor-icons/react";
 import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import type { GameState, Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { useTranslations } from "next-intl";
 
 interface WolfPlanningPanelProps {
@@ -13,7 +14,7 @@ interface WolfPlanningPanelProps {
 
 export function WolfPlanningPanel({ gameState, humanPlayer }: WolfPlanningPanelProps) {
   const t = useTranslations();
-  const wolves = gameState.players.filter(p => p.role === "Werewolf" && p.alive);
+  const wolves = gameState.players.filter(p => isWolfRole(p.role) && p.alive);
   const wolfVotes = gameState.nightActions.wolfVotes || {};
   const votedCount = Object.keys(wolfVotes).length;
 
@@ -131,7 +132,7 @@ export function WolfPlanningPanel({ gameState, humanPlayer }: WolfPlanningPanelP
       )}
 
       {/* 提示 */}
-      {!wolfVotes[humanPlayer?.playerId || ""] && humanPlayer?.role === "Werewolf" && (
+      {!wolfVotes[humanPlayer?.playerId || ""] && humanPlayer && isWolfRole(humanPlayer.role) && (
         <div className="mt-3 text-xs text-yellow-400 flex items-center gap-1">
           <Target size={12} />
           {t("wolfPlanning.hint")}

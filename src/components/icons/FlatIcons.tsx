@@ -344,3 +344,50 @@ export const GuardIcon = forwardRef<SVGSVGElement, IconProps>(
   )
 );
 GuardIcon.displayName = "GuardIcon";
+
+// 白痴图标
+export const IdiotIcon = forwardRef<SVGSVGElement, IconProps>(
+  ({ size = 24, className, ...props }, ref) => (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      fill="none"
+      width={size}
+      height={size}
+      className={className}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="10" fill="currentColor"/>
+      <circle cx="9" cy="10" r="1.5" fill="white"/>
+      <circle cx="15" cy="10" r="1.5" fill="white"/>
+      <path d="M8 15C8 15 9.5 17 12 17C14.5 17 16 15 16 15" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M6 6L9 9" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M18 6L15 9" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+);
+IdiotIcon.displayName = "IdiotIcon";
+
+// 白狼王图标
+export const WhiteWolfKingIcon = forwardRef<SVGSVGElement, IconProps>(
+  ({ size = 24, className, ...props }, ref) => (
+    <svg
+      ref={ref}
+      viewBox="0 0 24 24"
+      fill="none"
+      width={size}
+      height={size}
+      className={className}
+      {...props}
+    >
+      <path d="M12 2L8 7L4 5V11L2 14L4 16L6 22H18L20 16L22 14L20 11V5L16 7L12 2Z" fill="currentColor"/>
+      <path d="M8 11.5L12 11.5M16 11.5L12 11.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="8" cy="13" r="1.5" fill="white"/>
+      <circle cx="16" cy="13" r="1.5" fill="white"/>
+      <path d="M10 18L12 16L14 18" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Crown */}
+      <path d="M8 4L10 2L12 4L14 2L16 4" stroke="gold" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  )
+);
+WhiteWolfKingIcon.displayName = "WhiteWolfKingIcon";

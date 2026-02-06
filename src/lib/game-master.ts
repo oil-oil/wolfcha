@@ -11,6 +11,7 @@ import {
   type Alignment,
   type DailySummaryFact,
   type DailySummaryVoteData,
+  isWolfRole,
   GENERATOR_MODEL,
   SUMMARY_MODEL,
   PLAYER_MODELS,
@@ -166,6 +167,8 @@ export function createInitialGameState(): GameState {
       witchHealUsed: false,
       witchPoisonUsed: false,
       hunterCanShoot: true,
+      idiotRevealed: false,
+      whiteWolfKingBoomUsed: false,
     },
     winner: null,
   };
@@ -173,12 +176,12 @@ export function createInitialGameState(): GameState {
 
 export function getRoleConfiguration(playerCount: number): Role[] {
   const configs: Record<number, Role[]> = {
-    8: ["Werewolf", "Werewolf", "Werewolf", "Seer", "Witch", "Hunter", "Villager", "Villager"],
-    9: ["Werewolf", "Werewolf", "Werewolf", "Seer", "Witch", "Hunter", "Villager", "Villager", "Villager"],
+    8: ["Werewolf", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Villager", "Villager"],
+    9: ["Werewolf", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Villager", "Villager", "Villager"],
     10: [
       "Werewolf",
       "Werewolf",
-      "Werewolf",
+      "WhiteWolfKing",
       "Seer",
       "Witch",
       "Hunter",
@@ -191,12 +194,12 @@ export function getRoleConfiguration(playerCount: number): Role[] {
       "Werewolf",
       "Werewolf",
       "Werewolf",
-      "Werewolf",
+      "WhiteWolfKing",
       "Seer",
       "Witch",
       "Hunter",
       "Guard",
-      "Villager",
+      "Idiot",
       "Villager",
       "Villager",
     ],
@@ -204,12 +207,12 @@ export function getRoleConfiguration(playerCount: number): Role[] {
       "Werewolf",
       "Werewolf",
       "Werewolf",
-      "Werewolf",
+      "WhiteWolfKing",
       "Seer",
       "Witch",
       "Hunter",
       "Guard",
-      "Villager",
+      "Idiot",
       "Villager",
       "Villager",
       "Villager",
@@ -228,13 +231,32 @@ export function setupPlayers(
   fixedRoles?: Role[],
   seedPlayerIds?: string[],
   modelRefs?: ModelRef[],
-  aiSeatOrder?: number[]
+  aiSeatOrder?: number[],
+  preferredRole?: Role
 ): Player[] {
   const { t } = getI18n();
   const totalPlayers = playerCount;
   const fallbackHumanName = t("common.you");
   const roles = getRoleConfiguration(totalPlayers);
   const assignedRoles = fixedRoles && fixedRoles.length === totalPlayers ? fixedRoles : shuffleArray(roles);
+
+  // If the user chose a preferred role (and no dev fixedRoles), swap to ensure the human gets it
+  if (
+    preferredRole &&
+    !(fixedRoles && fixedRoles.length === totalPlayers) &&
+    humanSeat >= 0
+  ) {
+    const currentRoleAtHumanSeat = assignedRoles[humanSeat];
+    if (currentRoleAtHumanSeat !== preferredRole) {
+      const targetIndex = assignedRoles.findIndex(
+        (r, i) => r === preferredRole && i !== humanSeat
+      );
+      if (targetIndex !== -1) {
+        assignedRoles[targetIndex] = currentRoleAtHumanSeat;
+        assignedRoles[humanSeat] = preferredRole;
+      }
+    }
+  }
 
   const players: Player[] = [];
 
@@ -264,7 +286,7 @@ export function setupPlayers(
 
   for (let seat = 0; seat < totalPlayers; seat++) {
     const role = assignedRoles[seat];
-    const alignment: Alignment = role === "Werewolf" ? "wolf" : "village";
+    const alignment: Alignment = isWolfRole(role) ? "wolf" : "village";
     const playerId = getPlayerIdForSeat(seat);
 
     if (seat === humanSeat) {
@@ -533,9 +555,15 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
     : null;
   const sheriffPlayerId = sheriffPlayer?.playerId;
   
+  // 已翻牌白痴的投票不计入
+  const revealedIdiotId = state.roleAbilities.idiotRevealed
+    ? state.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+    : undefined;
+
   for (const [voterId, targetSeat] of Object.entries(state.votes)) {
     if (!aliveById.has(voterId)) continue;
     if (!aliveBySeat.has(targetSeat)) continue;
+    if (voterId === revealedIdiotId) continue; // 白痴翻牌后失去投票权
     // 警长的票计算为1.5票
     const voteWeight = voterId === sheriffPlayerId ? 1.5 : 1;
     voteCounts[targetSeat] = (voteCounts[targetSeat] || 0) + voteWeight;
@@ -1324,7 +1352,7 @@ export async function generateAIBadgeSignupBatch(
           targetName: targetPlayer.displayName 
         });
       }
-    } else if (player.role === "Werewolf") {
+    } else if (isWolfRole(player.role)) {
       nightActionInfo = t("gameMaster.badgeSignup.werewolfParticipated");
     }
 
@@ -1887,6 +1915,70 @@ export async function generateHunterShoot(
     },
     response: {
       content: cleanedHunter,
+      raw: result.content,
+      rawResponse: JSON.stringify(result.raw, null, 2),
+      finishReason: result.raw.choices?.[0]?.finish_reason,
+      parsed: { targetSeat: parsedTarget },
+      duration: Date.now() - startTime,
+    },
+  });
+
+  return parsedTarget;
+}
+
+/**
+ * AI 白狼王自爆决策：返回目标座位号（自爆）或 null（不自爆）
+ */
+export async function generateWhiteWolfKingBoomDecision(
+  state: GameState,
+  player: Player
+): Promise<number | null> {
+  const prompt = resolvePhasePrompt("WHITE_WOLF_KING_BOOM", state, player);
+  const alivePlayers = state.players.filter(
+    (p) => p.alive && p.playerId !== player.playerId
+  );
+  const startTime = Date.now();
+  const { messages } = buildMessagesForPrompt(prompt);
+
+  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+    model: player.agentProfile!.modelRef.model,
+    messages,
+    temperature: GAME_TEMPERATURE.ACTION,
+  }));
+
+  const cleaned = stripMarkdownCodeFences(result.content);
+  const contentLower = cleaned.toLowerCase().trim();
+
+  let parsedTarget: number | null;
+
+  // AI 可以选择 "pass" 表示不自爆
+  if (contentLower.includes("pass") || contentLower === "0") {
+    parsedTarget = null;
+  } else {
+    const match = cleaned.match(/\d+/);
+    if (match) {
+      const seat = parseInt(match[0]) - 1;
+      const validSeats = alivePlayers.map((p) => p.seat);
+      if (validSeats.includes(seat)) {
+        parsedTarget = seat;
+      } else {
+        // 无效目标视为不自爆
+        parsedTarget = null;
+      }
+    } else {
+      parsedTarget = null;
+    }
+  }
+
+  await aiLogger.log({
+    type: "wwk_boom_decision",
+    request: {
+      model: player.agentProfile!.modelRef.model,
+      messages,
+      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+    },
+    response: {
+      content: cleaned,
       raw: result.content,
       rawResponse: JSON.stringify(result.raw, null, 2),
       finishReason: result.raw.choices?.[0]?.finish_reason,

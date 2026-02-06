@@ -16,10 +16,12 @@
   "roles": {
     "villager": "Villager",
     "werewolf": "Werewolf",
+    "whiteWolfKing": "White Wolf King",
     "seer": "Seer",
     "witch": "Witch",
     "hunter": "Hunter",
-    "guard": "Guard"
+    "guard": "Guard",
+    "idiot": "Idiot"
   },
   "alignment": {
     "village": "Villagers",
@@ -222,32 +224,32 @@
       "8": {
         "title": "8 players",
         "subtitle": "Compact match",
-        "description": "3 wolves, 3 specials, 2 villagers",
+        "description": "2 wolves + WWK, 3 specials, 2 villagers",
         "roles": "Special roles: Seer, Witch, Hunter"
       },
       "9": {
         "title": "9 players",
         "subtitle": "Classic entry",
-        "description": "3 wolves, 3 specials, 3 villagers",
+        "description": "2 wolves + WWK, 3 specials, 3 villagers",
         "roles": "Special roles: Seer, Witch, Hunter"
       },
       "10": {
         "title": "10 players",
         "subtitle": "Standard setup",
-        "description": "3 wolves, 3 specials, 4 villagers",
-        "roles": "Special roles: Seer, Witch, Hunter"
+        "description": "2 wolves + WWK, 4 specials, 3 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter, Guard"
       },
       "11": {
         "title": "11 players",
         "subtitle": "Faster showdown",
-        "description": "4 wolves, 4 specials, 3 villagers",
-        "roles": "Special roles: Seer, Witch, Hunter, Guard"
+        "description": "3 wolves + WWK, 5 specials, 2 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter, Guard, Idiot"
       },
       "12": {
         "title": "12 players",
         "subtitle": "Full classic",
-        "description": "4 wolves, 4 specials, 4 villagers",
-        "roles": "Special roles: Seer, Witch, Hunter, Guard"
+        "description": "3 wolves + WWK, 5 specials, 3 villagers",
+        "roles": "Special roles: Seer, Witch, Hunter, Guard, Idiot"
       }
     }
   },
@@ -371,11 +373,11 @@
       "hardDesc": "Deep confrontation, more complex reasoning"
     },
     "playerCount": {
-      "8": { "title": "8 players", "description": "3 wolves, 3 gods, 2 villagers", "roles": "Gods: Seer, Witch, Hunter" },
-      "9": { "title": "9 players", "description": "3 wolves, 3 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter" },
-      "10": { "title": "10 players", "description": "3 wolves, 4 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard" },
-      "11": { "title": "11 players", "description": "4 wolves, 4 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard" },
-      "12": { "title": "12 players", "description": "4 wolves, 4 gods, 4 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard" }
+      "8": { "title": "8 players", "description": "2 wolves + WWK, 3 gods, 2 villagers", "roles": "Gods: Seer, Witch, Hunter" },
+      "9": { "title": "9 players", "description": "2 wolves + WWK, 3 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter" },
+      "10": { "title": "10 players", "description": "2 wolves + WWK, 4 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard" },
+      "11": { "title": "11 players", "description": "3 wolves + WWK, 5 gods, 2 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot" },
+      "12": { "title": "12 players", "description": "3 wolves + WWK, 5 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot" }
     },
     "genshinMode": {
       "title": "Model original mode",
@@ -384,6 +386,22 @@
     "spectatorMode": {
       "title": "Spectator Mode",
       "description": "Watch AI players only, without participating. Tap player cards to reveal their true role"
+    },
+    "rolePreference": {
+      "label": "Role Preference",
+      "random": "Random",
+      "randomDesc": "Your role will be randomly assigned",
+      "hint": "Choose the role you want to play; random by default",
+      "desc": {
+        "villager": "A regular villager who relies on reasoning and voting",
+        "werewolf": "Wolf team — eliminate villagers each night",
+        "whiteWolfKing": "Special wolf — can take someone down when voted out",
+        "seer": "Check one player's true identity each night",
+        "witch": "Has one healing potion and one poison potion",
+        "hunter": "Can shoot and eliminate a player upon death",
+        "guard": "Protect one player from wolf attacks each night",
+        "idiot": "Survives a vote-out by revealing role, but loses voting rights"
+      }
     }
   }
   ,
@@ -582,7 +600,11 @@
       "villageWin": "Villagers win!",
       "wolfWin": "Werewolves win!"
     },
-    "restart": "Restart"
+    "restart": "Restart",
+    "confirmAction": {
+      "whiteWolfKingBoom": "Self-destruct & take #{seat}",
+      "whiteWolfKingBoomBtn": "Self-destruct"
+    }
   }
   ,
   "mentions": {
@@ -786,6 +808,30 @@
           "Speak with evidence",
           "Stay logically consistent"
         ]
+      },
+      "idiot": {
+        "title": "Idiot",
+        "subtitle": "Immune to exile once — flip your card and survive.",
+        "abilities": [
+          "When voted out, auto-reveal and survive once",
+          "After revealing, lose voting rights but can still speak"
+        ],
+        "tips": [
+          "Speak boldly — you can't be voted out easily",
+          "After revealing, influence others through speech"
+        ]
+      },
+      "whiteWolfKing": {
+        "title": "White Wolf King",
+        "subtitle": "King of wolves — self-destruct to take someone down.",
+        "abilities": [
+          "At night, coordinate with wolf team to kill",
+          "During the day, you can self-destruct to eliminate one player"
+        ],
+        "tips": [
+          "Timing is everything for self-destruct",
+          "Seer checks you as Werewolf"
+        ]
       }
     },
     "nextStep": {
@@ -795,6 +841,8 @@
       "guard": "When it's your turn, select a player to protect.",
       "hunter": "Observe first; reveal your shot when it matters.",
       "villager": "You don't act yet. Listen and observe.",
+      "idiot": "You don't act yet. Listen and observe. You'll auto-survive if voted out.",
+      "whiteWolfKing": "When it's your turn, select a player to attack. During day, you can self-destruct.",
       "default": "The stage is set. Follow the host's prompts."
     }
   },
@@ -836,6 +884,9 @@
     "witchPoison": "You poisoned Seat {seat} {name}.",
     "guardProtect": "You protected Seat {seat} {name}.",
     "hunterShoot": "Hunter Seat {hunterSeat} shot Seat {targetSeat} {targetName}.",
+    "whiteWolfKingBoom": "Seat {seat} White Wolf King self-destructed and took Seat {targetSeat} {targetName}.",
+    "whiteWolfKingBoomNoTarget": "Seat {seat} White Wolf King self-destructed without taking anyone.",
+    "idiotRevealed": "Seat {seat} {name} revealed as Idiot — immune to exile! Loses voting rights.",
     "badgeTransferStart": "Seat {seat} {name} is the sheriff. Transfer the badge or tear it up.",
     "badgeTransferred": "Badge transferred to Seat {toSeat} {toName}.",
     "badgeTorn": "Seat {seat} {name} tore up the badge.",
@@ -864,6 +915,8 @@
     "badgeVotePrompt": "Tap a player card to vote for sheriff",
     "hunterShoot": "Tap a player card to choose your shot target",
     "hunterAiming": "The hunter is choosing a target...",
+    "whiteWolfKingBoom": "Tap a player card to choose self-destruct target",
+    "whiteWolfKingAiming": "White Wolf King is choosing a target...",
     "yourTurn": "Your turn to speak",
     "votePrompt": "Tap a player card to vote",
     "clickToVote": "Tap a player card to vote",
@@ -1008,6 +1061,11 @@
       "lastWordsContext": "\n\n【Your Last Words】\n{lastWords}\n\n【Important】Please keep your shooting decision consistent with your last words. If you expressed intent to shoot in your last words, execute it now.",
       "lastWordsIntentHint": "You stated in your last words that you would shoot Seat {seat} ({name}). Please execute your decision.",
       "lastWordsPassHint": "You stated in your last words that you would not shoot. Please stay consistent."
+    },
+    "whiteWolfKingBoom": {
+      "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{difficultyHint}",
+      "task": "【White Wolf King Self-Destruct Ability】\nYou are the White Wolf King. You may choose to self-destruct during the day. When you self-destruct, you take one alive player with you (no last words for them). After self-destruct, the day ends and night begins immediately, skipping the vote.\n\n【When to Self-Destruct】\n- Your identity has been exposed and you're about to be voted out\n- There's a confirmed high-value role you can take out\n- The wolf team is in crisis and needs to disrupt the village\n\n【When NOT to Self-Destruct】\n- Your identity is still hidden and you're not suspected\n- The situation favors the wolves; no need to take risks\n- No clear high-value target to take out\n\n【Target Priority】\nSeer > Witch > Hunter > Guard > Key villagers\n\n【Task】\nBased on the current situation, decide whether to self-destruct. If yes, choose a target seat number. If no, reply pass.\n\nAlive players: {options}",
+      "user": "{context}\n\nShould you self-destruct? If yes, which seat?\n\n【Format】\nReply with a seat number (self-destruct and take that player), e.g., 5\nReply pass (do not self-destruct)\nNo explanations, no extra text, no code blocks"
     }
   },
   "badgePhase": {
@@ -1048,6 +1106,7 @@
     "dayResolve": { "description": "Execution resolution" },
     "badgeTransfer": { "description": "Sheriff badge transfer", "human": "Tap a player card to choose a transfer target" },
     "hunterShoot": { "description": "Hunter shot", "human": "Tap a player card to choose your shot target" },
+    "whiteWolfKingBoom": { "description": "White Wolf King self-destruct", "human": "Tap a player card to choose self-destruct target" },
     "gameEnd": { "description": "Game over", "villageWin": "Villagers win", "wolfWin": "Werewolves win" }
   },
   "page": {
@@ -1151,6 +1210,8 @@
       "wolfKill": "Kill",
       "guardProtect": "Protect",
       "hunterShoot": "Shoot",
+      "whiteWolfKingBoom": "Self-destruct on",
+      "whiteWolfKingBoomBtn": "Self-destruct",
       "badgeTransfer": "Transfer badge to",
       "select": "Select"
     },
@@ -1245,6 +1306,26 @@
         ],
         "action": "Tap a player to vote during voting phase",
         "tips": ["Speak with evidence", "Think and listen more"]
+      },
+      "Idiot": {
+        "desc": "Immune to exile once — flip your card and survive.",
+        "points": [
+          "No night action; wait for day",
+          "When voted out, auto-reveal and survive once",
+          "After reveal, lose voting rights but can still speak"
+        ],
+        "action": "Tap a player to vote (before reveal)",
+        "tips": ["Speak boldly", "After reveal, influence through speech"]
+      },
+      "WhiteWolfKing": {
+        "desc": "King of wolves — self-destruct to take someone down.",
+        "points": [
+          "At night, coordinate with wolves to kill",
+          "During day, you can self-destruct to take one player",
+          "After self-destruct, skip to night immediately"
+        ],
+        "action": "Tap a player to kill at night; use self-destruct button during day",
+        "tips": ["Timing is everything", "Prioritize taking key roles"]
       }
     }
   },
@@ -1295,7 +1376,11 @@
     "roleRevealItem": "Seat {seat} {name}: {role}",
     "roleRevealLine": "Role reveal: {list}",
     "roleRevealTitle": "Role reveal",
-    "roleRevealHuman": "Human player"
+    "roleRevealHuman": "Human player",
+    "idiotRevealed": "Seat {seat} {name} is the Idiot — immune to exile! Loses voting rights.",
+    "whiteWolfKingBoom": "Seat {seat} {name} self-destructed! Took Seat {targetSeat} {targetName}.",
+    "whiteWolfKingBoomNoTarget": "Seat {seat} {name} self-destructed! Didn't take anyone.",
+    "whiteWolfKingPrompt": "You are the White Wolf King. Tap a player card to choose your self-destruct target (or skip)."
   },
   "gameLogic": {
     "errors": {
@@ -1444,7 +1529,9 @@
       "witch": "Witch (good team, one antidote and one poison)",
       "hunter": "Hunter (good team, may shoot on death)",
       "guard": "Guard (good team, protects one player each night)",
-      "villager": "Villager (good team)"
+      "villager": "Villager (good team)",
+      "idiot": "Idiot (good team, immune to exile once, then loses voting rights)",
+      "whiteWolfKing": "White Wolf King (evil team, can self-destruct during day to take one player)"
     },
     "winCondition": {
       "werewolf": "【Win condition】Werewolves win when their count >= good players\n【Core goals】\n- Coordinate nightly kills; prioritize key roles (Seer > Witch > Hunter > Guard)\n- Disguise as good during the day and steer eliminations\n- Protect wolf teammates from focus",
@@ -1452,7 +1539,9 @@
       "witch": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Use antidote carefully to save key roles or confirmed good\n- Save poison for confirmed wolves or high-risk players\n- Note: witch can self-save and can use only one potion per night",
       "hunter": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Speak actively and analyze during the day\n- On death, shoot a confirmed wolf\n- Note: if poisoned, you cannot shoot",
       "guard": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Protect likely wolf targets each night\n- Cannot protect the same player on consecutive nights\n- Infer wolf targets from table info",
-      "villager": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Listen carefully and analyze behavior during the day\n- Eliminate wolves by voting\n- Coordinate with key roles"
+      "villager": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- Listen carefully and analyze behavior during the day\n- Eliminate wolves by voting\n- Coordinate with key roles",
+      "idiot": "【Win condition】Good wins when all werewolves are eliminated\n【Core goals】\n- When voted out, auto-reveal and survive (once)\n- After reveal, lose voting rights but can still speak\n- Killed by wolves or poisoned = normal death",
+      "whiteWolfKing": "【Win condition】Werewolves win when their count >= good players\n【Core goals】\n- Coordinate nightly kills with wolf teammates\n- During the day, can self-destruct to take one player (no last words for target)\n- After self-destruct, skip to night phase immediately\n- Seer checks you as Werewolf"
     },
     "roleKnowHow": {
       "werewolf": "<role_tips>\n【When to claim / hard-claim】\n- Consider claiming when info roles are unclear, the real seer isn't confirmed, or the badge fight is critical\n- If the real seer is strong and credible, a hard-claim can split the table but only if you can survive scrutiny\n- If teammates are collapsing or the vote is doomed, a claim can create new conflicts and buy time\n\n【Strategy library (optional)】\n- Hard-claim seer: keep checks and badge flow consistent; avoid \"wolf-omniscient\" reasoning\n- Soft claim or strong villager posture: lead with logic and vote guidance instead of a direct claim\n- Mix pressure and stability across the team; avoid synchronized pushes\n- Scatter wolf votes to reduce exposure\n\n【Self-check】\n- Your check reasons/badge flow should look like a blind good player's choices\n- Don't eliminate too many players too early or build perfect, overfitted logic\n- Avoid syncing timing and stances with teammates too closely\n</role_tips>",
@@ -1460,7 +1549,9 @@
       "witch": "<role_tips>\n- Potion count: You have ONE antidote and ONE poison. Once used, they're gone forever and cannot be used again\n- First night: usually don't save (unless the target is a confirmed claimed Seer)\n- Heal strategy: From night 2 onward, if a likely-good player is knifed (even a Villager), USE the heal\n- Poison timing: save it for confirmed wolves or highly suspicious fake-claimers\n- Self-save: you CAN self-save; if knifed, you can use antidote on yourself\n- Stance value: you know who was knifed; use this to read wolves\n- Peaceful night logic: Peaceful night = no deaths, could be Witch save, Guard protect, or wolf skip; wolf self-kill causes death\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>",
       "hunter": "<role_tips>\n- Shoot timing: on death, shoot a confirmed wolf\n- Poison rule: if poisoned by witch, you cannot shoot; note this limit\n- Last words value: if voted out, you can shoot after last words\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>",
       "guard": "<role_tips>\n- Protection priority: Seer > Witch > other key roles > key good players\n- Consecutive protection: cannot protect the same player two nights in a row; plan ahead\n- Read the knife: judge who wolves will knife tonight based on the situation\n- Coordinate with seer: if seer revealed, prioritize protecting them\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>",
-      "villager": "<role_tips>\n- Listening: listen for contradictions and tells\n- Independent thinking: don't blindly follow sheriff or early speakers; form your own judgment\n- Challenge spirit: if you think the vote target is wrong, speak up with your opinion\n- Speech value: speak up and share your independent perspective\n- Situation awareness: keep track of alive roles and counts\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>"
+      "villager": "<role_tips>\n- Listening: listen for contradictions and tells\n- Independent thinking: don't blindly follow sheriff or early speakers; form your own judgment\n- Challenge spirit: if you think the vote target is wrong, speak up with your opinion\n- Speech value: speak up and share your independent perspective\n- Situation awareness: keep track of alive roles and counts\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>",
+      "idiot": "<role_tips>\n- Core advantage: When voted out, auto-reveal and survive\n- After reveal: lose voting rights but can still speak normally\n- Speak boldly and take strong stances; you're safe from exile\n- After reveal, use speech to influence other players' votes\n- Note: killed by wolves or witch poison = normal death, no reveal\n- Death info: if someone died at night, react to the cause in your speech\n</role_tips>",
+      "whiteWolfKing": "<role_tips>\n- White Wolf King is the wolf team's trump card with self-destruct ability\n- Self-destruct timing: when seer has confirmed you or you're about to be voted out\n- Priority targets for self-destruct: Seer > Witch > Hunter > Guard\n- After self-destruct, game skips to night immediately — advantageous for wolves\n- Don't self-destruct too early: it's a one-time ability, bad timing wastes it\n- Disguise strategy: same as regular wolves, blend in during the day\n- Team coordination: let regular wolves take the heat, save yourself as last resort\n</role_tips>"
     },
     "difficultySpeech": {
       "easy": "【Difficulty】Beginner (relaxed, intuitive)\n【Style】\n- Rely on intuition and emotion; avoid complex chains\n- More likely to trust others or follow the majority\n- Werewolf: play safely; avoid advanced tactics; small slips allowed\n- Good: follow info roles more; fewer hard pushes",
@@ -1590,10 +1681,12 @@
     "roles": {
       "Villager": "Villager",
       "Werewolf": "Werewolf",
+      "WhiteWolfKing": "White Wolf King",
       "Seer": "Seer",
       "Witch": "Witch",
       "Hunter": "Hunter",
-      "Guard": "Guard"
+      "Guard": "Guard",
+      "Idiot": "Idiot"
     },
     "tabs": {
       "global": "Global",
