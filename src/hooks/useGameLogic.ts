@@ -671,12 +671,34 @@ export function useGameLogic() {
       setDialogue(speakerHost, msg, false);
     }
 
+    // 白狼王自爆带走的人没有遗言，如果被带走的人或白狼王是警长，警徽直接撕毁
+    const sheriffSeat = currentState.badge.holderSeat;
+    if (sheriffSeat !== null && (!currentState.players.find((p) => p.seat === sheriffSeat)?.alive)) {
+      const sheriffPlayer = currentState.players.find((p) => p.seat === sheriffSeat);
+      const forceTornMsg = t("system.badgeForceTorn", { seat: sheriffSeat + 1, name: sheriffPlayer?.displayName || "" });
+      currentState = addSystemMessage(currentState, forceTornMsg);
+      currentState = {
+        ...currentState,
+        badge: { ...currentState.badge, holderSeat: null },
+      };
+    }
+
     setGameState(currentState);
 
     const winner = checkWinCondition(currentState);
     if (winner) {
       const endFn = endGameRef.current;
       if (endFn) await endFn(currentState, winner);
+      return true;
+    }
+
+    // 白狼王自爆带走猎人时，猎人可以开枪（非毒死，技能可发动）
+    const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
+    if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+      setGameState(currentState);
+      await delay(1200);
+      const hunterFn = hunterDeathRef.current;
+      if (hunterFn) await hunterFn(currentState, boomTarget, false);
       return true;
     }
 
@@ -1760,12 +1782,36 @@ export function useGameLogic() {
         currentState = addSystemMessage(currentState, msg);
         setDialogue(speakerHost, msg, false);
       }
+
+      // 白狼王自爆带走的人没有遗言，如果被带走的人或白狼王是警长，警徽直接撕毁
+      const boomSheriffSeat = currentState.badge.holderSeat;
+      if (boomSheriffSeat !== null && (!currentState.players.find((p) => p.seat === boomSheriffSeat)?.alive)) {
+        const boomSheriffPlayer = currentState.players.find((p) => p.seat === boomSheriffSeat);
+        const forceTornMsg = t("system.badgeForceTorn", { seat: boomSheriffSeat + 1, name: boomSheriffPlayer?.displayName || "" });
+        currentState = addSystemMessage(currentState, forceTornMsg);
+        currentState = {
+          ...currentState,
+          badge: { ...currentState.badge, holderSeat: null },
+        };
+      }
+
       setGameState(currentState);
 
       const winner = checkWinCondition(currentState);
       if (winner) {
         await endGameSafely(currentState, winner);
         return;
+      }
+
+      // 白狼王自爆带走猎人时，猎人可以开枪（非毒死，技能可发动）
+      if (targetSeat >= 0) {
+        const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
+        if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+          await delay(1200);
+          const hunterFn = hunterDeathRef.current;
+          if (hunterFn) await hunterFn(currentState, boomTarget, false);
+          return;
+        }
       }
 
       await delay(1200);
@@ -1778,7 +1824,7 @@ export function useGameLogic() {
     if (!humanPlayer || humanPlayer.role !== "WhiteWolfKing" || !humanPlayer.alive) return;
     const currentState = gameStateRef.current;
     if (currentState.roleAbilities.whiteWolfKingBoomUsed) return;
-    if (currentState.phase !== "DAY_SPEECH" && currentState.phase !== "DAY_PK_SPEECH") return;
+    if (currentState.phase !== "DAY_SPEECH" && currentState.phase !== "DAY_BADGE_SPEECH" && currentState.phase !== "DAY_PK_SPEECH") return;
 
     // Transition to WWK boom phase
     const nextState = transitionPhase(currentState, "WHITE_WOLF_KING_BOOM");

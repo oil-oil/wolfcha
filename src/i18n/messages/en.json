@@ -890,6 +890,7 @@
     "badgeTransferStart": "Seat {seat} {name} is the sheriff. Transfer the badge or tear it up.",
     "badgeTransferred": "Badge transferred to Seat {toSeat} {toName}.",
     "badgeTorn": "Seat {seat} {name} tore up the badge.",
+    "badgeForceTorn": "Sheriff (Seat {seat} {name}) had no last words — badge is torn.",
     "patterns": {
       "nightFall": "^Night\\s*\\d+\\.?\\s*Close your eyes\\.?$",
       "playerKilled": "^Seat\\s+\\d+\\s+.+\\s+was eliminated last night\\.?$",

@@ -890,6 +890,7 @@
     "badgeTransferStart": "{seat}号 {name} 是警长，请选择移交警徽的对象或撕毁警徽",
     "badgeTransferred": "警徽移交给 {toSeat}号 {toName}",
     "badgeTorn": "{seat}号 {name} 选择撕毁警徽",
+    "badgeForceTorn": "警长（{seat}号 {name}）因无遗言，警徽自动撕毁",
     "patterns": {
       "nightFall": "^第\\s*\\d+\\s*夜，天黑请闭眼$",
       "playerKilled": "^\\d+号\\s+.+\\s+昨晚出局$",

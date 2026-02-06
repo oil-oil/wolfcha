@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle, Prohibit } from "@phosphor-icons/react";
 import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIcons";
+import { VoteResultCard } from "./VoteResultCard";
 import { VotingProgress } from "./VotingProgress";
 import { WolfPlanningPanel } from "./WolfPlanningPanel";
 import { MentionInput } from "./MentionInput";
@@ -1789,20 +1790,6 @@ function ChatMessageItem({
   const isPlayerReady = player ? (player.isHuman ? !!player.displayName?.trim() : !!player.agentProfile?.persona) : false;
   const isSystem = msg.isSystem;
 
-  // #region agent log - debug-session
-  // UI-side evidence: if structured tags leak into non-system messages, they'll show as "extra info".
-  if (
-    !isSystem &&
-    (msg.content.startsWith("[VOTE_RESULT]") ||
-      msg.content.startsWith("[ROLE_REVEAL]") ||
-      msg.content.includes("```") ||
-      (msg.content.includes("[") && msg.content.includes("]")) ||
-      (msg.content.includes("{") && msg.content.includes("}")))
-  ) {
-    fetch("http://127.0.0.1:7242/ingest/db589a22-2841-4c18-bc9c-0f6e4855a775", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "debug-session", runId: "pre-fix", hypothesisId: "B", location: "src/components/game/DialogArea.tsx:ChatMessageItem", message: "non-system message contains structured artifacts", data: { msgId: msg.id, phase: msg.phase, day: msg.day, playerId: msg.playerId, contentLen: msg.content.length, contentPreview: msg.content.slice(0, 200) }, timestamp: Date.now() }) }).catch(() => {});
-  }
-  // #endregion agent log - debug-session
-
   if (isSystem) {
     // 检查是否是身份揭晓消息
     if (msg.content.startsWith('[ROLE_REVEAL]')) {
@@ -1837,7 +1824,21 @@ function ChatMessageItem({
     }
     // 检查是否是投票结果消息
     if (msg.content.startsWith('[VOTE_RESULT]')) {
-      return null;
+      try {
+        const jsonData = msg.content.substring('[VOTE_RESULT]'.length);
+        const voteData = JSON.parse(jsonData);
+        return (
+          <VoteResultCard
+            title={voteData.title}
+            results={voteData.results}
+            players={players}
+            isNight={isNight}
+            isGenshinMode={isGenshinMode}
+          />
+        );
+      } catch (e) {
+        console.error('Failed to parse vote result:', e);
+      }
     }
     
     return (

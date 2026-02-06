@@ -78,7 +78,11 @@ export class VotePhase extends GamePhase {
 
     // PK投票时，参与PK的人不能投票
     const pkTargets = currentState.pkSource === "vote" && Array.isArray(currentState.pkTargets) ? currentState.pkTargets : [];
-    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !pkTargets.includes(p.seat));
+    // 已翻牌白痴不参与投票（节省 AI 调用）
+    const revealedIdiotId = currentState.roleAbilities.idiotRevealed
+      ? currentState.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+      : undefined;
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !pkTargets.includes(p.seat) && p.playerId !== revealedIdiotId);
     let tokenInvalidated = false;
     setIsWaitingForAI(true);
     try {

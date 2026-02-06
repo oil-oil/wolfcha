@@ -502,9 +502,9 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   // 白天流程: 开始 -> 发言 -> 投票 -> 结算
   DAY_START: ["DAY_BADGE_SIGNUP", "DAY_SPEECH"],
   DAY_BADGE_SIGNUP: ["DAY_BADGE_SPEECH", "DAY_SPEECH"],
-  DAY_BADGE_SPEECH: ["DAY_BADGE_ELECTION"],
+  DAY_BADGE_SPEECH: ["DAY_BADGE_ELECTION", "WHITE_WOLF_KING_BOOM"],
   DAY_BADGE_ELECTION: ["DAY_PK_SPEECH", "DAY_SPEECH"],
-  DAY_PK_SPEECH: ["DAY_BADGE_ELECTION", "DAY_VOTE"],
+  DAY_PK_SPEECH: ["DAY_BADGE_ELECTION", "DAY_VOTE", "WHITE_WOLF_KING_BOOM"],
   DAY_SPEECH: ["DAY_VOTE", "WHITE_WOLF_KING_BOOM"],
   DAY_VOTE: ["DAY_RESOLVE"],
   DAY_RESOLVE: ["DAY_PK_SPEECH", "DAY_LAST_WORDS", "BADGE_TRANSFER", "NIGHT_START", "GAME_END"],
@@ -513,7 +513,7 @@ export const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
   // 特殊阶段
   BADGE_TRANSFER: ["DAY_LAST_WORDS", "HUNTER_SHOOT", "NIGHT_START", "DAY_SPEECH", "GAME_END"],
   HUNTER_SHOOT: ["DAY_START", "NIGHT_START", "BADGE_TRANSFER", "GAME_END"],
-  WHITE_WOLF_KING_BOOM: ["NIGHT_START", "GAME_END"],
+  WHITE_WOLF_KING_BOOM: ["NIGHT_START", "HUNTER_SHOOT", "GAME_END"],
   GAME_END: ["LOBBY"], // 允许重新开始
 };
 
@@ -612,7 +612,9 @@ export function getNextNightPhase(currentPhase: Phase, gameState: GameState): Ph
   
   const requiredRole = roleForPhase[nextPhase];
   if (requiredRole) {
-    const hasAliveRole = gameState.players.some(p => p.role === requiredRole && p.alive);
+    const hasAliveRole = requiredRole === "Werewolf"
+      ? gameState.players.some(p => isWolfRole(p.role) && p.alive)
+      : gameState.players.some(p => p.role === requiredRole && p.alive);
     if (!hasAliveRole) {
       // 递归跳到下一个阶段
       return getNextNightPhase(nextPhase, gameState);

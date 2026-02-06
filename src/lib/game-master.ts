@@ -1313,10 +1313,12 @@ export async function generateAIBadgeSignupBatch(
     const roleText = (() => {
       switch (player.role) {
         case "Werewolf": return t("promptUtils.roleText.werewolf");
+        case "WhiteWolfKing": return t("promptUtils.roleText.whiteWolfKing");
         case "Seer": return t("promptUtils.roleText.seer");
         case "Witch": return t("promptUtils.roleText.witch");
         case "Hunter": return t("promptUtils.roleText.hunter");
         case "Guard": return t("promptUtils.roleText.guard");
+        case "Idiot": return t("promptUtils.roleText.idiot");
         default: return t("promptUtils.roleText.villager");
       }
     })();
