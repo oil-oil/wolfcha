@@ -697,9 +697,10 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
       });
     }
 
-    // 猎人开枪信息
-    if (dayData?.hunterShot) {
-      const { hunterSeat, targetSeat } = dayData.hunterShot;
+    // 猎人开枪信息（可能在夜晚或白天触发）
+    const hunterShot = dayData?.hunterShot || nightData?.hunterShot;
+    if (hunterShot) {
+      const { hunterSeat, targetSeat } = hunterShot;
       if (targetSeat !== null && targetSeat !== undefined) {
         dayEvents.push({
           type: "hunter_shot",
@@ -718,16 +719,14 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
     
     if (day === 1 && state.badge.holderSeat !== null) {
       const badgeVotes = state.badge.history?.[1] || {};
-      const votes: VoteRecord[] = Object.entries(badgeVotes).map(([oderId, targetSeat]) => {
-        const voter = state.players.find(p => p.playerId === oderId);
+      const votes: VoteRecord[] = Object.entries(badgeVotes).map(([voterId, targetSeat]) => {
+        const voter = state.players.find(p => p.playerId === voterId);
         return {
           voterSeat: (voter?.seat ?? -1) + 1,
           targetSeat: (targetSeat as number) + 1,
         };
       });
 
-      // 从投票记录中提取实际候选人（被投票的玩家）
-      const votedSeats = new Set(Object.values(badgeVotes) as number[]);
       // 从发言消息中提取候选人（DAY_BADGE_SPEECH阶段发言的玩家）
       const speechCandidates = state.messages
         .filter(m => m.day === day && m.phase === "DAY_BADGE_SPEECH" && !m.isSystem)
@@ -737,8 +736,14 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
         })
         .filter((seat): seat is number => seat !== undefined);
       
-      // 合并候选人：发言的玩家 + 被投票的玩家
-      const candidateSeats = [...new Set([...speechCandidates, ...votedSeats])].sort((a, b) => a - b);
+      // 从投票记录中提取被投票的玩家座位
+      const votedSeats = new Set(Object.values(badgeVotes) as number[]);
+      
+      // 合并候选人：发言的玩家 + 被投票的玩家 + 当选者（确保当选者在列表中）
+      const allCandidateSeats = new Set([...speechCandidates, ...votedSeats]);
+      // 确保当选者一定在候选人列表中
+      allCandidateSeats.add(state.badge.holderSeat);
+      const candidateSeats = [...allCandidateSeats].sort((a, b) => a - b);
       
       // 计算当选警长的得票数（确保类型一致比较）
       const badgeVoteCount = Object.entries(badgeVotes).filter(
@@ -875,6 +880,11 @@ export async function generateGameAnalysis(
   const tags = evaluateTag(humanPlayer, state, ctx);
   const aiData = await generateAIAnalysisData(state, humanPlayer, resolvedModel);
   
+  const humanSpeeches = state.messages
+    .filter(m => m.playerName === humanPlayer.displayName && !m.isSystem)
+    .map(m => m.content);
+  const hasSpeeches = humanSpeeches.length > 0;
+  
   const baseRadarStats = calculateRadarStats(humanPlayer, state, ctx);
   const radarStats = {
     ...baseRadarStats,
@@ -890,7 +900,7 @@ export async function generateGameAnalysis(
     alignment: ROLE_ALIGNMENT[humanPlayer.role],
     tags,
     radarStats,
-    highlightQuote: aiData.highlightQuote,
+    highlightQuote: hasSpeeches ? aiData.highlightQuote : "",
     totalScore,
   };
 
@@ -1024,7 +1034,7 @@ ${allHumanSpeeches || "（无发言记录）"}
 2. 【重要】优先考虑将玩家「${humanPlayer.displayName}」评为MVP或SVP（如果他在对应阵营且表现不差）
 3. reviews必须包含2条队友评价（ally，从「${alliesText}」中选择）和1条对手评价（enemy，从「${enemiesText}」中选择）
 4. 【重要】队友是指同一阵营的玩家，对手是指敌对阵营的玩家。${humanAlignmentText}的队友只能是${humanAlignmentText}的其他成员！
-5. highlightQuote必须是玩家的原话，如果没有精彩发言则编写一句符合其角色的台词
+5. highlightQuote必须是玩家的原话，从上面的发言记录中选取，如果无发言记录则返回空字符串""
 6. 角色名使用英文：Werewolf, Seer, Witch, Hunter, Guard, Villager
 7. speechScores评分标准：
    - logic（逻辑严密度）：分析发言是否有逻辑漏洞、推理是否合理

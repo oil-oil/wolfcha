@@ -359,22 +359,20 @@ export function PersonalStatsCard({ stats, overrideTag, onOverrideTagChange }: P
         onSelectTag={(tag) => onOverrideTagChange?.(tag)}
       />
 
-      {stats.highlightQuote && (
-        <div className="bg-[#141210] border border-[var(--color-gold)]/10 rounded-lg p-4 relative mt-2">
-          <Quote className="absolute top-3 left-3 w-6 h-6 text-[var(--color-gold)]/20" />
-          <p className="text-sm text-[var(--text-secondary)] italic text-center px-4 py-2 leading-relaxed">
-            &ldquo;{stats.highlightQuote}&rdquo;
-          </p>
-          <div className="flex justify-center mt-3 gap-4 text-[10px] text-[var(--color-gold)]/60 tracking-wider">
-            <span className="flex items-center gap-1.5">
-              <ThumbsUp className="w-3 h-3" /> HIGHLIGHT
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Brain className="w-3 h-3" /> BEST LOGIC
-            </span>
-          </div>
+      <div className="bg-[#141210] border border-[var(--color-gold)]/10 rounded-lg p-4 relative mt-2">
+        <Quote className="absolute top-3 left-3 w-6 h-6 text-[var(--color-gold)]/20" />
+        <p className="text-sm text-[var(--text-secondary)] italic text-center px-4 py-2 leading-relaxed">
+          {stats.highlightQuote ? `"${stats.highlightQuote}"` : "未发言"}
+        </p>
+        <div className="flex justify-center mt-3 gap-4 text-[10px] text-[var(--color-gold)]/60 tracking-wider">
+          <span className="flex items-center gap-1.5">
+            <ThumbsUp className="w-3 h-3" /> HIGHLIGHT
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Brain className="w-3 h-3" /> BEST LOGIC
+          </span>
         </div>
-      )}
+      </div>
     </section>
   );
 }

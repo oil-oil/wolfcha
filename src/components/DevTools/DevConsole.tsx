@@ -21,6 +21,7 @@ import { PhaseManager } from "@/game/core/PhaseManager";
 import { DEFAULT_VOICE_ID, resolveVoiceId, VOICE_PRESETS, ENGLISH_VOICE_PRESETS, type AppLocale } from "@/lib/voice-constants";
 import { getLocale } from "@/i18n/locale-store";
 import { aiLogger } from "@/lib/ai-logger";
+import { useGameAnalysis } from "@/hooks/useGameAnalysis";
 
 type AILogEntry = {
   id: string;
@@ -1091,6 +1092,7 @@ function GlobalTab({
   const router = useRouter();
   const phaseNames = usePhaseNames();
   const formatPlayerLabel = useFormatPlayerLabel();
+  const { triggerAnalysis, isLoading: isAnalysisLoading } = useGameAnalysis();
   const actionDays = useMemo(() => {
     const days = new Set<number>();
     Object.keys(gameState.nightHistory || {}).forEach((d) => days.add(Number(d)));
@@ -1229,7 +1231,7 @@ function GlobalTab({
       {/* 复盘测试 */}
       <Section title="复盘测试">
         <button
-          onClick={() => router.push("/analysis-demo")}
+          onClick={() => router.push("/test-analysis")}
           className="w-full px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-purple-600 hover:bg-purple-500 text-white"
         >
           <ChartBar size={18} weight="fill" />
@@ -1238,6 +1240,33 @@ function GlobalTab({
         <div className="mt-2 text-xs text-gray-400">
           跳转到复盘页面，使用预设的Mock数据进行UI测试
         </div>
+        
+        <button
+          onClick={() => router.push("/test-analysis/from-log")}
+          className="w-full mt-3 px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-green-600 hover:bg-green-500 text-white"
+        >
+          <ChartBar size={18} weight="fill" />
+          从日志文件生成复盘
+        </button>
+        <div className="mt-2 text-xs text-gray-400">
+          上传游戏日志JSON文件，测试复盘生成功能
+        </div>
+        
+        {gameState.phase === "GAME_END" && (
+          <>
+            <button
+              onClick={() => triggerAnalysis()}
+              disabled={isAnalysisLoading}
+              className="w-full mt-3 px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-50"
+            >
+              <Lightning size={18} weight="fill" />
+              {isAnalysisLoading ? "重新生成中..." : "重新生成复盘数据"}
+            </button>
+            <div className="mt-2 text-xs text-gray-400">
+              从当前游戏状态重新生成复盘分析数据
+            </div>
+          </>
+        )}
       </Section>
 
       {/* 全场动作信息记录 */}

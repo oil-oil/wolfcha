@@ -1,15 +1,24 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PostGameAnalysisPage } from "@/components/analysis";
 import { MOCK_ANALYSIS_DATA } from "@/components/analysis/mockData";
+import { TEST_ANALYSIS_DATA } from "@/components/analysis/testMockData";
 import { useGameAnalysis } from "@/hooks/useGameAnalysis";
 
 export default function AnalysisDemoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { analysisData, isLoading, error } = useGameAnalysis();
 
-  const displayData = analysisData || MOCK_ANALYSIS_DATA;
+  const testMode = searchParams.get("test");
+  const getMockData = () => {
+    if (testMode === "village") return TEST_ANALYSIS_DATA;
+    if (testMode === "wolf") return MOCK_ANALYSIS_DATA;
+    return TEST_ANALYSIS_DATA;
+  };
+
+  const displayData = analysisData || getMockData();
 
   const handleReturn = () => {
     router.push("/");
