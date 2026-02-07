@@ -499,8 +499,21 @@ ${checks.join("\n")}
     const healStatus = state.roleAbilities.witchHealUsed ? "已用" : "可用";
     const poisonStatus = state.roleAbilities.witchPoisonUsed ? "已用" : "可用";
     const witchActions: string[] = [];
+    const wolfTargetInfo: string[] = [];
+
     if (state.nightHistory) {
       Object.entries(state.nightHistory).forEach(([day, history]) => {
+        // 收集狼人刀口信息，只有当解药未使用或已被使用但未救人时才显示刀口
+        if (history.wolfTarget !== undefined) {
+          const targetPlayer = state.players.find(p => p.seat === history.wolfTarget);
+          if (targetPlayer) {
+            // 如果解药未被使用，则显示刀口信息；如果解药被使用并且确实救了人，也显示原本的刀口
+            if (!state.roleAbilities.witchHealUsed || history.witchSave) {
+              wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
+            }
+          }
+        }
+
         if (history.witchSave && history.wolfTarget !== undefined) {
           const savedPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (savedPlayer) {
@@ -517,6 +530,9 @@ ${checks.join("\n")}
     }
     let witchInfo = `<your_potions>
 【你的药水状态】解药: ${healStatus} | 毒药: ${poisonStatus}`;
+    if (wolfTargetInfo.length > 0) {
+      witchInfo += `\n【刀口信息】\n${wolfTargetInfo.join('\n')}`;
+    }
     if (witchActions.length > 0) {
       witchInfo += `\n【用药记录】\n${witchActions.join("\n")}`;
     }
