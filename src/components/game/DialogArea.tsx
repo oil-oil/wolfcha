@@ -1246,16 +1246,18 @@ export function DialogArea({
                   <div className={`flex items-center justify-between mt-4 pt-3 border-t ${isNight ? "border-white/10" : "border-black/5"}`}>
                     <span className="text-xs text-[var(--text-muted)]">{t("dialog.playAgainHint")}</span>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={onViewAnalysis}
-                        className="wc-action-btn text-sm h-9 px-4 flex items-center gap-2"
-                        type="button"
-                      >
-                        {isAnalysisLoading && (
-                          <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                        )}
-                        {t("ui.viewAnalysis")}
-                      </button>
+                      {getLocale() === "zh" && (
+                        <button
+                          onClick={onViewAnalysis}
+                          className="wc-action-btn text-sm h-9 px-4 flex items-center gap-2"
+                          type="button"
+                        >
+                          {isAnalysisLoading && (
+                            <span className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                          )}
+                          {t("ui.viewAnalysis")}
+                        </button>
+                      )}
                       <button
                         onClick={onRestart}
                         className="wc-action-btn wc-action-btn--primary text-sm h-9 px-4"
