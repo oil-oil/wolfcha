@@ -503,14 +503,11 @@ ${checks.join("\n")}
 
     if (state.nightHistory) {
       Object.entries(state.nightHistory).forEach(([day, history]) => {
-        // 收集狼人刀口信息，只有当解药未使用或已被使用但未救人时才显示刀口
+        // 收集狼人刀口信息，女巫始终可以看到所有历史刀口
         if (history.wolfTarget !== undefined) {
           const targetPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (targetPlayer) {
-            // 如果解药未被使用，则显示刀口信息；如果解药被使用并且确实救了人，也显示原本的刀口
-            if (!state.roleAbilities.witchHealUsed || history.witchSave) {
-              wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
-            }
+            wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
           }
         }
 
