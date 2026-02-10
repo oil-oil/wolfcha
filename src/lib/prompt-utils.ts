@@ -800,6 +800,14 @@ alive_count: ${alivePlayers.length}
             context += `\nday_${day}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: executedSeat + 1 })}${executedPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${dayHistory.executed.votes}${leaderSeat ? `, ${t("promptUtils.gameContext.mainVoter")}: ${t("promptUtils.gameContext.seatLabel", { seat: leaderSeat })}` : ''}}`;
           } else if (dayHistory?.voteTie) {
             context += `\nday_${day}: {${t("promptUtils.gameContext.result")}: ${t("promptUtils.gameContext.tie")}}`;
+          } else if (sortedTargets.length > 0) {
+            // 即使没有 dayHistory，也显示投票信息（防止投票信息丢失）
+            const topTarget = sortedTargets[0];
+            const targetPlayer = state.players.find(p => p.seat === topTarget.target);
+            const topVoter = topTarget.voters[0];
+            const leaderSeat = topVoter !== undefined ? topVoter + 1 : null;
+            const voteLabel = Number.isInteger(topTarget.weightedVotes) ? `${topTarget.weightedVotes}` : topTarget.weightedVotes.toFixed(1);
+            context += `\nday_${day}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: topTarget.target + 1 })}${targetPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${voteLabel}${leaderSeat ? `, ${t("promptUtils.gameContext.mainVoter")}: ${t("promptUtils.gameContext.seatLabel", { seat: leaderSeat })}` : ''}}`;
           }
         }
       });
