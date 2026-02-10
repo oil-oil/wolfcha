@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
 import { PLAYER_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
-import { gameStateAtom, isValidTransition } from "@/store/game-machine";
+import { gameStateAtom, isValidTransition, clearPersistedGameState, isGameInProgress } from "@/store/game-machine";
 import { getGeneratorModel } from "@/lib/api-keys";
 import {
   createInitialGameState,
@@ -36,7 +36,7 @@ import {
   generateWhiteWolfKingBoomDecision,
 } from "@/lib/game-master";
 import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs, type GeneratedCharacter } from "@/lib/character-generator";
-import { getSystemMessages } from "@/lib/game-texts";
+import { getSystemMessages, getUiText } from "@/lib/game-texts";
 import { getRandomScenario } from "@/lib/scenarios";
 import { DELAY_CONFIG, getRoleName } from "@/lib/game-constants";
 import { generateUUID } from "@/lib/utils";
@@ -91,6 +91,27 @@ export function useGameLogic() {
   const [inputText, setInputText] = useState("");
   const [showTable, setShowTable] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  
+  // Track if we've already restored the game state on mount
+  const hasRestoredRef = useRef(false);
+  // If the FIRST render is already "in progress", it's almost certainly restored from localStorage
+  const restoredInProgressOnMountRef = useRef(
+    isGameInProgress(gameState) && gameState.players.length > 0
+  );
+  const hasResumedFromCheckpointRef = useRef(false);
+
+  // Restore game state from localStorage on mount
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+    
+    // Check if the current gameState is from a restored game in progress
+    if (isGameInProgress(gameState) && gameState.players.length > 0) {
+      console.info("[wolfcha] Restoring game session from previous state");
+      setGameStarted(true);
+      setShowTable(true);
+    }
+  }, [gameState]);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
@@ -187,6 +208,8 @@ export function useGameLogic() {
 
   const getToken = useCallback(() => flowController.current.getToken(), []);
   const isTokenValid = useCallback((token: { isValid: () => boolean }) => token.isValid(), []);
+
+  // 细粒度恢复逻辑在后面定义（等 runNightPhaseAction 等函数定义后）
 
   const scrollToBottom = useCallback(() => {
     if (logRef.current) {
@@ -774,6 +797,274 @@ export function useGameLogic() {
   }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
+  // ============================================
+  // 从检查点恢复后的细粒度推进
+  // 根据恢复的具体阶段决定如何继续流程
+  // ============================================
+  useEffect(() => {
+    if (!restoredInProgressOnMountRef.current) return;
+    if (hasResumedFromCheckpointRef.current) return;
+
+    const s = gameStateRef.current;
+    if (!isGameInProgress(s) || s.players.length === 0) return;
+
+    hasResumedFromCheckpointRef.current = true;
+    const token = getToken();
+
+    console.info(`[wolfcha] Resuming from checkpoint at phase ${s.phase}, day ${s.day}`);
+
+    const uiText = getUiText();
+    const speakerHint = t("speakers.hint");
+
+    const didLastSpeechComeFrom = (state: GameState, playerId: string): boolean => {
+      for (let i = state.messages.length - 1; i >= 0; i--) {
+        const m = state.messages[i];
+        if (m.isSystem) continue;
+        if (m.day !== state.day) continue;
+        if (m.phase !== state.phase) continue;
+        return m.playerId === playerId;
+      }
+      return false;
+    };
+
+    // 根据恢复的阶段决定如何继续
+    switch (s.phase) {
+      case "NIGHT_START": {
+        // 第一晚需要弹身份牌，后续夜晚直接开始夜晚流程
+        if (s.day === 1) {
+          // 第一晚：标记等待身份牌展示
+          pendingStartStateRef.current = s;
+          hasContinuedAfterRevealRef.current = false;
+          isAwaitingRoleRevealRef.current = true;
+        } else {
+          // 后续夜晚：直接开始夜晚流程（不弹身份牌）
+          hasContinuedAfterRevealRef.current = true;
+          isAwaitingRoleRevealRef.current = false;
+          void runNightPhaseAction(s, token, "START_NIGHT");
+        }
+        break;
+      }
+
+      case "NIGHT_GUARD_ACTION": {
+        // 守卫阶段：检查是否已完成
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        const guard = s.players.find((p) => p.role === "Guard" && p.alive);
+        if (!guard || s.nightActions.guardTarget !== undefined) {
+          // 守卫已选择或没有守卫，继续到狼人阶段
+          void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_GUARD");
+        } else if (!guard.isHuman) {
+          // AI 守卫需要重新选择
+          void runNightPhaseAction(s, token, "START_NIGHT");
+        }
+        // 人类守卫等待输入
+        break;
+      }
+
+      case "NIGHT_WOLF_ACTION": {
+        // 狼人阶段：检查是否已完成
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        if (s.nightActions.wolfTarget !== undefined) {
+          // 狼人已选择，继续到女巫阶段
+          void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_WOLF");
+        } else {
+          const humanWolf = s.players.find((p) => p.role === "Werewolf" && p.alive && p.isHuman);
+          if (!humanWolf) {
+            // AI 狼人需要重新选择
+            void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_GUARD");
+          }
+          // 人类狼人等待输入
+        }
+        break;
+      }
+
+      case "NIGHT_WITCH_ACTION": {
+        // 女巫阶段：检查是否已完成
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        const witch = s.players.find((p) => p.role === "Witch" && p.alive);
+        const witchDone =
+          !witch ||
+          (s.roleAbilities.witchHealUsed && s.roleAbilities.witchPoisonUsed) ||
+          s.nightActions.witchSave !== undefined ||
+          s.nightActions.witchPoison !== undefined;
+
+        if (witchDone) {
+          // 女巫已决定，继续到预言家阶段
+          void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_WITCH");
+        } else if (!witch?.isHuman) {
+          // AI 女巫需要重新选择
+          void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_WOLF");
+        }
+        // 人类女巫等待输入
+        break;
+      }
+
+      case "NIGHT_SEER_ACTION": {
+        // 预言家阶段：检查是否已完成
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        if (s.nightActions.seerTarget !== undefined) {
+          // 预言家已查验，设置继续回调并显示查验结果
+          const seerResult = s.nightActions.seerResult;
+          if (seerResult) {
+            const targetPlayer = s.players.find((p) => p.seat === seerResult.targetSeat);
+            setDialogue(
+              t("speakers.seerResult"),
+              t("gameLogicMessages.seerResultText", {
+                seat: seerResult.targetSeat + 1,
+                name: targetPlayer?.displayName || "",
+                result: seerResult.isWolf ? t("gameLogicMessages.werewolfResult") : t("gameLogicMessages.goodResult"),
+              }),
+              false
+            );
+          }
+          nightContinueRef.current = async (state) => {
+            await resolveNight(state, token, async (resolvedState) => {
+              await startDayPhaseInternal(resolvedState, token);
+            });
+          };
+        } else {
+          const seer = s.players.find((p) => p.role === "Seer" && p.alive);
+          if (!seer?.isHuman) {
+            // AI 预言家需要重新查验
+            void runNightPhaseAction(s, token, "CONTINUE_NIGHT_AFTER_WITCH");
+          }
+          // 人类预言家等待输入
+        }
+        break;
+      }
+
+      case "DAY_START": {
+        // 白天开始：进入警徽/讨论流程
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        void startDayPhaseInternal(s, token);
+        break;
+      }
+
+      case "DAY_BADGE_SIGNUP": {
+        // Day 1 警长竞选报名：恢复后继续让 AI 补齐报名，并在全员决定后衔接发言
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        void badgePhase.resumeBadgeSignupPhase(s);
+        break;
+      }
+
+      case "DAY_BADGE_SPEECH":
+      case "DAY_PK_SPEECH":
+      case "DAY_SPEECH": {
+        // 发言阶段：恢复后尝试把 UI/AI 推进到一个可继续的状态
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+
+        // 若没有 speaker（异常/边界），尝试推进到下一个 speaker
+        if (s.currentSpeakerSeat === null) {
+          void runDaySpeechAction(s, token, "ADVANCE_SPEAKER");
+          break;
+        }
+
+        const currentSpeaker = s.players.find((p) => p.seat === s.currentSpeakerSeat) || null;
+        if (!currentSpeaker || !currentSpeaker.alive) {
+          void runDaySpeechAction(s, token, "ADVANCE_SPEAKER");
+          break;
+        }
+
+        if (currentSpeaker.isHuman) {
+          setDialogue(speakerHint, uiText.yourTurn, false);
+          break;
+        }
+
+        // AI speaker：如果刷新前它已经说完（最后一条本 phase 消息来自它），则恢复为"等待下一轮"状态
+        // 否则说明它还没开始/没说完，重新触发一次发言生成
+        const aiAlreadySpoke = didLastSpeechComeFrom(s, currentSpeaker.playerId);
+        if (aiAlreadySpoke) {
+          setWaitingForNextRound(true);
+          break;
+        }
+
+        void runAISpeech(s, currentSpeaker);
+        break;
+      }
+
+      case "DAY_LAST_WORDS": {
+        // 遗言阶段：发言者应该是已死亡的玩家
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+
+        // 若没有 speaker，说明状态异常，跳过遗言直接进入下一阶段
+        if (s.currentSpeakerSeat === null) {
+          console.warn('[wolfcha] DAY_LAST_WORDS: currentSpeakerSeat is null, skipping last words');
+          void proceedToNight(s, token);
+          break;
+        }
+
+        const lastWordsSpeaker = s.players.find((p) => p.seat === s.currentSpeakerSeat) || null;
+        
+        // 遗言发言者必须存在（无论生死）
+        if (!lastWordsSpeaker) {
+          console.warn('[wolfcha] DAY_LAST_WORDS: speaker not found, skipping last words');
+          void proceedToNight(s, token);
+          break;
+        }
+
+        // 遗言阶段的发言者应该是已死亡的玩家，如果还活着说明状态异常
+        if (lastWordsSpeaker.alive) {
+          console.warn('[wolfcha] DAY_LAST_WORDS: speaker is still alive, this should not happen');
+          void proceedToNight(s, token);
+          break;
+        }
+
+        if (lastWordsSpeaker.isHuman) {
+          // 人类玩家：始终恢复到可以继续发言的状态，让玩家决定是否继续或结束
+          setDialogue(speakerHint, uiText.yourTurn, false);
+          break;
+        }
+
+        // AI 遗言发言者：由于无法可靠判断是否已完整说完（可能只说了一部分就刷新了）
+        // 因此不检查历史消息，直接重新触发 AI 发言
+        // AI 会根据历史消息自行判断是否需要继续说，如果已经说过遗言，AI 会生成简短的补充或确认
+        console.info('[wolfcha] DAY_LAST_WORDS: Restoring AI last words, re-triggering speech');
+        void runAISpeech(s, lastWordsSpeaker);
+        break;
+      }
+
+      case "DAY_BADGE_ELECTION": {
+        // 如果已经全员投票，恢复后直接触发一次结算（否则维持现状）
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        void badgePhase.maybeResolveBadgeElection(s);
+        break;
+      }
+
+      case "DAY_VOTE": {
+        // 投票阶段恢复：检查是否所有应投票的玩家都已投完
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        // PK 投票时，参与PK的人不投票
+        const pkTargets =
+          s.pkSource === "vote" && Array.isArray(s.pkTargets) ? s.pkTargets : [];
+        const voterIds = s.players
+          .filter((p) => p.alive && !pkTargets.includes(p.seat))
+          .map((p) => p.playerId);
+        const allVoted = voterIds.length > 0 && voterIds.every((id) => typeof s.votes[id] === "number");
+        if (allVoted) {
+          void resolveVotesSafely(s, token);
+        }
+        // 否则等待剩余玩家投票（人类和AI）
+        break;
+      }
+
+      default: {
+        // 其他阶段暂不自动推进
+        hasContinuedAfterRevealRef.current = true;
+        isAwaitingRoleRevealRef.current = false;
+        break;
+      }
+    }
+  }, [badgePhase, getToken, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
+
   hunterDeathRef.current = async (state: GameState, hunter: Player, diedAtNight: boolean) => {
     const token = getToken();
     await specialEvents.handleHunterDeath(state, hunter, diedAtNight, token, async (afterState) => {
@@ -869,10 +1160,15 @@ export function useGameLogic() {
     const revealedIdiotId = gameState.roleAbilities.idiotRevealed
       ? gameState.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
       : undefined;
-    const aliveIds = gameState.players.filter((p) => p.alive && p.playerId !== revealedIdiotId).map((p) => p.playerId);
-    const allVoted = aliveIds.every((id) => typeof gameState.votes[id] === "number");
+    // PK投票时，参与PK的人不投票，需要排除
+    const pkTargets =
+      gameState.pkSource === "vote" && Array.isArray(gameState.pkTargets) ? gameState.pkTargets : [];
+    const voterIds = gameState.players
+      .filter((p) => p.alive && p.playerId !== revealedIdiotId && !pkTargets.includes(p.seat))
+      .map((p) => p.playerId);
+    const allVoted = voterIds.every((id) => typeof gameState.votes[id] === "number");
     
-    if (allVoted && aliveIds.length > 0) {
+    if (allVoted && voterIds.length > 0) {
       console.log("[wolfcha] useEffect: All votes detected, triggering resolveVotePhase as safety net");
       const token = getToken();
       void resolveVotesSafely(gameState, token);
@@ -1379,14 +1675,16 @@ export function useGameLogic() {
         hasContinuedAfterRevealRef.current = true;
         isAwaitingRoleRevealRef.current = false;
         
-        // Start the night phase directly
-        const token = getToken();
-        if (isTokenValid(token)) {
-          const systemMessages = getSystemMessages();
-          setDialogue(speakerHost, systemMessages.nightFall(newState.day), false);
-          await playNarrator("nightFall");
-          await runNightPhaseAction(newState, token, "START_NIGHT");
-        }
+        // Start the night phase directly after state is set
+        setTimeout(async () => {
+          const token = getToken();
+          if (isTokenValid(token)) {
+            const systemMessages = getSystemMessages();
+            setDialogue(speakerHost, systemMessages.nightFall(newState.day), false);
+            await playNarrator("nightFall");
+            await runNightPhaseAction(newState, token, "START_NIGHT");
+          }
+        }, 0);
       } else {
         pendingStartStateRef.current = devPreset ? null : newState;
         hasContinuedAfterRevealRef.current = false;
@@ -1415,8 +1713,10 @@ export function useGameLogic() {
   /** 角色揭示后继续 */
   const continueAfterRoleReveal = useCallback(async () => {
     const token = getToken();
-    const pending = pendingStartStateRef.current;
+    const pending = pendingStartStateRef.current ?? gameStateRef.current;
     if (!pending) return;
+    // Only meaningful at NIGHT_START (role reveal screen)
+    if (pending.phase !== "NIGHT_START") return;
     if (hasContinuedAfterRevealRef.current) return;
 
     hasContinuedAfterRevealRef.current = true;
@@ -1438,6 +1738,9 @@ export function useGameLogic() {
 
   /** 重新开始 */
   const restartGame = useCallback(() => {
+    // Clear persisted game state from localStorage
+    clearPersistedGameState();
+    
     setGameState(createInitialGameState());
     resetDialogueState();
     setInputText("");
@@ -1531,9 +1834,9 @@ export function useGameLogic() {
     if (baseState.phase !== "DAY_VOTE" && baseState.phase !== "DAY_BADGE_ELECTION") return;
     const targetPlayer = baseState.players.find((p) => p.seat === targetSeat);
     if (!targetPlayer || !targetPlayer.alive) return;
-    if (typeof baseState.votes[humanPlayer.playerId] === "number") return;
 
     if (baseState.phase === "DAY_BADGE_ELECTION") {
+      if (typeof baseState.badge.votes?.[humanPlayer.playerId] === "number") return;
       const candidates = baseState.badge.candidates || [];
       if (candidates.includes(humanPlayer.seat)) {
         console.warn("[wolfcha] Candidate cannot vote in badge election");
@@ -1555,6 +1858,7 @@ export function useGameLogic() {
       return;
     }
 
+    if (typeof baseState.votes[humanPlayer.playerId] === "number") return;
     if (baseState.pkSource === "vote" && Array.isArray(baseState.pkTargets) && baseState.pkTargets.length > 0) {
       if (!baseState.pkTargets.includes(targetSeat)) {
         console.warn("[wolfcha] Vote target not in PK list");

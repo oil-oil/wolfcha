@@ -143,6 +143,7 @@ export interface GameState {
   gameId: string;
   phase: Phase;
   day: number;
+  startTime?: number;
   devMutationId?: number;
   devPhaseJump?: { to: Phase; ts: number };
   isPaused?: boolean;
@@ -164,6 +165,7 @@ export interface GameState {
     candidates: number[];
     signup: Record<string, boolean>;
     votes: Record<string, number>;
+    allVotes: Record<string, number>;
     history: Record<number, Record<string, number>>;
     revoteCount: number;
   };
@@ -238,25 +240,27 @@ export interface DailySummaryVoteData {
 }
 
 // Models for summary & character generation
-export const GENERATOR_MODEL = "google/gemini-2.5-flash-lite";
-export const SUMMARY_MODEL = "google/gemini-2.5-flash-lite";
+export const GENERATOR_MODEL = "qwen-flash";
+export const SUMMARY_MODEL = "qwen-flash";
+export const REVIEW_MODEL = "google/gemini-3-flash-preview";
 
 // Default models used when custom key is not enabled
 // Note: SUMMARY_MODEL and GENERATOR_MODEL are included here for server-side validation.
 export const AVAILABLE_MODELS: ModelRef[] = [
+  { provider: "dashscope", model: "qwen-flash" },
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen3-max" },
 
-  // { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
-  { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
-  { provider: "zenmux", model: "z-ai/glm-4.7" },
+  { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
+  // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
+  // { provider: "zenmux", model: "z-ai/glm-4.7" },
   // {provider:"zenmux", model:"minimax/minimax-m2.1"},
   
   // { provider: "zenmux", model: "google/gemini-3-flash-preview" },
 ];
 
 // Models not allowed for in-game players (summary & generation only)
-export const NON_PLAYER_MODELS = [GENERATOR_MODEL, SUMMARY_MODEL];
+export const NON_PLAYER_MODELS = [GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL];
 
 export function filterPlayerModels(models: ModelRef[]): ModelRef[] {
   return models.filter((ref) => !NON_PLAYER_MODELS.includes(ref.model));
@@ -268,6 +272,7 @@ export const PLAYER_MODELS: ModelRef[] = filterPlayerModels(AVAILABLE_MODELS);
 // All available models for custom key users (includes commented ones from AVAILABLE_MODELS)
 export const ALL_MODELS: ModelRef[] = [
   // Dashscope models
+  { provider: "dashscope", model: "qwen-flash" },
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen-plus-2025-12-01" },
   { provider: "dashscope", model: "qwen3-max" },

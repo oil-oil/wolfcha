@@ -17,6 +17,7 @@ import { SharePanel } from "@/components/game/SharePanel";
 import { AccountModal } from "@/components/game/AccountModal";
 import { ResetPasswordModal } from "@/components/game/ResetPasswordModal";
 import { UserProfileModal } from "@/components/game/UserProfileModal";
+import { LowCreditModal, LOW_CREDIT_THRESHOLD } from "@/components/game/LowCreditModal";
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
@@ -267,6 +268,8 @@ export function WelcomeScreen({
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCustomCharacterOpen, setIsCustomCharacterOpen] = useState(false);
+  const [isLowCreditOpen, setIsLowCreditOpen] = useState(false);
+  const [userProfileDefaultTab, setUserProfileDefaultTab] = useState<string | undefined>(undefined);
   const selectionStorageKey = useMemo(() => {
     return user?.id
       ? `${CUSTOM_CHARACTER_SELECTION_STORAGE_KEY}:${user.id}`
@@ -438,6 +441,7 @@ export function WelcomeScreen({
     isGroupOpen ||
     isMobileMenuOpen ||
     isCustomCharacterOpen ||
+    isLowCreditOpen ||
     isDevConsoleOpen;
 
   useEffect(() => {
@@ -543,9 +547,8 @@ export function WelcomeScreen({
 
     const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
 
-    if (!hasUserKey && credits !== null && credits <= 0) {
-      setIsShareOpen(true);
-      toast(t("welcome.toast.noCredits.title"), { description: t("welcome.toast.noCredits.description") });
+    if (!hasUserKey && credits !== null && credits <= LOW_CREDIT_THRESHOLD) {
+      setIsLowCreditOpen(true);
       return;
     }
 
@@ -611,6 +614,70 @@ export function WelcomeScreen({
       });
   };
 
+  const handleOpenPayAsYouGo = () => {
+    setUserProfileDefaultTab("payAsYouGo");
+    setIsUserProfileOpen(true);
+  };
+
+  const handleStartGameFromLowCreditModal = () => {
+    isStartingRef.current = true;
+
+    const seal = sealButtonRef.current;
+    if (seal) createParticles(seal);
+
+    setIsTransitioning(true);
+
+    window.setTimeout(() => {
+      const roles = devTab === "roles" && roleConfigValid ? (fixedRoles as Role[]) : undefined;
+      const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
+
+      const selectedCustomChars = customCharacters.characters
+        .filter(c => selectedCharacterIds.has(c.id))
+        .map(c => ({
+          id: c.id,
+          display_name: c.display_name,
+          gender: c.gender,
+          age: c.age,
+          mbti: c.mbti,
+          basic_info: c.basic_info,
+          style_label: c.style_label,
+          avatar_seed: c.avatar_seed,
+        }));
+
+      void onStart({
+        fixedRoles: roles,
+        devPreset: preset,
+        difficulty,
+        playerCount,
+        customCharacters: selectedCustomChars,
+      });
+    }, 800);
+
+    const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
+    if (hasUserKey) {
+      isStartingRef.current = false;
+      return;
+    }
+
+    void consumeCredit()
+      .then((consumed) => {
+        if (consumed) return;
+        setIsTransitioning(false);
+        onAbort?.();
+        setIsShareOpen(true);
+        toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
+      })
+      .catch(() => {
+        setIsTransitioning(false);
+        onAbort?.();
+        setIsShareOpen(true);
+        toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
+      })
+      .finally(() => {
+        isStartingRef.current = false;
+      });
+  };
+
   const handleOpenGroup = () => {
     if (locale === "en") {
       if (typeof window !== "undefined") {
@@ -662,7 +729,10 @@ export function WelcomeScreen({
         <AccountModal open={isAccountOpen} onOpenChange={setIsAccountOpen} />
         <UserProfileModal
           open={isUserProfileOpen}
-          onOpenChange={setIsUserProfileOpen}
+          onOpenChange={(open) => {
+            setIsUserProfileOpen(open);
+            if (!open) setUserProfileDefaultTab(undefined);
+          }}
           email={user?.email}
           credits={credits ?? undefined}
           referralCode={referralCode}
@@ -671,8 +741,15 @@ export function WelcomeScreen({
           onShareInvite={() => setIsShareOpen(true)}
           onSignOut={signOut}
           onCustomKeyEnabledChange={setCustomKeyEnabled}
-          accessToken={session?.access_token}
           onCreditsChange={fetchCredits}
+          defaultTab={userProfileDefaultTab}
+        />
+        <LowCreditModal
+          open={isLowCreditOpen}
+          onOpenChange={setIsLowCreditOpen}
+          credits={credits ?? 0}
+          onStartGame={handleStartGameFromLowCreditModal}
+          onOpenPayAsYouGo={handleOpenPayAsYouGo}
         />
         <ResetPasswordModal
           open={isPasswordRecovery}

@@ -351,17 +351,20 @@ export class NightPhase extends GamePhase {
   private async runNightPhase(state: GameState, runtime: NightPhaseRuntime): Promise<void> {
     let currentState = state;
 
-    currentState = await this.runGuardAction(currentState, runtime);
-    if (!runtime.isTokenValid(runtime.token)) return;
+    const hasGuard = currentState.players.some((p) => p.role === "Guard");
+    if (hasGuard) {
+      currentState = await this.runGuardAction(currentState, runtime);
+      if (!runtime.isTokenValid(runtime.token)) return;
 
-    const guard = currentState.players.find((p) => p.role === "Guard" && p.alive);
-    if (guard?.isHuman && currentState.nightActions.guardTarget === undefined) {
-      return;
+      const guard = currentState.players.find((p) => p.role === "Guard" && p.alive);
+      if (guard?.isHuman && currentState.nightActions.guardTarget === undefined) {
+        return;
+      }
+
+      await delay(DELAY_CONFIG.NIGHT_PHASE_GAP);
+      await runtime.waitForUnpause();
+      if (!runtime.isTokenValid(runtime.token)) return;
     }
-
-    await delay(DELAY_CONFIG.NIGHT_PHASE_GAP);
-    await runtime.waitForUnpause();
-    if (!runtime.isTokenValid(runtime.token)) return;
 
     currentState = await this.runWolfAction(currentState, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;

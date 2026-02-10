@@ -213,6 +213,14 @@
       },
       "exportSuccess": "Log file exported",
       "exportFail": "Export failed"
+    },
+    "game": {
+      "exitGame": "Exit Game",
+      "exitGameDescription": "Exit current game and return to home screen",
+      "exitConfirmTitle": "Exit game?",
+      "exitConfirmDescription": "Your current game progress will be lost and cannot be recovered.",
+      "exitConfirmButton": "Exit",
+      "exitCancelButton": "Continue Playing"
     }
   },
   "playerCount": {
@@ -929,6 +937,7 @@
     "generatingRoles": "Inviting other players...",
     "startGame": "Start game",
     "restart": "Play again",
+    "viewAnalysis": "Analysis",
     "speechOrder": "Players speak in order",
     "generatingVoice": "Generating voice",
     "seatNumber": "Seat {seat}",
@@ -2014,6 +2023,11 @@
     "payAsYouGo": {
       "title": "Buy Game Credits",
       "description": "Purchase single-game credits without a subscription. Each credit grants one game session.",
+      "wechatPayHint": "WeChat/Alipay (¥2/game) - contact developer",
+      "contactDeveloper": "Contact",
+      "wechatQrTitle": "Developer WeChat",
+      "wechatQrDescription": "Scan to add developer on WeChat, note 'Wolfcha credits'",
+      "longPressToSave": "Long press to save image",
       "pricePerGame": "${price} per game",
       "quantity": "Quantity",
       "quantityPlaceholder": "Enter quantity",
@@ -2056,8 +2070,9 @@
       "description": "Character generation, daily summary, and AI player selection",
       "generator": "Character Generator Model",
       "summary": "Daily Summary Model",
+      "review": "Post-Game Review Model",
       "candidates": "AI Player Candidates",
-      "candidatesDesc": "Select multiple models to draw AI players from"
+      "candidatesDesc": "Select models for AI players"
     },
     "voice": {
       "title": "Voice & Sound (Optional)",
@@ -2164,5 +2179,16 @@
       "copied": "Copied to clipboard",
       "copyFailed": "Copy failed"
     }
+  },
+  "lowCreditModal": {
+    "title": "Running Low on Credits",
+    "description": "Your game credits are running low. Consider recharging for a better experience.",
+    "currentCredits": "Credits Left",
+    "unit": "games",
+    "guidance": "We're indie developers, and server & AI costs add up. If you enjoy this game, your support helps us keep it running 🙏",
+    "buyApiKey": "Get API Key",
+    "recharge": "Buy Game Credits",
+    "startGame": "Continue Playing",
+    "startGameNoCredits": "Buy Game Credits"
   }
 }

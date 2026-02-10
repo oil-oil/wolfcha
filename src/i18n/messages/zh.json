@@ -213,6 +213,14 @@
       },
       "exportSuccess": "已导出日志文件",
       "exportFail": "导出失败"
+    },
+    "game": {
+      "exitGame": "退出游戏",
+      "exitGameDescription": "退出当前游戏并返回主界面",
+      "exitConfirmTitle": "确定要退出游戏吗？",
+      "exitConfirmDescription": "当前游戏进度将丢失，无法恢复。",
+      "exitConfirmButton": "确认退出",
+      "exitCancelButton": "继续游戏"
     }
   },
   "playerCount": {
@@ -929,6 +937,7 @@
     "generatingRoles": "正在邀请其他玩家…",
     "startGame": "开始游戏",
     "restart": "再来一局",
+    "viewAnalysis": "复盘报告",
     "speechOrder": "请各位玩家依次发言",
     "generatingVoice": "生成语音",
     "seatWithName": "{seat}号 {name}",
@@ -1855,8 +1864,8 @@
       "werewolfParticipated": "参与了狼人刀人"
     },
     "dailySummary": {
-      "systemPrompt": "你是狼人杀的客观记录员。\n\n任务：把给定记录压缩为【要点列表】，作为后续玩家长期记忆。\n\n【核心原则】\n- 客观记录\"谁说了什么、谁做了什么\"，禁止评价或判断\n- 保留原始发言的要点和立场，而非你的看法\n\n【必须记录的内容（缺一不可）】\n1. 夜晚结果：平安夜/谁死亡/死因\n2. 警徽结果：谁上警、谁当选警长、得票情况\n3. 身份声明：谁跳了什么身份、报了什么查验\n4. 每个发言玩家的核心观点（1句话概括）\n5. 站边关系：谁支持谁、谁质疑谁\n6. 投票结果：谁被放逐、票型分布\n\n【格式要求】\n- 必须包含座位号（如\"2号\"）\n- 每条要点简短\n- 要点数量 6-12 条\n- 确保每个发言玩家都有记录\n\n输出格式：严格返回 JSON：\n'{' \"bullets\": [\"要点1\", \"要点2\", ...] '}'",
-      "userPrompt": "【第{day}天 白天记录】\n{transcript}\n\n请严格返回 JSON：",
+      "systemPrompt": "你是狼人杀局势概括员。用1-2句话概括当天局势，不要罗列细节。\n\n【示例输出】\n- 竞选阶段：\"1号和7号均声明自己是预言家并上警竞选，1号查杀9号，7号反查杀1号。\"\n- 发言阶段：\"7号当选警长后，各玩家就两位预言家的真假进行讨论，最终1号被全票放逐。\"\n\n【要求】\n- 只概括核心局势走向\n- 包含关键座位号\n- 每个阶段1-2句话即可\n\n输出格式：'{ \"summary\": \"概括内容\" }'",
+      "userPrompt": "【第{day}天 白天记录】\n{transcript}\n\n请用1-2句话概括局势：",
       "fallbackText": "第{day}天：暂无摘要"
     },
     "voteFallback": {
@@ -2014,6 +2023,11 @@
     "payAsYouGo": {
       "title": "购买游戏额度",
       "description": "无需订阅，按需购买单次游戏额度。每个额度可进行一局游戏。",
+      "wechatPayHint": "微信/支付宝支付（每局¥2）可联系开发人员",
+      "contactDeveloper": "联系开发者",
+      "wechatQrTitle": "开发者微信",
+      "wechatQrDescription": "扫码添加开发者微信，备注「狼人杀充值」即可",
+      "longPressToSave": "长按图片可保存到相册",
       "pricePerGame": "每局 ${price}",
       "quantity": "购买数量",
       "quantityPlaceholder": "输入数量",
@@ -2056,6 +2070,7 @@
       "description": "人物生成、每日总结与 AI 玩家抽选",
       "generator": "人物生成模型",
       "summary": "每日总结模型",
+      "review": "复盘报告模型",
       "candidates": "AI 玩家候选",
       "candidatesDesc": "从中抽取 AI 玩家，可多选"
     },
@@ -2164,5 +2179,16 @@
       "copied": "已复制到剪贴板",
       "copyFailed": "复制失败"
     }
+  },
+  "lowCreditModal": {
+    "title": "额度即将用尽",
+    "description": "您的游戏额度较低，建议补充额度以获得更好的体验。",
+    "currentCredits": "剩余额度",
+    "unit": "局",
+    "guidance": "我们是独立开发者，服务器和 AI 调用成本不低。如果你喜欢这个游戏，希望能支持一下我们继续做下去 🙏",
+    "buyApiKey": "购买 API Key",
+    "recharge": "充值游戏额度",
+    "startGame": "继续开始游戏",
+    "startGameNoCredits": "充值游戏额度"
   }
 }

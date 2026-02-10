@@ -4354,3 +4354,73 @@ input[type="submit"]:not(:disabled),
 .animate-role-card-enter {
   animation: role-card-enter 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* ========== Post Game Analysis Page ========== */
+.analysis-page {
+  background-color: #1a1614;
+  color: #f0e6d2;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(138, 28, 28, 0.15), transparent 60%),
+    radial-gradient(circle at 0% 100%, rgba(197, 160, 89, 0.08), transparent 50%);
+}
+
+@keyframes analysis-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.analysis-card {
+  background: linear-gradient(145deg, rgba(40, 35, 33, 0.9), rgba(30, 25, 23, 0.95));
+  border: 1px solid rgba(197, 160, 89, 0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 40px rgba(0,0,0,0.2);
+  position: relative;
+}
+
+.analysis-card::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid rgba(197, 160, 89, 0.1);
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.analysis-ornament-border {
+  position: relative;
+}
+
+.analysis-ornament-border::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(197, 160, 89, 0.5), transparent);
+}
+
+.analysis-nav-line {
+  position: absolute;
+  left: 50%; 
+  transform: translateX(-50%);
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(to bottom, rgba(197, 160, 89, 0.1), rgba(197, 160, 89, 0.3), rgba(197, 160, 89, 0.1));
+  z-index: 0;
+}
+
+.analysis-hide-scrollbar::-webkit-scrollbar { 
+  display: none; 
+}
+
+.analysis-hide-scrollbar { 
+  -ms-overflow-style: none; 
+  scrollbar-width: none; 
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  20% { left: 100%; }
+  100% { left: 100%; }
+}

@@ -1,4 +1,4 @@
-import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL } from "@/types/game";
+import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/types/game";
 
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
@@ -8,6 +8,7 @@ const CUSTOM_KEY_ENABLED_STORAGE = "wolfcha_custom_key_enabled";
 const SELECTED_MODELS_STORAGE = "wolfcha_selected_models";
 const GENERATOR_MODEL_STORAGE = "wolfcha_generator_model";
 const SUMMARY_MODEL_STORAGE = "wolfcha_summary_model";
+const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
 
@@ -212,6 +213,19 @@ export function setSummaryModel(model: string) {
   writeStorage(SUMMARY_MODEL_STORAGE, model);
 }
 
+export function getReviewModel(): string {
+  // When custom key is disabled, always use REVIEW_MODEL directly
+  if (!isCustomKeyEnabled()) {
+    return REVIEW_MODEL;
+  }
+  const stored = readStorage(REVIEW_MODEL_STORAGE);
+  return resolveModelForCurrentKeyState(stored, REVIEW_MODEL, REVIEW_MODEL_STORAGE);
+}
+
+export function setReviewModel(model: string) {
+  writeStorage(REVIEW_MODEL_STORAGE, model);
+}
+
 export function clearApiKeys() {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(ZENMUX_API_KEY_STORAGE);
@@ -222,6 +236,7 @@ export function clearApiKeys() {
   window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
   window.localStorage.removeItem(GENERATOR_MODEL_STORAGE);
   window.localStorage.removeItem(SUMMARY_MODEL_STORAGE);
+  window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
   window.localStorage.removeItem(VALIDATED_ZENMUX_KEY_STORAGE);
   window.localStorage.removeItem(VALIDATED_DASHSCOPE_KEY_STORAGE);
 }

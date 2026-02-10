@@ -30,7 +30,7 @@ import { useTypewriter } from "@/hooks/useTypewriter";
 import { useGameLogic } from "@/hooks/useGameLogic";
 import type { Player, Role } from "@/types/game";
 import { isWolfRole } from "@/types/game";
-import { PHASE_CONFIGS } from "@/store/game-machine";
+import { PHASE_CONFIGS, isGameInProgress } from "@/store/game-machine";
 import { getI18n } from "@/i18n/translator";
 import { getSystemMessages, getSystemPatterns } from "@/lib/game-texts";
 import { useTranslations } from "next-intl";
@@ -59,6 +59,8 @@ import { getLocale } from "@/i18n/locale-store";
 import { useSettings } from "@/hooks/useSettings";
 import { useTutorial } from "@/hooks/useTutorial";
 import { persistReferralFromCurrentUrl, removeReferralFromCurrentUrl } from "@/lib/referral";
+import { useRouter, useParams } from "next/navigation";
+import { useGameAnalysis } from "@/hooks/useGameAnalysis";
 
 const RITUAL_CUE_DURATION_SECONDS = 2.2;
 const DAY_NIGHT_BLINK = {
@@ -135,6 +137,9 @@ function getRitualCueFromSystemMessage(content: string): { title: string; subtit
 
 export default function Home() {
   const t = useTranslations();
+  const router = useRouter();
+  const params = useParams();
+  const slug = params?.slug as string | undefined;
   const {
     humanName,
     setHumanName,
@@ -167,6 +172,9 @@ export default function Home() {
   const { settings, setBgmVolume, setSoundEnabled, setAiVoiceEnabled, setGenshinMode, setSpectatorMode, setAutoAdvanceDialogueEnabled } = useSettings();
   const { bgmVolume, isSoundEnabled, isAiVoiceEnabled, isGenshinMode, isSpectatorMode, isAutoAdvanceDialogueEnabled } = settings;
   const shouldUseAiVoice = isSoundEnabled && isAiVoiceEnabled && bgmVolume > 0;
+  
+  // Exit game functionality - use restartGame which properly handles all state resets
+  const gameInProgress = useMemo(() => isGameInProgress(gameState), [gameState]);
   const {
     state: tutorialState,
     isLoaded: isTutorialLoaded,
@@ -176,6 +184,9 @@ export default function Home() {
     markSeenDayIntro,
     markSeenRole,
   } = useTutorial();
+
+  // 游戏结束时自动触发复盘分析生成
+  const { isLoading: isAnalysisLoading } = useGameAnalysis();
 
   const [visualIsNight, setVisualIsNight] = useState(isNight);
   const visualIsNightRef = useRef(isNight);
@@ -215,6 +226,12 @@ export default function Home() {
     if (gameState.phase !== "GAME_END") return;
     setAiVoiceEnabled(false);
   }, [gameState.phase, setAiVoiceEnabled]);
+
+  const handleViewAnalysis = useCallback(() => {
+    const basePath = slug ? `/${slug}` : "";
+    const gameIdShort = gameState.gameId?.substring(0, 6).toUpperCase() || "";
+    router.push(`${basePath}/analysis#${gameIdShort}`);
+  }, [router, slug, gameState.gameId]);
 
   const clearDayNightBlinkTimers = useCallback(() => {
     dayNightBlinkTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
@@ -263,6 +280,13 @@ export default function Home() {
     if (isNight) {
       // Mark that we need to blink to night
       pendingNightBlinkRef.current = true;
+      
+      // In spectator mode (no human player), trigger night blink immediately
+      // because the game progresses quickly without waiting for role reveal
+      if (showTable && !humanPlayer) {
+        scheduleDayNightBlink(true, 0);
+        pendingNightBlinkRef.current = false;
+      }
       return;
     }
 
@@ -270,7 +294,7 @@ export default function Home() {
     pendingNightBlinkRef.current = false;
     lastNightCueIdRef.current = null;
     scheduleDayNightBlink(false, 0);
-  }, [isNight, scheduleDayNightBlink]);
+  }, [isNight, scheduleDayNightBlink, showTable, humanPlayer]);
 
   useEffect(() => {
     return () => {
@@ -746,6 +770,10 @@ export default function Home() {
       clearAutoAdvanceTimeout();
       return;
     }
+    if (!showTable) {
+      clearAutoAdvanceTimeout();
+      return;
+    }
     if (isRoleRevealOpen) {
       clearAutoAdvanceTimeout();
       return;
@@ -817,6 +845,7 @@ export default function Home() {
     isRoleRevealOpen,
     isSettingsOpen,
     isWaitingForAI,
+    showTable,
     waitingForNextRound,
   ]);
 
@@ -834,6 +863,8 @@ export default function Home() {
     if (!humanPlayer) return;
     if (hasShownRoleReveal) return;
     if (gameState.phase !== "NIGHT_START") return;
+    // 只在第一晚弹身份牌，恢复到后续夜晚时不再弹
+    if (gameState.day !== 1) return;
     if (!visualIsNight) return;
     if (dayNightBlinkPhase) return;
     const t = window.setTimeout(() => {
@@ -841,7 +872,7 @@ export default function Home() {
       setHasShownRoleReveal(true);
     }, 380);
     return () => window.clearTimeout(t);
-  }, [showTable, humanPlayer, hasShownRoleReveal, gameState.phase, visualIsNight, dayNightBlinkPhase]);
+  }, [showTable, humanPlayer, hasShownRoleReveal, gameState.phase, gameState.day, visualIsNight, dayNightBlinkPhase]);
 
   const openTutorial = useCallback(
     (payload: TutorialPayload, options?: { force?: boolean }) => {
@@ -1561,6 +1592,8 @@ export default function Home() {
                       onBadgeSignup={handleBadgeSignup}
                       onRestart={restartGame}
                       onWhiteWolfKingBoom={handleWhiteWolfKingBoom}
+                      onViewAnalysis={handleViewAnalysis}
+                      isAnalysisLoading={isAnalysisLoading}
                     />
 
                     {/* 移动端玩家条 */}
@@ -1698,6 +1731,8 @@ export default function Home() {
         onSoundEnabledChange={setSoundEnabled}
         onAiVoiceEnabledChange={setAiVoiceEnabled}
         onAutoAdvanceDialogueEnabledChange={setAutoAdvanceDialogueEnabled}
+        isGameInProgress={gameInProgress}
+        onExitGame={restartGame}
       />
 
       {/* 开发者模式 - 只在游戏开始后显示 */}

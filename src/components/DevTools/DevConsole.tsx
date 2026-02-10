@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { gameStateAtom } from "@/store/game-machine";
 import type { GameState, Phase, Role, Player } from "@/types/game";
 import { isWolfRole } from "@/types/game";
-import { X, Wrench, Play, Pause, SkipForward, Eye, Users, Crosshair, Code, ChatDots, Warning, ArrowRight, ArrowLeft, Lightning, SpeakerHigh } from "@phosphor-icons/react";
+import { X, Wrench, Play, Pause, SkipForward, Eye, Users, Crosshair, Code, ChatDots, Warning, ArrowRight, ArrowLeft, Lightning, SpeakerHigh, ChartBar } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
 import {
   applySmartJump,
   applySmartJumpWithFilledData,
@@ -21,6 +22,7 @@ import { PhaseManager } from "@/game/core/PhaseManager";
 import { DEFAULT_VOICE_ID, resolveVoiceId, VOICE_PRESETS, ENGLISH_VOICE_PRESETS, type AppLocale } from "@/lib/voice-constants";
 import { getLocale } from "@/i18n/locale-store";
 import { aiLogger } from "@/lib/ai-logger";
+import { useGameAnalysis } from "@/hooks/useGameAnalysis";
 
 type AILogEntry = {
   id: string;
@@ -803,7 +805,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
         ...prev.badge,
         holderSeat: seat,
         // 如果移除警长，清空相关竞选数据
-        ...(seat === null ? { candidates: [], signup: {}, votes: {} } : {}),
+        ...(seat === null ? { candidates: [], signup: {}, votes: {}, allVotes: {} } : {}),
       },
       devMutationId: bumpDevMutation(prev),
     }));
@@ -1090,8 +1092,10 @@ function GlobalTab({
   setDay: (day: number) => void;
 }) {
   const t = useTranslations();
+  const router = useRouter();
   const phaseNames = usePhaseNames();
   const formatPlayerLabel = useFormatPlayerLabel();
+  const { triggerAnalysis, isLoading: isAnalysisLoading } = useGameAnalysis();
   const actionDays = useMemo(() => {
     const days = new Set<number>();
     Object.keys(gameState.nightHistory || {}).forEach((d) => days.add(Number(d)));
@@ -1225,6 +1229,47 @@ function GlobalTab({
             +
           </button>
         </div>
+      </Section>
+
+      {/* 复盘测试 */}
+      <Section title="复盘测试">
+        <button
+          onClick={() => router.push("/test-analysis")}
+          className="w-full px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-purple-600 hover:bg-purple-500 text-white"
+        >
+          <ChartBar size={18} weight="fill" />
+          使用Mock数据测试复盘
+        </button>
+        <div className="mt-2 text-xs text-gray-400">
+          跳转到复盘页面，使用预设的Mock数据进行UI测试
+        </div>
+        
+        <button
+          onClick={() => router.push("/test-analysis/from-log")}
+          className="w-full mt-3 px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-green-600 hover:bg-green-500 text-white"
+        >
+          <ChartBar size={18} weight="fill" />
+          从日志文件生成复盘
+        </button>
+        <div className="mt-2 text-xs text-gray-400">
+          上传游戏日志JSON文件，测试复盘生成功能
+        </div>
+        
+        {gameState.phase === "GAME_END" && (
+          <>
+            <button
+              onClick={() => triggerAnalysis()}
+              disabled={isAnalysisLoading}
+              className="w-full mt-3 px-4 py-2 rounded font-medium text-sm flex items-center justify-center gap-2 transition-colors bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-50"
+            >
+              <Lightning size={18} weight="fill" />
+              {isAnalysisLoading ? "重新生成中..." : "重新生成复盘数据"}
+            </button>
+            <div className="mt-2 text-xs text-gray-400">
+              从当前游戏状态重新生成复盘分析数据
+            </div>
+          </>
+        )}
       </Section>
 
       {/* 全场动作信息记录 */}
@@ -1960,18 +2005,32 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ============ 悬浮入口按钮 ============
 export function DevModeButton({ onClick }: { onClick: () => void }) {
   const t = useTranslations();
+  const router = useRouter();
   const showDevTools =
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
 
   if (!showDevTools) return null;
 
+  const handleTestAnalysis = () => {
+    router.push("/test-analysis");
+  };
+
   return (
-    <button
-      onClick={onClick}
-      className="fixed bottom-5 right-5 z-[99] w-12 h-12 rounded-full bg-yellow-500 hover:bg-yellow-400 shadow-lg flex items-center justify-center transition-all hover:scale-110"
-      title={t("devConsole.devMode")}
-    >
-      <Wrench size={24} className="text-gray-900" />
-    </button>
+    <div className="fixed bottom-5 right-5 z-[99] flex flex-col gap-2">
+      <button
+        onClick={handleTestAnalysis}
+        className="w-12 h-12 rounded-full bg-emerald-500 hover:bg-emerald-400 shadow-lg flex items-center justify-center transition-all hover:scale-110"
+        title="测试复盘报告"
+      >
+        <ChartBar size={24} className="text-gray-900" />
+      </button>
+      <button
+        onClick={onClick}
+        className="w-12 h-12 rounded-full bg-yellow-500 hover:bg-yellow-400 shadow-lg flex items-center justify-center transition-all hover:scale-110"
+        title={t("devConsole.devMode")}
+      >
+        <Wrench size={24} className="text-gray-900" />
+      </button>
+    </div>
   );
 }

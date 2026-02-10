@@ -7,8 +7,494 @@ import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import type { GameState, Phase, Player, Role } from "@/types/game";
 import { isWolfRole } from "@/types/game";
+import type { GameAnalysisData } from "@/types/analysis";
 import { createInitialGameState } from "@/lib/game-master";
 import { getI18n } from "@/i18n/translator";
+
+// ============ 游戏状态持久化配置 ============
+
+const GAME_STATE_STORAGE_KEY = "wolfcha.game_state";
+const GAME_STATE_VERSION = 1;
+// 24 hours in milliseconds - states older than this won't be restored
+const GAME_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface PersistedGameState {
+  version: number;
+  state: GameState;
+  savedAt: number;
+}
+
+// Phases that indicate a game is in progress (for UI display purposes)
+const IN_PROGRESS_PHASES: Phase[] = [
+  "NIGHT_START",
+  "NIGHT_GUARD_ACTION",
+  "NIGHT_WOLF_ACTION",
+  "NIGHT_WITCH_ACTION",
+  "NIGHT_SEER_ACTION",
+  "NIGHT_RESOLVE",
+  "DAY_START",
+  "DAY_BADGE_SIGNUP",
+  "DAY_BADGE_SPEECH",
+  "DAY_BADGE_ELECTION",
+  "DAY_PK_SPEECH",
+  "DAY_SPEECH",
+  "DAY_LAST_WORDS",
+  "DAY_VOTE",
+  "DAY_RESOLVE",
+  "BADGE_TRANSFER",
+  "HUNTER_SHOOT",
+];
+
+/**
+ * Check if a game state represents a game in progress that should be restored
+ */
+export function isGameInProgress(state: GameState | null | undefined): boolean {
+  if (!state) return false;
+  return IN_PROGRESS_PHASES.includes(state.phase);
+}
+
+/**
+ * Check if the current phase's required action has been completed.
+ * We only save state when the phase action is complete to avoid
+ * restoring into the middle of an action.
+ * 
+ * 细粒度保存策略：
+ * - 守卫选完 → 可保存
+ * - 狼人选完 → 可保存
+ * - 女巫决定完 → 可保存
+ * - 预言家查完 → 可保存
+ * - 白天/夜晚开始 → 可保存（过渡阶段）
+ */
+function isPhaseActionCompleted(state: GameState): boolean {
+  switch (state.phase) {
+    // 过渡阶段，进入时即可保存
+    case "NIGHT_START":
+    case "DAY_START":
+      return true;
+
+    // 警长竞选报名：即使在报名中途也属于“稳定态”（只是等待更多人的选择）
+    // 刷新恢复后可继续报名/等待AI报名，不需要回退到 DAY_START 重跑整个流程
+    case "DAY_BADGE_SIGNUP":
+      return true;
+
+    case "NIGHT_GUARD_ACTION": {
+      const guard = state.players.find((p) => p.role === "Guard" && p.alive);
+      // 没有守卫，或守卫已选择目标
+      return !guard || state.nightActions.guardTarget !== undefined;
+    }
+
+    case "NIGHT_WOLF_ACTION": {
+      const aliveWolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
+      if (aliveWolves.length === 0) return true;
+      // 狼人已选择目标
+      return state.nightActions.wolfTarget !== undefined;
+    }
+
+    case "NIGHT_WITCH_ACTION": {
+      const witch = state.players.find((p) => p.role === "Witch" && p.alive);
+      if (!witch) return true;
+      // 药都用完了
+      if (state.roleAbilities.witchHealUsed && state.roleAbilities.witchPoisonUsed) return true;
+      // 女巫已做出决定（救人、毒人、或明确不救）
+      // 注意：witchSave === false 表示明确不救，undefined 表示还没决定
+      return (
+        state.nightActions.witchSave !== undefined ||
+        state.nightActions.witchPoison !== undefined
+      );
+    }
+
+    case "NIGHT_SEER_ACTION": {
+      const seer = state.players.find((p) => p.role === "Seer" && p.alive);
+      // 没有预言家，或预言家已查验
+      return !seer || state.nightActions.seerTarget !== undefined;
+    }
+
+    case "NIGHT_RESOLVE":
+      // 夜晚结算阶段，通常很快就会进入 DAY_START
+      // 为安全起见，不在这里保存
+      return false;
+
+    case "DAY_BADGE_ELECTION": {
+      const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
+      // 候选人不投票
+      const voterIds = state.players
+        .filter((p) => p.alive && !candidates.includes(p.seat))
+        .map((p) => p.playerId);
+      if (voterIds.length === 0) return true;
+      return voterIds.every((id) => typeof state.badge?.votes?.[id] === "number");
+    }
+
+    case "DAY_VOTE": {
+      // PK投票时，参与PK的人不投票
+      const pkTargets =
+        state.pkSource === "vote" && Array.isArray(state.pkTargets) ? state.pkTargets : [];
+      const voterIds = state.players
+        .filter((p) => p.alive && !pkTargets.includes(p.seat))
+        .map((p) => p.playerId);
+      if (voterIds.length === 0) return true;
+      return voterIds.every((id) => typeof state.votes[id] === "number");
+    }
+
+    // 发言阶段：允许保存（会牺牲“刷新后能继续同一段流式发言”的能力）
+    // 但可以显著提升 Day 1 警徽竞选、发言推进等场景的恢复颗粒度，避免刷新后回到 DAY_START 重跑流程。
+    case "DAY_BADGE_SPEECH":
+    case "DAY_PK_SPEECH":
+    case "DAY_SPEECH":
+    case "DAY_LAST_WORDS":
+      return true;
+
+    // 其他阶段比较复杂，暂不在中间保存
+    case "DAY_RESOLVE":
+    case "BADGE_TRANSFER":
+    case "HUNTER_SHOOT":
+      return false;
+
+    default:
+      return false;
+  }
+}
+
+/**
+ * Get the "fallback" phase to restore to if the current phase action is incomplete.
+ * Returns the previous stable checkpoint.
+ */
+export function getRestorePhase(state: GameState): Phase {
+  // 如果当前阶段已完成，可以直接恢复到当前阶段
+  if (isPhaseActionCompleted(state)) {
+    return state.phase;
+  }
+
+  // 否则回退到上一个稳定点
+  switch (state.phase) {
+    case "NIGHT_GUARD_ACTION":
+      return "NIGHT_START";
+    case "NIGHT_WOLF_ACTION":
+      // 如果守卫已选，回到守卫选完后的状态
+      const guard = state.players.find((p) => p.role === "Guard" && p.alive);
+      if (!guard || state.nightActions.guardTarget !== undefined) {
+        return "NIGHT_GUARD_ACTION";
+      }
+      return "NIGHT_START";
+    case "NIGHT_WITCH_ACTION":
+      // 如果狼人已选，回到狼人选完后的状态
+      if (state.nightActions.wolfTarget !== undefined) {
+        return "NIGHT_WOLF_ACTION";
+      }
+      return "NIGHT_START";
+    case "NIGHT_SEER_ACTION":
+      // 检查女巫是否已决定
+      const witch = state.players.find((p) => p.role === "Witch" && p.alive);
+      const witchDone =
+        !witch ||
+        (state.roleAbilities.witchHealUsed && state.roleAbilities.witchPoisonUsed) ||
+        state.nightActions.witchSave !== undefined ||
+        state.nightActions.witchPoison !== undefined;
+      if (witchDone) {
+        return "NIGHT_WITCH_ACTION";
+      }
+      if (state.nightActions.wolfTarget !== undefined) {
+        return "NIGHT_WOLF_ACTION";
+      }
+      return "NIGHT_START";
+    case "NIGHT_RESOLVE":
+      // 回到预言家阶段
+      return "NIGHT_SEER_ACTION";
+    case "DAY_SPEECH":
+    case "DAY_BADGE_SIGNUP":
+    case "DAY_BADGE_SPEECH":
+    case "DAY_BADGE_ELECTION":
+    case "DAY_PK_SPEECH":
+    case "DAY_VOTE":
+    case "DAY_LAST_WORDS":
+    case "DAY_RESOLVE":
+    case "BADGE_TRANSFER":
+    case "HUNTER_SHOOT":
+      // 白天的复杂阶段，回到 DAY_START
+      return "DAY_START";
+    default:
+      return state.phase;
+  }
+}
+
+/**
+ * Validate that a game state has all required fields and is structurally valid
+ */
+// All valid Phase values for validation
+const VALID_PHASES: readonly string[] = [
+  "LOBBY", "SETUP",
+  "NIGHT_START", "NIGHT_GUARD_ACTION", "NIGHT_WOLF_ACTION",
+  "NIGHT_WITCH_ACTION", "NIGHT_SEER_ACTION", "NIGHT_RESOLVE",
+  "DAY_START", "DAY_BADGE_SIGNUP", "DAY_BADGE_SPEECH", "DAY_BADGE_ELECTION",
+  "DAY_PK_SPEECH", "DAY_SPEECH", "DAY_LAST_WORDS", "DAY_VOTE", "DAY_RESOLVE",
+  "BADGE_TRANSFER", "HUNTER_SHOOT", "GAME_END",
+] as const;
+
+function isValidGameState(state: unknown): state is GameState {
+  if (!state || typeof state !== "object") return false;
+  
+  const s = state as Record<string, unknown>;
+  
+  // Check required string fields
+  if (typeof s.gameId !== "string" || !s.gameId) return false;
+  if (typeof s.phase !== "string" || !VALID_PHASES.includes(s.phase)) return false;
+  
+  // Check required number fields
+  if (typeof s.day !== "number" || !Number.isFinite(s.day)) return false;
+  
+  // Check players array
+  if (!Array.isArray(s.players)) return false;
+  
+  // Check required objects
+  if (!s.badge || typeof s.badge !== "object") return false;
+  if (!s.roleAbilities || typeof s.roleAbilities !== "object") return false;
+  if (!s.nightActions || typeof s.nightActions !== "object") return false;
+  
+  // Check arrays
+  if (!Array.isArray(s.messages)) return false;
+  if (!Array.isArray(s.events)) return false;
+  
+  // Check objects (can be empty)
+  if (typeof s.votes !== "object" || s.votes === null) return false;
+  if (typeof s.voteHistory !== "object" || s.voteHistory === null) return false;
+  if (typeof s.dailySummaries !== "object" || s.dailySummaries === null) return false;
+  if (typeof s.dailySummaryFacts !== "object" || s.dailySummaryFacts === null) return false;
+  
+  return true;
+}
+
+/**
+ * Normalize a game state to ensure all fields have valid values
+ * This handles partial or corrupted data by filling in defaults
+ */
+function normalizeGameState(state: GameState): GameState {
+  const initial = createInitialGameState();
+  
+  return {
+    ...initial,
+    ...state,
+    // Ensure required fields have valid values
+    gameId: state.gameId || initial.gameId,
+    phase: state.phase || initial.phase,
+    day: typeof state.day === "number" && Number.isFinite(state.day) ? state.day : initial.day,
+    difficulty: state.difficulty || initial.difficulty,
+    players: Array.isArray(state.players) ? state.players : initial.players,
+    events: Array.isArray(state.events) ? state.events : initial.events,
+    messages: Array.isArray(state.messages) ? state.messages : initial.messages,
+    votes: state.votes && typeof state.votes === "object" ? state.votes : initial.votes,
+    voteHistory: state.voteHistory && typeof state.voteHistory === "object" ? state.voteHistory : initial.voteHistory,
+    dailySummaries: state.dailySummaries && typeof state.dailySummaries === "object" ? state.dailySummaries : initial.dailySummaries,
+    dailySummaryFacts: state.dailySummaryFacts && typeof state.dailySummaryFacts === "object" ? state.dailySummaryFacts : initial.dailySummaryFacts,
+    badge: state.badge && typeof state.badge === "object" ? {
+      ...initial.badge,
+      ...state.badge,
+    } : initial.badge,
+    nightActions: state.nightActions && typeof state.nightActions === "object" ? state.nightActions : initial.nightActions,
+    roleAbilities: state.roleAbilities && typeof state.roleAbilities === "object" ? {
+      ...initial.roleAbilities,
+      ...state.roleAbilities,
+    } : initial.roleAbilities,
+    winner: state.winner ?? null,
+  };
+}
+
+/**
+ * Load and validate game state from localStorage
+ * Returns initial state if no valid saved state exists
+ */
+function loadPersistedGameState(): GameState {
+  const initial = createInitialGameState();
+  
+  // SSR safety check
+  if (typeof window === "undefined") {
+    return initial;
+  }
+  
+  try {
+    const raw = localStorage.getItem(GAME_STATE_STORAGE_KEY);
+    if (!raw) return initial;
+    
+    const parsed: PersistedGameState = JSON.parse(raw);
+    
+    // Version check for future migrations
+    if (parsed.version !== GAME_STATE_VERSION) {
+      console.warn(`[wolfcha] Game state version mismatch: ${parsed.version} !== ${GAME_STATE_VERSION}`);
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      return initial;
+    }
+    
+    // Check if the saved state is too old
+    const age = Date.now() - parsed.savedAt;
+    if (age > GAME_STATE_MAX_AGE_MS) {
+      console.info("[wolfcha] Saved game state expired, starting fresh");
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      return initial;
+    }
+    
+    // Validate the state structure
+    if (!isValidGameState(parsed.state)) {
+      console.warn("[wolfcha] Invalid saved game state structure");
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      return initial;
+    }
+    
+    // Only restore if game is in progress
+    if (!isGameInProgress(parsed.state)) {
+      console.info("[wolfcha] Saved game not in progress, starting fresh");
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      return initial;
+    }
+    
+    // Players must exist for a valid in-progress game
+    if (parsed.state.players.length === 0) {
+      console.warn("[wolfcha] Saved game has no players");
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+      return initial;
+    }
+    
+    // 细粒度恢复：如果当前阶段的动作未完成，回退到上一个稳定点
+    const savedState = normalizeGameState(parsed.state);
+    const restorePhase = getRestorePhase(savedState);
+    
+    if (restorePhase !== savedState.phase) {
+      console.info(`[wolfcha] Phase ${savedState.phase} action incomplete, restoring to ${restorePhase}`);
+      // 回退 phase，但保留已完成的 nightActions
+      const restoredState = {
+        ...savedState,
+        phase: restorePhase,
+      };
+      console.info(`[wolfcha] Restoring game from ${new Date(parsed.savedAt).toLocaleString()} at phase ${restorePhase} (rolled back from ${savedState.phase})`);
+      return restoredState;
+    }
+    
+    console.info(`[wolfcha] Restoring game from ${new Date(parsed.savedAt).toLocaleString()} at phase ${parsed.state.phase}`);
+    return savedState;
+    
+  } catch (error) {
+    console.error("[wolfcha] Failed to load saved game state:", error);
+    // Clear potentially corrupted data
+    try {
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+    } catch {
+      // Ignore errors when clearing
+    }
+    return initial;
+  }
+}
+
+// 发言阶段 throttle：避免流式消息追加导致频繁 JSON 序列化
+const SPEECH_SAVE_THROTTLE_MS = 3000;
+let lastSpeechSaveTimestamp = 0;
+let pendingSpeechSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Phases where throttled saving is applied (frequent state updates during speech)
+const THROTTLED_SAVE_PHASES: Phase[] = [
+  "DAY_BADGE_SPEECH",
+  "DAY_PK_SPEECH",
+  "DAY_SPEECH",
+  "DAY_LAST_WORDS",
+];
+
+/**
+ * Save game state to localStorage
+ * 细粒度保存：只有当阶段动作完成时才保存
+ * 这样刷新后可以恢复到最近完成的检查点
+ * 
+ * 发言阶段使用 throttle 策略，避免频繁序列化影响性能
+ */
+function saveGameState(state: GameState): void {
+  // SSR safety check
+  if (typeof window === "undefined") return;
+  
+  // Clear saved state when game ends or returns to lobby
+  if (!isGameInProgress(state)) {
+    // Clear any pending throttled save
+    if (pendingSpeechSaveTimer !== null) {
+      clearTimeout(pendingSpeechSaveTimer);
+      pendingSpeechSaveTimer = null;
+    }
+    try {
+      localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+    } catch {
+      // Ignore errors
+    }
+    return;
+  }
+  
+  // 只有当阶段动作完成时才保存
+  // 这样刷新后恢复的是"最近完成的动作"，而不是"正在进行的动作"
+  if (!isPhaseActionCompleted(state)) {
+    // 动作未完成，不保存，保留之前的检查点
+    return;
+  }
+  
+  // 发言阶段使用 throttle：降低频繁 JSON.stringify 的性能损耗
+  // 但遗言阶段需要立即保存，因为它是关键的阶段转换点
+  if (THROTTLED_SAVE_PHASES.includes(state.phase) && state.phase !== "DAY_LAST_WORDS") {
+    const now = Date.now();
+    const elapsed = now - lastSpeechSaveTimestamp;
+    
+    if (elapsed < SPEECH_SAVE_THROTTLE_MS) {
+      // 距离上次保存不足阈值，延迟保存（确保最终一定会保存最新状态）
+      if (pendingSpeechSaveTimer !== null) {
+        clearTimeout(pendingSpeechSaveTimer);
+      }
+      pendingSpeechSaveTimer = setTimeout(() => {
+        pendingSpeechSaveTimer = null;
+        doSaveGameState(state);
+        lastSpeechSaveTimestamp = Date.now();
+      }, SPEECH_SAVE_THROTTLE_MS - elapsed);
+      return;
+    }
+    
+    lastSpeechSaveTimestamp = now;
+  }
+  
+  // Clear any pending throttled save since we're saving now
+  if (pendingSpeechSaveTimer !== null) {
+    clearTimeout(pendingSpeechSaveTimer);
+    pendingSpeechSaveTimer = null;
+  }
+  
+  doSaveGameState(state);
+}
+
+/** Internal: actually write state to localStorage */
+function doSaveGameState(state: GameState): void {
+  // Double-check: don't save if game is no longer in progress
+  // This handles the case where a throttled timer fires after the user exits the game
+  if (!isGameInProgress(state)) {
+    return;
+  }
+  
+  try {
+    const persisted: PersistedGameState = {
+      version: GAME_STATE_VERSION,
+      state,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(GAME_STATE_STORAGE_KEY, JSON.stringify(persisted));
+    console.debug(`[wolfcha] Saved checkpoint at ${state.phase}, day ${state.day}`);
+  } catch (error) {
+    console.error("[wolfcha] Failed to save game state:", error);
+  }
+}
+
+/**
+ * Clear persisted game state from localStorage
+ */
+export function clearPersistedGameState(): void {
+  if (typeof window === "undefined") return;
+  // Clear any pending throttled save
+  if (pendingSpeechSaveTimer !== null) {
+    clearTimeout(pendingSpeechSaveTimer);
+    pendingSpeechSaveTimer = null;
+  }
+  try {
+    localStorage.removeItem(GAME_STATE_STORAGE_KEY);
+  } catch {
+    // Ignore errors
+  }
+}
 
 // ============ 基础状态 Atoms ============
 
@@ -16,8 +502,20 @@ import { getI18n } from "@/i18n/translator";
 export const humanNameAtom = atomWithStorage("wolfcha_human_name", "");
 export const apiKeyConfirmedAtom = atom(false);
 
-// 游戏核心状态
-export const gameStateAtom = atom<GameState>(createInitialGameState());
+// Raw game state atom with localStorage persistence
+const rawGameStateAtom = atom<GameState>(loadPersistedGameState());
+
+// 游戏核心状态 - wraps raw atom to handle persistence
+export const gameStateAtom = atom(
+  (get) => get(rawGameStateAtom),
+  (get, set, update: GameState | ((prev: GameState) => GameState)) => {
+    const prev = get(rawGameStateAtom);
+    const next = typeof update === "function" ? update(prev) : update;
+    set(rawGameStateAtom, next);
+    // Persist to localStorage
+    saveGameState(next);
+  }
+);
 
 // UI 状态
 export const uiStateAtom = atom({
@@ -39,6 +537,11 @@ export const dialogueAtom = atom<DialogueState | null>(null);
 
 // 输入文本
 export const inputTextAtom = atom("");
+
+// 游戏分析数据 - 使用 localStorage 持久化存储
+export const gameAnalysisAtom = atomWithStorage<GameAnalysisData | null>("wolfcha_analysis_data", null);
+export const analysisLoadingAtom = atom(false);
+export const analysisErrorAtom = atom<string | null>(null);
 
 // ============ 派生状态 Atoms ============
 
@@ -465,7 +968,7 @@ export const setRoleRevealAtom = atom(
   }
 );
 
-// 重置游戏
+// 重置游戏（用于开始新游戏，保留持久化状态直到新游戏开始）
 export const resetGameAtom = atom(null, (get, set) => {
   set(gameStateAtom, createInitialGameState());
   set(dialogueAtom, null);
@@ -478,6 +981,9 @@ export const resetGameAtom = atom(null, (get, set) => {
     showRoleReveal: false,
     showLog: false,
   });
+  set(gameAnalysisAtom, null);
+  set(analysisLoadingAtom, false);
+  set(analysisErrorAtom, null);
 });
 
 // ============ 状态机转换规则 ============

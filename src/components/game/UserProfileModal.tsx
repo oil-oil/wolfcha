@@ -26,6 +26,7 @@ import {
   getMinimaxGroupId,
   getSelectedModels,
   getSummaryModel,
+  getReviewModel,
   getZenmuxApiKey,
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
@@ -34,6 +35,7 @@ import {
   setMinimaxGroupId,
   setSelectedModels,
   setSummaryModel,
+  setReviewModel,
   setZenmuxApiKey,
   setDashscopeApiKey,
   setCustomKeyEnabled,
@@ -42,11 +44,13 @@ import {
   isCustomKeyEnabled as getCustomKeyEnabled,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
+import { supabase } from "@/lib/supabase";
 import {
   ALL_MODELS,
   AVAILABLE_MODELS,
   GENERATOR_MODEL,
   SUMMARY_MODEL,
+  REVIEW_MODEL,
   filterPlayerModels,
   type ModelRef,
 } from "@/types/game";
@@ -62,8 +66,8 @@ import {
    onShareInvite: () => void;
   onSignOut: () => void | Promise<void>;
   onCustomKeyEnabledChange?: (value: boolean) => void;
-  accessToken?: string;
   onCreditsChange?: () => void;
+  defaultTab?: string;
  }
  
  export function UserProfileModal({
@@ -77,8 +81,8 @@ import {
    onShareInvite,
    onSignOut,
   onCustomKeyEnabledChange,
-  accessToken,
   onCreditsChange,
+  defaultTab = "profile",
  }: UserProfileModalProps) {
   const t = useTranslations();
   const [zenmuxKey, setZenmuxKeyState] = useState("");
@@ -93,6 +97,7 @@ import {
   const [selectedModels, setSelectedModelsState] = useState<string[]>([]);
   const [generatorModel, setGeneratorModelState] = useState("");
   const [summaryModel, setSummaryModelState] = useState("");
+  const [reviewModel, setReviewModelState] = useState("");
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isValidatingZenmux, setIsValidatingZenmux] = useState(false);
   const [isValidatingDashscope, setIsValidatingDashscope] = useState(false);
@@ -103,6 +108,7 @@ import {
   const [purchaseQuantity, setPurchaseQuantity] = useState(10);
   const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("10");
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isWechatQrOpen, setIsWechatQrOpen] = useState(false);
 
    const displayCredits = useMemo(() => {
     if (credits === null || credits === undefined) return t("userProfile.empty");
@@ -119,6 +125,7 @@ import {
     const nextSelectedModels = getSelectedModels();
     const nextGeneratorModel = getGeneratorModel();
     const nextSummaryModel = getSummaryModel();
+    const nextReviewModel = getReviewModel();
     const storedCustomEnabled = getCustomKeyEnabled();
     if (mounted) {
       setZenmuxKeyState(nextZenmuxKey);
@@ -128,6 +135,7 @@ import {
       setSelectedModelsState(nextSelectedModels);
       setGeneratorModelState(nextGeneratorModel);
       setSummaryModelState(nextSummaryModel);
+      setReviewModelState(nextReviewModel);
       setIsCustomKeyEnabled(storedCustomEnabled);
       const z = nextZenmuxKey;
       const d = nextDashscopeKey;
@@ -189,6 +197,11 @@ import {
       if (availableSet.has(SUMMARY_MODEL)) return SUMMARY_MODEL;
       return availableModelPool[0]?.model ?? "";
     });
+    setReviewModelState((prev) => {
+      if (prev && availableSet.has(prev)) return prev;
+      if (availableSet.has(REVIEW_MODEL)) return REVIEW_MODEL;
+      return availableModelPool[0]?.model ?? "";
+    });
   }, [availableModelPool, defaultPlayerModels, isCustomKeyEnabled, playerModelPool]);
 
   const selectedModelSummary = useMemo(() => {
@@ -246,15 +259,20 @@ import {
     const fallbackSummary = availableSet.has(SUMMARY_MODEL)
       ? SUMMARY_MODEL
       : availableModelPool[0]?.model ?? "";
+    const fallbackReview = availableSet.has(REVIEW_MODEL)
+      ? REVIEW_MODEL
+      : availableModelPool[0]?.model ?? "";
     const nextGeneratorModel = availableSet.has(generatorModel) ? generatorModel : fallbackGenerator;
     const nextSummaryModel = availableSet.has(summaryModel) ? summaryModel : fallbackSummary;
+    const nextReviewModel = availableSet.has(reviewModel) ? reviewModel : fallbackReview;
     const removedSelected = selectedModels.filter((m) => !playerAvailableSet.has(m));
     const generatorAdjusted = Boolean(generatorModel) && !availableSet.has(generatorModel);
     const summaryAdjusted = Boolean(summaryModel) && !availableSet.has(summaryModel);
+    const reviewAdjusted = Boolean(reviewModel) && !availableSet.has(reviewModel);
 
     if (
       isCustomKeyEnabled &&
-      (availableSet.size === 0 || removedSelected.length > 0 || generatorAdjusted || summaryAdjusted)
+      (availableSet.size === 0 || removedSelected.length > 0 || generatorAdjusted || summaryAdjusted || reviewAdjusted)
     ) {
       toast(t("customKey.toasts.modelsAdjusted"), {
         description: t("customKey.toasts.modelsAdjustedDesc"),
@@ -267,9 +285,11 @@ import {
     setSelectedModels(nextSelectedModels);
     setGeneratorModel(nextGeneratorModel);
     setSummaryModel(nextSummaryModel);
+    setReviewModel(nextReviewModel);
     setSelectedModelsState(nextSelectedModels);
     setGeneratorModelState(nextGeneratorModel);
     setSummaryModelState(nextSummaryModel);
+    setReviewModelState(nextReviewModel);
     toast(t("customKey.toasts.saved"), { description: t("customKey.toasts.savedDesc") });
     onOpenChange(false);
   };
@@ -366,6 +386,7 @@ import {
     setSelectedModelsState([]);
     setGeneratorModelState(getGeneratorModel());
     setSummaryModelState(getSummaryModel());
+    setReviewModelState(getReviewModel());
     setIsCustomKeyEnabled(false);
     setValidatedKeys({ zenmux: "", dashscope: "" });
     onCustomKeyEnabledChange?.(false);
@@ -373,14 +394,22 @@ import {
   };
 
   const handlePurchase = async () => {
-    if (isPurchasing || purchaseQuantity < 10 || !accessToken) return;
+    if (isPurchasing || purchaseQuantity < 10) return;
     setIsPurchasing(true);
     try {
+      // Get fresh access token to avoid using expired token
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        toast(t("customKey.payAsYouGo.error"));
+        return;
+      }
+
       const response = await fetch("/api/stripe/payment-link", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ quantity: purchaseQuantity }),
       });
@@ -413,7 +442,7 @@ import {
           <DialogDescription>{t("userProfile.description")}</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="profile">
+        <Tabs defaultValue={defaultTab} key={defaultTab}>
           <TabsList>
             <TabsTrigger value="profile">{t("customKey.tabs.profile")}</TabsTrigger>
             <TabsTrigger value="payAsYouGo">{t("customKey.tabs.payAsYouGo")}</TabsTrigger>
@@ -474,17 +503,22 @@ import {
 
           <TabsContent value="payAsYouGo">
             <div className="space-y-4">
-              <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4">
-                <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => setIsWechatQrOpen(true)}
+                className="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 hover:border-[var(--color-accent)] hover:bg-[var(--bg-hover)] transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-bg)]">
                     <CreditCard size={20} className="text-[var(--color-accent)]" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.payAsYouGo.title")}</h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.payAsYouGo.description")}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.payAsYouGo.wechatPayHint")}</p>
                   </div>
+                  <ArrowRight size={16} className="text-[var(--text-muted)]" />
                 </div>
-              </section>
+              </button>
 
               <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
                 <div className="flex items-center justify-between">
@@ -727,6 +761,20 @@ import {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label htmlFor="review-model" className="text-xs">{t("customKey.modelConfig.review")}</Label>
+                          <Select
+                            value={availableModelPool.some((r) => r.model === reviewModel) ? reviewModel : ""}
+                            onValueChange={(v) => setReviewModelState(v)}
+                          >
+                            <SelectTrigger id="review-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              {availableModelPool.map((r) => (
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
 
                       <div className="space-y-2">
@@ -834,6 +882,29 @@ import {
           </TabsContent>
         </Tabs>
       </DialogContent>
+
+      <Dialog open={isWechatQrOpen} onOpenChange={setIsWechatQrOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("customKey.payAsYouGo.wechatQrTitle")}</DialogTitle>
+            <DialogDescription>{t("customKey.payAsYouGo.wechatQrDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center p-2">
+            <a
+              href="/wechat-qr.png"
+              download="wechat-qr.png"
+              className="block"
+            >
+              <img
+                src="/wechat-qr.png"
+                alt="Developer WeChat QR Code"
+                className="w-72 h-72 sm:w-80 sm:h-80 object-contain rounded-lg"
+              />
+            </a>
+          </div>
+          <p className="text-xs text-center text-[var(--text-muted)]">{t("customKey.payAsYouGo.longPressToSave")}</p>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
  }

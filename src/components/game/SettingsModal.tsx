@@ -3,10 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import type { GameState } from "@/types/game";
-import { aiLogger } from "@/lib/ai-logger";
-import type { AILogEntry } from "@/lib/ai-logger";
+import { aiLogger, type AILogEntry } from "@/lib/ai-logger";
 import { useTranslations } from "next-intl";
 import { useAppLocale } from "@/i18n/useAppLocale";
 
@@ -33,6 +32,9 @@ interface SettingsModalProps {
   onSoundEnabledChange: (value: boolean) => void;
   onAiVoiceEnabledChange: (value: boolean) => void;
   onAutoAdvanceDialogueEnabledChange: (value: boolean) => void;
+  // Exit game functionality
+  isGameInProgress?: boolean;
+  onExitGame?: () => void;
 }
 
 export function SoundSettingsSection({
@@ -113,15 +115,37 @@ export function SettingsModal({
   onSoundEnabledChange,
   onAiVoiceEnabledChange,
   onAutoAdvanceDialogueEnabledChange,
+  isGameInProgress = false,
+  onExitGame,
 }: SettingsModalProps) {
   const t = useTranslations();
   const { locale } = useAppLocale();
   const discordInviteUrl = "https://discord.gg/ETkdZWgy";
-  const [view, setView] = useState<"settings" | "about">("settings");
+  const [view, setView] = useState<"settings" | "about" | "exitConfirm">("settings");
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [aiLogs, setAiLogs] = useState<AILogEntry[]>([]);
 
+  // Handle exit game confirmation
+  const handleExitConfirm = useCallback(() => {
+    onExitGame?.();
+    onOpenChange(false);
+    setView("settings");
+  }, [onExitGame, onOpenChange]);
+
+  const handleExitCancel = useCallback(() => {
+    setView("settings");
+  }, []);
+
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0";
+
+  // Reset view to settings when modal closes
+  useEffect(() => {
+    if (!open) {
+      // Use a small delay to avoid visual flicker during close animation
+      const timer = window.setTimeout(() => setView("settings"), 200);
+      return () => window.clearTimeout(timer);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -147,16 +171,20 @@ export function SettingsModal({
 
   const handleCopyLog = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(logJsonText);
+      const freshLogs = await aiLogger.getLogs();
+      const freshJsonText = JSON.stringify(freshLogs, null, 2);
+      await navigator.clipboard.writeText(freshJsonText);
       toast(t("settings.toast.copySuccess"));
     } catch {
       toast(t("settings.toast.copyFail.title"), { description: t("settings.toast.copyFail.description") });
     }
-  }, [logJsonText]);
+  }, [t]);
 
-  const handleDownloadLog = useCallback(() => {
+  const handleDownloadLog = useCallback(async () => {
     try {
-      const blob = new Blob([logJsonText], { type: "application/json;charset=utf-8" });
+      const freshLogs = await aiLogger.getLogs();
+      const freshJsonText = JSON.stringify(freshLogs, null, 2);
+      const blob = new Blob([freshJsonText], { type: "application/json;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const safeGameId = (gameState.gameId || "").replace(/[^a-zA-Z0-9_-]/g, "");
@@ -171,21 +199,47 @@ export function SettingsModal({
     } catch {
       toast(t("settings.toast.exportFail"));
     }
-  }, [gameState.gameId, logJsonText]);
+  }, [gameState.gameId, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[92vw] max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-serif text-[var(--text-primary)]">
-            {view === "about" ? t("settings.about.title") : t("settings.title")}
+            {view === "about" ? t("settings.about.title") : view === "exitConfirm" ? t("settings.game.exitConfirmTitle") : t("settings.title")}
           </DialogTitle>
           <DialogDescription className="text-[var(--text-muted)]">
-            {view === "about" ? t("settings.about.description") : t("settings.description")}
+            {view === "about" ? t("settings.about.description") : view === "exitConfirm" ? t("settings.game.exitConfirmDescription") : t("settings.description")}
           </DialogDescription>
         </DialogHeader>
 
-        {view === "about" ? (
+        {view === "exitConfirm" ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border-2 border-red-500/30 bg-red-500/10 p-4">
+              <div className="text-sm text-[var(--text-primary)]">
+                {t("settings.game.exitConfirmDescription")}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExitCancel}
+                className="flex-1"
+              >
+                {t("settings.game.exitCancelButton")}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleExitConfirm}
+                className="flex-1"
+              >
+                {t("settings.game.exitConfirmButton")}
+              </Button>
+            </div>
+          </div>
+        ) : view === "about" ? (
           <div className="space-y-5">
             <div className="rounded-lg border-2 border-[var(--border-color)] bg-[var(--bg-card)] p-3">
               <div className="flex items-center gap-3">
@@ -271,6 +325,23 @@ export function SettingsModal({
                 {t("settings.about.view")}
               </Button>
             </div>
+
+            {/* Exit Game Button - only show when game is in progress */}
+            {isGameInProgress && onExitGame && (
+              <div className="rounded-lg border-2 border-red-500/30 bg-red-500/5 p-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-[var(--text-primary)]">{t("settings.game.exitGame")}</div>
+                  <div className="text-xs text-[var(--text-muted)]">{t("settings.game.exitGameDescription")}</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setView("exitConfirm")}
+                >
+                  {t("settings.game.exitGame")}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

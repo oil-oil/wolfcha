@@ -42,3 +42,6 @@ next-env.d.ts
 # logs
 ai-logs.json
 ai-logs.jsonl
+
+# windsurf rules (local only)
+.windsurf/rules/renewlog.md

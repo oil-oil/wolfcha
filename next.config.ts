@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/zh", destination: "/" },
       { source: "/zh/", destination: "/" },
+      { source: "/zh/:path*", destination: "/:path*" },
     ];
   },
   env: {
