@@ -488,7 +488,7 @@ export class DaySpeechPhase extends GamePhase {
 
     try {
       // AI白狼王自爆决策：发言结束后检查是否自爆
-      if (state.phase === "DAY_SPEECH" || state.phase === "DAY_BADGE_SPEECH" || state.phase === "DAY_PK_SPEECH") {
+      if (state.phase === "DAY_SPEECH" || state.phase === "DAY_PK_SPEECH") {
         const currentSpeaker = state.players.find((p) => p.seat === state.currentSpeakerSeat);
         if (
           currentSpeaker &&

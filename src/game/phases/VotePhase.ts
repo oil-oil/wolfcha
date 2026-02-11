@@ -309,9 +309,14 @@ export class VotePhase extends GamePhase {
       if (executed?.role === "Idiot" && !currentState.roleAbilities.idiotRevealed) {
         const idiotMsg = t("system.idiotRevealed", { seat: result.seat + 1, name: executed.displayName });
         currentState = addSystemMessage(currentState, idiotMsg);
+        const prevDayRec = currentState.dayHistory?.[currentState.day] || {};
         currentState = {
           ...currentState,
           roleAbilities: { ...currentState.roleAbilities, idiotRevealed: true },
+          dayHistory: {
+            ...(currentState.dayHistory || {}),
+            [currentState.day]: { ...prevDayRec, idiotRevealed: { seat: result.seat } },
+          },
           pkTargets: undefined,
           pkSource: undefined,
         };

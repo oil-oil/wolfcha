@@ -718,7 +718,6 @@ export function useGameLogic() {
     // 白狼王自爆带走猎人时，猎人可以开枪（非毒死，技能可发动）
     const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
     if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
-      setGameState(currentState);
       await delay(1200);
       const hunterFn = hunterDeathRef.current;
       if (hunterFn) await hunterFn(currentState, boomTarget, false);
@@ -2133,7 +2132,9 @@ export function useGameLogic() {
     // Transition to WWK boom phase
     const nextState = transitionPhase(currentState, "WHITE_WOLF_KING_BOOM");
     setGameState(nextState);
-  }, [humanPlayer, transitionPhase, setGameState]);
+    clearDialogue();
+    setDialogue(speakerHost, t("ui.whiteWolfKingBoom"), false);
+  }, [humanPlayer, transitionPhase, setGameState, clearDialogue, setDialogue, speakerHost, t]);
 
   /** 人类警长移交 */
   const handleHumanBadgeTransfer = useCallback(async (targetSeat: number) => {

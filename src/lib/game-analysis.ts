@@ -4,6 +4,7 @@
  */
 
 import type { GameState, Player, Role, Alignment, Phase } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { getSummaryModel } from "@/lib/api-keys";
 import type {
   GameAnalysisData,
@@ -31,6 +32,8 @@ const ROLE_ALIGNMENT: Record<Role, Alignment> = {
   Witch: "village",
   Hunter: "village",
   Guard: "village",
+  Idiot: "village",
+  WhiteWolfKing: "wolf",
   Villager: "village",
 };
 
@@ -131,25 +134,25 @@ const HUNTER_TAGS: EvaluationTagRule[] = [
     const shot = findHunterShot(p, state);
     if (!shot) return false;
     const target = state.players.find(pl => pl.seat === shot.targetSeat);
-    return target?.role === "Werewolf";
+    return !!target && isWolfRole(target.role);
   }, priority: 100 },
   { tag: "擦枪走火", condition: (p, state) => {
     const shot = findHunterShot(p, state);
     if (!shot) return false;
     const target = state.players.find(pl => pl.seat === shot.targetSeat);
-    return target?.role !== "Werewolf";
+    return !!target && !isWolfRole(target.role);
   }, priority: 90 },
   { tag: "仁慈之枪", condition: (_, __, ctx) => !ctx.hunterShot, priority: 80 },
 ];
 
 const WOLF_TAGS: EvaluationTagRule[] = [
   { tag: "孤狼啸月", condition: (p, state) => {
-    const wolves = state.players.filter(pl => pl.role === "Werewolf");
+    const wolves = state.players.filter(pl => isWolfRole(pl.role));
     const aliveWolves = wolves.filter(w => w.alive);
     return state.winner === "wolf" && aliveWolves.length === 1 && aliveWolves[0].seat === p.seat;
   }, priority: 100 },
   { tag: "完美猎杀", condition: (_, state) => {
-    const wolves = state.players.filter(pl => pl.role === "Werewolf");
+    const wolves = state.players.filter(pl => isWolfRole(pl.role));
     return state.winner === "wolf" && wolves.every(w => w.alive);
   }, priority: 95 },
   { tag: "演技大师", condition: (_, __, ctx) => ctx.gotBadgeByJump, priority: 90 },
@@ -175,7 +178,9 @@ function getTagRulesForRole(role: Role): EvaluationTagRule[] {
     case "Witch": return [...WITCH_TAGS, ...VILLAGER_TAGS];
     case "Guard": return [...GUARD_TAGS, ...VILLAGER_TAGS];
     case "Hunter": return [...HUNTER_TAGS, ...VILLAGER_TAGS];
-    case "Werewolf": return WOLF_TAGS;
+    case "Werewolf":
+    case "WhiteWolfKing": return WOLF_TAGS;
+    case "Idiot": return VILLAGER_TAGS;
     default: return VILLAGER_TAGS;
   }
 }
@@ -274,7 +279,7 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
     }
     
     // 检查狼人首夜自刀骗药
-    if (day === 1 && humanPlayer.role === "Werewolf") {
+    if (day === 1 && isWolfRole(humanPlayer.role)) {
       if (nightData.wolfTarget === humanPlayer.seat && nightData.witchSave) {
         selfKnifeFirstNight = true;
       }
@@ -282,7 +287,7 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
   }
 
   // 检查狼人被查杀后是否抗推存活（好人被投出）
-  if (humanPlayer.role === "Werewolf") {
+  if (isWolfRole(humanPlayer.role)) {
     for (const [dayStr, nightData] of Object.entries(nightHistory)) {
       const day = parseInt(dayStr, 10);
       if (nightData.seerResult?.targetSeat === humanPlayer.seat && nightData.seerResult?.isWolf) {
@@ -290,7 +295,7 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
         const dayData = dayHistory[day];
         if (dayData?.executed) {
           const executedPlayer = state.players.find(p => p.seat === dayData.executed!.seat);
-          if (executedPlayer && executedPlayer.role !== "Werewolf") {
+          if (executedPlayer && !isWolfRole(executedPlayer.role)) {
             survivedAfterCheck = true;
             break;
           }
@@ -302,10 +307,16 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
   if (!humanPlayer.alive && !humanDeathDay) {
     for (const [dayStr, dayData] of Object.entries(dayHistory)) {
       if (dayData.executed?.seat === humanPlayer.seat) {
+        // 白痴翻牌免疫放逐：不记录为死亡
+        if (dayData.idiotRevealed?.seat === humanPlayer.seat) continue;
         humanDeathDay = parseInt(dayStr, 10);
         break;
       }
       if (dayData.hunterShot?.targetSeat === humanPlayer.seat) {
+        humanDeathDay = parseInt(dayStr, 10);
+        break;
+      }
+      if (dayData.whiteWolfKingBoom?.targetSeat === humanPlayer.seat || dayData.whiteWolfKingBoom?.boomSeat === humanPlayer.seat) {
         humanDeathDay = parseInt(dayStr, 10);
         break;
       }
@@ -342,7 +353,7 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
     }
     if (shotTargetSeat !== undefined) {
       const shotTarget = state.players.find(p => p.seat === shotTargetSeat);
-      if (shotTarget?.role === "Werewolf") {
+      if (shotTarget && isWolfRole(shotTarget.role)) {
         hunterShotWolf = true;
       } else if (shotTarget) {
         hunterShotVillager = true;
@@ -350,7 +361,7 @@ function buildAnalysisContext(humanPlayer: Player, state: GameState): AnalysisCo
     }
   }
 
-  const gotBadgeByJump = humanPlayer.role === "Werewolf" && state.badge.holderSeat === humanPlayer.seat;
+  const gotBadgeByJump = isWolfRole(humanPlayer.role) && state.badge.holderSeat === humanPlayer.seat;
 
   return {
     humanPlayer,
@@ -433,10 +444,14 @@ function buildPlayerSnapshots(state: GameState): PlayerSnapshot[] {
       }
     }
 
-    // Check dayHistory for executions and hunter shots
+    // Check dayHistory for executions, hunter shots, and white wolf king boom
     if (!deathDay) {
       for (const [dayStr, dayData] of Object.entries(state.dayHistory || {})) {
         if (dayData.executed?.seat === player.seat) {
+          // 白痴翻牌免疫放逐：不记录为死亡
+          if (dayData.idiotRevealed?.seat === player.seat) {
+            continue;
+          }
           deathDay = parseInt(dayStr, 10);
           deathCause = "exiled";
           break;
@@ -444,6 +459,11 @@ function buildPlayerSnapshots(state: GameState): PlayerSnapshot[] {
         if (dayData.hunterShot?.targetSeat === player.seat) {
           deathDay = parseInt(dayStr, 10);
           deathCause = "shot";
+          break;
+        }
+        if (dayData.whiteWolfKingBoom?.targetSeat === player.seat || dayData.whiteWolfKingBoom?.boomSeat === player.seat) {
+          deathDay = parseInt(dayStr, 10);
+          deathCause = "boom";
           break;
         }
       }
@@ -805,6 +825,36 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
       }
     }
 
+    // 白狼王自爆信息
+    const wwkBoom = dayData?.whiteWolfKingBoom;
+    if (wwkBoom) {
+      const { boomSeat, targetSeat } = wwkBoom;
+      const targetPlayer = state.players.find(p => p.seat === targetSeat);
+      const targetName = targetPlayer?.displayName || "";
+      if (targetSeat !== null && targetSeat !== undefined) {
+        dayEvents.push({
+          type: "white_wolf_king_boom",
+          target: `${boomSeat + 1}号自爆 → ${targetSeat + 1}号${targetName}`,
+        });
+      } else {
+        dayEvents.push({
+          type: "white_wolf_king_boom",
+          target: `${boomSeat + 1}号自爆，未带走任何人`,
+        });
+      }
+    }
+
+    // 白痴翻牌信息
+    const idiotReveal = dayData?.idiotRevealed;
+    if (idiotReveal) {
+      const idiotPlayer = state.players.find(p => p.seat === idiotReveal.seat);
+      const idiotName = idiotPlayer?.displayName || "";
+      dayEvents.push({
+        type: "idiot_reveal",
+        target: `${idiotReveal.seat + 1}号${idiotName}翻牌——白痴，免疫放逐`,
+      });
+    }
+
     // Build day phases for better organization
     const dayPhases: DayPhase[] = [];
     
@@ -898,15 +948,19 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
           ? gameResultSummary
           : "各玩家发言讨论");
     
-    // 始终创建讨论阶段（即使没有 speeches），包含放逐事件和猎人开枪事件
+    // 始终创建讨论阶段（即使没有 speeches），包含放逐事件和特殊事件
     const exileEvent = dayEvents.find(e => e.type === "exile");
     const hunterEvent = dayEvents.find(e => e.type === "hunter_shot");
+    const whiteWolfKingBoomEvent = dayEvents.find(e => e.type === "white_wolf_king_boom");
+    const idiotRevealEvent = dayEvents.find(e => e.type === "idiot_reveal");
     dayPhases.push({
       type: "discussion",
       summary: discussionSummary,
       speeches: speeches.length > 0 ? speeches : undefined,
       event: exileEvent,
       hunterEvent,
+      whiteWolfKingBoomEvent,
+      idiotRevealEvent,
     });
 
     entries.push({
@@ -927,7 +981,7 @@ function calculateRadarStats(player: Player, state: GameState, ctx: AnalysisCont
     ? Math.round((ctx.humanDeathDay / ctx.totalDays) * 100)
     : 100;
 
-  const isWolf = player.role === "Werewolf";
+  const isWolf = isWolfRole(player.role);
 
   if (isWolf) {
     // 狼人隐藏价值：基于伪装和欺骗能力
@@ -1053,6 +1107,14 @@ function calculateRadarStats(player: Player, state: GameState, ctx: AnalysisCont
     }
     skillValue = Math.max(10, Math.min(100, hunterScore));
     
+  } else if (player.role === "Idiot") {
+    // 白痴技能价值：翻牌后仍存活说明技能生效，基于存活和投票准确率
+    let idiotScore = 50;
+    if (state.roleAbilities.idiotRevealed) {
+      idiotScore = 80; // 成功翻牌免疫放逐
+      if (player.alive) idiotScore = 90; // 翻牌后存活到最后
+    }
+    skillValue = Math.max(10, Math.min(100, idiotScore));
   } else if (player.role === "Villager") {
     // 村民技能价值：基于投票准确率（村民没有技能，用投票体现价值）
     skillValue = Math.max(20, Math.min(100, Math.round(ctx.voteAccuracy * 100) + 20));
@@ -1251,7 +1313,7 @@ ${allHumanSpeeches || "（无发言记录）"}
 3. reviews必须包含2条队友评价（ally，从「${alliesText}」中选择）和1条对手评价（enemy，从「${enemiesText}」中选择）
 4. 【重要】队友是指同一阵营的玩家，对手是指敌对阵营的玩家。${humanAlignmentText}的队友只能是${humanAlignmentText}的其他成员！
 5. highlightQuote必须是玩家的原话，从上面的发言记录中选取，如果无发言记录则返回空字符串""
-6. 角色名使用英文：Werewolf, Seer, Witch, Hunter, Guard, Villager
+6. 角色名使用英文：Werewolf, Seer, Witch, Hunter, Guard, Villager, WhiteWolfKing, Idiot
 7. speechScores评分标准：
    - logic（逻辑严密度）：分析发言是否有逻辑漏洞、推理是否合理
    - clarity（发言清晰度）：分析表达是否清晰、是否容易理解
@@ -1316,12 +1378,12 @@ function correctAIResult(result: AIAnalysisResult, state: GameState): AIAnalysis
 
 function generateFallbackAIData(state: GameState, humanPlayer: Player): AIAnalysisResult {
   const winnerPlayers = state.players.filter(p => 
-    (state.winner === "wolf" && p.role === "Werewolf") ||
-    (state.winner === "village" && p.role !== "Werewolf")
+    (state.winner === "wolf" && isWolfRole(p.role)) ||
+    (state.winner === "village" && !isWolfRole(p.role))
   );
   const loserPlayers = state.players.filter(p => 
-    (state.winner === "wolf" && p.role !== "Werewolf") ||
-    (state.winner === "village" && p.role === "Werewolf")
+    (state.winner === "wolf" && !isWolfRole(p.role)) ||
+    (state.winner === "village" && isWolfRole(p.role))
   );
 
   const mvpPlayer = winnerPlayers.find(p => p.alive) || winnerPlayers[0];

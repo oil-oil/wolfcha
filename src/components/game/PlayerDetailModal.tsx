@@ -79,10 +79,12 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
   }, [persona?.voiceRules]);
   const roleLabels = useMemo<Record<string, string>>(() => ({
     Werewolf: t("roles.werewolf"),
+    WhiteWolfKing: t("roles.whiteWolfKing"),
     Seer: t("roles.seer"),
     Witch: t("roles.witch"),
     Hunter: t("roles.hunter"),
     Guard: t("roles.guard"),
+    Idiot: t("roles.idiot"),
     Villager: t("roles.villager"),
   }), [t]);
   const strategyLabels = useMemo<Record<string, string>>(() => ({

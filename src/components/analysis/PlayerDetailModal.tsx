@@ -18,6 +18,7 @@ const DEATH_CAUSE_LABELS: Record<string, string> = {
   exiled: "被投票放逐",
   poisoned: "被女巫毒杀",
   shot: "被猎人击杀",
+  boom: "被白狼王自爆带走",
 };
 
 const ALIGNMENT_LABELS: Record<string, { label: string; color: string }> = {

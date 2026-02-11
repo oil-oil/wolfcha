@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Eye, Gavel, Star, Shield, Skull, Heart, Droplets, ChevronDown, ChevronUp, MessageSquare, Vote, X, Crown, Swords, Crosshair } from "lucide-react";
+import { Eye, Gavel, Star, Shield, Skull, Heart, Droplets, ChevronDown, ChevronUp, MessageSquare, Vote, X, Crown, Swords, Crosshair, Bomb, ShieldAlert } from "lucide-react";
 import type { TimelineEntry, PlayerSpeech, DayEvent, DayPhase, VoteRecord } from "@/types/analysis";
 import { ROLE_ICONS, NIGHT_EVENT_COLORS } from "./constants";
 
@@ -237,6 +237,36 @@ function DayEventItem({ event, onShowVotes }: { event: DayEvent; onShowVotes?: (
     );
   }
 
+  // 白狼王自爆信息
+  if (event.type === "white_wolf_king_boom") {
+    return (
+      <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded px-3 py-2 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Bomb className="w-4 h-4 text-red-400" />
+          <span className="text-xs text-red-400">白狼王自爆</span>
+        </div>
+        <span className="text-xs font-bold text-red-300">
+          {event.target}
+        </span>
+      </div>
+    );
+  }
+
+  // 白痴翻牌信息
+  if (event.type === "idiot_reveal") {
+    return (
+      <div className="mt-2 bg-sky-500/10 border border-sky-500/20 rounded px-3 py-2 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-sky-400" />
+          <span className="text-xs text-sky-400">白痴翻牌</span>
+        </div>
+        <span className="text-xs font-bold text-sky-300">
+          {event.target}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="text-[var(--text-muted)]">{event.type}</span>
@@ -337,6 +367,20 @@ function DayPhaseCard({
       {phase.hunterEvent && (
         <DayEventItem 
           event={phase.hunterEvent} 
+          onShowVotes={() => {}}
+        />
+      )}
+
+      {phase.whiteWolfKingBoomEvent && (
+        <DayEventItem 
+          event={phase.whiteWolfKingBoomEvent} 
+          onShowVotes={() => {}}
+        />
+      )}
+
+      {phase.idiotRevealEvent && (
+        <DayEventItem 
+          event={phase.idiotRevealEvent} 
           onShowVotes={() => {}}
         />
       )}

@@ -171,9 +171,9 @@ function buildDefaultRoles(playerCount: number): Role[] {
 }
 
 function getRoleCountConfig(playerCount: number) {
-  const regularWolfCount = playerCount >= 11 ? 3 : 2;
+  const werewolfCount = playerCount >= 11 ? 3 : 2;
   const whiteWolfKingCount = 1;
-  const wolfCount = regularWolfCount + whiteWolfKingCount;
+  const wolfCount = werewolfCount + whiteWolfKingCount;
   const guardCount = playerCount >= 10 ? 1 : 0;
   const idiotCount = playerCount >= 11 ? 1 : 0;
   const seerCount = 1;
@@ -182,6 +182,8 @@ function getRoleCountConfig(playerCount: number) {
   const godCount = seerCount + witchCount + hunterCount + guardCount + idiotCount;
   const villagerCount = Math.max(0, playerCount - wolfCount - godCount);
   return {
+    werewolfCount,
+    whiteWolfKingCount,
     wolfCount,
     guardCount,
     seerCount,
@@ -407,11 +409,13 @@ export function WelcomeScreen({
 
     const expected = getRoleCountConfig(playerCount);
     return (
-      counts.Werewolf === expected.wolfCount &&
+      counts.Werewolf === expected.werewolfCount &&
+      counts.WhiteWolfKing === expected.whiteWolfKingCount &&
       counts.Seer === expected.seerCount &&
       counts.Witch === expected.witchCount &&
       counts.Hunter === expected.hunterCount &&
       counts.Guard === expected.guardCount &&
+      counts.Idiot === expected.idiotCount &&
       counts.Villager === expected.villagerCount
     );
   }, [fixedRoles, playerCount]);

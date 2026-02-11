@@ -19,6 +19,7 @@ const DEATH_CAUSE_LABELS: Record<string, string> = {
   poisoned: "被毒",
   shot: "被枪",
   milk: "毒奶",
+  boom: "自爆",
 };
 
 function PlayerCard({ player, onClick, seatOffset }: { player: PlayerSnapshot; onClick: () => void; seatOffset: number }) {

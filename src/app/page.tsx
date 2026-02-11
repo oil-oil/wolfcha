@@ -92,6 +92,8 @@ const getRoleLabel = (role?: Role | null) => {
     case "Witch": return t("roles.witch");
     case "Hunter": return t("roles.hunter");
     case "Guard": return t("roles.guard");
+    case "Idiot": return t("roles.idiot");
+    case "WhiteWolfKing": return t("roles.whiteWolfKing");
     case "Villager": return t("roles.villager");
     default: return "?";
   }
@@ -566,7 +568,7 @@ export default function Home() {
   const [lastRitualMessageId, setLastRitualMessageId] = useState<string | null>(null);
   const ritualCueQueueRef = useRef<Array<{ id: string; title: string; subtitle?: string }>>([]);
   const lastAdvanceTimeRef = useRef(0);
-  const canShowRole = hasShownRoleReveal;
+  const canShowRole = hasShownRoleReveal || (gameState.day >= 1 && gameState.phase !== "LOBBY");
   const selectionTone = useMemo(() => {
     if (!humanPlayer) return undefined;
     switch (gameState.phase) {

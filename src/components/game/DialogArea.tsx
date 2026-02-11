@@ -1002,10 +1002,12 @@ export function DialogArea({
   const getRoleName = (role?: string) => {
     switch (role) {
       case "Werewolf": return t("roles.werewolf");
+      case "WhiteWolfKing": return t("roles.whiteWolfKing");
       case "Seer": return t("roles.seer");
       case "Witch": return t("roles.witch");
       case "Hunter": return t("roles.hunter");
       case "Guard": return t("roles.guard");
+      case "Idiot": return t("roles.idiot");
       default: return t("roles.villager");
     }
   };
@@ -1057,7 +1059,8 @@ export function DialogArea({
       (phase === "NIGHT_WOLF_ACTION" && humanPlayer && isWolfRole(humanPlayer.role) && humanPlayer.alive) ||
       (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
       (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter") ||
-      (phase === "BADGE_TRANSFER" && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat);
+      (phase === "BADGE_TRANSFER" && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat) ||
+      (phase === "WHITE_WOLF_KING_BOOM" && humanPlayer?.role === "WhiteWolfKing" && humanPlayer?.alive && !gameState.roleAbilities.whiteWolfKingBoomUsed);
 
     return Boolean(
       isCorrectRoleForPhase
@@ -1404,6 +1407,7 @@ export function DialogArea({
                   NIGHT_GUARD_ACTION: t("dialog.action.guardProtect"),
                   HUNTER_SHOOT: t("dialog.action.hunterShoot"),
                   BADGE_TRANSFER: t("dialog.action.badgeTransfer"),
+                  WHITE_WOLF_KING_BOOM: t("dialog.action.whiteWolfKingBoom"),
                 };
 
                 const actionColorMap: Record<string, string> = {
@@ -1414,6 +1418,7 @@ export function DialogArea({
                   NIGHT_GUARD_ACTION: "text-[var(--color-success)]",
                   HUNTER_SHOOT: "text-[var(--color-warning)]",
                   BADGE_TRANSFER: "text-[var(--color-warning)]",
+                  WHITE_WOLF_KING_BOOM: "text-[var(--color-danger)]",
                 };
 
                 const actionText = actionTextMap[phase] || t("dialog.action.select");

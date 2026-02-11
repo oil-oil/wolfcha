@@ -193,6 +193,7 @@ export interface GameState {
       voteTie?: boolean;
       hunterShot?: { hunterSeat: number; targetSeat: number };
       whiteWolfKingBoom?: { boomSeat: number; targetSeat: number };
+      idiotRevealed?: { seat: number };
     }
   >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list

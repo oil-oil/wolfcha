@@ -1,7 +1,7 @@
 import type { Alignment, Role } from "./game";
 
 export type NightEventType = "kill" | "save" | "poison" | "check" | "guard";
-export type DayEventType = "exile" | "badge" | "hunter_shot";
+export type DayEventType = "exile" | "badge" | "hunter_shot" | "white_wolf_king_boom" | "idiot_reveal";
 
 export interface NightEvent {
   type: NightEventType;
@@ -34,6 +34,8 @@ export interface DayPhase {
   speeches?: PlayerSpeech[];
   event?: DayEvent;
   hunterEvent?: DayEvent;
+  whiteWolfKingBoomEvent?: DayEvent;
+  idiotRevealEvent?: DayEvent;
 }
 
 export interface TimelineEntry {
@@ -81,7 +83,7 @@ export interface PlayerReview {
   role: Role;
 }
 
-export type DeathCause = "killed" | "exiled" | "poisoned" | "shot" | "milk";
+export type DeathCause = "killed" | "exiled" | "poisoned" | "shot" | "milk" | "boom";
 
 export interface PlayerSnapshot {
   playerId: string;

@@ -6,6 +6,8 @@ export const ROLE_ICONS: Record<Role, string> = {
   Witch: "/roles/witch.png",
   Hunter: "/roles/hunter.png",
   Guard: "/roles/guard.png",
+  Idiot: "/roles/idiot.png",
+  WhiteWolfKing: "/roles/white-wolf-king.png",
   Villager: "/roles/guard.png",
 };
 
@@ -15,6 +17,8 @@ export const ROLE_NAMES: Record<Role, string> = {
   Witch: "女巫",
   Hunter: "猎人",
   Guard: "守卫",
+  Idiot: "白痴",
+  WhiteWolfKing: "白狼王",
   Villager: "平民",
 };
 
@@ -24,6 +28,8 @@ export const ROLE_SHORT: Record<Role, string> = {
   Witch: "巫",
   Hunter: "猎",
   Guard: "守",
+  Idiot: "痴",
+  WhiteWolfKing: "王",
   Villager: "民",
 };
 
@@ -47,6 +53,8 @@ export const DAY_EVENT_LABELS: Record<string, string> = {
   exile: "放逐",
   badge: "警长竞选",
   hunter_shot: "猎人开枪",
+  white_wolf_king_boom: "白狼王自爆",
+  idiot_reveal: "白痴翻牌",
 };
 
 export const TAG_ILLUSTRATIONS: Record<string, string> = {
