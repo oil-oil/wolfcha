@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
@@ -110,6 +110,12 @@ export function GameSetupModal({
 
   // Reset preferred role if it's no longer available for the current player count
   const effectivePreferredRole = preferredRole && availableRoles.includes(preferredRole) ? preferredRole : "";
+
+  useEffect(() => {
+    if (preferredRole && !availableRoles.includes(preferredRole)) {
+      onPreferredRoleChange("");
+    }
+  }, [preferredRole, availableRoles, onPreferredRoleChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

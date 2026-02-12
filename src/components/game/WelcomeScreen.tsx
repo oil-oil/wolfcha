@@ -655,6 +655,7 @@ export function WelcomeScreen({
         difficulty,
         playerCount,
         customCharacters: selectedCustomChars,
+        preferredRole: preferredRole || undefined,
       });
     }, 800);
 
