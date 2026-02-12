@@ -18,11 +18,16 @@ export function VotingProgress({ gameState, humanPlayer }: VotingProgressProps) 
   const isBadgeElection = gameState.phase === "DAY_BADGE_ELECTION";
   const votes = isBadgeElection ? gameState.badge.votes : gameState.votes;
   
+  // 已翻牌白痴不参与投票
+  const revealedIdiotId = gameState.roleAbilities.idiotRevealed
+    ? gameState.players.find(p => p.role === "Idiot" && p.alive)?.playerId
+    : undefined;
+
   // 警长投票阶段，候选人不参与投票
   const candidates = gameState.badge.candidates || [];
   const eligibleVoters = isBadgeElection 
     ? alivePlayers.filter(p => !candidates.includes(p.seat))
-    : alivePlayers;
+    : alivePlayers.filter(p => p.playerId !== revealedIdiotId);
   const totalVoters = eligibleVoters.length;
   const votedCount = eligibleVoters.reduce((count, voter) => {
     return votes[voter.playerId] !== undefined ? count + 1 : count;

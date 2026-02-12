@@ -6,6 +6,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle, Prohibit } from "@phosphor-icons/react";
 import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIcons";
+import { VoteResultCard } from "./VoteResultCard";
 import { VotingProgress } from "./VotingProgress";
 import { WolfPlanningPanel } from "./WolfPlanningPanel";
 import { MentionInput } from "./MentionInput";
@@ -13,9 +14,9 @@ import { TalkingAvatar } from "./TalkingAvatar";
 import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { RoleRevealHistoryCard, type RoleRevealEntry } from "@/components/game/RoleRevealHistoryCard";
-import { VoteResultCard } from "@/components/game/VoteResultCard";
 import LoadingMiniGame from "./MiniGame/LoadingMiniGame";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { cn } from "@/lib/utils";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
@@ -28,10 +29,12 @@ import type { DialogueState } from "@/store/game-machine";
 // 职业立绘映射
 const ROLE_PORTRAIT_MAP: Record<string, string> = {
   Werewolf: '/roles/werewolf.png',
+  WhiteWolfKing: '/roles/white-wolf-king.png',
   Seer: '/roles/seer.png',
   Witch: '/roles/witch.png',
   Hunter: '/roles/hunter.png',
   Guard: '/roles/guard.png',
+  Idiot: '/roles/idiot.png',
   Villager: '/roles/villager.png',
 };
 
@@ -49,14 +52,15 @@ function preloadRolePortraits() {
   });
 }
 
-// 获取当前阶段对应的角色
-const getPhaseRole = (phase: Phase): string | null => {
+// 获取当前阶段对应的角色（需要人类玩家角色来区分狼人/白狼王）
+const getPhaseRole = (phase: Phase, humanRole?: string): string | null => {
   switch (phase) {
     case 'NIGHT_GUARD_ACTION': return 'Guard';
-    case 'NIGHT_WOLF_ACTION': return 'Werewolf';
+    case 'NIGHT_WOLF_ACTION': return humanRole === 'WhiteWolfKing' ? 'WhiteWolfKing' : 'Werewolf';
     case 'NIGHT_WITCH_ACTION': return 'Witch';
     case 'NIGHT_SEER_ACTION': return 'Seer';
     case 'HUNTER_SHOOT': return 'Hunter';
+    case 'WHITE_WOLF_KING_BOOM': return 'WhiteWolfKing';
     default: return null;
   }
 };
@@ -270,6 +274,7 @@ interface DialogAreaProps {
   onNightAction?: (seat: number, actionType?: WitchActionType) => void;
   onBadgeSignup?: (wants: boolean) => void;
   onRestart?: () => void;
+  onWhiteWolfKingBoom?: () => void;
   onViewAnalysis?: () => void;
   isAnalysisLoading?: boolean;
 }
@@ -382,6 +387,7 @@ export function DialogArea({
   onNightAction,
   onBadgeSignup,
   onRestart,
+  onWhiteWolfKingBoom,
   onViewAnalysis,
   isAnalysisLoading = false,
 }: DialogAreaProps) {
@@ -533,7 +539,7 @@ export function DialogArea({
     <AnimatePresence mode="wait" initial={false}>
       {(() => {
         // 夜晚行动阶段：显示对应职业立绘
-        const phaseRole = getPhaseRole(phase);
+        const phaseRole = getPhaseRole(phase, humanPlayer?.role);
         const rolePortrait = phaseRole ? encodeURI(ROLE_PORTRAIT_MAP[phaseRole]) : null;
 
         if (rolePortrait) {
@@ -551,6 +557,7 @@ export function DialogArea({
                 className={cn(
                   "absolute bottom-[20%] left-1/2 -translate-x-1/2 w-40 h-40 rounded-full blur-2xl",
                   phaseRole === 'Werewolf' && "bg-gradient-radial from-red-500/30 via-transparent to-transparent",
+                  phaseRole === 'WhiteWolfKing' && "bg-gradient-radial from-red-400/30 via-transparent to-transparent",
                   phaseRole === 'Seer' && "bg-gradient-radial from-blue-500/30 via-transparent to-transparent",
                   phaseRole === 'Witch' && "bg-gradient-radial from-purple-500/30 via-transparent to-transparent",
                   phaseRole === 'Guard' && "bg-gradient-radial from-emerald-500/30 via-transparent to-transparent",
@@ -995,10 +1002,12 @@ export function DialogArea({
   const getRoleName = (role?: string) => {
     switch (role) {
       case "Werewolf": return t("roles.werewolf");
+      case "WhiteWolfKing": return t("roles.whiteWolfKing");
       case "Seer": return t("roles.seer");
       case "Witch": return t("roles.witch");
       case "Hunter": return t("roles.hunter");
       case "Guard": return t("roles.guard");
+      case "Idiot": return t("roles.idiot");
       default: return t("roles.villager");
     }
   };
@@ -1047,10 +1056,11 @@ export function DialogArea({
       (phase === "DAY_VOTE" && humanPlayer?.alive) ||
       (phase === "DAY_BADGE_ELECTION" && humanPlayer?.alive && !humanIsCandidate) ||
       (phase === "NIGHT_SEER_ACTION" && humanPlayer?.role === "Seer" && humanPlayer?.alive && gameState.nightActions.seerTarget === undefined) ||
-      (phase === "NIGHT_WOLF_ACTION" && humanPlayer?.role === "Werewolf" && humanPlayer?.alive) ||
+      (phase === "NIGHT_WOLF_ACTION" && humanPlayer && isWolfRole(humanPlayer.role) && humanPlayer.alive) ||
       (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
       (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter") ||
-      (phase === "BADGE_TRANSFER" && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat);
+      (phase === "BADGE_TRANSFER" && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat) ||
+      (phase === "WHITE_WOLF_KING_BOOM" && humanPlayer?.role === "WhiteWolfKing" && humanPlayer?.alive && !gameState.roleAbilities.whiteWolfKingBoomUsed);
 
     return Boolean(
       isCorrectRoleForPhase
@@ -1193,7 +1203,7 @@ export function DialogArea({
         )}
 
         {/* 狼人协作面板 */}
-        {gameState.phase === "NIGHT_WOLF_ACTION" && humanPlayer?.role === "Werewolf" && (
+        {gameState.phase === "NIGHT_WOLF_ACTION" && humanPlayer && isWolfRole(humanPlayer.role) && (
           <div className="mb-3">
             <WolfPlanningPanel gameState={gameState} humanPlayer={humanPlayer} />
           </div>
@@ -1366,7 +1376,7 @@ export function DialogArea({
                   (phase === "DAY_VOTE" && humanPlayer?.alive) ||
                   (phase === "DAY_BADGE_ELECTION" && humanPlayer?.alive && !humanIsCandidate) ||
                   (phase === "NIGHT_SEER_ACTION" && humanPlayer?.role === "Seer" && humanPlayer?.alive) ||
-                  (phase === "NIGHT_WOLF_ACTION" && humanPlayer?.role === "Werewolf" && humanPlayer?.alive) ||
+                  (phase === "NIGHT_WOLF_ACTION" && humanPlayer && isWolfRole(humanPlayer.role) && humanPlayer.alive) ||
                   (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
                   (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter") ||
                   (phase === "BADGE_TRANSFER" && humanPlayer && gameState.badge.holderSeat === humanPlayer.seat);
@@ -1397,6 +1407,7 @@ export function DialogArea({
                   NIGHT_GUARD_ACTION: t("dialog.action.guardProtect"),
                   HUNTER_SHOOT: t("dialog.action.hunterShoot"),
                   BADGE_TRANSFER: t("dialog.action.badgeTransfer"),
+                  WHITE_WOLF_KING_BOOM: t("dialog.action.whiteWolfKingBoom"),
                 };
 
                 const actionColorMap: Record<string, string> = {
@@ -1407,6 +1418,7 @@ export function DialogArea({
                   NIGHT_GUARD_ACTION: "text-[var(--color-success)]",
                   HUNTER_SHOOT: "text-[var(--color-warning)]",
                   BADGE_TRANSFER: "text-[var(--color-warning)]",
+                  WHITE_WOLF_KING_BOOM: "text-[var(--color-danger)]",
                 };
 
                 const actionText = actionTextMap[phase] || t("dialog.action.select");
@@ -1579,6 +1591,19 @@ export function DialogArea({
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-3"
                 >
+                  {/* 白狼王自爆按钮 - 在发言阶段显示 */}
+                  {humanPlayer?.role === "WhiteWolfKing" && humanPlayer?.alive && !gameState.roleAbilities.whiteWolfKingBoomUsed && ["DAY_SPEECH", "DAY_BADGE_SPEECH", "DAY_PK_SPEECH"].includes(phase) && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={onWhiteWolfKingBoom}
+                        className="h-8 px-3 rounded text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                        type="button"
+                      >
+                        <Skull size={14} weight="fill" />
+                        {t("bottomAction.confirmAction.whiteWolfKingBoomBtn")}
+                      </button>
+                    </div>
+                  )}
                   <div className="wc-input-box relative" style={{ minHeight: "112px", alignItems: "flex-start", padding: "14px 16px 56px" }}>
                     <MentionInput
                       key={`mention-input-${gameState.phase}-${gameState.currentSpeakerSeat}`}
@@ -1787,20 +1812,6 @@ function ChatMessageItem({
   const isHuman = msg.playerId === humanPlayerId;
   const isPlayerReady = player ? (player.isHuman ? !!player.displayName?.trim() : !!player.agentProfile?.persona) : false;
   const isSystem = msg.isSystem;
-
-  // #region agent log - debug-session
-  // UI-side evidence: if structured tags leak into non-system messages, they'll show as "extra info".
-  if (
-    !isSystem &&
-    (msg.content.startsWith("[VOTE_RESULT]") ||
-      msg.content.startsWith("[ROLE_REVEAL]") ||
-      msg.content.includes("```") ||
-      (msg.content.includes("[") && msg.content.includes("]")) ||
-      (msg.content.includes("{") && msg.content.includes("}")))
-  ) {
-    fetch("http://127.0.0.1:7242/ingest/db589a22-2841-4c18-bc9c-0f6e4855a775", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "debug-session", runId: "pre-fix", hypothesisId: "B", location: "src/components/game/DialogArea.tsx:ChatMessageItem", message: "non-system message contains structured artifacts", data: { msgId: msg.id, phase: msg.phase, day: msg.day, playerId: msg.playerId, contentLen: msg.content.length, contentPreview: msg.content.slice(0, 200) }, timestamp: Date.now() }) }).catch(() => {});
-  }
-  // #endregion agent log - debug-session
 
   if (isSystem) {
     // 检查是否是身份揭晓消息

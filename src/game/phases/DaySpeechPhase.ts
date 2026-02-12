@@ -1,4 +1,5 @@
 import type { GameState, Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
@@ -42,6 +43,8 @@ type DaySpeechRuntime = {
   onStartVote: (state: GameState, token: FlowToken) => Promise<void>;
   onBadgeSpeechEnd: (state: GameState) => Promise<void>;
   onPkSpeechEnd: (state: GameState) => Promise<void>;
+  /** AI白狼王自爆决策：返回 true 表示已自爆（由调用方处理后续），false 表示不自爆 */
+  onWhiteWolfKingBoomCheck: (state: GameState, wwk: Player) => Promise<boolean>;
 };
 
 export class DaySpeechPhase extends GamePhase {
@@ -193,12 +196,12 @@ export class DaySpeechPhase extends GamePhase {
         : t("prompts.daySpeech.task.dayDiscussion");
     
     // Add last words strategy for werewolves
-    const lastWordsStrategy = isLastWords && player.role === "Werewolf" 
+    const lastWordsStrategy = isLastWords && isWolfRole(player.role) 
       ? "\n" + t("prompts.daySpeech.task.lastWordsWerewolfStrategy")
       : "";
     
     const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" }) + lastWordsStrategy;
-    const roleHintLine = player.role === "Werewolf" ? t("prompts.daySpeech.roleHints.werewolf") : player.role === "Seer" ? t("prompts.daySpeech.roleHints.seer") : "";
+    const roleHintLine = isWolfRole(player.role) ? t("prompts.daySpeech.roleHints.werewolf") : player.role === "Seer" ? t("prompts.daySpeech.roleHints.seer") : "";
     const guidelinesSection = isGenshinMode
       ? t("prompts.daySpeech.guidelines.genshin")
       : t("prompts.daySpeech.guidelines.default", { playerName: player.displayName, roleHintLine });
@@ -252,6 +255,10 @@ export class DaySpeechPhase extends GamePhase {
     if (!raw.setGameState || !raw.setDialogue || !raw.waitForUnpause) return null;
     if (!raw.runAISpeech || !raw.onBadgeTransfer || !raw.onHunterDeath || !raw.onGameEnd) return null;
     if (!raw.onStartVote || !raw.onBadgeSpeechEnd || !raw.onPkSpeechEnd) return null;
+    // 提供默认的空实现以保持向后兼容
+    if (!raw.onWhiteWolfKingBoomCheck) {
+      raw.onWhiteWolfKingBoomCheck = async () => false;
+    }
     return raw;
   }
 
@@ -480,6 +487,21 @@ export class DaySpeechPhase extends GamePhase {
     this.isMovingToNextSpeaker = true;
 
     try {
+      // AI白狼王自爆决策：发言结束后检查是否自爆
+      if (state.phase === "DAY_SPEECH" || state.phase === "DAY_PK_SPEECH") {
+        const currentSpeaker = state.players.find((p) => p.seat === state.currentSpeakerSeat);
+        if (
+          currentSpeaker &&
+          !currentSpeaker.isHuman &&
+          currentSpeaker.role === "WhiteWolfKing" &&
+          currentSpeaker.alive &&
+          !state.roleAbilities.whiteWolfKingBoomUsed
+        ) {
+          const boomed = await runtime.onWhiteWolfKingBoomCheck(state, currentSpeaker);
+          if (boomed) return; // 自爆已处理，不再继续发言流程
+        }
+      }
+
       const getNextPkSeat = (): number | null => {
         const pkTargets = state.pkTargets || [];
         if (pkTargets.length === 0) return null;

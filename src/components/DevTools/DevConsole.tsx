@@ -6,6 +6,7 @@ import { useAtom } from "jotai";
 import { motion, AnimatePresence } from "framer-motion";
 import { gameStateAtom } from "@/store/game-machine";
 import type { GameState, Phase, Role, Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { X, Wrench, Play, Pause, SkipForward, Eye, Users, Crosshair, Code, ChatDots, Warning, ArrowRight, ArrowLeft, Lightning, SpeakerHigh, ChartBar } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import {
@@ -67,7 +68,7 @@ const ALL_PHASES: Phase[] = [
 ];
 
 // 所有可用的角色
-const ALL_ROLES: Role[] = ["Villager", "Werewolf", "Seer", "Witch", "Hunter", "Guard"];
+const ALL_ROLES: Role[] = ["Villager", "Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Idiot"];
 
 // Helper to get phase name with i18n
 const usePhaseNames = () => {
@@ -102,10 +103,12 @@ const useRoleNames = () => {
   return useMemo(() => ({
     Villager: t("devConsole.roles.Villager"),
     Werewolf: t("devConsole.roles.Werewolf"),
+    WhiteWolfKing: t("devConsole.roles.WhiteWolfKing"),
     Seer: t("devConsole.roles.Seer"),
     Witch: t("devConsole.roles.Witch"),
     Hunter: t("devConsole.roles.Hunter"),
     Guard: t("devConsole.roles.Guard"),
+    Idiot: t("devConsole.roles.Idiot"),
   } as Record<Role, string>), [t]);
 };
 
@@ -657,7 +660,7 @@ export function DevConsole({ isOpen, onClose }: DevConsoleProps) {
     setGameState((prev) => {
       const newPlayers = prev.players.map((p) =>
         p.seat === seat
-          ? { ...p, role, alignment: role === "Werewolf" ? "wolf" : "village" }
+          ? { ...p, role, alignment: isWolfRole(role) ? "wolf" : "village" }
           : p
       ) as Player[];
       return {
@@ -1782,7 +1785,7 @@ function ActionsTab({
                 const targetSeat = e.target.value ? parseInt(e.target.value) : undefined;
                 if (targetSeat !== undefined) {
                   const target = gameState.players.find(p => p.seat === targetSeat);
-                  const isWolf = target?.role === "Werewolf";
+                  const isWolf = target ? target.alignment === "wolf" : false;
                   const newHistory = [
                     ...(gameState.nightActions.seerHistory || []),
                     { day: gameState.day, targetSeat, isWolf }

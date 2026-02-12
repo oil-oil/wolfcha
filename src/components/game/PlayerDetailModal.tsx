@@ -4,13 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "@phosphor-icons/react";
 import type { Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { 
   WerewolfIcon,
   SeerIcon,
   VillagerIcon,
   WitchIcon,
   HunterIcon,
-  GuardIcon
+  GuardIcon,
+  IdiotIcon,
+  WhiteWolfKingIcon
 } from "@/components/icons/FlatIcons";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { useTranslations } from "next-intl";
@@ -32,10 +35,12 @@ const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) =>
 const getRoleIcon = (role: string, size: number = 20) => {
   switch (role) {
     case "Werewolf": return <WerewolfIcon size={size} />;
+    case "WhiteWolfKing": return <WhiteWolfKingIcon size={size} />;
     case "Seer": return <SeerIcon size={size} />;
     case "Witch": return <WitchIcon size={size} />;
     case "Hunter": return <HunterIcon size={size} />;
     case "Guard": return <GuardIcon size={size} />;
+    case "Idiot": return <IdiotIcon size={size} />;
     default: return <VillagerIcon size={size} />;
   }
 };
@@ -56,7 +61,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
   const modelLabel = renderPlayer?.agentProfile?.modelRef?.model;
   const isMe = !!renderPlayer?.isHuman;
   const showPersona = !!persona && !isGenshinMode;
-  const isWolfTeammate = humanPlayer?.role === "Werewolf" && renderPlayer?.role === "Werewolf" && !renderPlayer?.isHuman;
+  const isWolfTeammate = humanPlayer && isWolfRole(humanPlayer.role) && renderPlayer && isWolfRole(renderPlayer.role) && !renderPlayer.isHuman;
   const canSeeRole = isMe || !!isWolfTeammate || !renderPlayer?.alive || isSpectatorMode;
   const isIdentityReady = isMe ? !!renderPlayer?.displayName?.trim() : !!persona;
   const avatarSrc = renderPlayer ? getPlayerAvatarUrl(renderPlayer, isGenshinMode) : "";
@@ -74,10 +79,12 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
   }, [persona?.voiceRules]);
   const roleLabels = useMemo<Record<string, string>>(() => ({
     Werewolf: t("roles.werewolf"),
+    WhiteWolfKing: t("roles.whiteWolfKing"),
     Seer: t("roles.seer"),
     Witch: t("roles.witch"),
     Hunter: t("roles.hunter"),
     Guard: t("roles.guard"),
+    Idiot: t("roles.idiot"),
     Villager: t("roles.villager"),
   }), [t]);
   const strategyLabels = useMemo<Record<string, string>>(() => ({
@@ -172,7 +179,7 @@ export function PlayerDetailModal({ player, isOpen, onClose, humanPlayer, isGens
                 {/* 身份标签 - 仅可见时显示 */}
                 {canSeeRole && (
                   <div className={`inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-sm font-bold ${
-                    renderPlayer.role === "Werewolf" 
+                    isWolfRole(renderPlayer.role) 
                       ? "bg-[var(--color-wolf-bg)] text-[var(--color-wolf)]" 
                       : "bg-[var(--color-accent-bg)] text-[var(--color-accent)]"
                   }`}>

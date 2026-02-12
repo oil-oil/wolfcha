@@ -10,7 +10,9 @@ import {
   SeerIcon,
   VillagerIcon,
   WerewolfIcon,
+  WhiteWolfKingIcon,
   WitchIcon,
+  IdiotIcon,
 } from "@/components/icons/FlatIcons";
 import type { Phase, Role } from "@/types/game";
 import { Switch } from "@/components/ui/switch";
@@ -34,10 +36,12 @@ interface TutorialOverlayProps {
 
 const ROLE_META: Record<Role, { accent: string; bg: string; Icon: React.ComponentType<{ size?: number; className?: string }> }> = {
   Werewolf: { accent: "var(--color-wolf)", bg: "var(--color-wolf-bg)", Icon: WerewolfIcon },
+  WhiteWolfKing: { accent: "var(--color-wolf)", bg: "var(--color-wolf-bg)", Icon: WhiteWolfKingIcon },
   Seer: { accent: "var(--color-seer)", bg: "var(--color-seer-bg)", Icon: SeerIcon },
   Witch: { accent: "var(--color-witch)", bg: "var(--color-witch-bg)", Icon: WitchIcon },
   Hunter: { accent: "var(--color-hunter)", bg: "var(--color-hunter-bg)", Icon: HunterIcon },
   Guard: { accent: "var(--color-guard)", bg: "var(--color-guard-bg)", Icon: GuardIcon },
+  Idiot: { accent: "var(--color-villager)", bg: "var(--color-villager-bg)", Icon: IdiotIcon },
   Villager: { accent: "var(--color-villager)", bg: "var(--color-villager-bg)", Icon: VillagerIcon },
 };
 
@@ -108,6 +112,8 @@ export function TutorialOverlay({
       Witch: t("roles.witch"),
       Hunter: t("roles.hunter"),
       Guard: t("roles.guard"),
+      Idiot: t("roles.idiot"),
+      WhiteWolfKing: t("roles.whiteWolfKing"),
       Villager: t("roles.villager"),
     };
     const roleDataMap = t.raw("tutorialOverlay.roles" as any) as Record<Role, {

@@ -17,6 +17,7 @@ import {
   VoteIcon,
 } from "@/components/icons/FlatIcons";
 import type { GameState, Player, Phase } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { useTranslations } from "next-intl";
 
 type WitchActionType = "save" | "poison" | "pass";
@@ -60,13 +61,15 @@ export function BottomActionPanel({
       <AnimatePresence mode="wait">
         {/* 选择确认 (投票/夜间行动) */}
         {(() => {
+          const isRevealedIdiot = humanPlayer?.role === "Idiot" && gameState.roleAbilities.idiotRevealed;
           const isCorrectRoleForPhase = 
-            (phase === "DAY_VOTE" && humanPlayer?.alive) ||
+            (phase === "DAY_VOTE" && humanPlayer?.alive && !isRevealedIdiot) ||
             (phase === "DAY_BADGE_ELECTION" && humanPlayer?.alive) ||
             (phase === "NIGHT_SEER_ACTION" && humanPlayer?.role === "Seer" && humanPlayer?.alive && gameState.nightActions.seerTarget === undefined) ||
-            (phase === "NIGHT_WOLF_ACTION" && humanPlayer?.role === "Werewolf" && humanPlayer?.alive) ||
+            (phase === "NIGHT_WOLF_ACTION" && humanPlayer && isWolfRole(humanPlayer.role) && humanPlayer.alive) ||
             (phase === "NIGHT_GUARD_ACTION" && humanPlayer?.role === "Guard" && humanPlayer?.alive) ||
-            (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter");
+            (phase === "HUNTER_SHOOT" && humanPlayer?.role === "Hunter") ||
+            (phase === "WHITE_WOLF_KING_BOOM" && humanPlayer?.role === "WhiteWolfKing");
 
           if (
             isCorrectRoleForPhase &&
@@ -124,6 +127,13 @@ export function BottomActionPanel({
                   <button onClick={onConfirmAction} className="inline-flex items-center justify-center h-10 text-base font-medium rounded-sm border-none cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[var(--color-warning)] text-white hover:bg-[#b45309] flex-[2]">
                     <Crosshair size={18} weight="fill" className="mr-1" />
                     {t("bottomAction.confirmHunter", { seat: selectedSeat + 1 })}
+                  </button>
+                )}
+
+                {phase === "WHITE_WOLF_KING_BOOM" && (
+                  <button onClick={onConfirmAction} className="inline-flex items-center justify-center h-10 text-base font-medium rounded-sm border-none cursor-pointer active:scale-[0.98] transition-all duration-150 bg-[var(--color-danger)] text-white hover:bg-[#dc2626] flex-[2]">
+                    <Skull size={18} weight="fill" className="mr-1" />
+                    {t("bottomAction.confirmAction.whiteWolfKingBoom", { seat: selectedSeat + 1 })}
                   </button>
                 )}
               </motion.div>

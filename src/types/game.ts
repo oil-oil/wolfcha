@@ -1,4 +1,9 @@
-export type Role = "Villager" | "Werewolf" | "Seer" | "Witch" | "Hunter" | "Guard";
+export type Role = "Villager" | "Werewolf" | "Seer" | "Witch" | "Hunter" | "Guard" | "Idiot" | "WhiteWolfKing";
+
+/** Check if a role belongs to the wolf team (used for seer checks, wolf actions, etc.) */
+export function isWolfRole(role: string | undefined): boolean {
+  return role === "Werewolf" || role === "WhiteWolfKing";
+}
 
 export type DifficultyLevel = "easy" | "normal" | "hard";
 
@@ -25,6 +30,7 @@ export interface StartGameOptions {
   isGenshinMode?: boolean;
   isSpectatorMode?: boolean;
   customCharacters?: CustomCharacterData[];
+  preferredRole?: Role;
 }
 
 export type Phase =
@@ -47,6 +53,7 @@ export type Phase =
   | "DAY_RESOLVE"
   | "BADGE_TRANSFER"        // 警长移交警徽
   | "HUNTER_SHOOT"          // 猎人开枪
+  | "WHITE_WOLF_KING_BOOM"  // 白狼王自爆
   | "GAME_END";
 
 export type Alignment = "village" | "wolf";
@@ -185,6 +192,8 @@ export interface GameState {
       executed?: { seat: number; votes: number };
       voteTie?: boolean;
       hunterShot?: { hunterSeat: number; targetSeat: number };
+      whiteWolfKingBoom?: { boomSeat: number; targetSeat: number };
+      idiotRevealed?: { seat: number };
     }
   >;
   dailySummaries: Record<number, string[]>; // day -> summary bullet list
@@ -208,6 +217,8 @@ export interface GameState {
     witchHealUsed: boolean;      // 女巫解药是否已用
     witchPoisonUsed: boolean;    // 女巫毒药是否已用
     hunterCanShoot: boolean;     // 猎人是否能开枪（被毒死不能开枪）
+    idiotRevealed: boolean;      // 白痴是否已翻牌（翻牌后失去投票权但不死）
+    whiteWolfKingBoomUsed: boolean; // 白狼王是否已自爆
   };
   winner: Alignment | null;
 }

@@ -1,4 +1,5 @@
 import type { GameState, Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
@@ -65,19 +66,24 @@ export class VotePhase extends GamePhase {
       pkSource: isRevote ? "vote" : undefined,
     };
     currentState = addSystemMessage(currentState, systemMessages.voteStart);
-    setDialogue(speakerHost, humanPlayer?.alive ? uiText.votePrompt : uiText.aiVoting, false);
+    const isRevealedIdiot = humanPlayer?.role === "Idiot" && currentState.roleAbilities.idiotRevealed;
+    setDialogue(speakerHost, humanPlayer?.alive && !isRevealedIdiot ? uiText.votePrompt : uiText.aiVoting, false);
     setGameState(currentState);
 
     await playNarrator("voteStart");
     await waitForUnpause();
 
-    if (humanPlayer?.alive) {
+    if (humanPlayer?.alive && !isRevealedIdiot) {
       setDialogue(speakerHint, uiText.clickToVote, false);
     }
 
     // PK投票时，参与PK的人不能投票
     const pkTargets = currentState.pkSource === "vote" && Array.isArray(currentState.pkTargets) ? currentState.pkTargets : [];
-    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !pkTargets.includes(p.seat));
+    // 已翻牌白痴不参与投票（节省 AI 调用）
+    const revealedIdiotId = currentState.roleAbilities.idiotRevealed
+      ? currentState.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+      : undefined;
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !pkTargets.includes(p.seat) && p.playerId !== revealedIdiotId);
     let tokenInvalidated = false;
     setIsWaitingForAI(true);
     try {
@@ -108,7 +114,7 @@ export class VotePhase extends GamePhase {
     }
     if (tokenInvalidated) return;
 
-    if (!humanPlayer?.alive) {
+    if (!humanPlayer?.alive || isRevealedIdiot) {
       await this.resolveVotes(currentState, runtime);
     }
   }
@@ -189,9 +195,15 @@ export class VotePhase extends GamePhase {
     const aliveById = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
     const aliveBySeat = new Set(state.players.filter((p) => p.alive).map((p) => p.seat));
 
+    // Revealed Idiot cannot vote
+    const revealedIdiotId = state.roleAbilities.idiotRevealed
+      ? state.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+      : undefined;
+
     for (const [voterId, targetSeat] of Object.entries(state.votes)) {
       if (!aliveById.has(voterId)) continue;
       if (!aliveBySeat.has(targetSeat)) continue;
+      if (voterId === revealedIdiotId) continue; // Idiot's vote doesn't count
       const weight = voterId === sheriffPlayerId ? 1.5 : 1;
       counts[targetSeat] = (counts[targetSeat] || 0) + weight;
     }
@@ -293,6 +305,35 @@ export class VotePhase extends GamePhase {
 
     if (result) {
       const executed = currentState.players.find((p) => p.seat === result.seat);
+
+      // --- Idiot immunity: if the executed player is Idiot and hasn't revealed yet ---
+      if (executed?.role === "Idiot" && !currentState.roleAbilities.idiotRevealed) {
+        const idiotMsg = t("system.idiotRevealed", { seat: result.seat + 1, name: executed.displayName });
+        currentState = addSystemMessage(currentState, idiotMsg);
+        const prevDayRec = currentState.dayHistory?.[currentState.day] || {};
+        currentState = {
+          ...currentState,
+          roleAbilities: { ...currentState.roleAbilities, idiotRevealed: true },
+          dayHistory: {
+            ...(currentState.dayHistory || {}),
+            [currentState.day]: { ...prevDayRec, idiotRevealed: { seat: result.seat } },
+          },
+          pkTargets: undefined,
+          pkSource: undefined,
+        };
+        runtime.setDialogue(speakerHost, idiotMsg, false);
+        runtime.setGameState(currentState);
+
+        // Skip execution — Idiot stays alive but loses voting rights
+        const winner = checkWinCondition(currentState);
+        if (winner) {
+          await runtime.onGameEnd(currentState, winner);
+          return;
+        }
+        await runtime.onVoteComplete(currentState, null);
+        return;
+      }
+
       currentState = addSystemMessage(
         currentState,
         systemMessages.playerExecuted(result.seat + 1, executed?.displayName || "", result.count)

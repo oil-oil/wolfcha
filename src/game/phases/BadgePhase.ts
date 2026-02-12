@@ -1,4 +1,5 @@
 import type { Player } from "@/types/game";
+import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
@@ -48,9 +49,9 @@ export class BadgePhase extends GamePhase {
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
     const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const wolfMates =
-      player.role === "Werewolf"
+      isWolfRole(player.role)
         ? state.players
-          .filter((p) => p.alive && p.role === "Werewolf" && p.playerId !== player.playerId)
+          .filter((p) => p.alive && isWolfRole(p.role) && p.playerId !== player.playerId)
           .map((p) => t("promptUtils.gameContext.seatLabel", { seat: p.seat + 1 }))
           .join(t("promptUtils.gameContext.listSeparator"))
         : "";
@@ -109,8 +110,8 @@ export class BadgePhase extends GamePhase {
     
     // Wolf tactic hint injection: keep games varied and avoid rigid "scripts".
     let wolfTacticHint = "";
-    if (player.role === "Werewolf") {
-      const aliveWolves = state.players.filter((p) => p.role === "Werewolf" && p.alive);
+    if (isWolfRole(player.role)) {
+      const aliveWolves = state.players.filter((p) => isWolfRole(p.role) && p.alive);
       if (aliveWolves.length > 0) {
         // Randomly decide whether to apply a "designated jumper" tactic this game.
         // Keep the probability below 1 to avoid the same meta every game.
@@ -165,7 +166,7 @@ export class BadgePhase extends GamePhase {
     );
 
     const roleHints =
-      player.role === "Werewolf"
+      isWolfRole(player.role)
         ? t("prompts.badge.transfer.roleHintWerewolf")
         : t("prompts.badge.transfer.roleHintGood");
 

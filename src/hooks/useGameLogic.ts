@@ -20,7 +20,7 @@ import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
-import { PLAYER_MODELS, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
+import { PLAYER_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition, clearPersistedGameState, isGameInProgress } from "@/store/game-machine";
 import { getGeneratorModel } from "@/lib/api-keys";
 import {
@@ -33,6 +33,7 @@ import {
   killPlayer,
   generateDailySummary,
   getNextAliveSeat,
+  generateWhiteWolfKingBoomDecision,
 } from "@/lib/game-master";
 import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs, type GeneratedCharacter } from "@/lib/character-generator";
 import { getSystemMessages, getUiText } from "@/lib/game-texts";
@@ -140,6 +141,7 @@ export function useGameLogic() {
   const onStartVoteRef = useRef<((state: GameState, token: ReturnType<typeof getToken>) => Promise<void>) | null>(null);
   const onBadgeSpeechEndRef = useRef<((state: GameState) => Promise<void>) | null>(null);
   const onPkSpeechEndRef = useRef<((state: GameState) => Promise<void>) | null>(null);
+  const wwkBoomCheckRef = useRef<((state: GameState, wwk: Player) => Promise<boolean>) | null>(null);
 
   // 游戏启动相关 refs
   const pendingStartStateRef = useRef<GameState | null>(null);
@@ -300,6 +302,13 @@ export function useGameLogic() {
         if (fn) {
           await fn(state);
         }
+      },
+      onWhiteWolfKingBoomCheck: async (state: GameState, wwk: Player): Promise<boolean> => {
+        const fn = wwkBoomCheckRef.current;
+        if (fn) {
+          return fn(state, wwk);
+        }
+        return false;
       },
       onBadgeTransfer: async (state: GameState, sheriff: Player, afterTransfer: (s: GameState) => Promise<void>) => {
         const fn = badgeTransferRef.current;
@@ -638,6 +647,87 @@ export function useGameLogic() {
       await enterVotePhase(state, token, { isRevote: true });
       return;
     }
+  };
+
+  // AI白狼王自爆决策
+  wwkBoomCheckRef.current = async (state: GameState, wwk: Player): Promise<boolean> => {
+    if (state.roleAbilities.whiteWolfKingBoomUsed) return false;
+    if (!wwk.agentProfile?.modelRef) return false;
+
+    const targetSeat = await generateWhiteWolfKingBoomDecision(state, wwk);
+    if (targetSeat === null) return false; // AI 选择不自爆
+
+    const token = getToken();
+    if (!isTokenValid(token)) return false;
+
+    // 执行自爆逻辑
+    let currentState = transitionPhase(state, "WHITE_WOLF_KING_BOOM");
+    currentState = killPlayer(currentState, wwk.seat);
+    currentState = {
+      ...currentState,
+      roleAbilities: { ...currentState.roleAbilities, whiteWolfKingBoomUsed: true },
+    };
+
+    const target = currentState.players.find((p) => p.seat === targetSeat);
+    if (target && target.alive) {
+      currentState = killPlayer(currentState, targetSeat);
+      const msg = t("system.whiteWolfKingBoom", {
+        seat: wwk.seat + 1,
+        name: wwk.displayName,
+        targetSeat: targetSeat + 1,
+        targetName: target.displayName,
+      });
+      currentState = addSystemMessage(currentState, msg);
+      setDialogue(speakerHost, msg, false);
+
+      const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
+      currentState = {
+        ...currentState,
+        dayHistory: {
+          ...(currentState.dayHistory || {}),
+          [currentState.day]: { ...prevDayRecord, whiteWolfKingBoom: { boomSeat: wwk.seat, targetSeat } },
+        },
+      };
+    } else {
+      const msg = t("system.whiteWolfKingBoomNoTarget", { seat: wwk.seat + 1, name: wwk.displayName });
+      currentState = addSystemMessage(currentState, msg);
+      setDialogue(speakerHost, msg, false);
+    }
+
+    // 白狼王自爆带走的人没有遗言，如果被带走的人或白狼王是警长，警徽直接撕毁
+    const sheriffSeat = currentState.badge.holderSeat;
+    if (sheriffSeat !== null && (!currentState.players.find((p) => p.seat === sheriffSeat)?.alive)) {
+      const sheriffPlayer = currentState.players.find((p) => p.seat === sheriffSeat);
+      const forceTornMsg = t("system.badgeForceTorn", { seat: sheriffSeat + 1, name: sheriffPlayer?.displayName || "" });
+      currentState = addSystemMessage(currentState, forceTornMsg);
+      currentState = {
+        ...currentState,
+        badge: { ...currentState.badge, holderSeat: null },
+      };
+    }
+
+    setGameState(currentState);
+
+    const winner = checkWinCondition(currentState);
+    if (winner) {
+      const endFn = endGameRef.current;
+      if (endFn) await endFn(currentState, winner);
+      return true;
+    }
+
+    // 白狼王自爆带走猎人时，猎人可以开枪（非毒死，技能可发动）
+    const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
+    if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+      await delay(1200);
+      const hunterFn = hunterDeathRef.current;
+      if (hunterFn) await hunterFn(currentState, boomTarget, false);
+      return true;
+    }
+
+    await delay(1200);
+    const proceedFn = proceedToNightRef.current;
+    if (proceedFn) await proceedFn(currentState, token);
+    return true;
   };
 
   // ============================================
@@ -1065,11 +1155,15 @@ export function useGameLogic() {
     if (isResolvingVotesRef.current) return;
     if (isWaitingForAI) return;
 
+    // Revealed Idiot cannot vote, exclude from allVoted check
+    const revealedIdiotId = gameState.roleAbilities.idiotRevealed
+      ? gameState.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+      : undefined;
     // PK投票时，参与PK的人不投票，需要排除
     const pkTargets =
       gameState.pkSource === "vote" && Array.isArray(gameState.pkTargets) ? gameState.pkTargets : [];
     const voterIds = gameState.players
-      .filter((p) => p.alive && !pkTargets.includes(p.seat))
+      .filter((p) => p.alive && p.playerId !== revealedIdiotId && !pkTargets.includes(p.seat))
       .map((p) => p.playerId);
     const allVoted = voterIds.every((id) => typeof gameState.votes[id] === "number");
     
@@ -1157,7 +1251,10 @@ export function useGameLogic() {
           }
 
           if (s.phase === "DAY_VOTE") {
-            const aliveIds = s.players.filter((p) => p.alive).map((p) => p.playerId);
+            const revIdiotId = s.roleAbilities.idiotRevealed
+              ? s.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+              : undefined;
+            const aliveIds = s.players.filter((p) => p.alive && p.playerId !== revIdiotId).map((p) => p.playerId);
             const allVoted = aliveIds.every((id) => typeof s.votes[id] === "number");
             if (allVoted) {
               await resolveVotePhase(s, token);
@@ -1253,6 +1350,7 @@ export function useGameLogic() {
       isGenshinMode = false,
       isSpectatorMode = false,
       customCharacters = [],
+      preferredRole,
     } = options ?? {};
 
     const totalPlayers = playerCount;
@@ -1506,7 +1604,8 @@ export function useGameLogic() {
         fixedRoles,
         seedPlayerIds,
         isGenshinMode ? genshinModelRefs : aiModelRefs,
-        aiSeatOrder
+        aiSeatOrder,
+        preferredRole
       );
 
       let newState: GameState = {
@@ -1726,7 +1825,11 @@ export function useGameLogic() {
     if (!humanPlayer) return;
     if (!humanPlayer.alive) return;
 
-    const baseState = gameStateRef.current;
+    // Revealed Idiot cannot vote
+    const baseState0 = gameStateRef.current;
+    if (humanPlayer.role === "Idiot" && baseState0.roleAbilities.idiotRevealed) return;
+
+    const baseState = baseState0;
     if (baseState.phase !== "DAY_VOTE" && baseState.phase !== "DAY_BADGE_ELECTION") return;
     const targetPlayer = baseState.players.find((p) => p.seat === targetSeat);
     if (!targetPlayer || !targetPlayer.alive) return;
@@ -1779,8 +1882,11 @@ export function useGameLogic() {
     const latestState = updatedState || gameStateRef.current;
     gameStateRef.current = latestState;
 
-    // 检查是否所有人都投票了
-    const aliveIds = latestState.players.filter((p) => p.alive).map((p) => p.playerId);
+    // 检查是否所有人都投票了（已翻牌白痴除外）
+    const revealedIdiotId2 = latestState.roleAbilities.idiotRevealed
+      ? latestState.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
+      : undefined;
+    const aliveIds = latestState.players.filter((p) => p.alive && p.playerId !== revealedIdiotId2).map((p) => p.playerId);
     const allVoted = aliveIds.every((id) => typeof latestState.votes[id] === "number");
     
     console.log("[wolfcha] handleHumanVote: allVoted =", allVoted, "votes count =", Object.keys(latestState.votes).length, "alive count =", aliveIds.length);
@@ -1819,9 +1925,9 @@ export function useGameLogic() {
       await runNightPhaseAction(currentState, token, "CONTINUE_NIGHT_AFTER_GUARD");
     }
     // 狼人击杀
-    else if (gameState.phase === "NIGHT_WOLF_ACTION" && humanPlayer.role === "Werewolf") {
+    else if (gameState.phase === "NIGHT_WOLF_ACTION" && isWolfRole(humanPlayer.role)) {
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
-      const wolves = currentState.players.filter((p) => p.role === "Werewolf" && p.alive);
+      const wolves = currentState.players.filter((p) => isWolfRole(p.role) && p.alive);
       
       // 简化逻辑：人类狼人决定目标，其他AI狼人自动达成共识
       const wolfVotes: Record<string, number> = {};
@@ -1875,7 +1981,7 @@ export function useGameLogic() {
         return;
       }
       const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
-      const isWolf = targetPlayer?.role === "Werewolf";
+      const isWolf = targetPlayer ? targetPlayer.alignment === "wolf" : false;
       const seerHistory = currentState.nightActions.seerHistory || [];
 
       currentState = {
@@ -1948,7 +2054,87 @@ export function useGameLogic() {
         await proceedToNight(currentState, token);
       }
     }
+    // 白狼王自爆
+    else if (gameState.phase === "WHITE_WOLF_KING_BOOM" && humanPlayer.role === "WhiteWolfKing") {
+      // Kill the White Wolf King himself
+      currentState = killPlayer(currentState, humanPlayer.seat);
+      currentState = {
+        ...currentState,
+        roleAbilities: { ...currentState.roleAbilities, whiteWolfKingBoomUsed: true },
+      };
+
+      if (targetSeat >= 0) {
+        // Kill the target
+        currentState = killPlayer(currentState, targetSeat);
+        const target = currentState.players.find((p) => p.seat === targetSeat);
+        if (target) {
+          const msg = t("system.whiteWolfKingBoom", { seat: humanPlayer.seat + 1, name: humanPlayer.displayName, targetSeat: targetSeat + 1, targetName: target.displayName });
+          currentState = addSystemMessage(currentState, msg);
+          setDialogue(speakerHost, msg, false);
+        }
+        const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
+        currentState = {
+          ...currentState,
+          dayHistory: {
+            ...(currentState.dayHistory || {}),
+            [currentState.day]: { ...prevDayRecord, whiteWolfKingBoom: { boomSeat: humanPlayer.seat, targetSeat } },
+          },
+        };
+      } else {
+        const msg = t("system.whiteWolfKingBoomNoTarget", { seat: humanPlayer.seat + 1, name: humanPlayer.displayName });
+        currentState = addSystemMessage(currentState, msg);
+        setDialogue(speakerHost, msg, false);
+      }
+
+      // 白狼王自爆带走的人没有遗言，如果被带走的人或白狼王是警长，警徽直接撕毁
+      const boomSheriffSeat = currentState.badge.holderSeat;
+      if (boomSheriffSeat !== null && (!currentState.players.find((p) => p.seat === boomSheriffSeat)?.alive)) {
+        const boomSheriffPlayer = currentState.players.find((p) => p.seat === boomSheriffSeat);
+        const forceTornMsg = t("system.badgeForceTorn", { seat: boomSheriffSeat + 1, name: boomSheriffPlayer?.displayName || "" });
+        currentState = addSystemMessage(currentState, forceTornMsg);
+        currentState = {
+          ...currentState,
+          badge: { ...currentState.badge, holderSeat: null },
+        };
+      }
+
+      setGameState(currentState);
+
+      const winner = checkWinCondition(currentState);
+      if (winner) {
+        await endGameSafely(currentState, winner);
+        return;
+      }
+
+      // 白狼王自爆带走猎人时，猎人可以开枪（非毒死，技能可发动）
+      if (targetSeat >= 0) {
+        const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
+        if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
+          await delay(1200);
+          const hunterFn = hunterDeathRef.current;
+          if (hunterFn) await hunterFn(currentState, boomTarget, false);
+          return;
+        }
+      }
+
+      await delay(1200);
+      await proceedToNight(currentState, token);
+    }
   }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase, speakerHost, t]);
+
+  /** 人类白狼王自爆（进入 WHITE_WOLF_KING_BOOM 阶段） */
+  const handleWhiteWolfKingBoom = useCallback(async () => {
+    if (!humanPlayer || humanPlayer.role !== "WhiteWolfKing" || !humanPlayer.alive) return;
+    const currentState = gameStateRef.current;
+    if (currentState.roleAbilities.whiteWolfKingBoomUsed) return;
+    if (currentState.phase !== "DAY_SPEECH" && currentState.phase !== "DAY_BADGE_SPEECH" && currentState.phase !== "DAY_PK_SPEECH") return;
+
+    // Transition to WWK boom phase
+    const nextState = transitionPhase(currentState, "WHITE_WOLF_KING_BOOM");
+    setGameState(nextState);
+    clearDialogue();
+    setDialogue(speakerHost, t("ui.whiteWolfKingBoom"), false);
+  }, [humanPlayer, transitionPhase, setGameState, clearDialogue, setDialogue, speakerHost, t]);
 
   /** 人类警长移交 */
   const handleHumanBadgeTransfer = useCallback(async (targetSeat: number) => {
@@ -2077,6 +2263,7 @@ export function useGameLogic() {
     handleHumanVote,
     handleNightAction,
     handleHumanBadgeTransfer,
+    handleWhiteWolfKingBoom,
     handleNextRound,
     scrollToBottom,
     advanceSpeech,
