@@ -54,12 +54,14 @@ import {
   filterPlayerModels,
   type ModelRef,
 } from "@/types/game";
+import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
  
  interface UserProfileModalProps {
    open: boolean;
    onOpenChange: (open: boolean) => void;
    email?: string | null;
    credits?: number | null;
+   springCampaign?: SpringCampaignSnapshot | null;
    referralCode?: string | null;
    totalReferrals?: number | null;
    onChangePassword: () => void;
@@ -75,6 +77,7 @@ import {
    onOpenChange,
    email,
    credits,
+   springCampaign,
    referralCode,
    totalReferrals,
    onChangePassword,
@@ -460,6 +463,17 @@ import {
                       <span className="text-[var(--text-muted)]">{t("userProfile.fields.credits")}</span>
                       <span className="text-[var(--text-primary)]">{displayCredits}</span>
                     </div>
+                    {springCampaign?.active && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[var(--text-muted)]">{t("userProfile.fields.springQuota")}</span>
+                        <span className="text-[var(--text-primary)]">
+                          {t("userProfile.fields.springQuotaValue", {
+                            count: springCampaign.remainingQuota,
+                            total: springCampaign.totalQuota,
+                          })}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-[var(--text-muted)]">{t("userProfile.fields.referrals")}</span>
                       <span className="text-[var(--text-primary)]">{totalReferrals ?? 0}</span>
@@ -480,7 +494,11 @@ import {
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-[var(--text-muted)] pt-0.5">{t("customKey.dailyBonus")}</p>
+                    <p className="text-xs text-[var(--text-muted)] pt-0.5">
+                      {springCampaign?.active
+                        ? t("customKey.springCampaign.active")
+                        : t("customKey.springCampaign.ended")}
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">

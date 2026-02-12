@@ -45,7 +45,30 @@
       "viewInfo": "查看账号信息",
       "loggedIn": "已登录",
       "remaining": "剩余 {count} 局",
+      "tempQuotaShort": "新春 {count} 局",
       "info": "账号信息"
+    },
+    "springCampaign": {
+      "title": "新春登录福利",
+      "range": "截止 2月18日",
+      "claimedStatus": "今日新春额度：{count}/{total}（仅当日有效）",
+      "signInHint": "登录后自动发放今日 10 把新春额度（仅当日有效）",
+      "modal": {
+        "badge": "LUNAR EVENT",
+        "title": "新年快乐",
+        "subtitle": "愿你新岁顺遂，局局高光。",
+        "line1": "活动期间每日登录可领取 10 把新春额度，开局将优先消耗。",
+        "line2": "也想真诚告诉你：新年维护结束后，Wolfcha 可能会因为运营压力暂停维护。",
+        "line3": "谢谢你一路以来的支持与陪伴，也希望这段时间猹杀有陪你度过一些开心、放松的时刻。",
+        "note": "活动时间：2月12日 - 2月17日（北京时间，18日零点结束）",
+        "action": "收下祝福，继续对局"
+      },
+      "toast": {
+        "claimed": {
+          "title": "新春福利已到账",
+          "description": "今日新春额度 +10，本日内有效。"
+        }
+      }
     },
     "auth": {
       "signIn": "登录/注册"
@@ -559,6 +582,8 @@
     "fields": {
       "email": "邮箱",
       "credits": "剩余额度",
+      "springQuota": "新春额度",
+      "springQuotaValue": "{count}/{total} 局",
       "referrals": "邀请人数",
       "referralCode": "邀请码"
     },
@@ -2016,6 +2041,10 @@
     "title": "用我自己的 key 玩",
     "description": "开启后填写 API Key，仅保存在本地浏览器",
     "dailyBonus": "每天上线可领 1 局，记得常来呀~",
+    "springCampaign": {
+      "active": "新春福利进行中：2月18日前每日登录送 10 把新春额度（仅当日有效）",
+      "ended": "新春福利已结束，感谢参与。"
+    },
     "tabs": {
       "profile": "信息",
       "custom": "用我自己的 key 玩",

@@ -5,8 +5,10 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { readReferralFromStorage, removeReferralFromStorage } from "@/lib/referral";
+import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
 const REFERRAL_ENDPOINT = "/api/credits/referral";
+const SPRING_CAMPAIGN_ENDPOINT = "/api/credits/spring-login-bonus";
 const JSON_CONTENT_TYPE = "application/json";
 const AUTH_EVENT = {
   INITIAL_SESSION: "INITIAL_SESSION",
@@ -23,7 +25,9 @@ export function useCredits() {
   const [loading, setLoading] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [dailyBonusClaimed, setDailyBonusClaimed] = useState<boolean | null>(null);
-  const dailyBonusClaimedRef = useRef(false);
+  const dailyBonusClaimedUserRef = useRef<string | null>(null);
+  const springCampaignClaimedUserRef = useRef<string | null>(null);
+  const [springCampaign, setSpringCampaign] = useState<SpringCampaignSnapshot | null>(null);
 
   const fetchCredits = useCallback(async () => {
     if (!user) return;
@@ -65,10 +69,23 @@ export function useCredits() {
         },
       });
 
-      if (!res.ok) return false;
+      if (!res.ok) {
+        try {
+          const payload = (await res.json()) as { campaign?: SpringCampaignSnapshot };
+          if (payload.campaign) {
+            setSpringCampaign(payload.campaign);
+          }
+        } catch {
+          // no-op
+        }
+        return false;
+      }
 
-      const payload = (await res.json()) as { credits: number };
+      const payload = (await res.json()) as { credits: number; campaign?: SpringCampaignSnapshot };
       setCredits(payload.credits);
+      if (payload.campaign) {
+        setSpringCampaign(payload.campaign);
+      }
       return true;
     } catch {
       return false;
@@ -83,9 +100,9 @@ export function useCredits() {
     setIsPasswordRecovery(false);
   }, []);
 
-  const claimDailyBonus = useCallback(async (accessToken: string): Promise<void> => {
-    if (dailyBonusClaimedRef.current) return;
-    dailyBonusClaimedRef.current = true;
+  const claimDailyBonus = useCallback(async (accessToken: string, userId: string): Promise<void> => {
+    if (dailyBonusClaimedUserRef.current === userId) return;
+    dailyBonusClaimedUserRef.current = userId;
 
     try {
       const res = await fetch("/api/credits/daily-bonus", {
@@ -107,6 +124,29 @@ export function useCredits() {
       setDailyBonusClaimed(payload.bonusClaimed);
     } catch {
       // Silently fail - daily bonus is not critical
+    }
+  }, []);
+
+  const claimSpringCampaign = useCallback(async (accessToken: string, userId: string): Promise<void> => {
+    if (springCampaignClaimedUserRef.current === userId) return;
+    springCampaignClaimedUserRef.current = userId;
+
+    try {
+      const res = await fetch(SPRING_CAMPAIGN_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const payload = await res.json() as { campaign?: SpringCampaignSnapshot };
+      if (payload.campaign) {
+        setSpringCampaign(payload.campaign);
+      }
+    } catch {
+      // Silently fail - campaign is non-critical
     }
   }, []);
 
@@ -142,8 +182,11 @@ export function useCredits() {
 
   const handleAuthenticatedSession = useCallback(async (currentSession: Session): Promise<void> => {
     await applyReferralCode(currentSession.access_token);
-    void claimDailyBonus(currentSession.access_token);
-  }, [applyReferralCode, claimDailyBonus]);
+    await Promise.all([
+      claimDailyBonus(currentSession.access_token, currentSession.user.id),
+      claimSpringCampaign(currentSession.access_token, currentSession.user.id),
+    ]);
+  }, [applyReferralCode, claimDailyBonus, claimSpringCampaign]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -178,11 +221,15 @@ export function useCredits() {
 
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void fetchCredits();
     } else {
+      dailyBonusClaimedUserRef.current = null;
+      springCampaignClaimedUserRef.current = null;
       setCredits(null);
       setReferralCode(null);
       setTotalReferrals(0);
+      setSpringCampaign(null);
       setLoading(false);
     }
   }, [user, fetchCredits]);
@@ -200,5 +247,6 @@ export function useCredits() {
     isPasswordRecovery,
     clearPasswordRecovery,
     dailyBonusClaimed,
+    springCampaign,
   };
 }

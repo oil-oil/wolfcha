@@ -69,6 +69,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      campaign_daily_quota: {
+        Row: {
+          id: string;
+          user_id: string;
+          campaign_code: string;
+          quota_date: string;
+          granted_quota: number;
+          consumed_quota: number;
+          expires_at: string;
+          claimed_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          campaign_code: string;
+          quota_date: string;
+          granted_quota?: number;
+          consumed_quota?: number;
+          expires_at: string;
+          claimed_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          campaign_code?: string;
+          quota_date?: string;
+          granted_quota?: number;
+          consumed_quota?: number;
+          expires_at?: string;
+          claimed_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sponsor_clicks: {
         Row: {
           id: string;

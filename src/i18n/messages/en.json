@@ -45,7 +45,30 @@
       "viewInfo": "View account details",
       "loggedIn": "Signed in",
       "remaining": "{count} games remaining",
+      "tempQuotaShort": "Spring {count}",
       "info": "Account Info"
+    },
+    "springCampaign": {
+      "title": "Lunar New Year Login Bonus",
+      "range": "Ends Feb 18",
+      "claimedStatus": "Today's Spring quota: {count}/{total} (valid for today only)",
+      "signInHint": "Sign in to automatically claim 10 Spring quota for today.",
+      "modal": {
+        "badge": "LUNAR EVENT",
+        "title": "Happy Lunar New Year",
+        "subtitle": "Wishing you luck and great reads in every match.",
+        "line1": "During the event, sign in daily to receive 10 Spring quota. They are consumed first when a match starts.",
+        "line2": "We also want to be honest: after the Lunar New Year maintenance window, we may have to pause Wolfcha due to operational pressure.",
+        "line3": "Thank you for being with us all this way. We hope Wolfcha has kept you company through some joyful and relaxing moments.",
+        "note": "Event window: Feb 12 - Feb 17 (Asia/Shanghai, ends at 00:00 on Feb 18)",
+        "action": "Continue to Match"
+      },
+      "toast": {
+        "claimed": {
+          "title": "Lunar New Year bonus claimed",
+          "description": "You received +10 Spring quota for today."
+        }
+      }
     },
     "auth": {
       "signIn": "Sign In / Sign Up"
@@ -559,6 +582,8 @@
     "fields": {
       "email": "Email",
       "credits": "Credits",
+      "springQuota": "LNY quota",
+      "springQuotaValue": "{count}/{total} games",
       "referrals": "Referrals",
       "referralCode": "Referral code"
     },
@@ -2016,6 +2041,10 @@
     "title": "Use my own key",
     "description": "Enable to enter your API Key. Stored locally in browser only.",
     "dailyBonus": "Claim 1 free game daily. Come back often!",
+    "springCampaign": {
+      "active": "Lunar New Year bonus is live: sign in daily before Feb 18 to get 10 Spring quota (today only).",
+      "ended": "Lunar New Year bonus has ended. Thanks for playing."
+    },
     "tabs": {
       "profile": "Profile",
       "custom": "Use my own key",

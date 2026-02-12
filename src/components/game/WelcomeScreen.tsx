@@ -25,6 +25,12 @@ import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
 import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
+import {
+  SPRING_CAMPAIGN_CODE,
+  SPRING_CAMPAIGN_DAILY_QUOTA,
+  getShanghaiDateKey,
+  isSpringCampaignActive,
+} from "@/lib/spring-campaign";
 
 type SponsorCardProps = {
   sponsorId: string;
@@ -255,6 +261,7 @@ export function WelcomeScreen({
     isPasswordRecovery,
     clearPasswordRecovery,
     fetchCredits,
+    springCampaign,
   } = useCredits();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -266,6 +273,7 @@ export function WelcomeScreen({
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [isSponsorOpen, setIsSponsorOpen] = useState(false);
+  const [isSpringFestivalOpen, setIsSpringFestivalOpen] = useState(false);
   const [isGroupOpen, setIsGroupOpen] = useState(false);
   const [groupImgOk, setGroupImgOk] = useState<boolean | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -301,10 +309,44 @@ export function WelcomeScreen({
   const [playerCount, setPlayerCount] = useAtom(playerCountAtom);
   const [preferredRole, setPreferredRole] = useAtom(preferredRoleAtom);
   const [githubStars, setGithubStars] = useState<number | null>(null);
+  const springCampaignRemainingQuota = springCampaign?.remainingQuota ?? 0;
+  const springCampaignTotalQuota = springCampaign?.totalQuota ?? 0;
+  const springCampaignActiveNow = springCampaign?.active ?? isSpringCampaignActive();
+  const springCampaignDateToday = springCampaignActiveNow ? getShanghaiDateKey() : null;
+  const isSpringCampaignForToday = springCampaign?.quotaDate === springCampaignDateToday;
+  const effectiveSpringRemainingQuota = springCampaign?.active
+    ? (isSpringCampaignForToday ? springCampaignRemainingQuota : SPRING_CAMPAIGN_DAILY_QUOTA)
+    : 0;
+  const effectiveSpringTotalQuota = springCampaign?.active
+    ? (isSpringCampaignForToday ? springCampaignTotalQuota : SPRING_CAMPAIGN_DAILY_QUOTA)
+    : 0;
+  const hasSpringQuota = springCampaignActiveNow && effectiveSpringRemainingQuota > 0;
+  const mayHaveUnclaimedSpringQuota = springCampaignActiveNow && !isSpringCampaignForToday;
+  const springFestivalSeenKey = `wolfcha:${SPRING_CAMPAIGN_CODE}:welcome_seen`;
 
   useEffect(() => {
     if (locale === "en") setIsGroupOpen(false);
   }, [locale]);
+
+  useEffect(() => {
+    if (!springCampaign?.active || !springCampaign.justClaimed) return;
+    toast.success(t("welcome.springCampaign.toast.claimed.title"), {
+      description: t("welcome.springCampaign.toast.claimed.description"),
+    });
+  }, [springCampaign?.active, springCampaign?.justClaimed, t]);
+
+  useEffect(() => {
+    if (!springCampaignActiveNow) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const popupDebugMode = params.get("spring_popup_debug") === "1";
+    const seen = window.localStorage.getItem(springFestivalSeenKey);
+    if (!popupDebugMode && seen === "1") return;
+    if (!popupDebugMode) {
+      window.localStorage.setItem(springFestivalSeenKey, "1");
+    }
+    setIsSpringFestivalOpen(true);
+  }, [springCampaignActiveNow, springFestivalSeenKey]);
 
   useEffect(() => {
     selectionStorageKeyRef.current = selectionStorageKey;
@@ -443,6 +485,7 @@ export function WelcomeScreen({
     isAccountOpen ||
     isUserProfileOpen ||
     isSponsorOpen ||
+    isSpringFestivalOpen ||
     isGroupOpen ||
     isMobileMenuOpen ||
     isCustomCharacterOpen ||
@@ -552,7 +595,13 @@ export function WelcomeScreen({
 
     const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
 
-    if (!hasUserKey && credits !== null && credits <= LOW_CREDIT_THRESHOLD) {
+    if (
+      !hasUserKey &&
+      credits !== null &&
+      credits <= LOW_CREDIT_THRESHOLD &&
+      !hasSpringQuota &&
+      !mayHaveUnclaimedSpringQuota
+    ) {
       setIsLowCreditOpen(true);
       return;
     }
@@ -741,6 +790,7 @@ export function WelcomeScreen({
           }}
           email={user?.email}
           credits={credits ?? undefined}
+          springCampaign={springCampaign}
           referralCode={referralCode}
           totalReferrals={totalReferrals}
           onChangePassword={() => setIsAccountOpen(true)}
@@ -854,6 +904,47 @@ export function WelcomeScreen({
                 </a>
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isSpringFestivalOpen} onOpenChange={setIsSpringFestivalOpen}>
+          <DialogContent className="max-w-[560px] overflow-hidden border-2 border-[var(--border-color)] bg-[var(--bg-card)] p-0">
+            <motion.div
+              initial={{ opacity: 0, y: 18, scale: 0.92, rotateX: -14, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+              style={{ transformOrigin: "top center", perspective: 1100 }}
+              className="relative"
+            >
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.22),transparent_40%)]" />
+              <div className="bg-gradient-to-r from-[#8b1a1a] via-[#b4232b] to-[#8b1a1a] px-6 py-5 text-white">
+                <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/80">
+                  <Sparkle size={14} weight="fill" />
+                  {t("welcome.springCampaign.modal.badge")}
+                </div>
+                <h3 className="mt-2 text-2xl font-semibold tracking-wide">
+                  {t("welcome.springCampaign.modal.title")}
+                </h3>
+                <p className="mt-1 text-sm text-white/90">
+                  {t("welcome.springCampaign.modal.subtitle")}
+                </p>
+              </div>
+              <div className="space-y-3 px-6 py-5 text-sm">
+                <p className="text-[var(--text-primary)]">{t("welcome.springCampaign.modal.line1")}</p>
+                <p className="text-[var(--text-secondary)]">{t("welcome.springCampaign.modal.line2")}</p>
+                <p className="text-[var(--text-secondary)]">{t("welcome.springCampaign.modal.line3")}</p>
+                <div className="rounded-lg border border-[var(--border-color)] bg-white/60 px-3 py-2 text-xs text-[var(--text-secondary)]">
+                  {t("welcome.springCampaign.modal.note")}
+                </div>
+                <Button
+                  type="button"
+                  className="w-full bg-[#b4232b] text-white hover:bg-[#9f1f26]"
+                  onClick={() => setIsSpringFestivalOpen(false)}
+                >
+                  {t("welcome.springCampaign.modal.action")}
+                </Button>
+              </div>
+            </motion.div>
           </DialogContent>
         </Dialog>
 
@@ -1022,7 +1113,11 @@ export function WelcomeScreen({
                 {customKeyEnabled ? (
                   <span className="opacity-70">{t("customKey.title")}</span>
                 ) : (
-                  <span className="opacity-70">{t("welcome.account.remaining", { count: creditsLoading ? "..." : (credits ?? 0) })}</span>
+                  <span className="opacity-70">
+                    {springCampaignActiveNow ? t("welcome.account.tempQuotaShort", { count: effectiveSpringRemainingQuota }) : null}
+                    {springCampaignActiveNow ? " · " : null}
+                    {t("welcome.account.remaining", { count: creditsLoading ? "..." : (credits ?? 0) })}
+                  </span>
                 )}
               </button>
             ) : (
@@ -1160,52 +1255,33 @@ export function WelcomeScreen({
               <div className="wc-contract-subtitle">{t("welcome.subtitle")}</div>
             </div>
 
-
             <div className="mt-5">
-              <a
-                href="https://www.producthunt.com/products/wolfcha?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-wolfcha"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t("welcome.productHunt.ariaLabel")}
-                className="group mx-auto block w-full"
-              >
+              {springCampaignActiveNow ? (
                 <div className="relative rotate-[-1deg]">
                   <div
                     className="pointer-events-none absolute -top-2 left-6 h-4 w-20 rotate-[-6deg] rounded-sm border border-black/10 bg-white/60 shadow-sm"
                     aria-hidden="true"
                   />
-                  <div className="flex items-center gap-3 rounded-xl border border-[var(--border-color)] bg-white/55 px-3 py-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-transform group-hover:-translate-y-0.5 group-hover:rotate-[0.5deg]">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ff6154]">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 40 40"
-                        className="h-7 w-7"
-                        aria-hidden="true"
-                      >
-                        <path
-                          fill="#fff"
-                          d="M22.667 20H17v-6.667h5.667a3.333 3.333 0 0 1 0 6.667m0-10H13.333v20H17v-6.667h5.667a6.667 6.667 0 0 0 0-13.333"
-                        />
-                      </svg>
+                  <div className="rounded-xl border border-[var(--border-color)] bg-white/60 px-4 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-[var(--text-primary)]">
+                        {t("welcome.springCampaign.title")}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t("welcome.springCampaign.range")}
+                      </p>
                     </div>
-                    {/* Text */}
-                    <div className="min-w-0 flex-1">
-
-                      <div className="flex items-center gap-2">
-                        {/* Product Hunt logo */}
-
-                        <span className="text-sm font-semibold text-[var(--text-primary)]">
-                          {t("welcome.productHunt.title")}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-xs leading-snug text-[var(--text-secondary)]">
-                        {t("welcome.productHunt.description")}
-                      </div>
-                    </div>
-
+                    <p className="mt-1 text-xs leading-snug text-[var(--text-secondary)]">
+                      {user
+                        ? t("welcome.springCampaign.claimedStatus", {
+                          count: springCampaignActiveNow ? effectiveSpringRemainingQuota : SPRING_CAMPAIGN_DAILY_QUOTA,
+                          total: springCampaignActiveNow ? effectiveSpringTotalQuota : SPRING_CAMPAIGN_DAILY_QUOTA,
+                        })
+                        : t("welcome.springCampaign.signInHint")}
+                    </p>
                   </div>
                 </div>
-              </a>
+              ) : null}
             </div>
             <div className="mt-7 text-center wc-contract-body">
               <div className="wc-contract-oath">
