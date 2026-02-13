@@ -675,6 +675,10 @@ alive_count: ${alivePlayers.length}
     state.day === 1
       ? t("promptUtils.gameContext.phaseOrderNoteDay1BadgeBeforeDeath")
       : t("promptUtils.gameContext.phaseOrderNote");
+  const noSameDayCausalityNote =
+    state.phase.includes("DAY")
+      ? t("promptUtils.gameContext.noSameDayCausalityNote")
+      : "";
   
   // Check if guard exists in this game
   const hasGuard = state.players.some(p => p.role === "Guard");
@@ -698,6 +702,9 @@ alive_count: ${alivePlayers.length}
     rulesText += `\n${peacefulNightNote}`;
   }
   rulesText += `\n${phaseOrderNote}`;
+  if (noSameDayCausalityNote) {
+    rulesText += `\n${noSameDayCausalityNote}`;
+  }
   
   if (rulesText) {
     context += `\n\n<rules>\n${rulesText}\n</rules>`;
