@@ -661,4 +661,202 @@ export const soloLandingDataByKey: Record<SoloLandingKey, SoloLandingData> = {
     ],
     related: { hub: hubLinks, cluster: soloClusterLinks.filter((l) => l.href !== "/free-werewolf-game-online") },
   },
+
+  "online-werewolf-game": {
+    key: "online-werewolf-game",
+    slug: "online-werewolf-game",
+    title: "Online Werewolf Game",
+    tagline: "Play classic Werewolf online with AI opponents anytime.",
+    heroDescription:
+      "Looking for an online Werewolf game that starts instantly and still feels strategic? Wolfcha gives you the full social deduction loop in your browser: hidden roles, day debates, night actions, and tense final votes. You play as one seat, while 11 AI players handle the rest.",
+    problemsSolved: [
+      "Want an online Werewolf game without organizing a group",
+      "Need quick matches you can start any time",
+      "Prefer browser play over app installation",
+      "Want social deduction depth, not random outcomes",
+      "Need a game that works on both desktop and mobile",
+    ],
+    howItWorks: [
+      { step: "Open Wolfcha in your browser", description: "No installation or launcher needed." },
+      { step: "Start a new online match", description: "Game setup takes seconds." },
+      { step: "Receive your role", description: "Villager, Werewolf, Seer, Witch, Hunter, or Guard." },
+      { step: "Play day/night cycles", description: "Debate, vote, and use role abilities like a real Werewolf table." },
+      { step: "Queue another round", description: "Jump straight into your next match." },
+    ],
+    uniqueFeatures: [
+      { title: "Always-on online lobby", description: "No waiting for enough human players." },
+      { title: "Full 12-seat simulation", description: "You plus 11 AI opponents with distinct personalities." },
+      { title: "Serious deduction gameplay", description: "AI players reason about claims, votes, and contradictions." },
+      { title: "Optional voice mode", description: "Enable narration and AI voices for immersion." },
+    ],
+    comparisonTable: [
+      { feature: "Start time", traditional: "Wait for players", wolfcha: "Instant online start" },
+      { feature: "Player availability", traditional: "Depends on friends", wolfcha: "Always available" },
+      { feature: "Platform", traditional: "Often app-based", wolfcha: "Browser-first" },
+      { feature: "Match quality", traditional: "Can be chaotic", wolfcha: "Consistent AI logic" },
+      { feature: "Practice value", traditional: "Low repetition", wolfcha: "Unlimited repeatable practice" },
+    ],
+    seats: baseSeats,
+    dialogues: [
+      {
+        title: "Classic online day discussion",
+        subtitle: "AI opponents pressure each other based on vote logic.",
+        lines: [
+          { speaker: { seed: "alex-01", name: "Alex", modelLogo: "/models/deepseek.svg", meta: "structured" }, content: "Before voting, let's list who changed their read the fastest and why." },
+          { speaker: { seed: "riley-03", name: "Riley", modelLogo: "/models/claude.svg", meta: "aggressive" }, content: "Morgan is hedging too much. That looks like wolf positioning to me." },
+          { speaker: { seed: "morgan-02", name: "Morgan", modelLogo: "/models/gemini.svg", meta: "defensive" }, content: "Or I'm avoiding a blind vote. Certainty without evidence is the bigger red flag." },
+        ],
+      },
+      {
+        title: "Late-game online tension",
+        subtitle: "One wrong vote ends the game.",
+        lines: [
+          { speaker: { seed: "casey-06", name: "Casey", modelLogo: "/models/deepseek.svg", meta: "logical" }, content: "If Jamie is town, Riley's push yesterday makes no sense. Follow the chain." },
+          { speaker: { seed: "jamie-05", name: "Jamie", modelLogo: "/models/kimi.svg", meta: "calm" }, content: "I can be wrong, but I'm not hiding. Ask me anything before we lock votes." },
+          { speaker: { seed: "taylor-04", name: "Taylor", modelLogo: "/models/qwen.svg", meta: "deciding" }, content: "All right. Last call. We vote based on consistency, not volume." },
+        ],
+      },
+    ],
+    faqs: [
+      { question: "Is this a real online Werewolf game?", answer: "Yes. Wolfcha includes full Werewolf mechanics: hidden roles, day discussion, night actions, and voting." },
+      { question: "Can I play online without friends?", answer: "Yes. You play solo against 11 AI opponents, so no group setup is needed." },
+      { question: "How long is one online match?", answer: "Most games take around 15-30 minutes depending on settings and reading speed." },
+      { question: "Does it run on mobile browsers?", answer: "Yes. Wolfcha is optimized for modern mobile and desktop browsers." },
+      { question: "Is this browser game free?", answer: "Yes, the core experience is free to play." },
+      { question: "Can I improve at Werewolf by playing online here?", answer: "Absolutely. Repeated matches help you practice reads, claims, and vote control." },
+    ],
+    related: { hub: hubLinks, cluster: soloClusterLinks.filter((l) => l.href !== "/online-werewolf-game") },
+  },
+
+  "werewolf-game-online-free": {
+    key: "werewolf-game-online-free",
+    slug: "werewolf-game-online-free",
+    title: "Werewolf Game Online Free",
+    tagline: "Free online Werewolf matches with full AI gameplay.",
+    heroDescription:
+      "Wolfcha is a free online Werewolf game where you can play unlimited rounds in your browser. No download, no mandatory account, no match queue. Start a game immediately and face AI opponents who bluff, accuse, and adapt like real players.",
+    problemsSolved: [
+      "Need a free Werewolf game that still feels complete",
+      "Don't want ad-heavy or paywalled social deduction apps",
+      "Want quick, repeatable matches for practice",
+      "Prefer browser-based games over app installs",
+      "Need a low-friction way to test Werewolf strategies",
+    ],
+    howItWorks: [
+      { step: "Open the free online game page", description: "Works directly in your browser." },
+      { step: "Click Play", description: "No payment or subscription required for core play." },
+      { step: "Join a full AI table", description: "You + 11 AI players with different styles." },
+      { step: "Play full Werewolf rules", description: "Day discussion, night powers, eliminations, and win conditions." },
+      { step: "Replay instantly", description: "Run back-to-back games to practice." },
+    ],
+    uniqueFeatures: [
+      { title: "Free core gameplay", description: "Unlimited matches at no cost." },
+      { title: "No download required", description: "Browser access on desktop and mobile." },
+      { title: "No queue time", description: "AI opponents are always ready." },
+      { title: "Competitive deduction depth", description: "AI reasoning creates meaningful decisions every match." },
+    ],
+    comparisonTable: [
+      { feature: "Cost to start", traditional: "Often paid or gated", wolfcha: "Free" },
+      { feature: "Ads during match", traditional: "Common", wolfcha: "No in-game ad interruption" },
+      { feature: "Game access", traditional: "Limited daily plays", wolfcha: "Unlimited core rounds" },
+      { feature: "Setup friction", traditional: "Install + sign-up", wolfcha: "Open and play" },
+      { feature: "Match consistency", traditional: "Varies", wolfcha: "Stable AI-driven quality" },
+    ],
+    seats: baseSeats,
+    dialogues: [
+      {
+        title: "Free game, serious deduction",
+        subtitle: "No paywall doesn't mean shallow gameplay.",
+        lines: [
+          { speaker: { seed: "casey-06", name: "Casey", modelLogo: "/models/deepseek.svg", meta: "analysis" }, content: "If Hayden is wolf, this voting split is exactly what they want. Don't rush." },
+          { speaker: { seed: "hayden-10", name: "Hayden", modelLogo: "/models/doubao.svg", meta: "pressure" }, content: "You're overthinking. The simplest read is Taylor. Vote now." },
+          { speaker: { seed: "quinn-08", name: "Quinn", modelLogo: "/models/bytedance.svg", meta: "mediator" }, content: "Let's test both claims before deciding. We still have information to extract." },
+        ],
+      },
+      {
+        title: "Replay and improve",
+        subtitle: "Players use free rounds to sharpen fundamentals.",
+        lines: [
+          { speaker: { seed: "alex-01", name: "Alex", modelLogo: "/models/deepseek.svg", meta: "coach" }, content: "Same setup, new table dynamics. Great for practicing vote timing." },
+          { speaker: { seed: "jamie-05", name: "Jamie", modelLogo: "/models/kimi.svg", meta: "encouraging" }, content: "I lost last game, but now I can test a different Seer reveal strategy." },
+          { speaker: { seed: "drew-09", name: "Drew", modelLogo: "/models/openai.svg", meta: "reflective" }, content: "That's why free replays matter. Iteration beats one lucky game." },
+        ],
+      },
+    ],
+    faqs: [
+      { question: "Is this werewolf game online free forever?", answer: "Core gameplay is free, including full matches against AI opponents." },
+      { question: "Do I need to register to play free games?", answer: "No. You can start playing immediately in your browser." },
+      { question: "Are free players limited in match count?", answer: "No hard cap on core matches. You can replay to practice." },
+      { question: "Does free mode remove important roles?", answer: "No. Classic roles and core mechanics remain available." },
+      { question: "Is the free version still challenging?", answer: "Yes. AI opponents still bluff, reason, and adapt like in paid-quality strategy games." },
+      { question: "Can I play free games on phone?", answer: "Yes, the game is mobile-friendly and browser-based." },
+    ],
+    related: { hub: hubLinks, cluster: soloClusterLinks.filter((l) => l.href !== "/werewolf-game-online-free") },
+  },
+
+  "mafia-werewolf-game-online": {
+    key: "mafia-werewolf-game-online",
+    slug: "mafia-werewolf-game-online",
+    title: "Mafia Werewolf Game Online",
+    tagline: "Play the Mafia/Werewolf social deduction format online, solo.",
+    heroDescription:
+      "Mafia and Werewolf are two names for the same hidden-role party game. Wolfcha brings that format online for solo players: no host needed, no waiting room, and no scheduling. You still get all the essentials: deception, vote pressure, and high-stakes endgames.",
+    problemsSolved: [
+      "Searching for Mafia-style Werewolf gameplay online",
+      "Can't gather a full party for classic Mafia nights",
+      "Need practice in bluffing and suspicion reads",
+      "Want the genre without toxic voice lobbies",
+      "Prefer instant browser sessions over long setup",
+    ],
+    howItWorks: [
+      { step: "Open Wolfcha online", description: "No app installation required." },
+      { step: "Start a Mafia/Werewolf match", description: "You join a 12-seat game instantly." },
+      { step: "Play your hidden role", description: "Town, wolf, and power-role dynamics are preserved." },
+      { step: "Debate and vote", description: "Push narratives, challenge claims, and read contradictions." },
+      { step: "Review and improve", description: "Replay often to sharpen deception and deduction." },
+    ],
+    uniqueFeatures: [
+      { title: "Mafia + Werewolf familiarity", description: "Terminology differs, mechanics stay classic." },
+      { title: "Solo-ready online format", description: "All opponents are AI, available 24/7." },
+      { title: "No host required", description: "Rules and phase transitions are automated." },
+      { title: "Strategic AI personalities", description: "Each seat reasons differently, creating fresh table dynamics." },
+    ],
+    comparisonTable: [
+      { feature: "Required players", traditional: "8-12 humans", wolfcha: "1 human + 11 AI" },
+      { feature: "Moderator needs", traditional: "Human host", wolfcha: "Built-in game flow" },
+      { feature: "Start delay", traditional: "Often long", wolfcha: "Immediate" },
+      { feature: "Lobby toxicity", traditional: "Possible", wolfcha: "None" },
+      { feature: "Practice frequency", traditional: "Occasional", wolfcha: "Anytime, unlimited" },
+    ],
+    seats: baseSeats,
+    dialogues: [
+      {
+        title: "Mafia-style pressure play",
+        subtitle: "Classic accusation chains and counter-claims.",
+        lines: [
+          { speaker: { seed: "riley-03", name: "Riley", modelLogo: "/models/claude.svg", meta: "accusing" }, content: "Casey is controlling too much narrative. That's exactly how wolves hide in plain sight." },
+          { speaker: { seed: "casey-06", name: "Casey", modelLogo: "/models/deepseek.svg", meta: "counter" }, content: "Or it's how town solves games. Show one contradiction instead of a vibe read." },
+          { speaker: { seed: "morgan-02", name: "Morgan", modelLogo: "/models/gemini.svg", meta: "reading room" }, content: "Riley's push feels performative. I'm not voting Casey without stronger evidence." },
+        ],
+      },
+      {
+        title: "Endgame decision",
+        subtitle: "One elimination decides town vs wolves.",
+        lines: [
+          { speaker: { seed: "taylor-04", name: "Taylor", modelLogo: "/models/qwen.svg", meta: "seer claim" }, content: "I checked Alex last night: town. That means the final wolf is between Drew and Hayden." },
+          { speaker: { seed: "drew-09", name: "Drew", modelLogo: "/models/openai.svg", meta: "defense" }, content: "Convenient check when pressure is on me. Look at Hayden's voting history instead." },
+          { speaker: { seed: "hayden-10", name: "Hayden", modelLogo: "/models/doubao.svg", meta: "pushing" }, content: "Drew is redirecting. If town misvotes here, we lose. Decide now." },
+        ],
+      },
+    ],
+    faqs: [
+      { question: "Is Mafia and Werewolf the same game?", answer: "They are closely related versions of the same social deduction formula: hidden factions, day voting, and deception." },
+      { question: "Can I play Mafia-style Werewolf online solo?", answer: "Yes. Wolfcha is designed for solo matches against AI opponents." },
+      { question: "Do I need a host or moderator?", answer: "No. The game handles phases, role actions, and results automatically." },
+      { question: "Is this competitive enough for practice?", answer: "Yes. The AI table provides repeatable pressure scenarios for improving reads and bluff timing." },
+      { question: "How long does an online Mafia/Werewolf game take?", answer: "Typical sessions are around 15-30 minutes." },
+      { question: "Is it beginner-friendly?", answer: "Yes. New players can learn safely, while advanced players can iterate strategies quickly." },
+    ],
+    related: { hub: hubLinks, cluster: soloClusterLinks.filter((l) => l.href !== "/mafia-werewolf-game-online") },
+  },
 };

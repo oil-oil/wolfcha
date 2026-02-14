@@ -251,6 +251,7 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   { provider: "dashscope", model: "qwen-flash" },
   { provider: "dashscope", model: "deepseek-v3.2" },
   { provider: "dashscope", model: "qwen3-max" },
+  {provider:"dashscope", model:"kimi-k2.5"},
 
   { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
   // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },

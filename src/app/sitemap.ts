@@ -93,7 +93,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly" as const,
       priority: guide ? 0.7 : 0.8,
     })),
-    // Solo landing pages (10)
+    // Solo landing pages (13)
     ...soloLandingKeys.map((slug) => ({
       url: `${baseUrl}/${slug}`,
       lastModified,

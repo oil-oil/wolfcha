@@ -13,7 +13,10 @@ export type SoloLandingKey =
   | "practice-werewolf-online"
   | "learn-werewolf-strategy"
   | "werewolf-game-browser"
-  | "free-werewolf-game-online";
+  | "free-werewolf-game-online"
+  | "online-werewolf-game"
+  | "werewolf-game-online-free"
+  | "mafia-werewolf-game-online";
 
 export const soloLandingKeys: SoloLandingKey[] = [
   "play-werewolf-alone",
@@ -26,6 +29,9 @@ export const soloLandingKeys: SoloLandingKey[] = [
   "learn-werewolf-strategy",
   "werewolf-game-browser",
   "free-werewolf-game-online",
+  "online-werewolf-game",
+  "werewolf-game-online-free",
+  "mafia-werewolf-game-online",
 ];
 
 export interface SoloLandingData {
@@ -76,6 +82,9 @@ export const soloClusterLinks: LandingRelatedLink[] = [
   { href: "/werewolf-game-no-friends", label: "No Friends Needed", description: "Perfect for solo players." },
   { href: "/practice-werewolf-online", label: "Practice Online", description: "Sharpen your skills vs AI." },
   { href: "/free-werewolf-game-online", label: "Free Online Game", description: "Play for free in your browser." },
+  { href: "/online-werewolf-game", label: "Online Werewolf Game", description: "Play in browser with zero setup." },
+  { href: "/werewolf-game-online-free", label: "Werewolf Game Online Free", description: "Free matches without downloads." },
+  { href: "/mafia-werewolf-game-online", label: "Mafia Werewolf Game Online", description: "Mafia + Werewolf style solo mode." },
 ];
 
 export function getSoloLandingData(key: string): SoloLandingData | null {
