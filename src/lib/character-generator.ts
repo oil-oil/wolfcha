@@ -9,7 +9,7 @@ import {
   type ModelRef,
   type Persona,
 } from "@/types/game";
-import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, hasNewapiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
 import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
@@ -64,6 +64,7 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
     const allowedProviders = new Set<ModelRef["provider"]>();
     if (hasZenmuxKey()) allowedProviders.add("zenmux");
     if (hasDashscopeKey()) allowedProviders.add("dashscope");
+    if (hasNewapiKey()) allowedProviders.add("newapi");
     if (allowedProviders.size === 0) return defaultPool;
 
     // Filter by allowed providers, then exclude non-player models
@@ -358,20 +359,51 @@ const alignCharactersToProfiles = (
   chars: unknown,
   profiles: BaseProfile[]
 ): GeneratedCharacter[] | null => {
-  if (!Array.isArray(chars) || chars.length !== profiles.length) return null;
+  if (!Array.isArray(chars)) {
+    console.error("[alignCharacters] chars is not an array:", chars);
+    return null;
+  }
+  if (chars.length !== profiles.length) {
+    console.error(`[alignCharacters] length mismatch: ${chars.length} chars vs ${profiles.length} profiles`);
+    return null;
+  }
   const byName = new Map<string, GeneratedCharacter>();
   for (const c of chars as GeneratedCharacter[]) {
-    if (!c || typeof c !== "object") return null;
+    if (!c || typeof c !== "object") {
+      console.error("[alignCharacters] invalid character object:", c);
+      return null;
+    }
     const name = typeof c.displayName === "string" ? c.displayName.trim() : "";
-    if (!name) return null;
-    if (byName.has(name)) return null;
+    if (!name) {
+      console.error("[alignCharacters] missing displayName:", c);
+      return null;
+    }
+    if (byName.has(name)) {
+      console.error("[alignCharacters] duplicate name:", name);
+      return null;
+    }
     byName.set(name, c);
   }
   const ordered: GeneratedCharacter[] = [];
   for (const profile of profiles) {
     const key = profile.displayName.trim();
     const c = byName.get(key);
-    if (!c || !isValidPersonaForProfile(c.persona, profile)) return null;
+    if (!c) {
+      console.error(`[alignCharacters] character not found for profile: ${key}, available names:`, Array.from(byName.keys()));
+      return null;
+    }
+    if (!isValidPersonaForProfile(c.persona, profile)) {
+      const p = c.persona as any;
+      console.error(`[alignCharacters] invalid persona for ${key}:`, {
+        persona: c.persona,
+        profile: { gender: profile.gender, age: profile.age, mbti: profile.mbti },
+        isValid: isValidPersona(c.persona),
+        genderMatch: p?.gender === profile.gender,
+        ageMatch: p?.age === profile.age,
+        mbtiMatch: String(p?.mbti || "").trim() === profile.mbti,
+      });
+      return null;
+    }
     ordered.push(c);
   }
   return ordered;
@@ -472,11 +504,14 @@ export async function generateCharacters(
     const startTime = Date.now();
     const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
 
+    // 动态计算 max_tokens：每个角色约需 300-400 tokens，加上 JSON 结构开销
+    const baseMaxTokens = Math.max(2400, count * 350 + 600);
+
     const baseResult = await generateJSON<unknown>({
       model: getGeneratorModel(),
       messages: [{ role: "user", content: basePrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-      max_tokens: 1200,
+      max_tokens: baseMaxTokens,
     });
 
     const normalizedBase = normalizeBaseProfiles(baseResult);
@@ -488,7 +523,7 @@ export async function generateCharacters(
         model: getGeneratorModel(),
         messages: [{ role: "user", content: baseRepairPrompt }],
         temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
-        max_tokens: 1200,
+        max_tokens: baseMaxTokens,
       });
 
       const normalizedBaseRepaired = normalizeBaseProfiles(baseRepaired);
@@ -509,11 +544,14 @@ export async function generateCharacters(
     let accumulatedContent = "";
     const parser = new LLMJSONParser();
     
+    // 完整 persona 生成需要更多 tokens：每个角色约需 600-800 tokens
+    const fullMaxTokens = Math.max(6000, count * 700 + 1000);
+    
     const stream = generateCompletionStream({
       model: getGeneratorModel(),
       messages: [{ role: "user", content: fullPrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-      max_tokens: 6000,
+      max_tokens: fullMaxTokens,
     });
 
     for await (const chunk of stream) {
@@ -595,7 +633,7 @@ export async function generateCharacters(
           model: getGeneratorModel(),
           messages: [{ role: "user", content: repairPrompt }],
           temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
-          max_tokens: 6000,
+          max_tokens: fullMaxTokens,
         });
 
         const normalizedRepaired = normalizeGeneratedCharacters(repaired);
@@ -652,7 +690,7 @@ export async function generateCharacters(
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      console.log(`[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}`);
+      console.log(`[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasNewapi: ${hasNewapiKey()}`);
       return await runOnce();
     } catch (error) {
       lastError = error;

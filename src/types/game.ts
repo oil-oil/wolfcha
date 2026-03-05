@@ -66,7 +66,7 @@ export type Alignment = "village" | "wolf";
  }
 
 export interface ModelRef {
-  provider: "zenmux" | "dashscope";
+  provider: "zenmux" | "dashscope" | "newapi";
   model: string;
   /** Override call-time temperature for this model (e.g. some models only support 1) */
   temperature?: number;
@@ -257,8 +257,12 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
   // { provider: "zenmux", model: "z-ai/glm-4.7" },
   // {provider:"zenmux", model:"minimax/minimax-m2.1"},
-  
   // { provider: "zenmux", model: "google/gemini-3-flash-preview" },
+
+  { provider: "newapi", model: "gemini-2.5-flash" },
+  { provider: "newapi", model: "gemini-3-flash-preview" },
+  { provider: "newapi", model: "gemini-3-pro-preview" },
+  { provider: "newapi", model: "gemini-3.1-pro-preview" },
 ];
 
 // Models not allowed for in-game players (summary & generation only)
@@ -294,5 +298,12 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "zenmux", model: "google/gemini-3-pro-preview" },
   { provider: "zenmux", model: "z-ai/glm-4.7", temperature: 1 , reasoning: { enabled: false } },
   { provider: "zenmux", model: "minimax/minimax-m2.1", temperature: 1 , reasoning: { enabled: false } },
+
+  // New API models
+  { provider: "newapi", model: "gemini-2.5-flash" },
+  { provider: "newapi", model: "gemini-3-flash-preview" },
+  { provider: "newapi", model: "gemini-3-pro-preview" },
+  { provider: "newapi", model: "gemini-3.1-pro-preview" },
+
 ];
 

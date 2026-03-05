@@ -30,6 +30,9 @@ import {
   getZenmuxApiKey,
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
+  getNewapiApiKey,
+  getNewapiBaseUrl,
+  getValidatedNewapiKey,
   setGeneratorModel,
   setMinimaxApiKey,
   setMinimaxGroupId,
@@ -38,9 +41,12 @@ import {
   setReviewModel,
   setZenmuxApiKey,
   setDashscopeApiKey,
+  setNewapiApiKey,
+  setNewapiBaseUrl,
   setCustomKeyEnabled,
   setValidatedZenmuxKey,
   setValidatedDashscopeKey,
+  setValidatedNewapiKey,
   isCustomKeyEnabled as getCustomKeyEnabled,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
@@ -100,10 +106,13 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const [dashscopeKey, setDashscopeKeyState] = useState("");
   const [minimaxKey, setMinimaxKeyState] = useState("");
   const [minimaxGroupId, setMinimaxGroupIdState] = useState("");
+  const [newapiKey, setNewapiKeyState] = useState("");
+  const [newapiBaseUrl, setNewapiBaseUrlState] = useState("");
   const [showZenmuxKey, setShowZenmuxKey] = useState(false);
   const [showDashscopeKey, setShowDashscopeKey] = useState(false);
   const [showMinimaxKey, setShowMinimaxKey] = useState(false);
   const [showMinimaxGroupId, setShowMinimaxGroupId] = useState(false);
+  const [showNewapiKey, setShowNewapiKey] = useState(false);
   const [isCustomKeyEnabled, setIsCustomKeyEnabled] = useState(false);
   const [selectedModels, setSelectedModelsState] = useState<string[]>([]);
   const [generatorModel, setGeneratorModelState] = useState("");
@@ -112,9 +121,11 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isValidatingZenmux, setIsValidatingZenmux] = useState(false);
   const [isValidatingDashscope, setIsValidatingDashscope] = useState(false);
-  const [validatedKeys, setValidatedKeys] = useState<{ zenmux: string; dashscope: string }>({
+  const [isValidatingNewapi, setIsValidatingNewapi] = useState(false);
+  const [validatedKeys, setValidatedKeys] = useState<{ zenmux: string; dashscope: string; newapi: string }>({
     zenmux: "",
     dashscope: "",
+    newapi: "",
   });
   const [purchaseQuantity, setPurchaseQuantity] = useState(10);
   const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("10");
@@ -140,6 +151,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const nextDashscopeKey = getDashscopeApiKey();
     const nextMinimaxKey = getMinimaxApiKey();
     const nextMinimaxGroupId = getMinimaxGroupId();
+    const nextNewapiKey = getNewapiApiKey();
+    const nextNewapiBaseUrl = getNewapiBaseUrl();
     const nextSelectedModels = getSelectedModels();
     const nextGeneratorModel = getGeneratorModel();
     const nextSummaryModel = getSummaryModel();
@@ -150,6 +163,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setDashscopeKeyState(nextDashscopeKey);
       setMinimaxKeyState(nextMinimaxKey);
       setMinimaxGroupIdState(nextMinimaxGroupId);
+      setNewapiKeyState(nextNewapiKey);
+      setNewapiBaseUrlState(nextNewapiBaseUrl);
       setSelectedModelsState(nextSelectedModels);
       setGeneratorModelState(nextGeneratorModel);
       setSummaryModelState(nextSummaryModel);
@@ -157,9 +172,11 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setIsCustomKeyEnabled(storedCustomEnabled);
       const z = nextZenmuxKey;
       const d = nextDashscopeKey;
+      const n = nextNewapiKey;
       setValidatedKeys({
         zenmux: z && getValidatedZenmuxKey() === z ? z : "",
         dashscope: d && getValidatedDashscopeKey() === d ? d : "",
+        newapi: n && getValidatedNewapiKey() === n ? n : "",
       });
     }
     return () => {
@@ -169,6 +186,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
+  const newapiConfigured = Boolean(newapiKey.trim() && newapiBaseUrl.trim());
   const modelPool = useMemo(() => {
     return ALL_MODELS;
   }, []);
@@ -179,16 +197,18 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (newapiConfigured) providers.add("newapi");
     if (providers.size === 0) return [];
     return modelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, modelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, modelPool, zenmuxConfigured, newapiConfigured]);
   const defaultAvailableModels = useMemo(() => {
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (newapiConfigured) providers.add("newapi");
     if (providers.size === 0) return [];
     return defaultModelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, defaultModelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, defaultModelPool, zenmuxConfigured, newapiConfigured]);
   const playerModelPool = useMemo(() => {
     return filterPlayerModels(availableModelPool);
   }, [availableModelPool]);
@@ -258,7 +278,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     if (isCustomKeyEnabled) {
       const zenmuxOk = !zenmuxKey.trim() || validatedKeys.zenmux === zenmuxKey.trim();
       const dashscopeOk = !dashscopeKey.trim() || validatedKeys.dashscope === dashscopeKey.trim();
-      if (!zenmuxOk || !dashscopeOk) {
+      const newapiOk = !newapiKey.trim() || validatedKeys.newapi === newapiKey.trim();
+      if (!zenmuxOk || !dashscopeOk || !newapiOk) {
         toast(t("customKey.toasts.notValidated"), { description: t("customKey.toasts.notValidatedDesc") });
         return;
       }
@@ -300,6 +321,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     setDashscopeApiKey(dashscopeKey);
     setMinimaxApiKey(minimaxKey);
     setMinimaxGroupId(minimaxGroupId);
+    setNewapiApiKey(newapiKey);
+    setNewapiBaseUrl(newapiBaseUrl);
     setSelectedModels(nextSelectedModels);
     setGeneratorModel(nextGeneratorModel);
     setSummaryModel(nextSummaryModel);
@@ -313,18 +336,22 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   };
 
   const validateProviderKey = async (options: {
-    provider: "zenmux" | "dashscope";
+    provider: "zenmux" | "dashscope" | "newapi";
     key: string;
     model: string;
+    baseUrl?: string;
   }) => {
-    const { provider, key, model } = options;
+    const { provider, key, model, baseUrl } = options;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
     if (provider === "zenmux") {
       headers["X-Zenmux-Api-Key"] = key;
-    } else {
+    } else if (provider === "dashscope") {
       headers["X-Dashscope-Api-Key"] = key;
+    } else if (provider === "newapi") {
+      headers["X-Newapi-Api-Key"] = key;
+      if (baseUrl) headers["X-Newapi-Base-Url"] = baseUrl;
     }
 
     const response = await fetch("/api/chat", {
@@ -395,18 +422,43 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     }
   };
 
+  const handleValidateNewapi = async () => {
+    if (isValidatingNewapi || !newapiKey.trim() || !newapiBaseUrl.trim()) return;
+    setIsValidatingNewapi(true);
+    try {
+      await validateProviderKey({
+        provider: "newapi",
+        key: newapiKey.trim(),
+        model: "gemini-3-flash-preview",
+        baseUrl: newapiBaseUrl.trim(),
+      });
+      setValidatedKeys((prev) => ({ ...prev, newapi: newapiKey.trim() }));
+      setValidatedNewapiKey(newapiKey.trim());
+    } catch (error) {
+      setValidatedKeys((prev) => ({ ...prev, newapi: "" }));
+      if (newapiKey.trim() === getValidatedNewapiKey()) setValidatedNewapiKey("");
+      toast(t("customKey.toasts.validateFailed"), {
+        description: t("customKey.toasts.validateFailedDesc"),
+      });
+    } finally {
+      setIsValidatingNewapi(false);
+    }
+  };
+
   const handleClearKeys = () => {
     clearApiKeys();
     setZenmuxKeyState("");
     setDashscopeKeyState("");
     setMinimaxKeyState("");
     setMinimaxGroupIdState("");
+    setNewapiKeyState("");
+    setNewapiBaseUrlState("");
     setSelectedModelsState([]);
     setGeneratorModelState(getGeneratorModel());
     setSummaryModelState(getSummaryModel());
     setReviewModelState(getReviewModel());
     setIsCustomKeyEnabled(false);
-    setValidatedKeys({ zenmux: "", dashscope: "" });
+    setValidatedKeys({ zenmux: "", dashscope: "", newapi: "" });
     onCustomKeyEnabledChange?.(false);
     toast(t("customKey.toasts.cleared"));
   };
@@ -824,6 +876,54 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                         </div>
                         <ArrowRight size={14} className="shrink-0 text-[var(--text-muted)]" />
                       </a>
+                    </div>
+
+                    <div className="border-t border-[var(--border-color)] pt-3 space-y-2">
+                      <Label htmlFor="newapi-base-url" className="text-xs">New API Base URL</Label>
+                      <Input
+                        id="newapi-base-url"
+                        name="wolfcha-newapi-base-url"
+                        type="text"
+                        autoComplete="off"
+                        placeholder="http://home.agent-wiki.cn:8001/v1"
+                        value={newapiBaseUrl}
+                        onChange={(e) => {
+                          setNewapiBaseUrlState(e.target.value);
+                          setValidatedKeys((prev) => ({ ...prev, newapi: "" }));
+                        }}
+                      />
+                      
+                      <Label htmlFor="newapi-key" className="text-xs">New API Key</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="newapi-key"
+                          name="wolfcha-newapi-api-key"
+                          type={showNewapiKey ? "text" : "password"}
+                          autoComplete="new-password"
+                          placeholder="sk-xxxxx"
+                          value={newapiKey}
+                          onChange={(e) => {
+                            setNewapiKeyState(e.target.value);
+                            setValidatedKeys((prev) => ({ ...prev, newapi: "" }));
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowNewapiKey((v) => !v)}
+                          aria-label={showNewapiKey ? "隐藏 Key" : "显示 Key"}
+                        >
+                          {showNewapiKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={handleValidateNewapi} disabled={isValidatingNewapi || !newapiKey.trim() || !newapiBaseUrl.trim() || (!!validatedKeys.newapi && validatedKeys.newapi === newapiKey.trim())}>
+                          {isValidatingNewapi ? t("customKey.validating") : validatedKeys.newapi && validatedKeys.newapi === newapiKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : t("customKey.validate")}
+                        </Button>
+                      </div>
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        配置您的 New API 实例地址和 API Key，支持通过 New API 聚合的所有模型
+                      </p>
                     </div>
                   </section>
 

@@ -11,6 +11,9 @@ const SUMMARY_MODEL_STORAGE = "wolfcha_summary_model";
 const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
+const NEWAPI_API_KEY_STORAGE = "wolfcha_newapi_api_key";
+const NEWAPI_BASE_URL_STORAGE = "wolfcha_newapi_base_url";
+const VALIDATED_NEWAPI_KEY_STORAGE = "wolfcha_validated_newapi_key";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -92,6 +95,34 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
+export function getNewapiApiKey(): string {
+  return readStorage(NEWAPI_API_KEY_STORAGE);
+}
+
+export function setNewapiApiKey(key: string) {
+  writeStorage(NEWAPI_API_KEY_STORAGE, key);
+}
+
+export function getNewapiBaseUrl(): string {
+  return readStorage(NEWAPI_BASE_URL_STORAGE);
+}
+
+export function setNewapiBaseUrl(url: string) {
+  writeStorage(NEWAPI_BASE_URL_STORAGE, url);
+}
+
+export function hasNewapiKey(): boolean {
+  return Boolean(getNewapiApiKey()) && Boolean(getNewapiBaseUrl());
+}
+
+export function getValidatedNewapiKey(): string {
+  return readStorage(VALIDATED_NEWAPI_KEY_STORAGE);
+}
+
+export function setValidatedNewapiKey(key: string) {
+  writeStorage(VALIDATED_NEWAPI_KEY_STORAGE, key);
+}
+
 // When custom key is disabled, use a model from AVAILABLE_MODELS so the server
 // can use its built-in API keys (no user x-zenmux-api-key header).
 function resolveDefaultModelWhenCustomDisabled(fallbackDefault: string): string {
@@ -102,9 +133,10 @@ function resolveDefaultModelWhenCustomDisabled(fallbackDefault: string): string 
 
 // When custom key is enabled, keep model within providers that have keys.
 function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: string): string {
-  const allowedProviders = new Set<"zenmux" | "dashscope">();
+  const allowedProviders = new Set<"zenmux" | "dashscope" | "newapi">();
   if (hasZenmuxKey()) allowedProviders.add("zenmux");
   if (hasDashscopeKey()) allowedProviders.add("dashscope");
+  if (hasNewapiKey()) allowedProviders.add("newapi");
 
   if (allowedProviders.size === 0) return preferred;
 
@@ -142,7 +174,7 @@ export function isCustomKeyEnabled(): boolean {
   if (!flagEnabled) return false;
   // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
   // 这可以防止用户开启了开关但没有正确配置 key 的情况
-  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey();
+  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey() || hasNewapiKey();
   return hasAnyLLMKey;
 }
 
@@ -239,6 +271,9 @@ export function clearApiKeys() {
   window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
   window.localStorage.removeItem(VALIDATED_ZENMUX_KEY_STORAGE);
   window.localStorage.removeItem(VALIDATED_DASHSCOPE_KEY_STORAGE);
+  window.localStorage.removeItem(NEWAPI_API_KEY_STORAGE);
+  window.localStorage.removeItem(NEWAPI_BASE_URL_STORAGE);
+  window.localStorage.removeItem(VALIDATED_NEWAPI_KEY_STORAGE);
 }
 
 export interface KeyValidationResult {

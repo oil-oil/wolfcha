@@ -5,7 +5,7 @@ const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatibl
 
 const VALIDATION_TIMEOUT_MS = 15000;
 
-type Provider = "zenmux" | "dashscope";
+type Provider = "zenmux" | "dashscope" | "newapi";
 
 interface ValidationResult {
   provider: Provider;
@@ -104,6 +104,120 @@ async function validateZenmuxKey(apiKey: string): Promise<ValidationResult> {
     }
     return {
       provider: "zenmux",
+      valid: false,
+      error: `网络错误: ${String(error)}`,
+      errorCode: "network_error",
+    };
+  }
+}
+
+function getNewapiUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return "";
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  return `${withoutTrailingSlash}/chat/completions`;
+}
+
+async function validateNewapiKey(apiKey: string, baseUrl: string): Promise<ValidationResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
+
+  const newapiUrl = getNewapiUrl(baseUrl);
+  if (!newapiUrl) {
+    return {
+      provider: "newapi",
+      valid: false,
+      error: "无效的 Base URL",
+      errorCode: "invalid_base_url",
+    };
+  }
+
+  try {
+    const response = await fetch(newapiUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gemini-3-flash-preview",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      return { provider: "newapi", valid: true };
+    }
+
+    const errorText = await response.text().catch(() => "");
+    let errorCode = "";
+    let errorMessage = "";
+
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorCode = errorJson?.error?.code || errorJson?.code || "";
+      errorMessage = errorJson?.error?.message || errorJson?.message || "";
+    } catch {
+      errorMessage = errorText;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        provider: "newapi",
+        valid: false,
+        error: "API Key 无效或已过期",
+        errorCode: "invalid_key",
+      };
+    }
+
+    if (response.status === 402 || response.status === 429) {
+      const isQuotaError =
+        errorCode.includes("insufficient") ||
+        errorCode.includes("quota") ||
+        errorCode.includes("balance") ||
+        errorMessage.includes("insufficient") ||
+        errorMessage.includes("quota") ||
+        errorMessage.includes("余额");
+
+      if (isQuotaError || response.status === 402) {
+        return {
+          provider: "newapi",
+          valid: false,
+          error: "API Key 余额不足",
+          errorCode: "insufficient_quota",
+        };
+      }
+
+      return {
+        provider: "newapi",
+        valid: false,
+        error: "请求频率超限，请稍后再试",
+        errorCode: "rate_limit",
+      };
+    }
+
+    return {
+      provider: "newapi",
+      valid: false,
+      error: `验证失败: ${response.status} - ${errorMessage || errorText}`,
+      errorCode: "unknown",
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        provider: "newapi",
+        valid: false,
+        error: "验证超时，请检查网络连接或 Base URL 是否正确",
+        errorCode: "timeout",
+      };
+    }
+    return {
+      provider: "newapi",
       valid: false,
       error: `网络错误: ${String(error)}`,
       errorCode: "network_error",
@@ -213,8 +327,10 @@ export async function POST(request: NextRequest) {
   try {
     const zenmuxKey = request.headers.get("x-zenmux-api-key")?.trim() || "";
     const dashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || "";
+    const newapiKey = request.headers.get("x-newapi-api-key")?.trim() || "";
+    const newapiBaseUrl = request.headers.get("x-newapi-base-url")?.trim() || "";
 
-    if (!zenmuxKey && !dashscopeKey) {
+    if (!zenmuxKey && !dashscopeKey && !newapiKey) {
       return NextResponse.json(
         { error: "未提供任何 API Key", valid: false },
         { status: 400 }
@@ -229,6 +345,16 @@ export async function POST(request: NextRequest) {
     }
     if (dashscopeKey) {
       validationPromises.push(validateDashscopeKey(dashscopeKey));
+    }
+    if (newapiKey && newapiBaseUrl) {
+      validationPromises.push(validateNewapiKey(newapiKey, newapiBaseUrl));
+    } else if (newapiKey && !newapiBaseUrl) {
+      results.push({
+        provider: "newapi",
+        valid: false,
+        error: "未提供 New API Base URL",
+        errorCode: "missing_base_url",
+      });
     }
 
     const settled = await Promise.all(validationPromises);

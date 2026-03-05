@@ -9,13 +9,20 @@ const DASHSCOPE_CHAT_COMPLETIONS_URL = `${DASHSCOPE_API_BASE_URL}/chat/completio
 // API 调用超时时间（毫秒）
 const API_TIMEOUT_MS = 60000;
 
-type Provider = "zenmux" | "dashscope";
+type Provider = "zenmux" | "dashscope" | "newapi";
 
 function getProviderForModel(model: string): Provider | null {
   const modelRef =
     ALL_MODELS.find((ref) => ref.model === model) ??
     AVAILABLE_MODELS.find((ref) => ref.model === model);
   return modelRef?.provider ?? null;
+}
+
+function getNewapiUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return "";
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
+  return `${withoutTrailingSlash}/chat/completions`;
 }
 
 /** Resolve ModelRef for a model id; used to apply per-model temperature/reasoning overrides. */
@@ -181,7 +188,9 @@ type ChatRequestPayload = {
 async function runBatchItem(
   payload: ChatRequestPayload,
   headerApiKey: string | null,
-  headerDashscopeKey: string | null
+  headerDashscopeKey: string | null,
+  headerNewapiKey: string | null,
+  headerNewapiBaseUrl: string | null
 ): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string; details?: unknown }> {
   const {
     model,
@@ -200,7 +209,7 @@ async function runBatchItem(
   }
 
   const modelProvider: Provider | null =
-    provider === "dashscope" || provider === "zenmux" ? provider : getProviderForModel(model);
+    provider === "dashscope" || provider === "zenmux" || provider === "newapi" ? provider : getProviderForModel(model);
   if (!modelProvider) {
     return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
   }
@@ -213,9 +222,12 @@ async function runBatchItem(
     if (modelProvider === "dashscope" && !headerDashscopeKey) {
       return { ok: false, status: 401, error: "此模型需要您提供百炼 API Key" };
     }
+    if (modelProvider === "newapi" && (!headerNewapiKey || !headerNewapiBaseUrl)) {
+      return { ok: false, status: 401, error: "此模型需要您提供 New API Key 和 Base URL" };
+    }
   }
 
-  const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim());
+  const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerNewapiKey ?? "").trim());
 
   const modelRefOverride = getModelRef(model);
   const normalizedTemperature =
@@ -312,6 +324,73 @@ async function runBatchItem(
     return { ok: true, data: result };
   }
 
+  if (modelProvider === "newapi") {
+    if (hasAnyCustomKeyHeader && (!headerNewapiKey || !headerNewapiBaseUrl)) {
+      return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 New API Key 或 Base URL（已拒绝回退到系统 Key）" };
+    }
+    const newapiApiKey = headerNewapiKey || process.env.NEWAPI_API_KEY;
+    const newapiBaseUrl = headerNewapiBaseUrl || process.env.NEWAPI_BASE_URL;
+    if (!newapiApiKey || !newapiBaseUrl) {
+      return { ok: false, status: 500, error: "NEWAPI_API_KEY or NEWAPI_BASE_URL not configured on server" };
+    }
+
+    const newapiUrl = getNewapiUrl(newapiBaseUrl);
+    if (!newapiUrl) {
+      return { ok: false, status: 500, error: "Invalid New API Base URL" };
+    }
+
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: processedMessages,
+      temperature: cappedTemperature,
+    };
+
+    if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+      requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+    }
+
+    if (response_format && supportsResponseFormat(model)) {
+      requestBody.response_format = response_format;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(newapiUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${newapiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let parsed: unknown = undefined;
+      try {
+        parsed = JSON.parse(errorText);
+      } catch {
+        // ignore
+      }
+      return {
+        ok: false,
+        status: response.status,
+        error: `New API error: ${response.status}`,
+        details: parsed ?? errorText,
+      };
+    }
+
+    const result = await response.json();
+    return { ok: true, data: result };
+  }
+
   if (hasAnyCustomKeyHeader && !headerApiKey) {
     return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 Zenmux API Key（已拒绝回退到系统 Key）" };
   }
@@ -396,9 +475,11 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(body?.requests)) {
       const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim() || null;
       const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
+      const headerNewapiKey = request.headers.get("x-newapi-api-key")?.trim() || null;
+      const headerNewapiBaseUrl = request.headers.get("x-newapi-base-url")?.trim() || null;
       const requests = body.requests as ChatRequestPayload[];
       const results = await Promise.all(
-        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey))
+        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerNewapiKey, headerNewapiBaseUrl))
       );
       return NextResponse.json({ results });
     }
@@ -414,7 +495,7 @@ export async function POST(request: NextRequest) {
       provider,
     } = body;
     const modelProvider: Provider | null =
-      provider === "dashscope" || provider === "zenmux" ? provider : getProviderForModel(model);
+      provider === "dashscope" || provider === "zenmux" || provider === "newapi" ? provider : getProviderForModel(model);
     if (!modelProvider) {
       // Reject unknown models early to avoid mis-routing.
       return NextResponse.json(
@@ -424,7 +505,9 @@ export async function POST(request: NextRequest) {
     }
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
-    const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim());
+    const headerNewapiKey = request.headers.get("x-newapi-api-key")?.trim();
+    const headerNewapiBaseUrl = request.headers.get("x-newapi-base-url")?.trim();
+    const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerNewapiKey ?? "").trim());
     const isDefaultModel = AVAILABLE_MODELS.some((ref) => ref.model === model);
 
     const modelRefOverride = getModelRef(model);
@@ -470,6 +553,12 @@ export async function POST(request: NextRequest) {
       if (modelProvider === "dashscope" && !headerDashscopeKey) {
         return NextResponse.json(
           { error: "此模型需要您提供百炼 API Key" },
+          { status: 401 }
+        );
+      }
+      if (modelProvider === "newapi" && (!headerNewapiKey || !headerNewapiBaseUrl)) {
+        return NextResponse.json(
+          { error: "此模型需要您提供 New API Key 和 Base URL" },
           { status: 401 }
         );
       }
@@ -554,6 +643,97 @@ export async function POST(request: NextRequest) {
 
       if (stream) {
         // For streaming responses, forward the stream
+        const headers = new Headers();
+        headers.set("Content-Type", "text/event-stream");
+        headers.set("Cache-Control", "no-cache");
+        headers.set("Connection", "keep-alive");
+
+        return new Response(response.body, { headers });
+      }
+
+      const result = await response.json();
+      return NextResponse.json(result);
+    }
+
+    if (modelProvider === "newapi") {
+      if (hasAnyCustomKeyHeader && (!headerNewapiKey || !headerNewapiBaseUrl)) {
+        return NextResponse.json(
+          { error: "已启用自定义 Key，但未提供 New API Key 或 Base URL（已拒绝回退到系统 Key）" },
+          { status: 401 }
+        );
+      }
+
+      const newapiApiKey = headerNewapiKey || process.env.NEWAPI_API_KEY;
+      const newapiBaseUrl = headerNewapiBaseUrl || process.env.NEWAPI_BASE_URL;
+      if (!newapiApiKey || !newapiBaseUrl) {
+        return NextResponse.json(
+          { error: "NEWAPI_API_KEY or NEWAPI_BASE_URL not configured on server" },
+          { status: 500 }
+        );
+      }
+
+      const newapiUrl = getNewapiUrl(newapiBaseUrl);
+      if (!newapiUrl) {
+        return NextResponse.json(
+          { error: "Invalid New API Base URL" },
+          { status: 500 }
+        );
+      }
+
+      const requestBody: Record<string, unknown> = {
+        model,
+        messages: processedMessages,
+        temperature: cappedTemperature,
+      };
+
+      if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+        requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+      }
+
+      if (stream) {
+        requestBody.stream = true;
+      }
+
+      if (response_format && supportsResponseFormat(model)) {
+        requestBody.response_format = response_format;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(newapiUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${newapiApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let parsed: unknown = undefined;
+        try {
+          parsed = JSON.parse(errorText);
+        } catch {
+          // ignore
+        }
+        return NextResponse.json(
+          {
+            error: `New API error: ${response.status}`,
+            details: parsed ?? errorText,
+          },
+          { status: response.status }
+        );
+      }
+
+      if (stream) {
         const headers = new Headers();
         headers.set("Content-Type", "text/event-stream");
         headers.set("Cache-Control", "no-cache");

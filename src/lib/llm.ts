@@ -1,4 +1,4 @@
-import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getDashscopeApiKey, getZenmuxApiKey, getNewapiApiKey, getNewapiBaseUrl, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, type ModelRef } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
@@ -17,7 +17,7 @@ export interface LLMMessage {
   reasoning_details?: unknown;
 }
 
-type Provider = "zenmux" | "dashscope";
+type Provider = "zenmux" | "dashscope" | "newapi";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
@@ -53,6 +53,9 @@ export function resolveApiKeySource(model: string): ApiKeySource {
    const provider = getProviderForModel(model);
    if (provider === "dashscope") {
      return getDashscopeApiKey() ? "user" : "project";
+   }
+   if (provider === "newapi") {
+     return getNewapiApiKey() ? "user" : "project";
    }
    return getZenmuxApiKey() ? "user" : "project";
  }
@@ -415,6 +418,8 @@ export async function generateCompletion(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const newapiApiKey = customEnabled ? getNewapiApiKey() : "";
+  const newapiBaseUrl = customEnabled ? getNewapiBaseUrl() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
@@ -427,6 +432,12 @@ export async function generateCompletion(
   if (dashscopeApiKey) {
     headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
   }
+  if (newapiApiKey) {
+    headers["X-Newapi-Api-Key"] = newapiApiKey;
+  }
+  if (newapiBaseUrl) {
+    headers["X-Newapi-Base-Url"] = newapiBaseUrl;
+  }
 
   Object.assign(headers, await getAuthHeaders());
 
@@ -434,6 +445,7 @@ export async function generateCompletion(
     customEnabled,
     hasZenmuxKey: !!headerApiKey,
     hasDashscopeKey: !!dashscopeApiKey,
+    hasNewapiKey: !!newapiApiKey,
     model: modelToUse,
   });
 
@@ -582,6 +594,8 @@ export async function* generateCompletionStream(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const newapiApiKey = customEnabled ? getNewapiApiKey() : "";
+  const newapiBaseUrl = customEnabled ? getNewapiBaseUrl() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
@@ -593,6 +607,12 @@ export async function* generateCompletionStream(
   }
   if (dashscopeApiKey) {
     headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
+  }
+  if (newapiApiKey) {
+    headers["X-Newapi-Api-Key"] = newapiApiKey;
+  }
+  if (newapiBaseUrl) {
+    headers["X-Newapi-Base-Url"] = newapiBaseUrl;
   }
 
   Object.assign(headers, await getAuthHeaders());
