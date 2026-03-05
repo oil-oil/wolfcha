@@ -464,7 +464,12 @@
       "signingUp": "注册中...",
       "signUp": "注册",
       "sendReset": "发送重置邮件",
-      "waitCooldown": "请稍候（{seconds}s）"
+      "waitCooldown": "请稍候（{seconds}s）",
+      "signInWithWatcha": "使用观猹账号登录",
+      "signInWithGoogle": "使用 Google 账号登录"
+    },
+    "divider": {
+      "or": "或"
     },
     "links": {
       "forgotPassword": "忘记密码？",

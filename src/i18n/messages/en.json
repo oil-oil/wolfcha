@@ -464,7 +464,12 @@
       "signingUp": "Signing up...",
       "signUp": "Sign up",
       "sendReset": "Send reset email",
-      "waitCooldown": "Please wait ({seconds}s)"
+      "waitCooldown": "Please wait ({seconds}s)",
+      "signInWithWatcha": "Sign in with Watcha",
+      "signInWithGoogle": "Sign in with Google"
+    },
+    "divider": {
+      "or": "or"
     },
     "links": {
       "forgotPassword": "Forgot password?",
