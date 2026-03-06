@@ -241,9 +241,9 @@ export interface DailySummaryVoteData {
 }
 
 // Models for summary & character generation
-export const GENERATOR_MODEL = "qwen-flash";
-export const SUMMARY_MODEL = "qwen-flash";
-export const REVIEW_MODEL = "google/gemini-3-flash-preview";
+export const GENERATOR_MODEL = "gemini-3-flash-preview";
+export const SUMMARY_MODEL = "gemini-3-flash-preview";
+export const REVIEW_MODEL = "gemini-3-flash-preview";
 
 // Default models used when custom key is not enabled
 // Note: SUMMARY_MODEL and GENERATOR_MODEL are included here for server-side validation.
@@ -259,9 +259,8 @@ export const AVAILABLE_MODELS: ModelRef[] = [
   // {provider:"zenmux", model:"minimax/minimax-m2.1"},
   // { provider: "zenmux", model: "google/gemini-3-flash-preview" },
 
-  { provider: "newapi", model: "gemini-2.5-flash" },
   { provider: "newapi", model: "gemini-3-flash-preview" },
-  { provider: "newapi", model: "gemini-3-pro-preview" },
+  // { provider: "newapi", model: "gemini-3-pro-preview" },
   { provider: "newapi", model: "gemini-3.1-pro-preview" },
 ];
 

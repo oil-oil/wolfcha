@@ -4199,6 +4199,22 @@ input[type="submit"]:not(:disabled),
   right: 4%;
 }
 
+/* Watcha sponsor card: larger logo/name, more centered */
+.wc-sponsor-card--watcha {
+  top: 28%;
+  right: 14%;
+  width: 200px;
+}
+
+.wc-sponsor-card--watcha .wc-sponsor-card__logo {
+  width: 82px;
+  height: 82px;
+}
+
+.wc-sponsor-card--watcha .wc-sponsor-card__name {
+  font-size: 16px;
+}
+
 .wc-sponsor-card--bottom-right {
   bottom: 18%;
   right: 4%;
@@ -4215,6 +4231,10 @@ input[type="submit"]:not(:disabled),
 
   .wc-sponsor-card--right-bottom {
     right: 6%;
+  }
+
+  .wc-sponsor-card--watcha {
+    right: 8%;
   }
 }
 
@@ -4278,6 +4298,7 @@ input[type="submit"]:not(:disabled),
   opacity: 0.75;
   transform: scale(1.05);
 }
+
 
 .wc-paper-stamp__logo {
   width: 28px;

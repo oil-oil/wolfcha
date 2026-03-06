@@ -1073,11 +1073,11 @@ export function WelcomeScreen({
             note={t("welcome.sponsor.cards.zenmux")}
           />
 
-          {/* Sponsor card - Watcha (右上) */}
+          {/* Sponsor card - Watcha (右侧居中) */}
           <SponsorCard
             sponsorId="watcha"
             href="https://watcha.cn/"
-            className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--top-right"
+            className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--watcha"
             rotate="5deg"
             delay={0.45}
             logoSrc="/sponsor/watcha.svg"
