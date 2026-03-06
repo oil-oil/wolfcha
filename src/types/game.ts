@@ -241,19 +241,20 @@ export interface DailySummaryVoteData {
 }
 
 // Models for summary & character generation
-export const GENERATOR_MODEL = "gemini-3-flash-preview";
-export const SUMMARY_MODEL = "gemini-3-flash-preview";
-export const REVIEW_MODEL = "gemini-3-flash-preview";
+export const GENERATOR_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const SUMMARY_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const REVIEW_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 // Default models used when custom key is not enabled
 // Note: SUMMARY_MODEL and GENERATOR_MODEL are included here for server-side validation.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  { provider: "dashscope", model: "qwen-flash" },
+  // { provider: "dashscope", model: "qwen-flash" },
   { provider: "dashscope", model: "deepseek-v3.2" },
-  // { provider: "dashscope", model: "qwen3-max" },
+  { provider: "dashscope", model: "qwen3-max" },
   // {provider:"dashscope", model:"kimi-k2.5"},
 
   { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
+  { provider: "zenmux", model: "google/gemini-3.1-flash-lite-preview" },
   // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
   // { provider: "zenmux", model: "z-ai/glm-4.7" },
   // {provider:"zenmux", model:"minimax/minimax-m2.1"},
@@ -261,7 +262,7 @@ export const AVAILABLE_MODELS: ModelRef[] = [
 
   { provider: "newapi", model: "gemini-3-flash-preview" },
   // { provider: "newapi", model: "gemini-3-pro-preview" },
-  { provider: "newapi", model: "gemini-3.1-pro-preview" },
+  // { provider: "newapi", model: "gemini-3.1-pro-preview" },
 ];
 
 // Models not allowed for in-game players (summary & generation only)
@@ -285,6 +286,7 @@ export const ALL_MODELS: ModelRef[] = [
   // Zenmux models
   { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
   { provider: "zenmux", model: "google/gemini-3-flash-preview" },
+  { provider: "zenmux", model: "google/gemini-3.1-flash-lite-preview" },
   { provider: "zenmux", model: "moonshotai/kimi-k2-0905" },
   { provider: "zenmux", model: "qwen/qwen3-max" },
   { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
