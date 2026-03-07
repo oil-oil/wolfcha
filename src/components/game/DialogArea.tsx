@@ -9,7 +9,7 @@ import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIco
 import { VoteResultCard } from "./VoteResultCard";
 import { VotingProgress } from "./VotingProgress";
 import { WolfPlanningPanel } from "./WolfPlanningPanel";
-import { MentionInput } from "./MentionInput";
+import { MentionInput, type MentionInputHandle } from "./MentionInput";
 import { TalkingAvatar } from "./TalkingAvatar";
 import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
@@ -400,6 +400,7 @@ export function DialogArea({
   const historyContentRef = useRef<HTMLDivElement>(null);
   const lastPortraitPlayerRef = useRef<Player | null>(null);
   const voiceRecorderRef = useRef<VoiceRecorderHandle | null>(null);
+  const mentionInputRef = useRef<MentionInputHandle | null>(null);
 
   const [talkingPlayerId, setTalkingPlayerId] = useState<string | null>(null);
 
@@ -1606,6 +1607,7 @@ export function DialogArea({
                   )}
                   <div className="wc-input-box relative" style={{ minHeight: "112px", alignItems: "flex-start", padding: "14px 16px 56px" }}>
                     <MentionInput
+                      ref={mentionInputRef}
                       key={`mention-input-${gameState.phase}-${gameState.currentSpeakerSeat}`}
                       value={inputText}
                       onChange={(t) => onInputChange?.(t)}
@@ -1633,6 +1635,11 @@ export function DialogArea({
                         disabled={!isHumanTurn}
                         isNight={isNight}
                         onTranscript={(text) => {
+                          if (mentionInputRef.current) {
+                            mentionInputRef.current.insertTextAtCursor(text);
+                            return;
+                          }
+
                           const prev = String(inputText || "");
                           const next = prev.trim().length > 0 ? `${prev.trim()} ${text}` : text;
                           onInputChange?.(next);

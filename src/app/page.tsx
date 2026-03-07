@@ -312,6 +312,7 @@ export default function Home() {
   const showTableRef = useRef(showTable);
   const isNightRef = useRef(isNight);
   const bgmVolumeRef = useRef(bgmVolume);
+  const bgmDuckFactorRef = useRef(1);
   const isSoundEnabledRef = useRef(isSoundEnabled);
   const LOOP_FADE_DURATION_MS = 1200;
   const resolveAudioSrc = useCallback((src: string) => {
@@ -331,9 +332,22 @@ export default function Home() {
   useEffect(() => {
     bgmVolumeRef.current = bgmVolume;
   }, [bgmVolume]);
+  const [isSttProcessing, setIsSttProcessing] = useState(false);
+  useEffect(() => {
+    bgmDuckFactorRef.current = isSttProcessing ? 0.3 : 1;
+  }, [isSttProcessing]);
   useEffect(() => {
     isSoundEnabledRef.current = isSoundEnabled;
   }, [isSoundEnabled]);
+  useEffect(() => {
+    const handleSttProcessing = (event: Event) => {
+      const customEvent = event as CustomEvent<{ active?: boolean }>;
+      setIsSttProcessing(Boolean(customEvent.detail?.active));
+    };
+
+    window.addEventListener("wolfcha:stt-processing", handleSttProcessing as EventListener);
+    return () => window.removeEventListener("wolfcha:stt-processing", handleSttProcessing as EventListener);
+  }, []);
 
   // Fade in/out helper function
   const fadeAudio = useCallback((
@@ -390,7 +404,7 @@ export default function Home() {
           bgmLoopFadeRef.current = false;
           return;
         }
-        const targetVolume = bgmVolumeRef.current;
+        const targetVolume = bgmVolumeRef.current * bgmDuckFactorRef.current;
         audio.currentTime = 0;
         audio.volume = 0;
         void audio.play().catch(() => {});
@@ -406,7 +420,7 @@ export default function Home() {
   useEffect(() => {
     const audio = new Audio();
     audio.loop = false;
-    audio.volume = isSoundEnabledRef.current ? bgmVolumeRef.current : 0;
+    audio.volume = isSoundEnabledRef.current ? bgmVolumeRef.current * bgmDuckFactorRef.current : 0;
     bgmAudioRef.current = audio;
     const cleanupLoopFade = attachLoopFade(audio);
     return () => {
@@ -435,7 +449,7 @@ export default function Home() {
         audio.load();
       }
 
-      audio.volume = bgmVolumeRef.current;
+      audio.volume = bgmVolumeRef.current * bgmDuckFactorRef.current;
       // 必须在用户手势内触发一次 play 才能解锁后续自动播放
       void audio.play().catch(() => {});
 
@@ -452,7 +466,7 @@ export default function Home() {
     const audio = bgmAudioRef.current;
     if (!audio) return;
 
-    const desiredVolume = isSoundEnabled ? bgmVolume : 0;
+    const desiredVolume = isSoundEnabled ? bgmVolume * (isSttProcessing ? 0.3 : 1) : 0;
 
     if (!showTable || !isSoundEnabled) {
       // Fade out when hiding table or muting
@@ -513,7 +527,7 @@ export default function Home() {
         }
       }
     }
-  }, [isNight, showTable, fadeAudio, bgmVolume, isSoundEnabled, resolveAudioSrc]);
+  }, [isNight, showTable, fadeAudio, bgmVolume, isSoundEnabled, isSttProcessing, resolveAudioSrc]);
 
   useEffect(() => {
     audioManager.setEnabled(shouldUseAiVoice);

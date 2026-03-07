@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Mention from "@tiptap/extension-mention";
@@ -40,6 +40,11 @@ interface MentionInputProps {
   isNight?: boolean;
   isGenshinMode?: boolean;
   players: Player[];
+}
+
+export interface MentionInputHandle {
+  focus: () => void;
+  insertTextAtCursor: (text: string) => void;
 }
 
 const formatPlayerLabel = (seat: number, name: string) => {
@@ -219,7 +224,7 @@ function renderSuggestionList(isGenshinMode: boolean, onOpenChange?: (open: bool
   };
 }
 
-export function MentionInput({
+export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput({
   value,
   onChange,
   onSend,
@@ -231,7 +236,7 @@ export function MentionInput({
   isNight,
   players,
   isGenshinMode = false,
-}: MentionInputProps) {
+}, ref) {
   const items = useMemo(() => createSuggestionItems(players), [players]);
   const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
 
@@ -304,6 +309,36 @@ export function MentionInput({
     };
   }, []);
 
+  const insertTextAtCursor = useCallback((text: string) => {
+    if (!editor) return;
+    const rawText = text.trim();
+    if (!rawText) return;
+
+    const { from, to } = editor.state.selection;
+    const docSize = editor.state.doc.content.size;
+    const prevChar = from > 1
+      ? editor.state.doc.textBetween(Math.max(0, from - 1), from, "\n", "\n")
+      : "";
+    const nextChar = to < docSize
+      ? editor.state.doc.textBetween(to, Math.min(docSize, to + 1), "\n", "\n")
+      : "";
+
+    const needsLeadingSpace = !!prevChar && !/\s/.test(prevChar) && !/^[，。！？、,.!?]/.test(rawText);
+    const needsTrailingSpace = !!nextChar && !/\s/.test(nextChar) && !/[，。！？、,.!?]$/.test(rawText);
+    const textToInsert = `${needsLeadingSpace ? " " : ""}${rawText}${needsTrailingSpace ? " " : ""}`;
+
+    editor.chain().focus().insertContent(textToInsert).run();
+  }, [editor]);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      editor?.commands.focus();
+    },
+    insertTextAtCursor: (text: string) => {
+      insertTextAtCursor(text);
+    },
+  }), [editor, insertTextAtCursor]);
+
   if (!editor) return null;
 
   return (
@@ -329,7 +364,7 @@ export function MentionInput({
             !e.ctrlKey &&
             !e.altKey &&
             !e.shiftKey &&
-            !(e as any).isComposing
+            !e.nativeEvent.isComposing
           ) {
             if (holdingSlashRef.current) {
               e.preventDefault();
@@ -400,4 +435,4 @@ export function MentionInput({
       />
     </div>
   );
-}
+});

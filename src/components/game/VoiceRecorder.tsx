@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -7,6 +6,50 @@ import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 
 type RecorderStatus = "idle" | "recording" | "transcribing";
+const STT_PROCESSING_EVENT = "wolfcha:stt-processing";
+
+type BrowserSpeechRecognitionAlternative = {
+  transcript: string;
+  confidence: number;
+};
+
+type BrowserSpeechRecognitionResult = {
+  isFinal: boolean;
+  length: number;
+  0: BrowserSpeechRecognitionAlternative;
+  [index: number]: BrowserSpeechRecognitionAlternative;
+};
+
+type BrowserSpeechRecognitionResultList = {
+  length: number;
+  [index: number]: BrowserSpeechRecognitionResult;
+};
+
+type BrowserSpeechRecognitionEvent = Event & {
+  resultIndex: number;
+  results: BrowserSpeechRecognitionResultList;
+};
+
+type BrowserSpeechRecognitionErrorEvent = Event & {
+  error: string;
+  message?: string;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onstart: ((event: Event) => void) | null;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onerror: ((event: BrowserSpeechRecognitionErrorEvent) => void) | null;
+  onend: ((event: Event) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
 interface VoiceRecorderProps {
   disabled?: boolean;
@@ -27,82 +70,18 @@ function formatDuration(seconds: number) {
   return `${mm}:${ss}`;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-}
-
-function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
-  const numChannels = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const numFrames = buffer.length;
-
-  const samples = new Float32Array(numFrames * numChannels);
-  for (let ch = 0; ch < numChannels; ch++) {
-    const data = buffer.getChannelData(ch);
-    for (let i = 0; i < numFrames; i++) {
-      samples[i * numChannels + ch] = data[i];
-    }
-  }
-
-  const bytesPerSample = 2;
-  const blockAlign = numChannels * bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = numFrames * blockAlign;
-  const bufferSize = 44 + dataSize;
-  const arrayBuffer = new ArrayBuffer(bufferSize);
-  const view = new DataView(arrayBuffer);
-
-  const writeString = (offset: number, str: string) => {
-    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+function getSpeechRecognitionCtor(): BrowserSpeechRecognitionConstructor | undefined {
+  if (typeof window === "undefined") return undefined;
+  const browserWindow = window as Window & typeof globalThis & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
   };
-
-  writeString(0, "RIFF");
-  view.setUint32(4, 36 + dataSize, true);
-  writeString(8, "WAVE");
-
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true);
-
-  writeString(36, "data");
-  view.setUint32(40, dataSize, true);
-
-  let offset = 44;
-  for (let i = 0; i < samples.length; i++) {
-    const x = Math.max(-1, Math.min(1, samples[i]));
-    const v = x < 0 ? x * 0x8000 : x * 0x7fff;
-    view.setInt16(offset, Math.round(v), true);
-    offset += 2;
-  }
-
-  return arrayBuffer;
+  return browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
 }
 
-async function decodeToWav(blob: Blob): Promise<Uint8Array> {
-  const ab = await blob.arrayBuffer();
-  const AudioContextCtor = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext | undefined;
-  if (!AudioContextCtor) {
-    throw new Error("AudioContext is not supported in this browser");
-  }
-  const ctx = new AudioContextCtor();
-  try {
-    const audioBuffer = await ctx.decodeAudioData(ab.slice(0));
-    const wavAb = audioBufferToWav(audioBuffer);
-    return new Uint8Array(wavAb);
-  } finally {
-    await ctx.close().catch(() => undefined);
-  }
+function getBrowserSpeechLang(): string {
+  if (typeof navigator === "undefined") return "zh-CN";
+  return navigator.language || "zh-CN";
 }
 
 function WaveBars({ tone }: { tone: "gold" | "danger" }) {
@@ -132,294 +111,246 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
     const [error, setError] = useState<string | null>(null);
     const [seconds, setSeconds] = useState(0);
 
+    const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+    const browserTranscriptRef = useRef("");
+    const browserHadFinalResultRef = useRef(false);
+    const browserStopRequestedRef = useRef(false);
+    const browserFallbackDisabledRef = useRef(false);
+    const [browserRecognitionBlocked, setBrowserRecognitionBlocked] = useState(false);
     const timerRef = useRef<number | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    const recorderRef = useRef<MediaRecorder | null>(null);
-    const chunksRef = useRef<BlobPart[]>([]);
-    const stopRequestedRef = useRef(false);
-    const releaseStreamTimerRef = useRef<number | null>(null);
 
+    const speechRecognitionCtor = useMemo(() => getSpeechRecognitionCtor(), []);
+    const sttEnabled = Boolean(speechRecognitionCtor);
+    const sttDisabled = disabled || !sttEnabled || browserRecognitionBlocked;
     const isRecording = status === "recording";
-  const isBusy = status !== "idle";
-  const sttEnabled = false;
-  const sttDisabled = disabled || !sttEnabled;
+    const isBusy = status !== "idle";
 
-  const canUse = useMemo(() => {
-    return typeof window !== "undefined" && typeof navigator !== "undefined";
-  }, []);
-
-  const stopStreamNow = useCallback(() => {
-    if (releaseStreamTimerRef.current) {
-      window.clearTimeout(releaseStreamTimerRef.current);
-      releaseStreamTimerRef.current = null;
-    }
-    if (streamRef.current) {
-      for (const t of streamRef.current.getTracks()) t.stop();
-      streamRef.current = null;
-    }
-  }, []);
-
-  const scheduleReleaseStream = useCallback(() => {
-    if (releaseStreamTimerRef.current) {
-      window.clearTimeout(releaseStreamTimerRef.current);
-      releaseStreamTimerRef.current = null;
-    }
-
-    // Keep mic warm for a short window to avoid losing the first seconds next time.
-    releaseStreamTimerRef.current = window.setTimeout(() => {
-      // Only release when truly idle
-      if (!recorderRef.current) {
-        stopStreamNow();
+    const clearTimer = useCallback(() => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-    }, 8000);
-  }, [stopStreamNow]);
+      setSeconds(0);
+    }, []);
 
-  const cleanupMedia = useCallback(() => {
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setSeconds(0);
-
-    if (recorderRef.current) {
-      recorderRef.current.ondataavailable = null;
-      recorderRef.current.onstop = null;
-      recorderRef.current.onerror = null;
-      recorderRef.current = null;
-    }
-
-    chunksRef.current = [];
-  }, []);
-
-  useEffect(() => {
-    if (!sttEnabled) {
-      setError(t("voiceRecorder.errors.micUnavailable"));
-    }
-    return () => {
-      cleanupMedia();
-      stopStreamNow();
-    };
-  }, [cleanupMedia, stopStreamNow, sttEnabled]);
-
-  const acquireStream = useCallback(async (): Promise<MediaStream> => {
-    if (streamRef.current) {
-      const live = streamRef.current.getTracks().some((t) => t.readyState === "live");
-      if (live) return streamRef.current;
-    }
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    streamRef.current = stream;
-    return stream;
-  }, []);
-
-  const prepare = useCallback(() => {
-    if (!canUse) return;
-    if (sttDisabled) return;
-    if (status === "transcribing") return;
-
-    stopRequestedRef.current = false;
-
-    void acquireStream()
-      .then(() => {
-        scheduleReleaseStream();
-      })
-      .catch((e) => {
-        setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
-      });
-  }, [acquireStream, canUse, scheduleReleaseStream, status, sttDisabled]);
-
-  const start = useCallback(async () => {
-    if (!canUse) return;
-    if (sttDisabled || isBusy) return;
-
-    setError(null);
-    setSeconds(0);
-    stopRequestedRef.current = false;
-
-    try {
-      const stream = await acquireStream();
-
-      if (stopRequestedRef.current) {
-        stopRequestedRef.current = false;
-        setStatus("idle");
-        scheduleReleaseStream();
-        return;
-      }
-
-      const mimeTypeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-        "audio/ogg",
-      ];
-      const mimeType = mimeTypeCandidates.find((t) => {
-        try {
-          return typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t);
-        } catch {
-          return false;
-        }
-      });
-
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      recorderRef.current = recorder;
-      chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      recorder.onerror = () => {
-        setError(t("voiceRecorder.errors.recordFailed"));
-        setStatus("idle");
-        cleanupMedia();
-      };
-
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        chunksRef.current = [];
-        cleanupMedia();
-
-        if (blob.size === 0) {
-          setStatus("idle");
-          setError(t("voiceRecorder.errors.noAudio"));
-          return;
-        }
-
-        setStatus("transcribing");
-        try {
-          const wavBytes = await decodeToWav(blob);
-          const b64 = bytesToBase64(wavBytes);
-
-          const resp = await fetch("/api/stt", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ audio: b64, format: "wav" }),
-          });
-
-          if (!resp.ok) {
-            const text = await resp.text();
-            throw new Error(text || `HTTP ${resp.status}`);
-          }
-
-          const json = (await resp.json()) as any;
-          const transcript = typeof json?.text === "string" ? json.text.trim() : "";
-          if (!transcript) {
-            setError(t("voiceRecorder.errors.noTranscript"));
-          } else {
-            onTranscript(transcript);
-          }
-        } catch (e) {
-          setError(e instanceof Error ? e.message : t("voiceRecorder.errors.sttFailed"));
-        } finally {
-          setStatus("idle");
-          scheduleReleaseStream();
-        }
-      };
-
-      setStatus("recording");
-      recorder.start();
-
+    const startTimer = useCallback(() => {
+      clearTimer();
       timerRef.current = window.setInterval(() => {
         setSeconds((s) => s + 1);
       }, 1000);
-    } catch (e) {
-      setStatus("idle");
-      setError(e instanceof Error ? e.message : t("voiceRecorder.errors.micUnavailable"));
-      cleanupMedia();
-      scheduleReleaseStream();
-    }
-  }, [acquireStream, canUse, cleanupMedia, isBusy, onTranscript, scheduleReleaseStream, sttDisabled]);
+    }, [clearTimer]);
 
-  const stop = useCallback(() => {
-    if (status === "idle") return;
-    if (status === "transcribing") return;
+    const cleanupRecognition = useCallback(() => {
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        recognition.onstart = null;
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      }
+      recognitionRef.current = null;
+    }, []);
 
-    try {
-      if (!recorderRef.current) {
-        // still waiting for getUserMedia / recorder init
-        stopRequestedRef.current = true;
-        setStatus("idle");
-        scheduleReleaseStream();
+    const flushBrowserTranscript = useCallback(() => {
+      const transcript = browserTranscriptRef.current.trim();
+      browserTranscriptRef.current = "";
+      browserHadFinalResultRef.current = false;
+
+      if (!transcript) {
+        setError(t("voiceRecorder.errors.noTranscript"));
         return;
       }
 
-      recorderRef.current.stop();
-    } catch {
-      setStatus("idle");
-      cleanupMedia();
-      scheduleReleaseStream();
-    }
-  }, [cleanupMedia, scheduleReleaseStream, status]);
+      onTranscript(transcript);
+    }, [onTranscript, t]);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      prepare: () => {
-        prepare();
-      },
-      start: () => {
-        void start();
-      },
-      stop: () => {
-        stop();
-      },
-    }),
-    [prepare, start, stop]
-  );
+    useEffect(() => {
+      return () => {
+        cleanupRecognition();
+        clearTimer();
+      };
+    }, [cleanupRecognition, clearTimer]);
 
-  const buttonClassName = cn(
-    "h-8 px-3 rounded text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer",
-    sttDisabled || isBusy ? "opacity-40 cursor-not-allowed" : "",
-    isRecording
-      ? "border-[var(--color-danger)]/50 text-[var(--color-danger)] bg-transparent hover:bg-[var(--color-danger)]/10"
-      : "border-[var(--color-gold)]/50 text-[var(--color-gold)] bg-transparent hover:bg-[var(--color-gold)]/10"
-  );
+    useEffect(() => {
+      if (typeof window === "undefined") return;
 
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={isRecording ? stop : start}
-        disabled={sttDisabled || status === "transcribing"}
-        className={buttonClassName}
-        title={
-          isRecording
-            ? t("voiceRecorder.actions.stop")
-            : sttEnabled
-              ? t("voiceRecorder.actions.voiceInput")
-              : t("voiceRecorder.errors.micUnavailable")
+      window.dispatchEvent(new CustomEvent(STT_PROCESSING_EVENT, {
+        detail: { active: status !== "idle" },
+      }));
+
+      return () => {
+        window.dispatchEvent(new CustomEvent(STT_PROCESSING_EVENT, {
+          detail: { active: false },
+        }));
+      };
+    }, [status]);
+
+    const prepare = useCallback(() => {
+      return;
+    }, []);
+
+    const start = useCallback(async () => {
+      if (sttDisabled || isBusy || !speechRecognitionCtor) return;
+
+      setError(null);
+      browserTranscriptRef.current = "";
+      browserHadFinalResultRef.current = false;
+      browserStopRequestedRef.current = false;
+
+      const recognition = new speechRecognitionCtor();
+      recognitionRef.current = recognition;
+      recognition.lang = getBrowserSpeechLang();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setStatus("recording");
+        startTimer();
+      };
+
+      recognition.onresult = (event) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result?.isFinal) {
+            finalTranscript += result[0]?.transcript || "";
+          }
         }
-      >
-        {status === "transcribing" ? (
-          <>
-            <SpinnerGap size={14} className="animate-spin" weight="bold" />
-            {t("voiceRecorder.status.transcribing")}
-          </>
-        ) : isRecording ? (
-          <>
-            <StopCircle size={14} weight="fill" />
-            <WaveBars tone="danger" />
-            {formatDuration(seconds)}
-          </>
-        ) : (
-          <>
-            <Microphone size={14} weight="fill" />
-            {t("voiceRecorder.actions.holdToTalk")}
-          </>
-        )}
-      </button>
 
-      {error ? (
-        <div
-          className={cn(
-            "absolute right-0 -top-5 text-[11px] whitespace-nowrap",
-            isNight ? "text-white/55" : "text-[var(--text-muted)]"
-          )}
+        if (finalTranscript.trim()) {
+          browserTranscriptRef.current = `${browserTranscriptRef.current} ${finalTranscript}`.trim();
+          browserHadFinalResultRef.current = true;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const errorCode = event.error || "unknown";
+        if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+          browserFallbackDisabledRef.current = true;
+          setBrowserRecognitionBlocked(true);
+        }
+
+        if (errorCode !== "aborted") {
+          if (errorCode === "no-speech") {
+            setError(t("voiceRecorder.errors.noTranscript"));
+          } else {
+            setError(event.message || t("voiceRecorder.errors.sttFailed"));
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        clearTimer();
+        cleanupRecognition();
+        setStatus("idle");
+
+        if (browserStopRequestedRef.current || browserHadFinalResultRef.current) {
+          flushBrowserTranscript();
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        cleanupRecognition();
+        clearTimer();
+        setStatus("idle");
+        setError(error instanceof Error ? error.message : t("voiceRecorder.errors.sttFailed"));
+      }
+    }, [cleanupRecognition, clearTimer, flushBrowserTranscript, isBusy, speechRecognitionCtor, startTimer, sttDisabled, t]);
+
+    const stop = useCallback(() => {
+      if (status === "idle") return;
+      if (status === "transcribing") return;
+
+      if (recognitionRef.current) {
+        try {
+          browserStopRequestedRef.current = true;
+          setStatus("transcribing");
+          clearTimer();
+          recognitionRef.current.stop();
+          return;
+        } catch {
+          cleanupRecognition();
+          setStatus("idle");
+          flushBrowserTranscript();
+        }
+      }
+    }, [cleanupRecognition, clearTimer, flushBrowserTranscript, status]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        prepare: () => {
+          prepare();
+        },
+        start: () => {
+          void start();
+        },
+        stop: () => {
+          stop();
+        },
+      }),
+      [prepare, start, stop]
+    );
+
+    const buttonClassName = cn(
+      "h-8 px-3 rounded text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer",
+      sttDisabled || isBusy ? "opacity-40 cursor-not-allowed" : "",
+      isRecording
+        ? "border-[var(--color-danger)]/50 text-[var(--color-danger)] bg-transparent hover:bg-[var(--color-danger)]/10"
+        : "border-[var(--color-gold)]/50 text-[var(--color-gold)] bg-transparent hover:bg-[var(--color-gold)]/10"
+    );
+
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+          }}
+          onClick={isRecording ? stop : start}
+          disabled={sttDisabled || status === "transcribing"}
+          className={buttonClassName}
+          title={
+            isRecording
+              ? t("voiceRecorder.actions.stop")
+              : sttEnabled
+                ? t("voiceRecorder.actions.voiceInput")
+                : t("voiceRecorder.errors.micUnavailable")
+          }
         >
-          {error}
-        </div>
-      ) : null}
-    </div>
-  );
-});
+          {status === "transcribing" ? (
+            <>
+              <SpinnerGap size={14} className="animate-spin" weight="bold" />
+              {t("voiceRecorder.status.transcribing")}
+            </>
+          ) : isRecording ? (
+            <>
+              <StopCircle size={14} weight="fill" />
+              <WaveBars tone="danger" />
+              {formatDuration(seconds)}
+            </>
+          ) : (
+            <>
+              <Microphone size={14} weight="fill" />
+              {t("voiceRecorder.actions.holdToTalk")}
+            </>
+          )}
+        </button>
 
+        {(error || !sttEnabled) ? (
+          <div
+            className={cn(
+              "absolute right-0 -top-5 text-[11px] whitespace-nowrap",
+              isNight ? "text-white/55" : "text-[var(--text-muted)]"
+            )}
+          >
+            {error || t("voiceRecorder.errors.micUnavailable")}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+);
