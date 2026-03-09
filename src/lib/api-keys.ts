@@ -1,4 +1,4 @@
-import { ALL_MODELS, AVAILABLE_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/types/game";
+import { ALL_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/types/game";
 
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
@@ -11,9 +11,6 @@ const SUMMARY_MODEL_STORAGE = "wolfcha_summary_model";
 const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
-const NEWAPI_API_KEY_STORAGE = "wolfcha_newapi_api_key";
-const NEWAPI_BASE_URL_STORAGE = "wolfcha_newapi_base_url";
-const VALIDATED_NEWAPI_KEY_STORAGE = "wolfcha_validated_newapi_key";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -95,48 +92,11 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
-export function getNewapiApiKey(): string {
-  return readStorage(NEWAPI_API_KEY_STORAGE);
-}
-
-export function setNewapiApiKey(key: string) {
-  writeStorage(NEWAPI_API_KEY_STORAGE, key);
-}
-
-export function getNewapiBaseUrl(): string {
-  return readStorage(NEWAPI_BASE_URL_STORAGE);
-}
-
-export function setNewapiBaseUrl(url: string) {
-  writeStorage(NEWAPI_BASE_URL_STORAGE, url);
-}
-
-export function hasNewapiKey(): boolean {
-  return Boolean(getNewapiApiKey()) && Boolean(getNewapiBaseUrl());
-}
-
-export function getValidatedNewapiKey(): string {
-  return readStorage(VALIDATED_NEWAPI_KEY_STORAGE);
-}
-
-export function setValidatedNewapiKey(key: string) {
-  writeStorage(VALIDATED_NEWAPI_KEY_STORAGE, key);
-}
-
-// When custom key is disabled, use a model from AVAILABLE_MODELS so the server
-// can use its built-in API keys (no user x-zenmux-api-key header).
-function resolveDefaultModelWhenCustomDisabled(fallbackDefault: string): string {
-  const builtin =
-    AVAILABLE_MODELS.find((r) => r.provider === "zenmux") ?? AVAILABLE_MODELS[0];
-  return builtin?.model ?? fallbackDefault;
-}
-
 // When custom key is enabled, keep model within providers that have keys.
 function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: string): string {
-  const allowedProviders = new Set<"zenmux" | "dashscope" | "newapi">();
+  const allowedProviders = new Set<(typeof ALL_MODELS)[number]["provider"]>();
   if (hasZenmuxKey()) allowedProviders.add("zenmux");
   if (hasDashscopeKey()) allowedProviders.add("dashscope");
-  if (hasNewapiKey()) allowedProviders.add("newapi");
 
   if (allowedProviders.size === 0) return preferred;
 
@@ -154,12 +114,6 @@ function resolveModelForCurrentKeyState(
   fallbackValue: string,
   storageKey: string
 ): string {
-  // When custom key is disabled, always use system default - ignore user's stored selection
-  if (!isCustomKeyEnabled()) {
-    return resolveDefaultModelWhenCustomDisabled(fallbackValue);
-  }
-
-  // When custom key is enabled, use user's stored selection (or fallback if not set)
   const base = storedValue || fallbackValue;
   const resolved = resolveModelWhenCustomEnabled(base, fallbackValue);
   if (resolved !== base) {
@@ -174,17 +128,24 @@ export function isCustomKeyEnabled(): boolean {
   if (!flagEnabled) return false;
   // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
   // 这可以防止用户开启了开关但没有正确配置 key 的情况
-  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey() || hasNewapiKey();
+  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey();
   return hasAnyLLMKey;
 }
 
 export function setCustomKeyEnabled(value: boolean) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(CUSTOM_KEY_ENABLED_STORAGE, value ? "true" : "false");
+  if (!value) {
+    window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
+    window.localStorage.removeItem(GENERATOR_MODEL_STORAGE);
+    window.localStorage.removeItem(SUMMARY_MODEL_STORAGE);
+    window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
+  }
 }
 
 export function getSelectedModels(): string[] {
   if (!canUseStorage()) return [];
+  if (!isCustomKeyEnabled()) return [];
   const raw = window.localStorage.getItem(SELECTED_MODELS_STORAGE);
   if (!raw) return [];
   try {
@@ -198,6 +159,10 @@ export function getSelectedModels(): string[] {
 
 export function setSelectedModels(models: string[]) {
   if (!canUseStorage()) return;
+  if (!isCustomKeyEnabled()) {
+    window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
+    return;
+  }
   const normalized = models.map((m) => String(m ?? "").trim()).filter(Boolean);
   if (normalized.length === 0) {
     window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
@@ -206,9 +171,6 @@ export function setSelectedModels(models: string[]) {
   window.localStorage.setItem(SELECTED_MODELS_STORAGE, JSON.stringify(normalized));
 }
 
-// Deprecated Zenmux model ID that no longer exists; migrate to valid one
-const DEPRECATED_GENERATOR_MODEL = "google/gemini-2.5-flash-lite-preview-09-2025";
-
 export function getGeneratorModel(): string {
   // When custom key is disabled, always use GENERATOR_MODEL directly
   // (independent of AI player models in AVAILABLE_MODELS)
@@ -216,14 +178,14 @@ export function getGeneratorModel(): string {
     return GENERATOR_MODEL;
   }
   const stored = readStorage(GENERATOR_MODEL_STORAGE);
-  if (stored === DEPRECATED_GENERATOR_MODEL) {
-    writeStorage(GENERATOR_MODEL_STORAGE, GENERATOR_MODEL);
-    return GENERATOR_MODEL;
-  }
   return resolveModelForCurrentKeyState(stored, GENERATOR_MODEL, GENERATOR_MODEL_STORAGE);
 }
 
 export function setGeneratorModel(model: string) {
+  if (!isCustomKeyEnabled()) {
+    writeStorage(GENERATOR_MODEL_STORAGE, "");
+    return;
+  }
   writeStorage(GENERATOR_MODEL_STORAGE, model);
 }
 
@@ -234,14 +196,14 @@ export function getSummaryModel(): string {
     return SUMMARY_MODEL;
   }
   const stored = readStorage(SUMMARY_MODEL_STORAGE);
-  if (stored === DEPRECATED_GENERATOR_MODEL) {
-    writeStorage(SUMMARY_MODEL_STORAGE, SUMMARY_MODEL);
-    return SUMMARY_MODEL;
-  }
   return resolveModelForCurrentKeyState(stored, SUMMARY_MODEL, SUMMARY_MODEL_STORAGE);
 }
 
 export function setSummaryModel(model: string) {
+  if (!isCustomKeyEnabled()) {
+    writeStorage(SUMMARY_MODEL_STORAGE, "");
+    return;
+  }
   writeStorage(SUMMARY_MODEL_STORAGE, model);
 }
 
@@ -255,6 +217,10 @@ export function getReviewModel(): string {
 }
 
 export function setReviewModel(model: string) {
+  if (!isCustomKeyEnabled()) {
+    writeStorage(REVIEW_MODEL_STORAGE, "");
+    return;
+  }
   writeStorage(REVIEW_MODEL_STORAGE, model);
 }
 
@@ -271,9 +237,6 @@ export function clearApiKeys() {
   window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
   window.localStorage.removeItem(VALIDATED_ZENMUX_KEY_STORAGE);
   window.localStorage.removeItem(VALIDATED_DASHSCOPE_KEY_STORAGE);
-  window.localStorage.removeItem(NEWAPI_API_KEY_STORAGE);
-  window.localStorage.removeItem(NEWAPI_BASE_URL_STORAGE);
-  window.localStorage.removeItem(VALIDATED_NEWAPI_KEY_STORAGE);
 }
 
 export interface KeyValidationResult {
@@ -289,7 +252,6 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
 
   const zenmuxKey = getZenmuxApiKey();
   const dashscopeKey = getDashscopeApiKey();
-
   if (!zenmuxKey && !dashscopeKey) {
     return { valid: false, error: "未配置任何 API Key", errorCode: "no_key" };
   }

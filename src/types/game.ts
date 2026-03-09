@@ -240,71 +240,105 @@ export interface DailySummaryVoteData {
   execution_vote?: { eliminated: number; votes: Record<string, number[]> };
 }
 
+// Shared model IDs
+export const MODEL_IDS = {
+  zenmux: {
+    geminiFlashLite: "google/gemini-3.1-flash-lite-preview",
+    geminiFlashPreview: "google/gemini-3-flash-preview",
+    deepseek: "deepseek/deepseek-v3.2",
+    kimiK2: "moonshotai/kimi-k2-0905",
+    qwen3Max: "qwen/qwen3-max",
+    doubaoSeed: "volcengine/doubao-seed-1.8",
+    gpt52Chat: "openai/gpt-5.2-chat",
+    claudeHaiku45: "anthropic/claude-haiku-4.5",
+    claudeSonnet45: "anthropic/claude-sonnet-4.5",
+    claudeOpus45: "anthropic/claude-opus-4.5",
+    grok4: "x-ai/grok-4",
+    glm47: "z-ai/glm-4.7",
+    minimaxM21: "minimax/minimax-m2.1",
+  },
+  dashscope: {
+    qwenFlash: "qwen-flash",
+    deepseek: "deepseek-v3.2",
+    qwenPlus: "qwen-plus-2025-12-01",
+    qwen3Max: "qwen3-max",
+  },
+  newapi: {
+    gemini25Flash: "gemini-2.5-flash",
+    gemini3FlashPreview: "gemini-3-flash-preview",
+    gemini3ProPreview: "gemini-3-pro-preview",
+  },
+} as const;
+
+export const DEFAULT_MODEL_CONFIG = {
+  generator: MODEL_IDS.zenmux.geminiFlashLite,
+  summary: MODEL_IDS.dashscope.qwenFlash,
+  review: MODEL_IDS.zenmux.geminiFlashPreview,
+  validation: {
+    zenmux: MODEL_IDS.zenmux.geminiFlashLite,
+    dashscope: MODEL_IDS.dashscope.deepseek,
+  },
+} as const;
+
 // Models for summary & character generation
-export const GENERATOR_MODEL = "google/gemini-3.1-flash-lite-preview";
-export const SUMMARY_MODEL = "google/gemini-3.1-flash-lite-preview";
-export const REVIEW_MODEL = "google/gemini-3.1-flash-lite-preview";
+export const GENERATOR_MODEL = DEFAULT_MODEL_CONFIG.generator;
+export const SUMMARY_MODEL = DEFAULT_MODEL_CONFIG.summary;
+export const REVIEW_MODEL = DEFAULT_MODEL_CONFIG.review;
+export const ZENMUX_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.zenmux;
+export const DASHSCOPE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.dashscope;
 
-// Default models used when custom key is not enabled
-// Note: SUMMARY_MODEL and GENERATOR_MODEL are included here for server-side validation.
+export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
+  { provider: "zenmux", model: MODEL_IDS.zenmux.deepseek },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
+];
+
+// Default built-in models exposed to the app when custom key is not enabled.
+// This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  // { provider: "dashscope", model: "qwen-flash" },
-  { provider: "dashscope", model: "deepseek-v3.2" },
-  { provider: "dashscope", model: "qwen3-max" },
-  // {provider:"dashscope", model:"kimi-k2.5"},
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
+  ...BUILTIN_PLAYER_MODELS,
+  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashLite },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashPreview },
+];
 
-  { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
-  { provider: "zenmux", model: "google/gemini-3.1-flash-lite-preview" },
-  // { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
-  // { provider: "zenmux", model: "z-ai/glm-4.7" },
-  // {provider:"zenmux", model:"minimax/minimax-m2.1"},
-  // { provider: "zenmux", model: "google/gemini-3-flash-preview" },
+// Built-in project-key models that the server may call internally.
+// These are intentionally not exposed in the custom-key model selector.
+export const PROJECT_MODELS: ModelRef[] = [
+  ...AVAILABLE_MODELS,
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini25Flash },
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini3ProPreview },
+];
 
-  { provider: "newapi", model: "gemini-3-flash-preview" },
-  // { provider: "newapi", model: "gemini-3-pro-preview" },
-  // { provider: "newapi", model: "gemini-3.1-pro-preview" },
+// User-selectable models when custom key is enabled.
+export const ALL_MODELS: ModelRef[] = [
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenPlus },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwen3Max },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashLite },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.deepseek },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashPreview },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.gpt52Chat },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.claudeHaiku45 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.claudeSonnet45 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.claudeOpus45 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.grok4 },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.glm47, temperature: 1, reasoning: { enabled: false } },
+  { provider: "zenmux", model: MODEL_IDS.zenmux.minimaxM21, temperature: 1, reasoning: { enabled: false } },
 ];
 
 // Models not allowed for in-game players (summary & generation only)
-export const NON_PLAYER_MODELS = [GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL];
+export const NON_PLAYER_MODELS: string[] = [GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL];
 
 export function filterPlayerModels(models: ModelRef[]): ModelRef[] {
   return models.filter((ref) => !NON_PLAYER_MODELS.includes(ref.model));
 }
 
-// Built-in player model pool (excludes summary/generation models)
-export const PLAYER_MODELS: ModelRef[] = filterPlayerModels(AVAILABLE_MODELS);
-
-// All available models for custom key users (includes commented ones from AVAILABLE_MODELS)
-export const ALL_MODELS: ModelRef[] = [
-  // Dashscope models
-  { provider: "dashscope", model: "qwen-flash" },
-  { provider: "dashscope", model: "deepseek-v3.2" },
-  { provider: "dashscope", model: "qwen-plus-2025-12-01" },
-  { provider: "dashscope", model: "qwen3-max" },
-
-  // Zenmux models
-  { provider: "zenmux", model: "deepseek/deepseek-v3.2" },
-  { provider: "zenmux", model: "google/gemini-3-flash-preview" },
-  { provider: "zenmux", model: "google/gemini-3.1-flash-lite-preview" },
-  { provider: "zenmux", model: "moonshotai/kimi-k2-0905" },
-  { provider: "zenmux", model: "qwen/qwen3-max" },
-  { provider: "zenmux", model: "volcengine/doubao-seed-1.8" },
-  { provider: "zenmux", model: "google/gemini-2.5-flash-lite" },
-  { provider: "zenmux", model: "openai/gpt-5.2-chat" },
-  { provider: "zenmux", model: "anthropic/claude-haiku-4.5" },
-  { provider: "zenmux", model: "anthropic/claude-sonnet-4.5" },
-  { provider: "zenmux", model: "anthropic/claude-opus-4.5" },
-  { provider: "zenmux", model: "x-ai/grok-4" },
-  { provider: "zenmux", model: "google/gemini-3-pro-preview" },
-  { provider: "zenmux", model: "z-ai/glm-4.7", temperature: 1 , reasoning: { enabled: false } },
-  { provider: "zenmux", model: "minimax/minimax-m2.1", temperature: 1 , reasoning: { enabled: false } },
-
-  // New API models
-  { provider: "newapi", model: "gemini-2.5-flash" },
-  { provider: "newapi", model: "gemini-3-flash-preview" },
-  { provider: "newapi", model: "gemini-3-pro-preview" },
-  { provider: "newapi", model: "gemini-3.1-pro-preview" },
-
-];
-
+// Built-in player model pool used when custom key is disabled.
+export const PLAYER_MODELS: ModelRef[] = BUILTIN_PLAYER_MODELS;

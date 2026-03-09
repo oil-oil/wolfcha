@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { DASHSCOPE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -26,7 +27,7 @@ async function validateZenmuxKey(apiKey: string): Promise<ValidationResult> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-4.1-nano",
+        model: ZENMUX_VALIDATION_MODEL,
         messages: [{ role: "user", content: "hi" }],
         max_tokens: 1,
       }),
@@ -237,7 +238,7 @@ async function validateDashscopeKey(apiKey: string): Promise<ValidationResult> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "qwen-turbo",
+        model: DASHSCOPE_VALIDATION_MODEL,
         messages: [{ role: "user", content: "hi" }],
         max_tokens: 1,
       }),

@@ -613,7 +613,7 @@ export function WelcomeScreen({
       return;
     }
 
-    const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
+    const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
 
     if (
       !hasUserKey &&
@@ -720,7 +720,7 @@ export function WelcomeScreen({
       });
     }, 800);
 
-    const hasUserKey = customKeyEnabled && (hasZenmuxKey() || hasDashscopeKey());
+    const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
     if (hasUserKey) {
       isStartingRef.current = false;
       return;
@@ -1121,7 +1121,7 @@ export function WelcomeScreen({
               >
                 <UserCircle size={16} />
                 <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
-                {customKeyEnabled ? (
+                {isCustomKeyEnabled() ? (
                   <span className="opacity-70">{t("customKey.title")}</span>
                 ) : (
                   <span className="opacity-70">

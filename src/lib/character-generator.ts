@@ -9,7 +9,7 @@ import {
   type ModelRef,
   type Persona,
 } from "@/types/game";
-import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, hasNewapiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
 import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
@@ -64,7 +64,6 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
     const allowedProviders = new Set<ModelRef["provider"]>();
     if (hasZenmuxKey()) allowedProviders.add("zenmux");
     if (hasDashscopeKey()) allowedProviders.add("dashscope");
-    if (hasNewapiKey()) allowedProviders.add("newapi");
     if (allowedProviders.size === 0) return defaultPool;
 
     // Filter by allowed providers, then exclude non-player models
@@ -690,7 +689,7 @@ export async function generateCharacters(
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      console.log(`[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasNewapi: ${hasNewapiKey()}`);
+      console.log(`[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}`);
       return await runOnce();
     } catch (error) {
       lastError = error;

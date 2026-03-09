@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, requireCredits } from "@/lib/api-auth";
-import { ALL_MODELS, AVAILABLE_MODELS } from "@/types/game";
+import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
@@ -14,7 +14,7 @@ type Provider = "zenmux" | "dashscope" | "newapi";
 function getProviderForModel(model: string): Provider | null {
   const modelRef =
     ALL_MODELS.find((ref) => ref.model === model) ??
-    AVAILABLE_MODELS.find((ref) => ref.model === model);
+    PROJECT_MODELS.find((ref) => ref.model === model);
   return modelRef?.provider ?? null;
 }
 
@@ -26,8 +26,8 @@ function getNewapiUrl(baseUrl: string): string {
 }
 
 /** Resolve ModelRef for a model id; used to apply per-model temperature/reasoning overrides. */
-function getModelRef(model: string): (typeof AVAILABLE_MODELS)[number] | (typeof ALL_MODELS)[number] | undefined {
-  return ALL_MODELS.find((ref) => ref.model === model) ?? AVAILABLE_MODELS.find((ref) => ref.model === model);
+function getModelRef(model: string): (typeof PROJECT_MODELS)[number] | (typeof ALL_MODELS)[number] | undefined {
+  return ALL_MODELS.find((ref) => ref.model === model) ?? PROJECT_MODELS.find((ref) => ref.model === model);
 }
 
 function normalizeDashscopeModelName(model: string): string {
@@ -214,7 +214,7 @@ async function runBatchItem(
     return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
   }
 
-  const isDefaultModel = AVAILABLE_MODELS.some((ref) => ref.model === model);
+  const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
   if (!isDefaultModel) {
     if (modelProvider === "zenmux" && !headerApiKey) {
       return { ok: false, status: 401, error: "此模型需要您提供 Zenmux API Key" };
@@ -508,7 +508,7 @@ export async function POST(request: NextRequest) {
     const headerNewapiKey = request.headers.get("x-newapi-api-key")?.trim();
     const headerNewapiBaseUrl = request.headers.get("x-newapi-base-url")?.trim();
     const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerNewapiKey ?? "").trim());
-    const isDefaultModel = AVAILABLE_MODELS.some((ref) => ref.model === model);
+    const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
 
     const modelRefOverride = getModelRef(model);
     const normalizedTemperature =
