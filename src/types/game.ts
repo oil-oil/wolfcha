@@ -288,19 +288,33 @@ export const ZENMUX_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.zenmux;
 export const DASHSCOPE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.dashscope;
 
 export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
-  { provider: "zenmux", model: MODEL_IDS.zenmux.deepseek },
-  { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
-  { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
-  { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.deepseek },
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini25Flash },
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenPlus },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwen3Max },
+
 ];
 
 // Default built-in models exposed to the app when custom key is not enabled.
 // This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini25Flash },
+  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
   { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
-  ...BUILTIN_PLAYER_MODELS,
-  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashLite },
-  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashPreview },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenPlus },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwen3Max },
+
+  // { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
+  // ...BUILTIN_PLAYER_MODELS,
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashLite },
+  // { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashPreview },
 ];
 
 // Built-in project-key models that the server may call internally.
@@ -309,7 +323,10 @@ export const PROJECT_MODELS: ModelRef[] = [
   ...AVAILABLE_MODELS,
   { provider: "newapi", model: MODEL_IDS.newapi.gemini25Flash },
   { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
-  { provider: "newapi", model: MODEL_IDS.newapi.gemini3ProPreview },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwenPlus },
+  { provider: "dashscope", model: MODEL_IDS.dashscope.qwen3Max },
 ];
 
 // User-selectable models when custom key is enabled.
