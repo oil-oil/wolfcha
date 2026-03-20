@@ -1,8 +1,10 @@
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
+import { fetchDemoModeConfigClient } from "@/lib/demo-config";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { supabase } from "@/lib/supabase";
+import { getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -19,12 +21,27 @@ export interface LLMMessage {
 
 type Provider = "zenmux" | "dashscope" | "newapi";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
     const { data } = await supabase.auth.getSession();
     const token = data?.session?.access_token;
     if (token) return { Authorization: `Bearer ${token}` };
   } catch {}
+
+  const existingGuestId = readGuestIdFromStorage();
+  if (existingGuestId) {
+    return { "X-Guest-Id": existingGuestId };
+  }
+
+  const demoConfig = await fetchDemoModeConfigClient();
+  if (demoConfig.active) {
+    const guestId = getGuestId();
+    if (guestId) return { "X-Guest-Id": guestId };
+  }
   return {};
 }
 
@@ -156,13 +173,19 @@ function isQuotaExhaustedError(status: number, errorText: string): boolean {
 function formatApiError(status: number, errorText: string): string {
   let msg = `API error: ${status}`;
   try {
-    const errorJson = JSON.parse(errorText) as any;
-    if (typeof errorJson?.error === "string" && errorJson.error.trim()) {
-      msg = errorJson.error.trim();
-    }
-    const detailsMsg = errorJson?.details?.error?.message;
-    if (typeof detailsMsg === "string" && detailsMsg.trim()) {
-      msg = `${msg} - ${detailsMsg.trim()}`;
+    const errorJson: unknown = JSON.parse(errorText);
+    if (isRecord(errorJson)) {
+      if (typeof errorJson.error === "string" && errorJson.error.trim()) {
+        msg = errorJson.error.trim();
+      }
+
+      const details = errorJson.details;
+      if (isRecord(details)) {
+        const nestedError = details.error;
+        if (isRecord(nestedError) && typeof nestedError.message === "string" && nestedError.message.trim()) {
+          msg = `${msg} - ${nestedError.message.trim()}`;
+        }
+      }
     }
   } catch {
     const trimmed = (errorText || "").trim();
@@ -547,15 +570,15 @@ export async function generateCompletionBatch(
     throw new Error(formatApiError(response.status, errorText));
   }
 
-  const data = await response.json();
-  const results = Array.isArray(data?.results) ? data.results : [];
+  const data: unknown = await response.json();
+  const results = isRecord(data) && Array.isArray(data.results) ? data.results : [];
 
-  return results.map((item: any) => {
-    if (!item || item.ok !== true) {
+  return results.map((item): BatchCompletionResult => {
+    if (!isRecord(item) || item.ok !== true) {
       return {
         ok: false,
-        error: String(item?.error || "Unknown error"),
-        status: typeof item?.status === "number" ? item.status : undefined,
+        error: String(isRecord(item) ? (item.error ?? "Unknown error") : "Unknown error"),
+        status: isRecord(item) && typeof item.status === "number" ? item.status : undefined,
       };
     }
     const raw = item.data as ChatCompletionResponse;

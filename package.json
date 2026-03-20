@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

@@ -108,6 +108,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      demo_config: {
+        Row: {
+          id: string;
+          enabled: boolean;
+          starts_at: string | null;
+          expires_at: string | null;
+          updated_at: string;
+          updated_by: string | null;
+          notes: string | null;
+        };
+        Insert: {
+          id: string;
+          enabled?: boolean;
+          starts_at?: string | null;
+          expires_at?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          id?: string;
+          enabled?: boolean;
+          starts_at?: string | null;
+          expires_at?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+          notes?: string | null;
+        };
+        Relationships: [];
+      };
       sponsor_clicks: {
         Row: {
           id: string;

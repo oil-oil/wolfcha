@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
 import type { Database } from "@/types/database";
+import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import {
   SPRING_CAMPAIGN_CODE,
   SPRING_CAMPAIGN_DAILY_QUOTA,
@@ -38,6 +39,22 @@ export async function POST(request: Request) {
   const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Demo mode: skip credit consumption entirely
+  if (await isDemoModeActiveServer()) {
+    const { data } = await supabaseAdmin
+      .from("user_credits")
+      .select("credits")
+      .eq("id", user.id)
+      .single();
+    const creditsRow = data as { credits: number } | null;
+    return NextResponse.json({
+      success: true,
+      credits: creditsRow?.credits ?? 0,
+      bypassed: true,
+      demoMode: true,
+    });
   }
 
   const headerZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();

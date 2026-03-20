@@ -256,7 +256,6 @@ export function WelcomeScreen({
 
   const {
     user,
-    session,
     credits,
     referralCode,
     totalReferrals,
@@ -268,6 +267,7 @@ export function WelcomeScreen({
     clearPasswordRecovery,
     fetchCredits,
     springCampaign,
+    refreshDemoConfig,
   } = useCredits();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -607,7 +607,11 @@ export function WelcomeScreen({
       return;
     }
 
-    if (!user) {
+    const latestDemoConfig = await refreshDemoConfig(true);
+    const demoModeActive = latestDemoConfig.active;
+
+    // Demo mode: allow guests and skip credit checks
+    if (!user && !demoModeActive) {
       setIsAuthOpen(true);
       toast(t("welcome.toast.signInFirst"));
       return;
@@ -616,6 +620,7 @@ export function WelcomeScreen({
     const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
 
     if (
+      !demoModeActive &&
       !hasUserKey &&
       credits !== null &&
       credits <= LOW_CREDIT_THRESHOLD &&
@@ -662,7 +667,7 @@ export function WelcomeScreen({
       });
     }, 800);
 
-    if (hasUserKey) {
+    if (demoModeActive || hasUserKey) {
       isStartingRef.current = false;
       return;
     }
@@ -685,7 +690,7 @@ export function WelcomeScreen({
     setIsUserProfileOpen(true);
   };
 
-  const handleStartGameFromLowCreditModal = () => {
+  const handleStartGameFromLowCreditModal = async () => {
     isStartingRef.current = true;
 
     const seal = sealButtonRef.current;
@@ -720,8 +725,9 @@ export function WelcomeScreen({
       });
     }, 800);
 
+    const latestDemoConfig = await refreshDemoConfig(true);
     const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
-    if (hasUserKey) {
+    if (latestDemoConfig.active || hasUserKey) {
       isStartingRef.current = false;
       return;
     }

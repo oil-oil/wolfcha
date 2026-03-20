@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
+import { isDemoModeActiveServer } from "@/lib/demo-config-server";
+import { isGuestUser } from "@/lib/demo-mode";
+import { ensureAdminClient, supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +11,14 @@ interface CreateSessionPayload {
   difficulty?: string;
   usedCustomKey: boolean;
   modelUsed?: string;
+  userEmail?: string | null;
+  region?: string | null;
 }
 
 interface UpdateSessionPayload {
   action: "update";
   sessionId: string;
-  accessToken?: string; // 用于 sendBeacon 场景（无法发送 header）
+  accessToken?: string;
   winner?: "wolf" | "villager" | null;
   completed: boolean;
   roundsPlayed: number;
@@ -28,13 +32,28 @@ interface UpdateSessionPayload {
 
 type GameSessionPayload = CreateSessionPayload | UpdateSessionPayload;
 
+function isGuestUserIdSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const message = "message" in error && typeof error.message === "string"
+    ? error.message
+    : "";
+
+  return (
+    message.includes("invalid input syntax for type uuid")
+    || message.includes("uuid")
+  );
+}
+
 async function authenticateUser(request: Request, bodyToken?: string) {
-  // 优先使用 header 中的 token，其次使用 body 中的 token（sendBeacon 场景）
   const authHeader = request.headers.get("Authorization");
   const token = authHeader ? authHeader.replace("Bearer ", "") : bodyToken;
   if (!token) return null;
 
-  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser(token);
   if (error || !user) return null;
   return user;
 }
@@ -42,8 +61,8 @@ async function authenticateUser(request: Request, bodyToken?: string) {
 export async function POST(request: Request) {
   try {
     ensureAdminClient();
-  } catch (e) {
-    console.error(e);
+  } catch (error) {
+    console.error(error);
     return NextResponse.json(
       { error: "Server misconfiguration: missing SUPABASE_SERVICE_ROLE_KEY" },
       { status: 500 }
@@ -57,22 +76,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  // 对于 update 操作，支持从 body 中获取 token（sendBeacon 场景）
   const bodyToken = payload.action === "update" ? payload.accessToken : undefined;
   const user = await authenticateUser(request, bodyToken);
-  if (!user) {
+
+  const guestId = request.headers.get("x-guest-id") || request.headers.get("X-Guest-Id");
+  const demoActive = await isDemoModeActiveServer();
+  const isValidGuest = demoActive && guestId && isGuestUser(guestId);
+
+  if (!user && !isValidGuest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 创建新会话
+  const effectiveUserId = user?.id ?? guestId!;
+
   if (payload.action === "create") {
     const insertData = {
-      user_id: user.id,
+      user_id: effectiveUserId,
       player_count: payload.playerCount,
       difficulty: payload.difficulty || null,
       completed: false,
       used_custom_key: payload.usedCustomKey,
       model_used: payload.modelUsed || null,
+      user_email: payload.userEmail || null,
+      region: payload.region || null,
     };
 
     const { data, error: insertError } = await supabaseAdmin
@@ -83,13 +109,21 @@ export async function POST(request: Request) {
 
     if (insertError || !data) {
       console.error("[game-sessions] Insert error:", insertError);
+      if (!user && isGuestUserIdSchemaError(insertError)) {
+        return NextResponse.json(
+          {
+            error: "Guest session tracking is unavailable",
+            reason: "guest_user_id_not_supported",
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json({ error: "Failed to create game session" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, sessionId: (data as { id: string }).id });
   }
 
-  // 更新现有会话
   if (payload.action === "update") {
     const updateData = {
       winner: payload.winner,
@@ -108,7 +142,7 @@ export async function POST(request: Request) {
       .from("game_sessions")
       .update(updateData as never)
       .eq("id", payload.sessionId)
-      .eq("user_id", user.id);
+      .eq("user_id", effectiveUserId);
 
     if (updateError) {
       console.error("[game-sessions] Update error:", updateError);

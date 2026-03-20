@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import {
+  fetchDemoModeConfigClient,
+  getDefaultDemoModeConfigSnapshot,
+  type DemoModePublicConfigSnapshot,
+} from "@/lib/demo-config";
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
+import { supabase } from "@/lib/supabase";
 import {
   DAILY_BONUS_ENABLED,
   REFERRAL_BONUS_ENABLED,
@@ -16,6 +22,7 @@ const REFERRAL_ENDPOINT = "/api/credits/referral";
 const REDEEM_ENDPOINT = "/api/credits/redeem";
 const SPRING_CAMPAIGN_ENDPOINT = "/api/credits/spring-login-bonus";
 const JSON_CONTENT_TYPE = "application/json";
+const DEMO_CONFIG_REFRESH_INTERVAL_MS = 60_000;
 const AUTH_EVENT = {
   INITIAL_SESSION: "INITIAL_SESSION",
   PASSWORD_RECOVERY: "PASSWORD_RECOVERY",
@@ -26,6 +33,12 @@ export function useCredits() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
+  const [demoConfig, setDemoConfig] = useState<DemoModePublicConfigSnapshot>(() =>
+    getDefaultDemoModeConfigSnapshot()
+  );
+  const [demoConfigLoading, setDemoConfigLoading] = useState(true);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [guestId, setGuestId] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalReferrals, setTotalReferrals] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -59,7 +72,17 @@ export function useCredits() {
     setLoading(false);
   }, [user]);
 
+  const refreshDemoConfig = useCallback(async (forceRefresh = false) => {
+    const snapshot = await fetchDemoModeConfigClient(forceRefresh);
+    setDemoConfig(snapshot);
+    setIsDemoMode(snapshot.active);
+    setGuestId(snapshot.active ? getGuestId() : null);
+    setDemoConfigLoading(false);
+    return snapshot;
+  }, []);
+
   const consumeCredit = useCallback(async (): Promise<boolean> => {
+    if (isDemoMode) return true;
     if (!session) return false;
 
     try {
@@ -96,7 +119,7 @@ export function useCredits() {
     } catch {
       return false;
     }
-  }, [session]);
+  }, [isDemoMode, session]);
 
   const redeemCode = useCallback(async (code: string): Promise<{
     success: boolean;
@@ -116,7 +139,7 @@ export function useCredits() {
         body: JSON.stringify({ code: code.trim() }),
       });
 
-      const payload = await res.json() as {
+      const payload = (await res.json()) as {
         success?: boolean;
         credits?: number;
         creditsGranted?: number;
@@ -164,7 +187,7 @@ export function useCredits() {
 
       if (!res.ok) return;
 
-      const payload = await res.json() as {
+      const payload = (await res.json()) as {
         credits: number;
         bonusClaimed: boolean;
         bonusAmount?: number;
@@ -192,7 +215,7 @@ export function useCredits() {
 
       if (!res.ok) return;
 
-      const payload = await res.json() as { campaign?: SpringCampaignSnapshot };
+      const payload = (await res.json()) as { campaign?: SpringCampaignSnapshot };
       if (payload.campaign) {
         setSpringCampaign(payload.campaign);
       }
@@ -244,6 +267,35 @@ export function useCredits() {
   }, [applyReferralCode, claimDailyBonus, claimSpringCampaign]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const runRefresh = async (forceRefresh = false) => {
+      const snapshot = await refreshDemoConfig(forceRefresh);
+      if (cancelled) return;
+      setDemoConfig(snapshot);
+      setIsDemoMode(snapshot.active);
+      setGuestId(snapshot.active ? getGuestId() : null);
+    };
+
+    void runRefresh(true);
+
+    const onFocus = () => {
+      void runRefresh(true);
+    };
+
+    window.addEventListener("focus", onFocus);
+    const timer = window.setInterval(() => {
+      void runRefresh(true);
+    }, DEMO_CONFIG_REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", onFocus);
+      window.clearInterval(timer);
+    };
+  }, [refreshDemoConfig]);
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -257,7 +309,6 @@ export function useCredits() {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Handle password recovery flow
         if (event === AUTH_EVENT.PASSWORD_RECOVERY) {
           setIsPasswordRecovery(true);
         }
@@ -266,6 +317,22 @@ export function useCredits() {
           session
           && (event === AUTH_EVENT.SIGNED_IN || event === AUTH_EVENT.INITIAL_SESSION)
         ) {
+          const latestDemoConfig = await fetchDemoModeConfigClient(true);
+          setDemoConfig(latestDemoConfig);
+          setIsDemoMode(latestDemoConfig.active);
+          setGuestId(latestDemoConfig.active ? getGuestId() : null);
+          setDemoConfigLoading(false);
+
+          if (latestDemoConfig.active) {
+            const previousGuestId = readGuestIdFromStorage();
+            if (previousGuestId && session.user) {
+              void migrateGuestSessions(previousGuestId, session.access_token).then(() => {
+                clearGuestId();
+                setGuestId(null);
+              });
+            }
+          }
+
           await handleAuthenticatedSession(session);
         }
       }
@@ -275,10 +342,12 @@ export function useCredits() {
   }, [handleAuthenticatedSession]);
 
   useEffect(() => {
-    if (user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void fetchCredits();
-    } else {
+    const timer = window.setTimeout(() => {
+      if (user) {
+        void fetchCredits();
+        return;
+      }
+
       dailyBonusClaimedUserRef.current = null;
       springCampaignClaimedUserRef.current = null;
       setCredits(null);
@@ -286,7 +355,11 @@ export function useCredits() {
       setTotalReferrals(0);
       setSpringCampaign(null);
       setLoading(false);
-    }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [user, fetchCredits]);
 
   return {
@@ -295,7 +368,7 @@ export function useCredits() {
     credits,
     referralCode,
     totalReferrals,
-    loading,
+    loading: loading || demoConfigLoading,
     fetchCredits,
     consumeCredit,
     redeemCode,
@@ -304,5 +377,29 @@ export function useCredits() {
     clearPasswordRecovery,
     dailyBonusClaimed,
     springCampaign,
+    isDemoMode,
+    guestId,
+    demoConfig,
+    refreshDemoConfig,
   };
+}
+
+async function migrateGuestSessions(guestId: string, accessToken: string): Promise<void> {
+  try {
+    const res = await fetch("/api/guest/migrate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ guestId }),
+    });
+    if (!res.ok) {
+      console.warn("[demo-mode] Failed to migrate guest sessions:", res.status);
+    } else {
+      console.log("[demo-mode] Guest sessions migrated successfully");
+    }
+  } catch (error) {
+    console.error("[demo-mode] Migration error:", error);
+  }
 }
