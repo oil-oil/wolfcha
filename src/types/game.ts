@@ -286,7 +286,7 @@ export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
   // { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
   // { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
-  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
+  // { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview }, // agent-wiki 服务挂了，临时注释
   { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
   { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
 
@@ -295,7 +295,7 @@ export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
 // Default built-in models exposed to the app when custom key is not enabled.
 // This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
+  // { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview }, // agent-wiki 服务挂了，临时注释
   { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
   { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
 
@@ -309,7 +309,7 @@ export const AVAILABLE_MODELS: ModelRef[] = [
 // These are intentionally not exposed in the custom-key model selector.
 export const PROJECT_MODELS: ModelRef[] = [
   ...AVAILABLE_MODELS,
-  { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview },
+  // { provider: "newapi", model: MODEL_IDS.newapi.gemini3FlashPreview }, // agent-wiki 服务挂了，临时注释
   { provider: "dashscope", model: MODEL_IDS.dashscope.qwenFlash },
   { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
   // Generator / summary / review system models (zenmux)
