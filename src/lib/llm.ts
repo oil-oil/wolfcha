@@ -1,10 +1,8 @@
 import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
-import { fetchDemoModeConfigClient } from "@/lib/demo-config";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
-import { supabase } from "@/lib/supabase";
-import { getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
+import { getAuthHeaders } from "@/lib/auth-headers";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -25,25 +23,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const token = data?.session?.access_token;
-    if (token) return { Authorization: `Bearer ${token}` };
-  } catch {}
-
-  const existingGuestId = readGuestIdFromStorage();
-  if (existingGuestId) {
-    return { "X-Guest-Id": existingGuestId };
-  }
-
-  const demoConfig = await fetchDemoModeConfigClient();
-  if (demoConfig.active) {
-    const guestId = getGuestId();
-    if (guestId) return { "X-Guest-Id": guestId };
-  }
-  return {};
-}
 
 function getProviderForModel(model: string): Provider {
    const modelRef =

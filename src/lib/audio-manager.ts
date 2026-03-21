@@ -1,4 +1,5 @@
-import { getMinimaxApiKey, getMinimaxGroupId, hasMinimaxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getMinimaxApiKey, getMinimaxGroupId, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getAuthHeaders } from "@/lib/auth-headers";
 
 export interface AudioTask {
   id: string; // unique message id
@@ -19,7 +20,7 @@ class AudioManager {
   private currentAudio: HTMLAudioElement | null = null;
   private state: PlayState = "idle";
   private cache = new Map<string, { blob: Blob; durationMs?: number }>();
-  private enabled = isCustomKeyEnabled() && hasMinimaxKey();
+  private enabled = false;
   
   // Callbacks
   private onPlayStart: ((playerId: string) => void) | null = null;
@@ -29,13 +30,16 @@ class AudioManager {
     // binding if needed
   }
 
-  private buildTtsHeaders(): Record<string, string> {
+  private async buildTtsHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (!isCustomKeyEnabled()) return headers;
-    const apiKey = getMinimaxApiKey();
-    const groupId = getMinimaxGroupId();
-    if (apiKey) headers["X-Minimax-Api-Key"] = apiKey;
-    if (groupId) headers["X-Minimax-Group-Id"] = groupId;
+    const authHeaders = await getAuthHeaders();
+    Object.assign(headers, authHeaders);
+    if (isCustomKeyEnabled()) {
+      const apiKey = getMinimaxApiKey();
+      const groupId = getMinimaxGroupId();
+      if (apiKey) headers["X-Minimax-Api-Key"] = apiKey;
+      if (groupId) headers["X-Minimax-Group-Id"] = groupId;
+    }
     return headers;
   }
 
@@ -77,14 +81,10 @@ class AudioManager {
 
   private async prefetchTask(task: AudioTask) {
     if (this.cache.has(task.id)) return;
-    if (!isCustomKeyEnabled() || !hasMinimaxKey()) {
-      this.setEnabled(false);
-      return;
-    }
-
+    const headers = await this.buildTtsHeaders();
     const response = await fetch("/api/tts", {
       method: "POST",
-      headers: this.buildTtsHeaders(),
+      headers,
       body: JSON.stringify({ text: task.text, voiceId: task.voiceId }),
     });
 
@@ -168,11 +168,6 @@ class AudioManager {
     if (!this.enabled) return;
     if (this.state !== "idle") return;
     if (this.queue.length === 0) return;
-    if (!isCustomKeyEnabled() || !hasMinimaxKey()) {
-      this.setEnabled(false);
-      return;
-    }
-
     const task = this.queue.shift();
     if (!task) return;
 
@@ -183,9 +178,10 @@ class AudioManager {
       let blob = this.cache.get(task.id)?.blob;
       if (!blob) {
         // 1. 请求音频
+        const ttsHeaders = await this.buildTtsHeaders();
         const response = await fetch("/api/tts", {
           method: "POST",
-          headers: this.buildTtsHeaders(),
+          headers: ttsHeaders,
           body: JSON.stringify({
             text: task.text,
             voiceId: task.voiceId,
