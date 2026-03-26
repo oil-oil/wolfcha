@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, requireCredits } from "@/lib/api-auth";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
+import { Agent, setGlobalDispatcher } from "undici";
+
+// 将 undici 底层 TCP 连接超时从默认 10s 调高到 60s
+// 避免访问国内 API 网关（如 tokendance）时因建连慢而提前失败
+setGlobalDispatcher(new Agent({ connectTimeout: 60_000 }));
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
