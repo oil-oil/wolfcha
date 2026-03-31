@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { generateCompletion, generateCompletionBatch, generateCompletionStream, mergeOptionsFromModelRef, stripMarkdownCodeFences, type LLMMessage } from "./llm";
+import { generateCompletion, generateCompletionStream, mergeOptionsFromModelRef, stripMarkdownCodeFences, type LLMMessage } from "./llm";
 import type { ChatCompletionResponse } from "./llm";
 import { StreamingSpeechParser } from "./streaming-speech-parser";
 import {
@@ -9,7 +9,6 @@ import {
   type Phase,
   type ChatMessage,
   type Alignment,
-  type DailySummaryVoteData,
   isWolfRole,
   GENERATOR_MODEL,
   SUMMARY_MODEL,
@@ -592,138 +591,6 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
   return { seat: maxSeat, count: maxVotes };
 }
 
-/** Extract structured vote_data from [VOTE_RESULT] in day messages. Preserves "who voted for whom" so it is not lost when context is trimmed. */
-function extractVoteDataFromDayMessages(
-  dayMessages: ChatMessage[],
-  state: GameState
-): DailySummaryVoteData | undefined {
-  const { t } = getI18n();
-  const badgeVoteTitle = t("badgePhase.voteDetailTitle");
-  const dayVoteTitle = t("votePhase.voteDetailTitle");
-  let sheriff: { winner: number; votes: Record<string, number[]> } | undefined;
-  let execution: { eliminated: number; votes: Record<string, number[]> } | undefined;
-
-  for (const m of dayMessages) {
-    if (!m.isSystem || !m.content.startsWith("[VOTE_RESULT]")) continue;
-    try {
-      const json = m.content.slice("[VOTE_RESULT]".length);
-      const data = JSON.parse(json) as { title?: string; results?: Array<{ targetSeat: number; voterSeats?: number[] }> };
-      const results = data.results ?? [];
-      const votes: Record<string, number[]> = {};
-      for (const r of results) {
-        const k = String(r.targetSeat);
-        votes[k] = Array.isArray(r.voterSeats) ? r.voterSeats : [];
-      }
-      if (data.title === badgeVoteTitle && Object.keys(votes).length > 0) {
-        const winner = state.badge.holderSeat ?? -1;
-        sheriff = { winner, votes };
-      } else if (data.title === dayVoteTitle && Object.keys(votes).length > 0) {
-        const eliminated = state.dayHistory?.[state.day]?.executed?.seat ?? -1;
-        execution = { eliminated, votes };
-      }
-    } catch {
-      // skip malformed [VOTE_RESULT]
-    }
-  }
-
-  if (!sheriff && !execution) return undefined;
-  const out: DailySummaryVoteData = {};
-  if (sheriff != null && sheriff.winner >= 0) out.sheriff_election = sheriff;
-  if (execution != null && execution.eliminated >= 0) out.execution_vote = execution;
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-export async function generateDailySummary(
-  state: GameState
-): Promise<{ bullets: string[]; voteData?: DailySummaryVoteData }> {
-  const { t } = getI18n();
-  const startTime = Date.now();
-  const summaryModel = getSummaryModel();
-  const dayBreakText = t("system.dayBreak");
-  const systemSpeaker = t("speakers.system");
-
-  const dayStartIndex = (() => {
-    for (let i = state.messages.length - 1; i >= 0; i--) {
-      const m = state.messages[i];
-      if (m.isSystem && m.content === dayBreakText) return i;
-    }
-    return 0;
-  })();
-
-  const dayMessages = state.messages.slice(dayStartIndex);
-  const voteData = extractVoteDataFromDayMessages(dayMessages, state);
-
-  const transcript = dayMessages
-    .map((m) => {
-      if (m.isSystem) return `${systemSpeaker}: ${m.content}`;
-      const player = state.players.find((p) => p.playerId === m.playerId);
-      const seatLabel = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : "";
-      const nameLabel = player?.displayName || m.playerName;
-      const speaker = seatLabel ? `${seatLabel} ${nameLabel}`.trim() : nameLabel;
-      return `${speaker}: ${m.content}`;
-    })
-    .join("\n")
-    .slice(0, 15000);
-
-  const system = t("gameMaster.dailySummary.systemPrompt");
-  const user = t("gameMaster.dailySummary.userPrompt", { day: state.day, transcript });
-
-  const messages: LLMMessage[] = [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
-
-  const result = await generateCompletion({
-    model: summaryModel,
-    messages,
-    temperature: GAME_TEMPERATURE.SUMMARY,
-    response_format: { type: "json_object" },
-  });
-
-  const cleanedDaily = stripMarkdownCodeFences(result.content);
-
-  await aiLogger.log({
-    type: "daily_summary",
-    request: {
-      model: summaryModel,
-      messages,
-    },
-    response: {
-      content: cleanedDaily,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      duration: Date.now() - startTime,
-    },
-  });
-
-  // Parse the { "bullets": [...] } format (as per prompt template)
-  try {
-    const objectMatch = cleanedDaily.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      const obj = JSON.parse(objectMatch[0]) as { bullets?: string[]; summary?: string };
-      
-      // Handle bullets array format (expected from AI)
-      if (obj.bullets && Array.isArray(obj.bullets) && obj.bullets.length > 0) {
-        return { bullets: obj.bullets.map(b => String(b)), voteData };
-      }
-
-      // Handle summary string format (fallback)
-      if (typeof obj.summary === "string" && obj.summary.trim()) {
-        return { bullets: [obj.summary.trim()], voteData };
-      }
-    }
-  } catch {
-    // ignore parse errors
-  }
-
-  // Fallback: use raw content without JSON wrapper
-  const fallback = result.content
-    .replace(/```json\s*|\s*```/g, "")
-    .trim();
-
-  return { bullets: fallback ? [fallback] : [], voteData };
-}
 
 export async function* generateAISpeechStream(
   state: GameState,

@@ -81,8 +81,8 @@ export class DaySpeechPhase extends GamePhase {
     const difficultyHint = buildDifficultySpeechHint(state.difficulty);
     const totalSeats = state.players.length;
 
-    const todayTranscript = buildTodayTranscript(state, 2000);
-    const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
+    const todayTranscript = buildTodayTranscript(state, 8000);
+    const selfSpeech = buildPlayerTodaySpeech(state, player, 3000);
 
     const todaySpeakers = new Set<string>();
     const dayStartIndex = getDayStartIndex(state);
