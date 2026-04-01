@@ -258,7 +258,7 @@ export const MODEL_IDS = {
     deepseek: "deepseek-v3.2",
   },
   tokendance: {
-    minimaxM27: "minimax-m2.7",
+    // minimaxM27: "minimax-m2.7",
     qwen3Max: "qwen3-max",
     glm5: "glm-5",
     kimiK25: "kimi-k2.5",
@@ -288,7 +288,7 @@ export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
   // { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
   // { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
   // { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
+  // { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
   { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max },
   { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1 },
   { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25 },
@@ -299,7 +299,7 @@ export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
 // Default built-in models exposed to the app when custom key is not enabled.
 // This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
+  // { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
   { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max },
   { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1 },
   { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25 },
