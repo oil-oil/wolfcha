@@ -66,7 +66,7 @@ export type Alignment = "village" | "wolf";
  }
 
 export interface ModelRef {
-  provider: "zenmux" | "dashscope" | "tokendance";
+  provider: "zenmux" | "dashscope" | "tokendance" | "minimax";
   model: string;
   /** Override call-time temperature for this model (e.g. some models only support 1) */
   temperature?: number;
@@ -264,6 +264,10 @@ export const MODEL_IDS = {
     kimiK25: "kimi-k2.5",
     deepseekV32: "deepseek-v3.2",
   },
+  minimax: {
+    m27: "MiniMax-M2.7",
+    m27Highspeed: "MiniMax-M2.7-highspeed",
+  },
 } as const;
 
 export const DEFAULT_MODEL_CONFIG = {
@@ -330,6 +334,8 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "zenmux", model: MODEL_IDS.zenmux.grok4 },
   { provider: "zenmux", model: MODEL_IDS.zenmux.glm47, temperature: 1, reasoning: { enabled: false } },
   { provider: "zenmux", model: MODEL_IDS.zenmux.minimaxM21, temperature: 1, reasoning: { enabled: false } },
+  { provider: "minimax", model: MODEL_IDS.minimax.m27, temperature: 1, reasoning: { enabled: false } },
+  { provider: "minimax", model: MODEL_IDS.minimax.m27Highspeed, temperature: 1, reasoning: { enabled: false } },
 ];
 
 // Models not allowed for in-game players (summary & generation only)

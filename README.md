@@ -18,6 +18,7 @@ Current sponsors:
 
 *   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - Powers the core game flow, roleplay, and summary features with AI models
 *   [Dashscope](https://bailian.console.aliyun.com/) - Provides additional AI model support
+*   [MiniMax](https://www.minimax.io/) - Provides M2.7 LLM models and TTS voice synthesis
 *   [Watcha](https://watcha.cn/) - Provides AI model capabilities and showcase platform
 
 ---
@@ -52,6 +53,7 @@ Current built-in models (subject to project configuration):
 *   **Kimi K2**
 *   **Gemini 3 Flash**
 *   **Seed 1.8 (ByteDance)**
+*   **MiniMax M2.7**
 
 <div align="center">
   <img src="https://img.shields.io/badge/DeepSeek-V3.2-1B75FF?style=for-the-badge" alt="DeepSeek" />
@@ -59,6 +61,7 @@ Current built-in models (subject to project configuration):
   <img src="https://img.shields.io/badge/Moonshot%20AI-Kimi-111111?style=for-the-badge" alt="Kimi" />
   <br/>
   <img src="https://img.shields.io/badge/ByteDance-Seed-333333?style=for-the-badge" alt="Seed" />
+  <img src="https://img.shields.io/badge/MiniMax-M2.7-FF6600?style=for-the-badge" alt="MiniMax" />
 </div>
 
 ### 3. Immersive Retro Experience

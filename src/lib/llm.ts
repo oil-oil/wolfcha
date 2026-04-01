@@ -1,4 +1,4 @@
-import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getDashscopeApiKey, getMinimaxApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
@@ -17,7 +17,7 @@ export interface LLMMessage {
   reasoning_details?: unknown;
 }
 
-type Provider = "zenmux" | "dashscope" | "tokendance";
+type Provider = "zenmux" | "dashscope" | "tokendance" | "minimax";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -51,6 +51,9 @@ export function resolveApiKeySource(model: string): ApiKeySource {
    }
    if (provider === "tokendance") {
      return "project";
+   }
+   if (provider === "minimax") {
+     return getMinimaxApiKey() ? "user" : "project";
    }
    return getZenmuxApiKey() ? "user" : "project";
  }
@@ -424,6 +427,7 @@ export async function generateCompletion(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const minimaxApiKey = customEnabled ? getMinimaxApiKey() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
@@ -436,6 +440,9 @@ export async function generateCompletion(
   if (dashscopeApiKey) {
     headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
   }
+  if (minimaxApiKey) {
+    headers["X-Minimax-Api-Key"] = minimaxApiKey;
+  }
 
   Object.assign(headers, await getAuthHeaders());
 
@@ -443,6 +450,7 @@ export async function generateCompletion(
     customEnabled,
     hasZenmuxKey: !!headerApiKey,
     hasDashscopeKey: !!dashscopeApiKey,
+    hasMinimaxKey: !!minimaxApiKey,
     model: modelToUse,
   });
 
@@ -524,6 +532,7 @@ export async function generateCompletionBatch(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const minimaxApiKey = customEnabled ? getMinimaxApiKey() : "";
   const resolvedRequests = customEnabled
     ? requests
     : requests.map((r) => ({ ...r, model: resolveModelForBuiltin(r.model) }));
@@ -535,6 +544,9 @@ export async function generateCompletionBatch(
   }
   if (dashscopeApiKey) {
     headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
+  }
+  if (minimaxApiKey) {
+    headers["X-Minimax-Api-Key"] = minimaxApiKey;
   }
 
   Object.assign(headers, await getAuthHeaders());
@@ -591,6 +603,7 @@ export async function* generateCompletionStream(
   const customEnabled = isCustomKeyEnabled();
   const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
   const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+  const minimaxApiKey = customEnabled ? getMinimaxApiKey() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
@@ -602,6 +615,9 @@ export async function* generateCompletionStream(
   }
   if (dashscopeApiKey) {
     headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
+  }
+  if (minimaxApiKey) {
+    headers["X-Minimax-Api-Key"] = minimaxApiKey;
   }
 
   Object.assign(headers, await getAuthHeaders());

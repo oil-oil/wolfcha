@@ -10,11 +10,12 @@ setGlobalDispatcher(new Agent({ connectTimeout: 60_000 }));
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = `${DASHSCOPE_API_BASE_URL}/chat/completions`;
+const MINIMAX_CHAT_COMPLETIONS_URL = "https://api.minimax.io/v1/chat/completions";
 
 // API 调用超时时间（毫秒）
 const API_TIMEOUT_MS = 60000;
 
-type Provider = "zenmux" | "dashscope" | "tokendance";
+type Provider = "zenmux" | "dashscope" | "tokendance" | "minimax";
 
 function getProviderForModel(model: string): Provider | null {
   const modelRef =
@@ -195,7 +196,8 @@ async function runBatchItem(
   headerApiKey: string | null,
   headerDashscopeKey: string | null,
   headerTokendanceKey: string | null,
-  headerTokendanceBaseUrl: string | null
+  headerTokendanceBaseUrl: string | null,
+  headerMinimaxKey: string | null
 ): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string; details?: unknown }> {
   const {
     model,
@@ -214,7 +216,7 @@ async function runBatchItem(
   }
 
   const modelProvider: Provider | null =
-    provider === "dashscope" || provider === "zenmux" || provider === "tokendance" ? provider : getProviderForModel(model);
+    provider === "dashscope" || provider === "zenmux" || provider === "tokendance" || provider === "minimax" ? provider : getProviderForModel(model);
   if (!modelProvider) {
     return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
   }
@@ -230,9 +232,12 @@ async function runBatchItem(
     if (modelProvider === "tokendance" && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
       return { ok: false, status: 401, error: "此模型需要您提供 TokenDance Key 和 Base URL" };
     }
+    if (modelProvider === "minimax" && !headerMinimaxKey) {
+      return { ok: false, status: 401, error: "此模型需要您提供 MiniMax API Key" };
+    }
   }
 
-  const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim());
+  const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim() || (headerMinimaxKey ?? "").trim());
 
   const modelRefOverride = getModelRef(model);
   const normalizedTemperature =
@@ -404,6 +409,63 @@ async function runBatchItem(
     return { ok: true, data: result };
   }
 
+  if (modelProvider === "minimax") {
+    if (hasAnyCustomKeyHeader && !headerMinimaxKey) {
+      return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 MiniMax API Key（已拒绝回退到系统 Key）" };
+    }
+    const minimaxApiKey = headerMinimaxKey || process.env.MINIMAX_API_KEY;
+    if (!minimaxApiKey) {
+      return { ok: false, status: 500, error: "MINIMAX_API_KEY not configured on server" };
+    }
+
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: processedMessages,
+      temperature: Math.min(Math.max(0.01, cappedTemperature), 1),
+    };
+
+    if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+      requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(MINIMAX_CHAT_COMPLETIONS_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${minimaxApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let parsed: unknown = undefined;
+      try {
+        parsed = JSON.parse(errorText);
+      } catch {
+        // ignore
+      }
+      return {
+        ok: false,
+        status: response.status,
+        error: `MiniMax API error: ${response.status}`,
+        details: parsed ?? errorText,
+      };
+    }
+
+    const result = await response.json();
+    return { ok: true, data: result };
+  }
+
   if (hasAnyCustomKeyHeader && !headerApiKey) {
     return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 Zenmux API Key（已拒绝回退到系统 Key）" };
   }
@@ -490,9 +552,10 @@ export async function POST(request: NextRequest) {
       const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
       const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim() || null;
       const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || null;
+      const headerMinimaxKey = request.headers.get("x-minimax-api-key")?.trim() || null;
       const requests = body.requests as ChatRequestPayload[];
       const results = await Promise.all(
-        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerTokendanceKey, headerTokendanceBaseUrl))
+        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerTokendanceKey, headerTokendanceBaseUrl, headerMinimaxKey))
       );
       return NextResponse.json({ results });
     }
@@ -508,7 +571,7 @@ export async function POST(request: NextRequest) {
       provider,
     } = body;
     const modelProvider: Provider | null =
-      provider === "dashscope" || provider === "zenmux" || provider === "tokendance" ? provider : getProviderForModel(model);
+      provider === "dashscope" || provider === "zenmux" || provider === "tokendance" || provider === "minimax" ? provider : getProviderForModel(model);
     if (!modelProvider) {
       // Reject unknown models early to avoid mis-routing.
       return NextResponse.json(
@@ -520,7 +583,8 @@ export async function POST(request: NextRequest) {
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
     const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
     const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
-    const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim());
+    const headerMinimaxKey = request.headers.get("x-minimax-api-key")?.trim();
+    const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim() || (headerMinimaxKey ?? "").trim());
     const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
 
     const modelRefOverride = getModelRef(model);
@@ -572,6 +636,12 @@ export async function POST(request: NextRequest) {
       if (modelProvider === "tokendance" && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
         return NextResponse.json(
           { error: "此模型需要您提供 TokenDance Key 和 Base URL" },
+          { status: 401 }
+        );
+      }
+      if (modelProvider === "minimax" && !headerMinimaxKey) {
+        return NextResponse.json(
+          { error: "此模型需要您提供 MiniMax API Key" },
           { status: 401 }
         );
       }
@@ -748,6 +818,84 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: `TokenDance error: ${response.status}`,
+            details: parsed ?? errorText,
+          },
+          { status: response.status }
+        );
+      }
+
+      if (stream) {
+        const headers = new Headers();
+        headers.set("Content-Type", "text/event-stream");
+        headers.set("Cache-Control", "no-cache");
+        headers.set("Connection", "keep-alive");
+
+        return new Response(response.body, { headers });
+      }
+
+      const result = await response.json();
+      return NextResponse.json(result);
+    }
+
+    if (modelProvider === "minimax") {
+      if (hasAnyCustomKeyHeader && !headerMinimaxKey) {
+        return NextResponse.json(
+          { error: "已启用自定义 Key，但未提供 MiniMax API Key（已拒绝回退到系统 Key）" },
+          { status: 401 }
+        );
+      }
+
+      const minimaxApiKey = headerMinimaxKey || process.env.MINIMAX_API_KEY;
+      if (!minimaxApiKey) {
+        return NextResponse.json(
+          { error: "MINIMAX_API_KEY not configured on server" },
+          { status: 500 }
+        );
+      }
+
+      const requestBody: Record<string, unknown> = {
+        model,
+        messages: processedMessages,
+        temperature: Math.min(Math.max(0.01, cappedTemperature), 1),
+      };
+
+      if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+        requestBody.max_tokens = Math.max(16, Math.floor(max_tokens));
+      }
+
+      if (stream) {
+        requestBody.stream = true;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetch(MINIMAX_CHAT_COMPLETIONS_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${minimaxApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let parsed: unknown = undefined;
+        try {
+          parsed = JSON.parse(errorText);
+        } catch {
+          // ignore
+        }
+        return NextResponse.json(
+          {
+            error: `MiniMax API error: ${response.status}`,
             details: parsed ?? errorText,
           },
           { status: response.status }

@@ -41,6 +41,7 @@ import {
   setCustomKeyEnabled,
   setValidatedZenmuxKey,
   setValidatedDashscopeKey,
+  hasMinimaxLlmKey,
   isCustomKeyEnabled as getCustomKeyEnabled,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
@@ -170,6 +171,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
+  const minimaxLlmConfigured = Boolean(minimaxKey.trim());
   const modelPool = useMemo(() => {
     return ALL_MODELS;
   }, []);
@@ -180,16 +182,18 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (minimaxLlmConfigured) providers.add("minimax");
     if (providers.size === 0) return [];
     return modelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, modelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, minimaxLlmConfigured, modelPool, zenmuxConfigured]);
   const defaultAvailableModels = useMemo(() => {
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (minimaxLlmConfigured) providers.add("minimax");
     if (providers.size === 0) return [];
     return defaultModelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, defaultModelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, minimaxLlmConfigured, defaultModelPool, zenmuxConfigured]);
   const playerModelPool = useMemo(() => {
     return filterPlayerModels(availableModelPool);
   }, [availableModelPool]);
@@ -845,7 +849,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="generator-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : r.provider === "minimax" ? "MiniMax" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -859,7 +863,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="summary-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : r.provider === "minimax" ? "MiniMax" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -873,7 +877,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="review-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : r.provider === "minimax" ? "MiniMax" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -907,7 +911,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                               >
                                 <img src={getModelLogoPath(r)} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
                                 <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">{r.model}</span>
-                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")})</span>
+                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({r.provider === "zenmux" ? "Zenmux" : r.provider === "minimax" ? "MiniMax" : t("customKey.dashscope.short")})</span>
                               </DropdownMenuCheckboxItem>
                             ))}
                           </DropdownMenuContent>
@@ -916,7 +920,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                     </section>
                   )}
 
-                  {/* 4. Voice — optional Minimax */}
+                  {/* 4. MiniMax — LLM & TTS */}
                   <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
                     <div>
                       <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.voice.title")}</h3>

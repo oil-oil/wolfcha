@@ -2182,7 +2182,7 @@
     "validate": "验证",
     "llmKey": {
       "title": "语言模型 Key",
-      "description": "至少配置 Zenmux 或百炼其一，用于对局与人物生成"
+      "description": "至少配置 Zenmux、百炼或 MiniMax 其一，用于对局与人物生成"
     },
     "zenmux": {
       "label": "Zenmux API Key",
@@ -2211,12 +2211,12 @@
       "candidatesDesc": "从中抽取 AI 玩家，可多选"
     },
     "voice": {
-      "title": "语音与音效（可选）",
-      "description": "配置 Minimax 后可启用语音播报与音效"
+      "title": "MiniMax（LLM 与语音）",
+      "description": "配置 MiniMax 后可使用 M2.7 模型和语音播报"
     },
     "minimax": {
       "get": "获取 Minimax Key",
-      "note": "语音与音效",
+      "note": "LLM 模型与语音合成",
       "keyLabel": "Minimax API Key",
       "groupLabel": "Minimax Group ID",
       "hide": "隐藏 Minimax API Key",
