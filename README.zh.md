@@ -18,6 +18,7 @@
 
 *   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
 *   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 模型能力支持
+*   [MiniMax](https://www.minimax.io/) - 提供 M2.7 大语言模型和 TTS 语音合成能力
 *   [观猹](https://watcha.cn/) - 提供 AI 模型能力与展示平台
 
 ---
@@ -52,6 +53,7 @@
 *   **Kimi K2**
 *   **Gemini 3 Flash**
 *   **Seed 1.8 (ByteDance)**
+*   **MiniMax M2.7**
 
 <div align="center">
   <img src="https://img.shields.io/badge/DeepSeek-V3.2-1B75FF?style=for-the-badge" alt="DeepSeek" />
@@ -59,6 +61,7 @@
   <img src="https://img.shields.io/badge/Moonshot%20AI-Kimi-111111?style=for-the-badge" alt="Kimi" />
   <br/>
   <img src="https://img.shields.io/badge/ByteDance-Seed-333333?style=for-the-badge" alt="Seed" />
+  <img src="https://img.shields.io/badge/MiniMax-M2.7-FF6600?style=for-the-badge" alt="MiniMax" />
 </div>
 
 ### 3. 沉浸式复古体验

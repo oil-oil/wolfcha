@@ -92,11 +92,17 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
+/** MiniMax API key is sufficient for LLM calls (Group ID is only needed for TTS). */
+export function hasMinimaxLlmKey(): boolean {
+  return Boolean(getMinimaxApiKey());
+}
+
 // When custom key is enabled, keep model within providers that have keys.
 function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: string): string {
   const allowedProviders = new Set<(typeof ALL_MODELS)[number]["provider"]>();
   if (hasZenmuxKey()) allowedProviders.add("zenmux");
   if (hasDashscopeKey()) allowedProviders.add("dashscope");
+  if (hasMinimaxLlmKey()) allowedProviders.add("minimax");
 
   if (allowedProviders.size === 0) return preferred;
 
@@ -128,7 +134,7 @@ export function isCustomKeyEnabled(): boolean {
   if (!flagEnabled) return false;
   // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
   // 这可以防止用户开启了开关但没有正确配置 key 的情况
-  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey();
+  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey() || hasMinimaxLlmKey();
   return hasAnyLLMKey;
 }
 

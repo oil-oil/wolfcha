@@ -390,8 +390,7 @@
         "tag": "Challenge"
       }
     }
-  }
-  ,
+  },
   "gameSetup": {
     "title": "Game setup",
     "description": "Adjust difficulty and player count before starting",
@@ -406,11 +405,31 @@
       "hardDesc": "Deep confrontation, more complex reasoning"
     },
     "playerCount": {
-      "8": { "title": "8 players", "description": "3 wolves, 3 gods, 2 villagers", "roles": "Gods: Seer, Witch, Hunter" },
-      "9": { "title": "9 players", "description": "3 wolves, 3 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter" },
-      "10": { "title": "10 players", "description": "2 wolves + WWK, 4 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard" },
-      "11": { "title": "11 players", "description": "3 wolves + WWK, 5 gods, 2 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot" },
-      "12": { "title": "12 players", "description": "3 wolves + WWK, 5 gods, 3 villagers", "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot" }
+      "8": {
+        "title": "8 players",
+        "description": "3 wolves, 3 gods, 2 villagers",
+        "roles": "Gods: Seer, Witch, Hunter"
+      },
+      "9": {
+        "title": "9 players",
+        "description": "3 wolves, 3 gods, 3 villagers",
+        "roles": "Gods: Seer, Witch, Hunter"
+      },
+      "10": {
+        "title": "10 players",
+        "description": "2 wolves + WWK, 4 gods, 3 villagers",
+        "roles": "Gods: Seer, Witch, Hunter, Guard"
+      },
+      "11": {
+        "title": "11 players",
+        "description": "3 wolves + WWK, 5 gods, 2 villagers",
+        "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot"
+      },
+      "12": {
+        "title": "12 players",
+        "description": "3 wolves + WWK, 5 gods, 3 villagers",
+        "roles": "Gods: Seer, Witch, Hunter, Guard, Idiot"
+      }
     },
     "genshinMode": {
       "title": "Model original mode",
@@ -436,8 +455,7 @@
         "idiot": "Survives a vote-out by revealing role, but loses voting rights"
       }
     }
-  }
-  ,
+  },
   "authModal": {
     "title": "Sign in or sign up",
     "description": "Sign in to access credits and share rewards.",
@@ -515,8 +533,7 @@
         "description": "Please check your inbox"
       }
     }
-  }
-  ,
+  },
   "resetPassword": {
     "title": "Reset password",
     "description": "Enter your new password. It must be at least 6 characters.",
@@ -548,8 +565,7 @@
         "description": "An unknown error occurred"
       }
     }
-  }
-  ,
+  },
   "accountModal": {
     "title": "Change password",
     "description": "Update your account password. It must be at least 6 characters.",
@@ -578,8 +594,7 @@
         "description": "An unknown error occurred"
       }
     }
-  }
-  ,
+  },
   "userProfile": {
     "title": "Account",
     "description": "View account details and actions",
@@ -606,8 +621,7 @@
         "description": "Clipboard is unavailable or permission denied"
       }
     }
-  }
-  ,
+  },
   "sharePanel": {
     "title": "Share link",
     "description": "Share this link with friends.",
@@ -621,8 +635,7 @@
       "copySuccess": "Share link copied",
       "copyFail": "Copy failed. Please copy manually."
     }
-  }
-  ,
+  },
   "bottomAction": {
     "cancel": "Cancel",
     "confirmVote": "Confirm vote: Seat {seat}",
@@ -645,15 +658,13 @@
       "whiteWolfKingBoom": "Self-destruct & take #{seat}",
       "whiteWolfKingBoomBtn": "Self-destruct"
     }
-  }
-  ,
+  },
   "mentions": {
     "playerLabel": "Seat {seat} {name}",
     "seatLabel": "Seat {seat}",
     "mention": "@Seat {seat}",
     "noMatch": "No matching players"
-  }
-  ,
+  },
   "common": {
     "you": "You",
     "listSeparator": ", ",
@@ -671,21 +682,18 @@
     "badgeHolder": "Sheriff",
     "badgeCandidate": "Candidate",
     "joining": "Joining..."
-  }
-  ,
+  },
   "voteResult": {
     "seatLabel": "Seat {seat}",
     "voteCount": "{count} votes"
-  }
-  ,
+  },
   "votingProgress": {
     "votedCount": "{voted}/{total} voted",
     "totalVotes": "Total {count}",
     "waiting": "Waiting for votes...",
     "waitingLabel": "Waiting:",
     "youSuffix": " (you)"
-  }
-  ,
+  },
   "persona": {
     "strategy": {
       "aggressive": "Aggressive",
@@ -701,8 +709,7 @@
     "background": "Background",
     "voiceStyle": "Voice style",
     "selfRole": "This is your role"
-  }
-  ,
+  },
   "tutorialModal": {
     "title": "Beginner Guide: How to Play Werewolf",
     "intro": "This is a faction game of hidden roles, reasoning, and table talk. Follow the system prompts and act or speak when it's your turn.",
@@ -760,8 +767,7 @@
     "actions": {
       "close": "Got it"
     }
-  }
-  ,
+  },
   "roleReveal": {
     "cardTitle": "Role card",
     "cardHint": "View privately",
@@ -1068,8 +1074,7 @@
         "task": "【Witch Skill】\nYou have one antidote (save) and one poison (kill), each once per game.\n\n【Important Rules】\n- Antidote can save the wolf's victim (including yourself)\n- Poison can kill any player (usually confirmed wolves)\n- One potion max per night\n- If guard and witch both save the same target (milk poison), they still die\n\n【Potion Status】\nAntidote: {healStatus} | Poison: {poisonStatus}\n\n【Tonight】\n{tonightInfo}\n\n【Task】\nDecide whether to use a potion. Only output commands.\n{saveLine}\n{poisonLine}\n- Input \"pass\" to use no potion\n\nPoison targets: {poisonTargets}",
         "user": "{context}\n\nWhat will you do?\n\n【Format】\nReply: save / poison X / pass\nOnly output the command itself, no explanation or extra text"
       }
-    }
-    ,
+    },
     "badge": {
       "option": "Seat {seat} ({name})",
       "signup": {
@@ -1126,32 +1131,85 @@
     "tiePk": "Execution tied. Enter PK speeches."
   },
   "phase": {
-    "lobby": { "description": "Ready to start" },
-    "setup": { "description": "Generating roles..." },
-    "nightStart": { "description": "Night falls" },
-    "nightGuard": { "description": "Guard in action", "human": "Tap a player card to choose who to protect" },
-    "nightWolf": { "description": "Werewolves in action", "human": "Tap a player card to choose a kill target" },
-    "nightWitch": { "description": "Witch in action", "human": "Use a potion?" },
-    "nightSeer": { "description": "Seer in action", "human": "Tap a player card to choose who to check" },
-    "nightResolve": { "description": "Day breaks" },
-    "dayStart": { "description": "Day begins" },
-    "badgeSignup": { "description": "Sheriff signup", "human": "Run for sheriff?" },
-    "badgeSpeech": { "description": "Sheriff speeches" },
+    "lobby": {
+      "description": "Ready to start"
+    },
+    "setup": {
+      "description": "Generating roles..."
+    },
+    "nightStart": {
+      "description": "Night falls"
+    },
+    "nightGuard": {
+      "description": "Guard in action",
+      "human": "Tap a player card to choose who to protect"
+    },
+    "nightWolf": {
+      "description": "Werewolves in action",
+      "human": "Tap a player card to choose a kill target"
+    },
+    "nightWitch": {
+      "description": "Witch in action",
+      "human": "Use a potion?"
+    },
+    "nightSeer": {
+      "description": "Seer in action",
+      "human": "Tap a player card to choose who to check"
+    },
+    "nightResolve": {
+      "description": "Day breaks"
+    },
+    "dayStart": {
+      "description": "Day begins"
+    },
+    "badgeSignup": {
+      "description": "Sheriff signup",
+      "human": "Run for sheriff?"
+    },
+    "badgeSpeech": {
+      "description": "Sheriff speeches"
+    },
     "badgeElection": {
       "description": "Sheriff election",
       "human": "Tap a player card to vote for sheriff",
       "noVote": "You're a candidate; no vote needed"
     },
-    "pkSpeech": { "description": "PK speeches" },
-    "daySpeech": { "description": "Discussion phase" },
+    "pkSpeech": {
+      "description": "PK speeches"
+    },
+    "daySpeech": {
+      "description": "Discussion phase"
+    },
     "speechYourTurn": "Your turn to speak",
-    "lastWords": { "description": "Last words" },
-    "dayVote": { "description": "Vote phase", "human": "Tap a player card to vote", "noVotePk": "You are in the PK; no vote needed", "noVoteIdiot": "Idiot revealed — no voting rights" },
-    "dayResolve": { "description": "Execution resolution" },
-    "badgeTransfer": { "description": "Sheriff badge transfer", "human": "Tap a player card to choose a transfer target" },
-    "hunterShoot": { "description": "Hunter shot", "human": "Tap a player card to choose your shot target" },
-    "whiteWolfKingBoom": { "description": "White Wolf King self-destruct", "human": "Tap a player card to choose self-destruct target" },
-    "gameEnd": { "description": "Game over", "villageWin": "Villagers win", "wolfWin": "Werewolves win" }
+    "lastWords": {
+      "description": "Last words"
+    },
+    "dayVote": {
+      "description": "Vote phase",
+      "human": "Tap a player card to vote",
+      "noVotePk": "You are in the PK; no vote needed",
+      "noVoteIdiot": "Idiot revealed — no voting rights"
+    },
+    "dayResolve": {
+      "description": "Execution resolution"
+    },
+    "badgeTransfer": {
+      "description": "Sheriff badge transfer",
+      "human": "Tap a player card to choose a transfer target"
+    },
+    "hunterShoot": {
+      "description": "Hunter shot",
+      "human": "Tap a player card to choose your shot target"
+    },
+    "whiteWolfKingBoom": {
+      "description": "White Wolf King self-destruct",
+      "human": "Tap a player card to choose self-destruct target"
+    },
+    "gameEnd": {
+      "description": "Game over",
+      "villageWin": "Villagers win",
+      "wolfWin": "Werewolves win"
+    }
   },
   "page": {
     "voteHelp": "How to vote?",
@@ -1304,7 +1362,10 @@
           "By day, disguise as good and mislead others"
         ],
         "action": "Tap a good player to choose a kill target",
-        "tips": ["Coordinate with teammates", "Sound good, but not perfect"]
+        "tips": [
+          "Coordinate with teammates",
+          "Sound good, but not perfect"
+        ]
       },
       "Seer": {
         "desc": "You can check a player’s true alignment.",
@@ -1313,7 +1374,10 @@
           "Share results in the day to guide votes"
         ],
         "action": "Tap a player to check",
-        "tips": ["Build trust before revealing", "Let others believe you're the seer"]
+        "tips": [
+          "Build trust before revealing",
+          "Let others believe you're the seer"
+        ]
       },
       "Witch": {
         "desc": "You have one antidote and one poison.",
@@ -1322,7 +1386,10 @@
           "Poison: eliminate any player (once)"
         ],
         "action": "Choose save, poison, or pass",
-        "tips": ["Potions are precious", "Wait when info is limited"]
+        "tips": [
+          "Potions are precious",
+          "Wait when info is limited"
+        ]
       },
       "Hunter": {
         "desc": "When you are eliminated, you may shoot one player.",
@@ -1331,7 +1398,10 @@
           "If you die or are banished, you can shoot one player"
         ],
         "action": "Tap a player to shoot",
-        "tips": ["Don’t reveal too early", "Decide carefully before you fall"]
+        "tips": [
+          "Don’t reveal too early",
+          "Decide carefully before you fall"
+        ]
       },
       "Guard": {
         "desc": "You can protect a player from a wolf kill.",
@@ -1340,7 +1410,10 @@
           "You cannot protect the same player two nights in a row"
         ],
         "action": "Tap a player to protect",
-        "tips": ["Guard key moments, not just key people", "Don’t reveal who you guarded"]
+        "tips": [
+          "Guard key moments, not just key people",
+          "Don’t reveal who you guarded"
+        ]
       },
       "Villager": {
         "desc": "You have no special power, but your judgment matters.",
@@ -1349,7 +1422,10 @@
           "Listen carefully, find logic gaps, and vote suspicious players"
         ],
         "action": "Tap a player to vote during voting phase",
-        "tips": ["Speak with evidence", "Think and listen more"]
+        "tips": [
+          "Speak with evidence",
+          "Think and listen more"
+        ]
       },
       "Idiot": {
         "desc": "Immune to exile once — flip your card and survive.",
@@ -1359,7 +1435,10 @@
           "After reveal, lose voting rights but can still speak"
         ],
         "action": "Tap a player to vote (before reveal)",
-        "tips": ["Speak boldly", "After reveal, influence through speech"]
+        "tips": [
+          "Speak boldly",
+          "After reveal, influence through speech"
+        ]
       },
       "WhiteWolfKing": {
         "desc": "King of wolves — self-destruct to take someone down.",
@@ -1369,7 +1448,10 @@
           "After self-destruct, skip to night immediately"
         ],
         "action": "Tap a player to kill at night; use self-destruct button during day",
-        "tips": ["Timing is everything", "Prioritize taking key roles"]
+        "tips": [
+          "Timing is everything",
+          "Prioritize taking key roles"
+        ]
       }
     }
   },
@@ -1460,7 +1542,7 @@
     "rosterLineSimple": "{index}. {name} ({gender}) - {basicInfo}",
     "nicknamePrompt": "You are a naming assistant. Create Chinese nicknames from model English names.\n\n【Model list】\n{list}\n\n【Requirements】\n1. Provide the requested number of nicknames per model (unique per model)\n2. Prefer 1–4 characters; Chinese or mixed\n3. Fun and memorable; echo the English name\n4. items[].model must exactly match the model name above\n5. No duplicates, no quotes or numbering\n\n【Output JSON】\n'{'\n  \"items\": [\n    '{' \"model\": \"ModelX\", \"nicknames\": [\"XiaoX\", \"X-Boy\"] '}'\n  ]\n'}'\n\nNow output:",
     "baseProfilesPrompt": "You are a Werewolf game character designer.\n\n【Scenario background】\nTitle: {title}\nBackground: {description}\nRole hints: {rolesHint}\n\n【Task】\nGenerate {count} player profiles. These are normal people playing Werewolf, not mystery story characters.\n\n【Important】\n- This is a Werewolf game; profiles must allow discussion and voting\n- Catchphrases should feel like casual filler; avoid over-the-top anime quirks\n- Catchphrases should be occasional, not every sentence\n- Backgrounds are ordinary occupations/identities; no mystery drama\n- Characters should vary, but their speech should be natural\n- The scenario background is only for determining character name style and occupation; characters only discuss Werewolf gameplay, not scenario-related plots\n- Use English only; do not use Chinese characters\n- IMPORTANT: Use native Western English names (e.g., James Miller, Sarah Johnson), NOT Asian-style names (e.g., avoid names like Wang, Li, Zhang, Chen)\n\n【Output requirements】\n1. Must output strict JSON object\n2. Must have exactly {count} profiles\n3. Each profile fields:\n   - displayName: string (native Western English name with first and last name, e.g., \"James Miller\", \"Emma Wilson\")\n   - gender: \"male\" | \"female\"\n   - age: number (20–55)\n   - mbti: string (4 letters like INTJ/ENFP)\n   - basicInfo: string (one-sentence occupation/identity in English)\n4. Names must be unique\n\n【Example】\n'{'\n  \"profiles\": [\n    '{' \"displayName\": \"James Miller\", \"gender\": \"male\", \"age\": 35, \"mbti\": \"ESTJ\", \"basicInfo\": \"Taxi driver with 10 years of experience\" '}',\n    '{' \"displayName\": \"Emma Wilson\", \"gender\": \"female\", \"age\": 24, \"mbti\": \"ENFP\", \"basicInfo\": \"Product manager at a tech company\" '}'\n  ]\n'}'\n\nNow output:",
-"fullPersonasPrompt": "You are a Werewolf game character designer.\n\n【Scenario】\n{title} - {description}\nNote: The scenario above is only for the character's identity/background/persona; everyone is currently playing Werewolf, and all speech revolves around analyzing logic, rallying votes, and taking sides. Speaking habits must fit this game context.\n\n【Roster】\n{roster}\n\n【Task】\nFill in voiceRules for each role so they speak naturally and distinctively in a Werewolf game.\nEnsure each character has distinct personality, speaking habits, and rhythm, but all feel like real players.\n\n【Important constraints】\n- This is a Werewolf game; profiles must support discussion, analysis, voting\n- Keep speech in-game; avoid side plots or out-of-game chatter\n- voiceRules must reflect specific speaking traits, e.g., fast/slow tempo, confrontational or not, use of catchphrases, sentence length, rhetorical questions, etc.\n- voiceRules should only describe tone, rhythm, and sentence patterns (e.g., rhetorical questions, short sentences, urgent tone); strictly avoid job-related analogies or jargon (e.g., from the report, like my students)\n- Preserve persona diversity, but keep the expression in everyday language; don't rely heavily on domain jargon or ritualized speech\n- Use English only; do not use Chinese characters\n\n【Output requirements】\n1. Must output JSON: '{ \"characters\": [...] }'\n2. Must have exactly {count} roles, in the same order as the roster\n3. persona.gender/age/mbti must match the roster\n\n【Output structure】\n'{'\n  \"characters\": [\n{schema}\n  ]\n'}'\n\nNow output:",
+    "fullPersonasPrompt": "You are a Werewolf game character designer.\n\n【Scenario】\n{title} - {description}\nNote: The scenario above is only for the character's identity/background/persona; everyone is currently playing Werewolf, and all speech revolves around analyzing logic, rallying votes, and taking sides. Speaking habits must fit this game context.\n\n【Roster】\n{roster}\n\n【Task】\nFill in voiceRules for each role so they speak naturally and distinctively in a Werewolf game.\nEnsure each character has distinct personality, speaking habits, and rhythm, but all feel like real players.\n\n【Important constraints】\n- This is a Werewolf game; profiles must support discussion, analysis, voting\n- Keep speech in-game; avoid side plots or out-of-game chatter\n- voiceRules must reflect specific speaking traits, e.g., fast/slow tempo, confrontational or not, use of catchphrases, sentence length, rhetorical questions, etc.\n- voiceRules should only describe tone, rhythm, and sentence patterns (e.g., rhetorical questions, short sentences, urgent tone); strictly avoid job-related analogies or jargon (e.g., from the report, like my students)\n- Preserve persona diversity, but keep the expression in everyday language; don't rely heavily on domain jargon or ritualized speech\n- Use English only; do not use Chinese characters\n\n【Output requirements】\n1. Must output JSON: '{ \"characters\": [...] }'\n2. Must have exactly {count} roles, in the same order as the roster\n3. persona.gender/age/mbti must match the roster\n\n【Output structure】\n'{'\n  \"characters\": [\n{schema}\n  ]\n'}'\n\nNow output:",
     "repairBaseProfilesPrompt": "You are a strict JSON fixer.\n\n【Goal】\nFix the input into a strict JSON object with structure '{ \"profiles\": [...] }' and ensure exactly {count} profiles.\n\n【Field requirements】\n- displayName: string (English only)\n- gender: \"male\" | \"female\" | \"nonbinary\"\n- age: number (16–70)\n- mbti: string (4 letters like INTJ/ENFP)\n- basicInfo: string (English only)\n\n【Scenario】\n{title}\n{description}\n\n【Input】\n{raw}\n\n【Output】\nOnly output JSON in English (no Chinese characters):",
     "repairFullPersonasPrompt": "You are a strict JSON fixer.\n\n【Goal】\nFix the input into a strict JSON object with structure '{ \"characters\": [...] }' and ensure exactly {count} characters.\n\n【Must satisfy】\n1. Character order must match the base roster\n2. persona.gender/age/mbti must match the roster\n3. voiceRules should be preserved or minimally repaired, not replaced with templates\n4. Use English only; do not use Chinese characters\n\n【Scenario】\n{title}\n{description}\n\n【Base roster】\n{roster}\n\n【Input】\n{raw}\n\n【Output】\n'{'\n  \"characters\": [\n{schema}\n  ]\n'}'\n\nNote: output JSON only."
   },
@@ -2100,7 +2182,7 @@
     "validate": "Validate",
     "llmKey": {
       "title": "Language Model Key",
-      "description": "Configure at least Zenmux or Dashscope for gameplay and character generation"
+      "description": "Configure at least one of Zenmux, Dashscope, or MiniMax for gameplay and character generation"
     },
     "zenmux": {
       "label": "Zenmux API Key",
@@ -2129,12 +2211,12 @@
       "candidatesDesc": "Select models for AI players"
     },
     "voice": {
-      "title": "Voice & Sound (Optional)",
-      "description": "Configure Minimax to enable voice narration and sound effects"
+      "title": "MiniMax (LLM & TTS)",
+      "description": "Configure MiniMax for M2.7 LLM models and voice synthesis"
     },
     "minimax": {
       "get": "Get Minimax Key",
-      "note": "Voice and sound effects",
+      "note": "LLM models & voice synthesis",
       "keyLabel": "Minimax API Key",
       "groupLabel": "Minimax Group ID",
       "hide": "Hide Minimax API Key",
