@@ -32,8 +32,8 @@ import {
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { getI18n } from "@/i18n/translator";
 
-const NIGHT_TRANSCRIPT_MAX_CHARS = 2200;
-const NIGHT_SELF_SPEECH_MAX_CHARS = 700;
+const NIGHT_TRANSCRIPT_MAX_CHARS = 6000;
+const NIGHT_SELF_SPEECH_MAX_CHARS = 2000;
 
 function randomFakeActionDelay(): number {
   const min = DELAY_CONFIG.NIGHT_ROLE_ANIMATION_MIN;

@@ -31,7 +31,6 @@ import {
   transitionPhase as rawTransitionPhase,
   checkWinCondition,
   killPlayer,
-  generateDailySummary,
   getNextAliveSeat,
   generateWhiteWolfKingBoomDecision,
 } from "@/lib/game-master";
@@ -400,61 +399,6 @@ export function useGameLogic() {
   }, [buildVotePhaseExtras, gameState, gameState.phase, getToken]);
 
   // ============================================
-  // 每日总结生成
-  // ============================================
-  const maybeGenerateDailySummary = useCallback(
-    async (state: GameState, options?: { force?: boolean }): Promise<GameState> => {
-      if (state.day <= 0) return state;
-      if (!options?.force && state.dailySummaries?.[state.day]?.length) return state;
-      if (!state.messages || state.messages.length === 0) return state;
-      try {
-        const summary = await generateDailySummary(state);
-        if (!summary || summary.bullets.length === 0) return state;
-        return {
-          ...state,
-          dailySummaries: { ...state.dailySummaries, [state.day]: summary.bullets },
-          dailySummaryVoteData: {
-            ...(state.dailySummaryVoteData ?? {}),
-            ...(summary.voteData ? { [state.day]: summary.voteData } : {}),
-          },
-        };
-      } catch {
-        return state;
-      }
-    },
-    []
-  );
-
-  const buildRawDayTranscript = useCallback((state: GameState): string => {
-    const aliveIds = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
-    const dayStartIndex = (() => {
-      for (let i = state.messages.length - 1; i >= 0; i--) {
-        const m = state.messages[i];
-        if (m.isSystem && m.content === t("system.dayBreak")) return i;
-      }
-      return 0;
-    })();
-
-    const voteStartIndex = (() => {
-      for (let i = state.messages.length - 1; i >= 0; i--) {
-        const m = state.messages[i];
-        if (m.isSystem && m.content === t("system.voteStart")) return i;
-      }
-      return state.messages.length;
-    })();
-
-    const slice = state.messages.slice(
-      dayStartIndex,
-      voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
-    );
-
-    return slice
-      .filter((m) => !m.isSystem && aliveIds.has(m.playerId))
-      .map((m) => `${m.playerName}: ${m.content}`)
-      .join("\n");
-  }, []);
-
-  // ============================================
   // 特殊事件处理
   // ============================================
   // 缓存 access token 用于游戏会话保存
@@ -623,11 +567,7 @@ export function useGameLogic() {
   badgeTransferRef.current = badgePhase.handleBadgeTransfer;
   onStartVoteRef.current = enterVotePhase;
   onBadgeSpeechEndRef.current = async (state: GameState) => {
-    const summarized = await maybeGenerateDailySummary(state);
-    if (summarized !== state) {
-      setGameState(summarized);
-    }
-    await badgePhase.startBadgeElectionPhase(summarized);
+    await badgePhase.startBadgeElectionPhase(state);
   };
   onPkSpeechEndRef.current = async (state: GameState) => {
     const token = getToken();
@@ -779,20 +719,8 @@ export function useGameLogic() {
     await delay(250);
     if (!isTokenValid(token)) return;
 
-    setDialogue(speakerHost, systemMessages.summarizingDay, false);
-
-    const summarized = await maybeGenerateDailySummary(state, { force: true });
-    if (!isTokenValid(token)) return;
-
-    const mergedState = {
-      ...nextState,
-      dailySummaries: summarized.dailySummaries,
-      dailySummaryFacts: summarized.dailySummaryFacts,
-      dailySummaryVoteData: summarized.dailySummaryVoteData ?? nextState.dailySummaryVoteData,
-    };
-
-    await runNightPhaseAction(mergedState, token, "START_NIGHT");
-  }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
+    await runNightPhaseAction(nextState, token, "START_NIGHT");
+  }, [isTokenValid, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
   // ============================================
@@ -2184,26 +2112,6 @@ export function useGameLogic() {
       setGameState(nextState);
       markCurrentSegmentCommitted();
 
-      const rawTranscript = buildRawDayTranscript(nextState);
-      const shouldSummarizeEarly =
-        nextState.day > 0 &&
-        !nextState.dailySummaries?.[nextState.day]?.length &&
-        rawTranscript.length > 10000;
-      if (shouldSummarizeEarly) {
-        void maybeGenerateDailySummary(nextState)
-          .then((summarized) => {
-            setGameState((prev) => {
-              if (prev.gameId !== summarized.gameId || prev.day !== summarized.day) return prev;
-              return {
-                ...prev,
-                dailySummaries: summarized.dailySummaries,
-                dailySummaryFacts: summarized.dailySummaryFacts,
-                dailySummaryVoteData: summarized.dailySummaryVoteData ?? prev.dailySummaryVoteData,
-              };
-            });
-          })
-          .catch(() => {});
-      }
     }
 
     const result = advanceSpeechQueue();

@@ -1,4 +1,4 @@
-import type { DifficultyLevel, GameState, Player, DailySummaryVoteData } from "@/types/game";
+import type { DifficultyLevel, GameState, Player } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
@@ -323,66 +323,114 @@ export const buildAliveCountsSection = (state: GameState): string => {
   return t("promptUtils.aliveCounts", { count: alive.length });
 };
 
-/** Format structured vote_data into readable text for <history>. Seat numbers in vote_data are 0-based. */
-function formatVoteDataForHistory(v: DailySummaryVoteData): string {
+
+/**
+ * Build past days' transcripts using a rotation/budget approach.
+ * Instead of AI-generated summaries, includes actual past-day messages.
+ * Allocates budget from most recent day backward, dropping oldest days first.
+ * Each day gets a structured event header (deaths, executions) that is always preserved.
+ */
+export const buildPastDaysTranscript = (state: GameState, maxChars: number = 15000): string => {
   const { t } = getI18n();
-  const separator = t("promptUtils.gameContext.listSeparator");
-  const parts: string[] = [];
-  const fmt = (votes: Record<string, number[]>) =>
-    Object.entries(votes)
-      .map(([target, arr]) => {
-        const voters = (arr as number[]).map((s) => t("promptUtils.gameContext.seatLabel", { seat: s + 1 })).join(separator);
-        const targetNum = Number.parseInt(target, 10);
-        return t("promptUtils.gameContext.votersVotedFor", { voters, target: Number.isFinite(targetNum) ? targetNum + 1 : target });
-      })
-      .filter(Boolean)
-      .join(t("promptUtils.gameContext.semicolon"));
-  if (v.sheriff_election) {
-    const { winner, votes } = v.sheriff_election;
-    const base = t("promptUtils.gameContext.sheriffVote", { seat: winner + 1 });
-    const detail = fmt(votes);
-    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
+  if (state.day <= 1) return "";
+
+  const playerAliveMap = new Map<string, boolean>();
+  state.players.forEach((p) => playerAliveMap.set(p.playerId, p.alive));
+
+  const formatMsg = (m: { playerId: string; playerName: string; content: string; isLastWords?: boolean }) => {
+    const player = state.players.find((p) => p.playerId === m.playerId);
+    const speaker = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : m.playerName;
+    const lastWordsLabel = m.isLastWords ? t("promptUtils.gameContext.lastWordsLabel") : "";
+    return `${lastWordsLabel}${speaker}: ${m.content}`;
+  };
+
+  // Build structured event header for a given day (deaths, executions — always preserved)
+  const buildDayHeader = (day: number): string => {
+    const parts: string[] = [];
+    const nightHistory = state.nightHistory?.[day];
+    if (nightHistory) {
+      const deathSeats: number[] = [];
+      if (nightHistory.deaths && Array.isArray(nightHistory.deaths)) {
+        nightHistory.deaths.forEach((d) => {
+          if (d && typeof d.seat === "number") deathSeats.push(d.seat);
+        });
+      } else {
+        if (nightHistory.wolfTarget !== undefined) {
+          const p = state.players.find((pl) => pl.seat === nightHistory.wolfTarget);
+          if (p && !p.alive) deathSeats.push(nightHistory.wolfTarget);
+        }
+        if (nightHistory.witchPoison !== undefined) {
+          const p = state.players.find((pl) => pl.seat === nightHistory.witchPoison);
+          if (p && !p.alive) deathSeats.push(nightHistory.witchPoison);
+        }
+      }
+      if (deathSeats.length > 0) {
+        const names = deathSeats.map((s) => {
+          const p = state.players.find((pl) => pl.seat === s);
+          return `${s + 1}号${p?.displayName || ""}`;
+        });
+        parts.push(`夜晚出局: ${names.join("、")}`);
+      } else {
+        parts.push("平安夜");
+      }
+    }
+    const dayHistory = state.dayHistory?.[day];
+    const executed = dayHistory?.executed;
+    if (executed) {
+      const p = state.players.find((pl) => pl.seat === executed.seat);
+      parts.push(`投票出局: ${executed.seat + 1}号${p?.displayName || ""} (${executed.votes}票)`);
+    } else if (dayHistory?.voteTie) {
+      parts.push("投票平票，无人出局");
+    }
+    return parts.length > 0 ? `[${parts.join(" | ")}]` : "";
+  };
+
+  // Group past-day messages by day (excluding current day)
+  const dayGroups: { day: number; header: string; transcript: string }[] = [];
+  for (let d = 1; d < state.day; d++) {
+    const dayMessages = state.messages.filter(
+      (m) => m.day === d && !m.isSystem
+    );
+    const header = buildDayHeader(d);
+    const transcript = dayMessages.map(formatMsg).join("\n");
+    dayGroups.push({ day: d, header, transcript });
   }
-  if (v.execution_vote) {
-    const { eliminated, votes } = v.execution_vote;
-    const base = t("promptUtils.gameContext.executionVote", { seat: eliminated + 1 });
-    const detail = fmt(votes);
-    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
-  }
-  return parts.join(" ");
-}
 
-export const buildDailySummariesSection = (state: GameState): string => {
-  const { t } = getI18n();
-  // Get summaries from dailySummaries (new format: single paragraph text)
-  const entries = Object.entries(state.dailySummaries || {})
-    .map(([day, bullets]) => ({ day: Number(day), bullets }))
-    .filter((x) => Number.isFinite(x.day) && Array.isArray(x.bullets));
+  if (dayGroups.length === 0) return "";
 
-  if (entries.length === 0) return "";
+  // Allocate budget from most recent day backward
+  const sections: string[] = [];
+  let remaining = maxChars;
 
-  const lines: string[] = [];
-  const separator = t("promptUtils.gameContext.semicolon");
-  for (const { day, bullets } of entries.sort((a, b) => a.day - b.day)) {
-    const summaryTexts = bullets
-      .filter((x): x is string => typeof x === "string")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    if (summaryTexts.length === 0) continue;
-
-    const fullSummary = summaryTexts.join(separator);
-    
-    // Append structured vote_data so "who voted for whom" is never lost
-    const voteData = state.dailySummaryVoteData?.[day];
-    const voteText = voteData ? formatVoteDataForHistory(voteData) : "";
+  for (let i = dayGroups.length - 1; i >= 0; i--) {
+    const { day, header, transcript } = dayGroups[i];
     const dayLabel = t("promptUtils.gameContext.dayLabel", { day });
-    const line = voteText ? `${dayLabel}${fullSummary} ${voteText}` : `${dayLabel}${fullSummary}`;
-    lines.push(line);
+    const headerLine = header ? `${dayLabel}${header}` : dayLabel;
+
+    // Header is always included (small cost)
+    const headerCost = headerLine.length + 2; // +2 for newlines
+    if (remaining < headerCost) break;
+
+    // Try to fit transcript within remaining budget
+    const availableForTranscript = remaining - headerCost;
+    if (transcript.length <= availableForTranscript) {
+      sections.unshift(`${headerLine}\n${transcript}`);
+      remaining -= headerLine.length + 1 + transcript.length + 1;
+    } else if (availableForTranscript > 200) {
+      // Partial transcript: take the most recent part (sliding window)
+      const partial = transcript.slice(-availableForTranscript);
+      sections.unshift(`${headerLine}\n...${partial}`);
+      remaining = 0;
+      break;
+    } else {
+      // Only header fits
+      sections.unshift(headerLine);
+      remaining -= headerCost;
+    }
   }
 
-  if (lines.length === 0) return "";
-  return `<history>\n${lines.join("\n\n")}\n</history>`;
+  if (sections.length === 0) return "";
+  return `<history>\n${sections.join("\n\n")}\n</history>`;
 };
 
 export const getDayStartIndex = (state: GameState): number => {
@@ -403,36 +451,6 @@ export const getVoteStartIndex = (state: GameState): number => {
   return state.messages.length;
 };
 
-/**
- * Check if today's transcript is long enough to warrant a mid-day summary
- * Returns the transcript length and whether summary is needed
- */
-export const checkNeedsMidDaySummary = (state: GameState, threshold: number = 6000): {
-  transcriptLength: number;
-  needsSummary: boolean;
-  hasSummary: boolean;
-} => {
-  const dayStartIndex = getDayStartIndex(state);
-  const voteStartIndex = getVoteStartIndex(state);
-
-  const slice = state.messages.slice(
-    dayStartIndex,
-    voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
-  );
-
-  const transcript = slice
-    .filter((m) => !m.isSystem)
-    .map((m) => m.content)
-    .join("\n");
-
-  const hasSummary = (state.dailySummaries?.[state.day]?.length ?? 0) > 0;
-
-  return {
-    transcriptLength: transcript.length,
-    needsSummary: transcript.length > threshold && !hasSummary,
-    hasSummary,
-  };
-};
 
 export const buildTodayTranscript = (
   state: GameState,
@@ -480,41 +498,13 @@ export const buildTodayTranscript = (
   // Last words are always preserved (they're important)
   const lastWordsText = lastWordsMessages.map(formatMessage).join("\n");
   const regularText = regularMessages.map(formatMessage).join("\n");
-  
+
   const transcript = [lastWordsText, regularText].filter(Boolean).join("\n");
 
   if (!transcript) return "";
   if (transcript.length <= maxChars) return transcript;
 
-  const summaryItems = state.dailySummaries?.[state.day] || [];
-
-  if (summaryItems.length > 0) {
-    const separator = t("promptUtils.gameContext.semicolon");
-    const maxSummaryChars = Math.min(1200, Math.max(300, Math.floor(maxChars * 0.4)));
-    let summaryText = "";
-    for (const item of summaryItems) {
-      const clean = String(item).trim();
-      if (!clean) continue;
-      const candidate = summaryText ? `${summaryText}${separator}${clean}` : clean;
-      if (candidate.length > maxSummaryChars) break;
-      summaryText = candidate;
-    }
-    const header = `<early_summary>${summaryText}</early_summary>\n<recent_speech>\n`;
-    const footer = `\n</recent_speech>`;
-    
-    // Reserve space for last words (always include)
-    const lastWordsReserve = lastWordsText ? lastWordsText.length + 50 : 0;
-    const availableForRecent = maxChars - header.length - footer.length - lastWordsReserve;
-    
-    // Get recent regular messages
-    const recentRegular = availableForRecent > 0 ? regularText.slice(-availableForRecent) : "";
-    
-    // Combine: summary + last words + recent regular
-    const lastWordsPart = lastWordsText ? `<last_words>\n${lastWordsText}\n</last_words>\n` : "";
-    return `${header}${lastWordsPart}${recentRegular}${footer}`.trim();
-  }
-
-  // No summary: prioritize last words, then use sliding window for regular
+  // Prioritize last words, then use sliding window for regular speech
   if (lastWordsText) {
     const lastWordsPart = `<last_words>\n${lastWordsText}\n</last_words>\n`;
     const availableForRecent = maxChars - lastWordsPart.length;
@@ -809,9 +799,9 @@ alive_count: ${alivePlayers.length}
     context += `\n\n<rules>\n${rulesText}\n</rules>`;
   }
 
-  const summarySection = buildDailySummariesSection(state);
-  if (summarySection) {
-    context += `\n\n${summarySection}`;
+  const pastDaysSection = buildPastDaysTranscript(state);
+  if (pastDaysSection) {
+    context += `\n\n${pastDaysSection}`;
   }
 
   const systemAnnouncements = buildSystemAnnouncementsSinceDawn(state, 8);
