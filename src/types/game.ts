@@ -269,7 +269,7 @@ export const MODEL_IDS = {
 } as const;
 
 export const DEFAULT_MODEL_CONFIG = {
-  generator: MODEL_IDS.tokendance.deepseekV4Flash,
+  generator: MODEL_IDS.zenmux.geminiFlashLite,
   summary: MODEL_IDS.tokendance.deepseekV4Flash,
   review: MODEL_IDS.tokendance.deepseekV4Flash,
   validation: {
