@@ -71,7 +71,7 @@ export interface ModelRef {
   /** Override call-time temperature for this model (e.g. some models only support 1) */
   temperature?: number;
   /** Override call-time reasoning/thinking for this model (e.g. some models must enable it) */
-  reasoning?: { enabled: boolean, exclude?: boolean,effort?: "minimal" | "low" | "medium" | "high" };
+  reasoning?: { enabled: boolean, exclude?: boolean, effort?: "minimal" | "low" | "medium" | "high", max_tokens?: number };
 }
 
 export interface Persona {
@@ -87,6 +87,14 @@ export interface Persona {
   triggerTopics?: string[];
   socialHabit?: string;
   humorStyle?: string;
+  werewolfExperience?: string;
+  vocabularyStyle?: string;
+  reasoningStyle?: string;
+  speechLengthHabit?: string;
+  pressureStyle?: string;
+  uncertaintyStyle?: string;
+  mistakePattern?: string;
+  wolfDeceptionStyle?: string;
 }
 
 export interface AgentProfile {
@@ -260,18 +268,25 @@ export const MODEL_IDS = {
   },
   tokendance: {
     minimaxM27: "minimax-m2.7",
+    deepseekV4Pro: "deepseek-v4-pro",
+    deepseekV4Flash: "deepseek-v4-flash",
     qwen3Max: "qwen3-max",
     glm5: "glm-5",
     kimiK25: "kimi-k2.5",
     deepseekV32: "deepseek-v3.2",
-    deepseekV4Flash: "deepseek-v4-flash",
   },
 } as const;
 
+const BUILTIN_DEEPSEEK_V4_PRO_MODEL: ModelRef = {
+  provider: "tokendance",
+  model: MODEL_IDS.tokendance.deepseekV4Pro,
+  reasoning: { enabled: false },
+};
+
 export const DEFAULT_MODEL_CONFIG = {
   generator: MODEL_IDS.zenmux.geminiFlashLite,
-  summary: MODEL_IDS.tokendance.deepseekV4Flash,
-  review: MODEL_IDS.tokendance.deepseekV4Flash,
+  summary: MODEL_IDS.tokendance.deepseekV4Pro,
+  review: MODEL_IDS.tokendance.deepseekV4Pro,
   validation: {
     zenmux: MODEL_IDS.zenmux.geminiFlashLite,
     dashscope: MODEL_IDS.dashscope.deepseek,
@@ -286,38 +301,22 @@ export const ZENMUX_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.zenmux;
 export const DASHSCOPE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.dashscope;
 
 export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
-  // { provider: "zenmux", model: MODEL_IDS.zenmux.deepseek },
-  // { provider: "zenmux", model: MODEL_IDS.zenmux.kimiK2 },
-  // { provider: "zenmux", model: MODEL_IDS.zenmux.qwen3Max },
-  // { provider: "zenmux", model: MODEL_IDS.zenmux.doubaoSeed },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV32 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Flash },
-  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  BUILTIN_DEEPSEEK_V4_PRO_MODEL,
 ];
 
 // Default built-in models exposed to the app when custom key is not enabled.
 // This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV32 },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Flash },
-  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
+  BUILTIN_DEEPSEEK_V4_PRO_MODEL,
 ];
 
 // Built-in project-key models that the server may call internally.
 // These are intentionally not exposed in the custom-key model selector.
 export const PROJECT_MODELS: ModelRef[] = [
   ...AVAILABLE_MODELS,
-  // Legacy system models kept available for older persisted settings.
+  // Provider-specific validation models for user API key checks.
+  { provider: "dashscope", model: MODEL_IDS.dashscope.deepseek },
   { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashLite },
-  { provider: "zenmux", model: MODEL_IDS.zenmux.geminiFlashPreview },
 ];
 
 // User-selectable models when custom key is enabled.
@@ -342,12 +341,13 @@ export const ALL_MODELS: ModelRef[] = [
 export const NON_PLAYER_MODELS: ModelRef[] = [];
 
 export function filterPlayerModels(models: ModelRef[]): ModelRef[] {
-  return models.filter(
+  const filtered = models.filter(
     (ref) =>
       !NON_PLAYER_MODELS.some(
         (blocked) => blocked.provider === ref.provider && blocked.model === ref.model,
       ),
   );
+  return filtered.length > 0 ? filtered : models;
 }
 
 // Built-in player model pool used when custom key is disabled.

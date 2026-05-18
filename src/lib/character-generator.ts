@@ -431,9 +431,8 @@ const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfil
     )
     .join("\n");
 
-  // Removed styleLabel from schema - only voiceRules needed for speech style
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
   return t("characterGenerator.fullPersonasPrompt", {
@@ -484,9 +483,8 @@ const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: Base
     )
     .join("\n");
 
-  // Removed styleLabel from schema - only voiceRules needed for speech style
   const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
+    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
     .join(",\n");
 
   return t("characterGenerator.repairFullPersonasPrompt", {
@@ -552,8 +550,8 @@ export async function generateCharacters(
     let accumulatedContent = "";
     const parser = new LLMJSONParser();
     
-    // 完整 persona 生成需要更多 tokens：每个角色约需 600-800 tokens
-    const fullMaxTokens = Math.max(6000, count * 700 + 1000);
+    // 完整 persona 生成需要更多 tokens：每个角色包含发言画像，按更宽预算生成
+    const fullMaxTokens = Math.max(7000, count * 950 + 1400);
     
     const stream = generateCompletionStream({
       model: getGeneratorModel(),

@@ -56,6 +56,7 @@ function supportsMultipartContent(model: string): boolean {
   if (lower.startsWith("google/")) return true;
   if (lower.startsWith("anthropic/")) return true;
   if (lower.startsWith("deepseek/")) return true;
+  if (lower.startsWith("deepseek-")) return true;
   if (lower.startsWith("qwen/")) return true;
   if (lower.startsWith("moonshotai/")) return true;
   // z-ai/glm, volcengine/doubao may NOT support multipart - flatten to string
@@ -72,6 +73,7 @@ function supportsResponseFormat(model: string): boolean {
   if (lower.startsWith("google/")) return true;
   if (lower.startsWith("anthropic/")) return true;
   if (lower.startsWith("deepseek/")) return true;
+  if (lower.startsWith("deepseek-")) return true;
   if (lower.startsWith("qwen/")) return true;
   if (lower.startsWith("moonshotai/")) return true;
   // Models that may NOT support response_format - be conservative
@@ -176,6 +178,31 @@ function toZenMuxReasoning(
     };
   }
   return { enabled: false };
+}
+
+function toTokendanceThinking(
+  r: { enabled?: boolean; effort?: string; max_tokens?: number } | undefined
+): Record<string, unknown> | undefined {
+  if (r === undefined) return undefined;
+  if (r.enabled !== true) return { type: "disabled" };
+
+  const effortBudget: Record<string, number> = {
+    minimal: 64,
+    low: 128,
+    medium: 256,
+    high: 512,
+  };
+  const budget =
+    typeof r.max_tokens === "number" && Number.isFinite(r.max_tokens)
+      ? Math.max(32, Math.floor(r.max_tokens))
+      : r.effort
+        ? effortBudget[r.effort]
+        : undefined;
+
+  return {
+    type: "enabled",
+    ...(budget ? { budget_tokens: budget } : {}),
+  };
 }
 
 type ChatRequestPayload = {
@@ -356,7 +383,10 @@ async function runBatchItem(
 
     // GLM-4.7 / Kimi K2.5 默认开启思考，API 参数可关闭（已实测有效）
     const modelLower = model.toLowerCase();
-    if (modelLower.includes("glm") || modelLower.includes("kimi")) {
+    const thinking = toTokendanceThinking(effectiveReasoning);
+    if (thinking) {
+      requestBody.thinking = thinking;
+    } else if (modelLower.includes("glm") || modelLower.includes("kimi")) {
       requestBody.thinking = { type: "disabled" };
     }
 
@@ -709,7 +739,10 @@ export async function POST(request: NextRequest) {
 
       // GLM-4.7 / Kimi K2.5 默认开启思考，API 参数可关闭（已实测有效）
       const modelLower = model.toLowerCase();
-      if (modelLower.includes("glm") || modelLower.includes("kimi")) {
+      const thinking = toTokendanceThinking(effectiveReasoning);
+      if (thinking) {
+        requestBody.thinking = thinking;
+      } else if (modelLower.includes("glm") || modelLower.includes("kimi")) {
         requestBody.thinking = { type: "disabled" };
       }
 
