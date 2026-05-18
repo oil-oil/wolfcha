@@ -134,8 +134,8 @@ export class VotePhase extends GamePhase {
         (!eligibleSeats || eligibleSeats.has(p.seat))
     );
 
-    const todayTranscript = buildTodayTranscript(state, 10000);
-    const selfSpeech = buildPlayerTodaySpeech(state, player, 2000);
+    const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
+    const selfSpeech = buildPlayerTodaySpeech(state, player);
 
     // Get role-specific strategy tips
     const roleKnowHow = getRoleKnowHow(player.role);

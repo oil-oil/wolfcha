@@ -1,4 +1,4 @@
-import type { DifficultyLevel, GameState, Player, DailySummaryVoteData } from "@/types/game";
+import type { DifficultyLevel, GameState, Persona, Player } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
@@ -279,6 +279,7 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
  * The difficulty parameter is kept for backward compatibility but ignored.
  */
 export const buildDifficultySpeechHint = (_difficulty?: DifficultyLevel): string => {
+  void _difficulty;
   const { t } = getI18n();
   // Always use hard difficulty for better strategic depth
   return t("promptUtils.difficultySpeech.hard");
@@ -300,9 +301,37 @@ export const buildDifficultyDecisionHint = (_difficulty?: DifficultyLevel, role?
   return t("promptUtils.difficultyDecision.hard", { roleNote });
 };
 
+const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string): string => {
+  if (locale === "zh") {
+    const lines: string[] = [];
+    if (persona.werewolfExperience) lines.push(`狼人杀理解：${persona.werewolfExperience}`);
+    if (persona.vocabularyStyle) lines.push(`词汇习惯：${persona.vocabularyStyle}`);
+    if (persona.reasoningStyle) lines.push(`推理方式：${persona.reasoningStyle}`);
+    if (persona.speechLengthHabit) lines.push(`发言长短：${persona.speechLengthHabit}`);
+    if (persona.pressureStyle) lines.push(`压力反应：${persona.pressureStyle}`);
+    if (persona.uncertaintyStyle) lines.push(`不确定性：${persona.uncertaintyStyle}`);
+    if (persona.mistakePattern) lines.push(`常见误判：${persona.mistakePattern}`);
+    if (persona.wolfDeceptionStyle) lines.push(`拿狼伪装：${persona.wolfDeceptionStyle}`);
+    if (lines.length === 0) return "";
+    return `\n<hidden_communication_profile>\n这些信息只用于塑造你的狼人杀水平、词汇和发言长度，不要向其他玩家明说。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
+  }
+
+  const lines: string[] = [];
+  if (persona.werewolfExperience) lines.push(`Werewolf understanding: ${persona.werewolfExperience}`);
+  if (persona.vocabularyStyle) lines.push(`Vocabulary habit: ${persona.vocabularyStyle}`);
+  if (persona.reasoningStyle) lines.push(`Reasoning style: ${persona.reasoningStyle}`);
+  if (persona.speechLengthHabit) lines.push(`Speech length habit: ${persona.speechLengthHabit}`);
+  if (persona.pressureStyle) lines.push(`Pressure response: ${persona.pressureStyle}`);
+  if (persona.uncertaintyStyle) lines.push(`Uncertainty style: ${persona.uncertaintyStyle}`);
+  if (persona.mistakePattern) lines.push(`Common wrong reads: ${persona.mistakePattern}`);
+  if (persona.wolfDeceptionStyle) lines.push(`Wolf disguise habit: ${persona.wolfDeceptionStyle}`);
+  if (lines.length === 0) return "";
+  return `\n<hidden_communication_profile>\nUse this only to shape your Werewolf skill, vocabulary, and speech length. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
+};
+
 export const buildPersonaSection = (player: Player, isGenshinMode: boolean = false): string => {
   if (isGenshinMode || !player.agentProfile) return "";
-  const { t } = getI18n();
+  const { t, locale } = getI18n();
   const { persona } = player.agentProfile;
   const separator = t("promptUtils.gameContext.listSeparator");
 
@@ -313,7 +342,8 @@ export const buildPersonaSection = (player: Player, isGenshinMode: boolean = fal
   const extraInfo = persona.basicInfo?.trim()
     ? `\n${t("promptUtils.persona.basicInfo", { basicInfo: persona.basicInfo.trim() })}`
     : "";
-  return `${base}${extraInfo}`;
+  const hiddenCommunicationProfile = buildHiddenCommunicationProfileSection(persona, locale);
+  return `${base}${extraInfo}${hiddenCommunicationProfile}`;
 };
 
 export const buildAliveCountsSection = (state: GameState): string => {
@@ -323,66 +353,191 @@ export const buildAliveCountsSection = (state: GameState): string => {
   return t("promptUtils.aliveCounts", { count: alive.length });
 };
 
-/** Format structured vote_data into readable text for <history>. Seat numbers in vote_data are 0-based. */
-function formatVoteDataForHistory(v: DailySummaryVoteData): string {
+type NightHistoryRecord = NonNullable<GameState["nightHistory"]>[number];
+type NightDeathRecord = NonNullable<NightHistoryRecord["deaths"]>[number];
+
+const getRecordedNightDeaths = (history: NightHistoryRecord | undefined): NightDeathRecord[] => {
+  return Array.isArray(history?.deaths)
+    ? history.deaths.filter((death): death is NightDeathRecord => death && typeof death.seat === "number")
+    : [];
+};
+
+const formatSeatName = (state: GameState, seat: number): string => {
+  const player = state.players.find((p) => p.seat === seat);
+  return `${seat + 1}号${player?.displayName || ""}`;
+};
+
+const buildVoteGroupLines = (
+  state: GameState,
+  voteGroups: Record<number, number[]>,
+  sheriffPlayerId?: string
+): string[] => {
   const { t } = getI18n();
-  const separator = t("promptUtils.gameContext.listSeparator");
-  const parts: string[] = [];
-  const fmt = (votes: Record<string, number[]>) =>
-    Object.entries(votes)
-      .map(([target, arr]) => {
-        const voters = (arr as number[]).map((s) => t("promptUtils.gameContext.seatLabel", { seat: s + 1 })).join(separator);
-        const targetNum = Number.parseInt(target, 10);
-        return t("promptUtils.gameContext.votersVotedFor", { voters, target: Number.isFinite(targetNum) ? targetNum + 1 : target });
-      })
-      .filter(Boolean)
-      .join(t("promptUtils.gameContext.semicolon"));
-  if (v.sheriff_election) {
-    const { winner, votes } = v.sheriff_election;
-    const base = t("promptUtils.gameContext.sheriffVote", { seat: winner + 1 });
-    const detail = fmt(votes);
-    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
-  }
-  if (v.execution_vote) {
-    const { eliminated, votes } = v.execution_vote;
-    const base = t("promptUtils.gameContext.executionVote", { seat: eliminated + 1 });
-    const detail = fmt(votes);
-    parts.push(detail ? `${base}${t("promptUtils.gameContext.semicolon")}${detail}` : base);
-  }
-  return parts.join(" ");
-}
+  return Object.entries(voteGroups)
+    .map(([target, voters]) => {
+      const targetSeat = Number(target);
+      const weightedVotes = voters.reduce((sum, seat) => {
+        const voter = state.players.find((p) => p.seat === seat);
+        if (!voter) return sum;
+        return sum + (voter.playerId === sheriffPlayerId ? 1.5 : 1);
+      }, 0);
+      return { targetSeat, voters, weightedVotes };
+    })
+    .sort((a, b) => b.weightedVotes - a.weightedVotes)
+    .map(({ targetSeat, voters, weightedVotes }) => {
+      const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
+      const voterList = voters.map((seat) => seat + 1).join(",");
+      return `  ${formatSeatName(state, targetSeat)}: {${t("promptUtils.gameContext.voteCount")}: ${voteLabel}, ${t("promptUtils.gameContext.voters")}: [${voterList}]}`;
+    });
+};
 
-export const buildDailySummariesSection = (state: GameState): string => {
+const buildVoteGroupsFromPlayerTargets = (
+  state: GameState,
+  votes: Record<string, number>
+): Record<number, number[]> => {
+  const voteGroups: Record<number, number[]> = {};
+  Object.entries(votes).forEach(([voterId, targetSeat]) => {
+    const voter = state.players.find((p) => p.playerId === voterId);
+    if (!voter) return;
+    if (!voteGroups[targetSeat]) voteGroups[targetSeat] = [];
+    voteGroups[targetSeat].push(voter.seat);
+  });
+  return voteGroups;
+};
+
+const buildVoteGroupsFromSeatTargets = (
+  votes: Record<string, number[]>
+): Record<number, number[]> => {
+  const voteGroups: Record<number, number[]> = {};
+  Object.entries(votes).forEach(([target, voters]) => {
+    const targetSeat = Number(target);
+    if (!Number.isFinite(targetSeat)) return;
+    voteGroups[targetSeat] = voters
+      .map((seat) => Number(seat))
+      .filter((seat) => Number.isFinite(seat));
+  });
+  return voteGroups;
+};
+
+const getHistoricalSystemLines = (state: GameState, day: number): string[] => {
+  const systemMessages = getSystemMessages();
+  const systemPatterns = getSystemPatterns();
+  const excluded = new Set([
+    "天亮了",
+    "Dawn breaks, please open your eyes",
+    "进入投票环节",
+    "发言结束，开始投票。",
+    "Discussion ends, voting begins.",
+    systemMessages.dayBreak,
+    systemMessages.voteStart,
+    systemMessages.badgeSpeechStart,
+    systemMessages.badgeElectionStart,
+    systemMessages.badgeRevote,
+    systemMessages.dayDiscussion,
+    systemMessages.summarizingDay,
+    systemMessages.peacefulNight,
+    systemMessages.guardActionStart,
+    systemMessages.wolfActionStart,
+    systemMessages.witchActionStart,
+    systemMessages.seerActionStart,
+  ]);
+
+  return state.messages
+    .filter((m) => m.day === day && m.isSystem)
+    .map((m) => String(m.content || "").trim())
+    .filter((content) => {
+      if (!content) return false;
+      if (content.startsWith("[VOTE_RESULT]")) return false;
+      if (excluded.has(content)) return false;
+      if (
+        systemPatterns.nightFall.test(content) ||
+        systemPatterns.playerKilled.test(content) ||
+        systemPatterns.playerPoisoned.test(content) ||
+        systemPatterns.playerMilkKilled.test(content) ||
+        systemPatterns.playerExecuted.test(content) ||
+        systemPatterns.voteTie.test(content)
+      ) {
+        return false;
+      }
+      return true;
+    });
+};
+
+
+/**
+ * Build full past days' transcripts.
+ * The current default model has enough context for complete game history, so do not trim old speeches here.
+ */
+export const buildPastDaysTranscript = (state: GameState): string => {
   const { t } = getI18n();
-  // Get summaries from dailySummaries (new format: single paragraph text)
-  const entries = Object.entries(state.dailySummaries || {})
-    .map(([day, bullets]) => ({ day: Number(day), bullets }))
-    .filter((x) => Number.isFinite(x.day) && Array.isArray(x.bullets));
+  if (state.day <= 1) return "";
 
-  if (entries.length === 0) return "";
+  const playerAliveMap = new Map<string, boolean>();
+  state.players.forEach((p) => playerAliveMap.set(p.playerId, p.alive));
 
-  const lines: string[] = [];
-  const separator = t("promptUtils.gameContext.semicolon");
-  for (const { day, bullets } of entries.sort((a, b) => a.day - b.day)) {
-    const summaryTexts = bullets
-      .filter((x): x is string => typeof x === "string")
-      .map((s) => s.trim())
-      .filter(Boolean);
+  const formatMsg = (m: { playerId: string; playerName: string; content: string; isLastWords?: boolean }) => {
+    const player = state.players.find((p) => p.playerId === m.playerId);
+    const speaker = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : m.playerName;
+    const lastWordsLabel = m.isLastWords ? t("promptUtils.gameContext.lastWordsLabel") : "";
+    return `${lastWordsLabel}${speaker}: ${m.content}`;
+  };
 
-    if (summaryTexts.length === 0) continue;
+  // Build structured event header for a given day (deaths, executions — always preserved)
+  const buildDayHeader = (day: number): string => {
+    const parts: string[] = [];
+    const nightHistory = state.nightHistory?.[day];
+    if (nightHistory) {
+      const deathSeats = getRecordedNightDeaths(nightHistory).map((death) => death.seat);
+      if (deathSeats.length > 0) {
+        const names = deathSeats.map((s) => {
+          return formatSeatName(state, s);
+        });
+        parts.push(`夜晚出局: ${names.join("、")}`);
+      } else if (Array.isArray(nightHistory.deaths)) {
+        parts.push("平安夜");
+      }
+    }
+    const dayHistory = state.dayHistory?.[day];
+    const executed = dayHistory?.executed;
+    if (executed) {
+      parts.push(`投票出局: ${formatSeatName(state, executed.seat)} (${executed.votes}票)`);
+    } else if (dayHistory?.voteTie) {
+      parts.push("投票平票，无人出局");
+    }
+    if (dayHistory?.hunterShot) {
+      parts.push(`猎人开枪: ${formatSeatName(state, dayHistory.hunterShot.hunterSeat)} 带走 ${formatSeatName(state, dayHistory.hunterShot.targetSeat)}`);
+    }
+    if (dayHistory?.whiteWolfKingBoom) {
+      parts.push(`白狼王自爆: ${formatSeatName(state, dayHistory.whiteWolfKingBoom.boomSeat)} 带走 ${formatSeatName(state, dayHistory.whiteWolfKingBoom.targetSeat)}`);
+    }
+    if (dayHistory?.idiotRevealed) {
+      parts.push(`白痴翻牌: ${formatSeatName(state, dayHistory.idiotRevealed.seat)} 免疫放逐并失去投票权`);
+    }
+    return parts.length > 0 ? `[${parts.join(" | ")}]` : "";
+  };
 
-    const fullSummary = summaryTexts.join(separator);
-    
-    // Append structured vote_data so "who voted for whom" is never lost
-    const voteData = state.dailySummaryVoteData?.[day];
-    const voteText = voteData ? formatVoteDataForHistory(voteData) : "";
+  // Group past-day messages by day (excluding current day)
+  const dayGroups: { day: number; header: string; transcript: string }[] = [];
+  for (let d = 1; d < state.day; d++) {
+    const dayMessages = state.messages.filter(
+      (m) => m.day === d && !m.isSystem
+    );
+    const header = buildDayHeader(d);
+    const publicSystemLines = getHistoricalSystemLines(state, d).map((line) => `系统: ${line}`);
+    const transcript = [...publicSystemLines, ...dayMessages.map(formatMsg)].join("\n");
+    dayGroups.push({ day: d, header, transcript });
+  }
+
+  if (dayGroups.length === 0) return "";
+
+  const sections = dayGroups.map(({ day, header, transcript }) => {
     const dayLabel = t("promptUtils.gameContext.dayLabel", { day });
-    const line = voteText ? `${dayLabel}${fullSummary} ${voteText}` : `${dayLabel}${fullSummary}`;
-    lines.push(line);
-  }
+    const headerLine = header ? `${dayLabel}${header}` : dayLabel;
+    return transcript ? `${headerLine}\n${transcript}` : headerLine;
+  });
 
-  if (lines.length === 0) return "";
-  return `<history>\n${lines.join("\n\n")}\n</history>`;
+  if (sections.length === 0) return "";
+  return `<history>\n${sections.join("\n\n")}\n</history>`;
 };
 
 export const getDayStartIndex = (state: GameState): number => {
@@ -403,50 +558,13 @@ export const getVoteStartIndex = (state: GameState): number => {
   return state.messages.length;
 };
 
-/**
- * Check if today's transcript is long enough to warrant a mid-day summary
- * Returns the transcript length and whether summary is needed
- */
-export const checkNeedsMidDaySummary = (state: GameState, threshold: number = 6000): {
-  transcriptLength: number;
-  needsSummary: boolean;
-  hasSummary: boolean;
-} => {
-  const dayStartIndex = getDayStartIndex(state);
-  const voteStartIndex = getVoteStartIndex(state);
-
-  const slice = state.messages.slice(
-    dayStartIndex,
-    voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
-  );
-
-  const transcript = slice
-    .filter((m) => !m.isSystem)
-    .map((m) => m.content)
-    .join("\n");
-
-  const hasSummary = (state.dailySummaries?.[state.day]?.length ?? 0) > 0;
-
-  return {
-    transcriptLength: transcript.length,
-    needsSummary: transcript.length > threshold && !hasSummary,
-    hasSummary,
-  };
-};
 
 export const buildTodayTranscript = (
   state: GameState,
-  maxChars: number,
-  options?: { includeDeadSpeech?: boolean }
+  options?: { includeDeadSpeech?: boolean; excludePlayerId?: string }
 ): string => {
   const { t } = getI18n();
-  const dayStartIndex = getDayStartIndex(state);
-  const voteStartIndex = getVoteStartIndex(state);
-
-  const slice = state.messages.slice(
-    dayStartIndex,
-    voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
-  );
+  const slice = state.messages.filter((m) => m.day === state.day);
 
   // Build a map of playerId -> alive status for quick lookup
   const playerAliveMap = new Map<string, boolean>();
@@ -458,13 +576,13 @@ export const buildTodayTranscript = (
   // Separate last words from regular speech for priority handling
   const regularMessages = slice.filter((m) => {
     if (m.isSystem || m.isLastWords) return false;
+    if (options?.excludePlayerId && m.playerId === options.excludePlayerId) return false;
     const isAlive = playerAliveMap.get(m.playerId) ?? true;
     return includeDeadSpeech || isAlive;
   });
   const lastWordsMessages = slice.filter((m) => {
-    if (m.isSystem || !m.isLastWords) return false;
-    const isAlive = playerAliveMap.get(m.playerId) ?? true;
-    return includeDeadSpeech || isAlive;
+    if (options?.excludePlayerId && m.playerId === options.excludePlayerId) return false;
+    return !m.isSystem && m.isLastWords;
   });
 
   const formatMessage = (m: typeof slice[0]) => {
@@ -480,72 +598,25 @@ export const buildTodayTranscript = (
   // Last words are always preserved (they're important)
   const lastWordsText = lastWordsMessages.map(formatMessage).join("\n");
   const regularText = regularMessages.map(formatMessage).join("\n");
-  
+
   const transcript = [lastWordsText, regularText].filter(Boolean).join("\n");
 
   if (!transcript) return "";
-  if (transcript.length <= maxChars) return transcript;
-
-  const summaryItems = state.dailySummaries?.[state.day] || [];
-
-  if (summaryItems.length > 0) {
-    const separator = t("promptUtils.gameContext.semicolon");
-    const maxSummaryChars = Math.min(1200, Math.max(300, Math.floor(maxChars * 0.4)));
-    let summaryText = "";
-    for (const item of summaryItems) {
-      const clean = String(item).trim();
-      if (!clean) continue;
-      const candidate = summaryText ? `${summaryText}${separator}${clean}` : clean;
-      if (candidate.length > maxSummaryChars) break;
-      summaryText = candidate;
-    }
-    const header = `<early_summary>${summaryText}</early_summary>\n<recent_speech>\n`;
-    const footer = `\n</recent_speech>`;
-    
-    // Reserve space for last words (always include)
-    const lastWordsReserve = lastWordsText ? lastWordsText.length + 50 : 0;
-    const availableForRecent = maxChars - header.length - footer.length - lastWordsReserve;
-    
-    // Get recent regular messages
-    const recentRegular = availableForRecent > 0 ? regularText.slice(-availableForRecent) : "";
-    
-    // Combine: summary + last words + recent regular
-    const lastWordsPart = lastWordsText ? `<last_words>\n${lastWordsText}\n</last_words>\n` : "";
-    return `${header}${lastWordsPart}${recentRegular}${footer}`.trim();
-  }
-
-  // No summary: prioritize last words, then use sliding window for regular
-  if (lastWordsText) {
-    const lastWordsPart = `<last_words>\n${lastWordsText}\n</last_words>\n`;
-    const availableForRecent = maxChars - lastWordsPart.length;
-    const recentRegular = availableForRecent > 0 ? regularText.slice(-availableForRecent) : "";
-    return `${lastWordsPart}<recent_speech>\n${recentRegular}\n</recent_speech>`.trim();
-  }
-
-  // No last words, just sliding window
-  return `<today_speech>\n${transcript.slice(-maxChars)}\n</today_speech>`;
+  return transcript;
 };
 
-export const buildPlayerTodaySpeech = (state: GameState, player: Player, maxChars: number): string => {
-  const dayStartIndex = getDayStartIndex(state);
-  const voteStartIndex = getVoteStartIndex(state);
-
-  const slice = state.messages.slice(
-    dayStartIndex,
-    voteStartIndex > dayStartIndex ? voteStartIndex : state.messages.length
-  );
-
-  const speech = slice
+export const buildPlayerTodaySpeech = (state: GameState, player: Player): string => {
+  const speech = state.messages
+    .filter((m) => m.day === state.day)
     .filter((m) => !m.isSystem && m.playerId === player.playerId)
     .map((m) => m.content)
     .join("\n");
 
   if (!speech) return "";
-  return speech.slice(0, maxChars);
+  return speech;
 };
 
-export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: number): string => {
-  const dayStartIndex = getDayStartIndex(state);
+export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines?: number): string => {
   const systemMessages = getSystemMessages();
   const systemPatterns = getSystemPatterns();
   const excluded = [
@@ -558,8 +629,8 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
     systemMessages.voteStart,
   ];
 
-  const slice = state.messages.slice(dayStartIndex);
-  const systemLines = slice
+  const systemLines = state.messages
+    .filter((m) => m.day === state.day)
     .filter((m) => m.isSystem)
     .map((m) => String(m.content || "").trim())
     .filter((c) => {
@@ -578,10 +649,11 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
       return true;
     });
 
+  if (systemLines.length === 0) return "";
+  if (maxLines === undefined || !Number.isFinite(maxLines)) return systemLines.join("\n");
   const limit = Math.max(0, maxLines);
-  if (limit === 0 || systemLines.length === 0) return "";
-  const recentLines = systemLines.length > limit ? systemLines.slice(-limit) : systemLines;
-  return recentLines.join("\n");
+  if (limit === 0) return "";
+  return (systemLines.length > limit ? systemLines.slice(-limit) : systemLines).join("\n");
 };
 
 /**
@@ -589,8 +661,6 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines: nu
  * This is placed at the TOP of the context to ensure AI sees it first.
  */
 const buildRolePrivateInfo = (state: GameState, player: Player): string | null => {
-  const { t } = getI18n();
-  
   if (player.role === "Seer") {
     const history = state.nightActions.seerHistory || [];
     if (history.length === 0) return null;
@@ -619,10 +689,7 @@ ${checks.join("\n")}
         if (history.wolfTarget !== undefined) {
           const targetPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (targetPlayer) {
-            // 如果解药未被使用，则显示刀口信息；如果解药被使用并且确实救了人，也显示原本的刀口
-            if (!state.roleAbilities.witchHealUsed || history.witchSave) {
-              wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
-            }
+            wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
           }
         }
 
@@ -719,20 +786,20 @@ export const buildGameContext = (
     let cause = publicGenericDeathCause;
     let deathDay = 0;
     for (const [day, history] of Object.entries(state.nightHistory || {})) {
-      if (history.wolfTarget === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
-      if (history.witchPoison === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
-      if (Array.isArray(history.deaths)) {
-        const match = history.deaths.find((d) => d.seat === p.seat);
-        if (match) {
-          cause = publicGenericDeathCause;
-          deathDay = Number(day);
-        }
+      const match = getRecordedNightDeaths(history).find((death) => death.seat === p.seat);
+      if (match) {
+        cause = publicGenericDeathCause;
+        deathDay = Number(day);
       }
       if (history.hunterShot?.targetSeat === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
     }
     for (const [day, history] of Object.entries(state.dayHistory || {})) {
       if (history.executed?.seat === p.seat) { cause = publicExecutionCause; deathDay = Number(day); }
       if (history.hunterShot?.targetSeat === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
+      if (history.whiteWolfKingBoom?.boomSeat === p.seat || history.whiteWolfKingBoom?.targetSeat === p.seat) {
+        cause = publicGenericDeathCause;
+        deathDay = Number(day);
+      }
     }
     return `{seat: ${p.seat + 1}, name: ${p.displayName}, day: ${deathDay}, cause: ${cause}}`;
   });
@@ -787,9 +854,8 @@ alive_count: ${alivePlayers.length}
   const isPeacefulNight = !options?.excludePendingDeaths && 
     state.phase.includes("DAY") && 
     nightHistory && 
-    !nightHistory.wolfTarget && 
-    !nightHistory.witchPoison && 
-    (!nightHistory.deaths || nightHistory.deaths.length === 0);
+    Array.isArray(nightHistory.deaths) &&
+    getRecordedNightDeaths(nightHistory).length === 0;
   
   // Build rules text with phase order note always included
   let rulesText = wolfFriendlyFireNote;
@@ -809,12 +875,12 @@ alive_count: ${alivePlayers.length}
     context += `\n\n<rules>\n${rulesText}\n</rules>`;
   }
 
-  const summarySection = buildDailySummariesSection(state);
-  if (summarySection) {
-    context += `\n\n${summarySection}`;
+  const pastDaysSection = buildPastDaysTranscript(state);
+  if (pastDaysSection) {
+    context += `\n\n${pastDaysSection}`;
   }
 
-  const systemAnnouncements = buildSystemAnnouncementsSinceDawn(state, 8);
+  const systemAnnouncements = buildSystemAnnouncementsSinceDawn(state);
   if (systemAnnouncements) {
     context += `\n\n<announcements>\n${systemAnnouncements}\n</announcements>`;
   }
@@ -824,28 +890,12 @@ alive_count: ${alivePlayers.length}
     if (!options?.excludePendingDeaths) {
       const currentDayDeaths: string[] = [];
       const nightHistory = state.nightHistory?.[state.day];
-      if (nightHistory?.wolfTarget !== undefined) {
-        const p = state.players.find(p => p.seat === nightHistory.wolfTarget);
+      getRecordedNightDeaths(nightHistory).forEach((death) => {
+        const p = state.players.find(p => p.seat === death.seat);
         if (p && !p.alive) {
           currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
         }
-      }
-      if (nightHistory?.witchPoison !== undefined) {
-        const p = state.players.find(p => p.seat === nightHistory.witchPoison);
-        if (p && !p.alive) {
-          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
-        }
-      }
-      if (nightHistory?.deaths && Array.isArray(nightHistory.deaths)) {
-        nightHistory.deaths.forEach(death => {
-          if (death && typeof death.seat === 'number') {
-            const p = state.players.find(p => p.seat === death.seat);
-            if (p && !p.alive) {
-              currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
-            }
-          }
-        });
-      }
+      });
       const dayHistory = state.dayHistory?.[state.day];
       if (dayHistory?.executed && typeof dayHistory.executed.seat === 'number') {
         const executedSeat = dayHistory.executed.seat;
@@ -854,9 +904,23 @@ alive_count: ${alivePlayers.length}
           currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicExecutionCause}}`);
         }
       }
+      if (dayHistory?.hunterShot && typeof dayHistory.hunterShot.targetSeat === "number") {
+        const p = state.players.find(p => p.seat === dayHistory.hunterShot?.targetSeat);
+        if (p && !p.alive) {
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
+        }
+      }
+      if (dayHistory?.whiteWolfKingBoom) {
+        [dayHistory.whiteWolfKingBoom.boomSeat, dayHistory.whiteWolfKingBoom.targetSeat].forEach((seat) => {
+          const p = state.players.find((player) => player.seat === seat);
+          if (p && !p.alive) {
+            currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
+          }
+        });
+      }
 
       if (currentDayDeaths.length > 0) {
-        context += `\n\n<today_deaths>\n${currentDayDeaths.join("\n")}\n</today_deaths>`;
+        context += `\n\n<today_deaths>\n${Array.from(new Set(currentDayDeaths)).join("\n")}\n</today_deaths>`;
       }
     }
 
@@ -864,70 +928,64 @@ alive_count: ${alivePlayers.length}
     context += `\n\n<focus_reminder>${t("promptUtils.gameContext.focusReminder")}</focus_reminder>`;
   }
 
-  if (state.voteHistory && Object.keys(state.voteHistory).length > 0) {
+  const hasExecutionVotes = state.voteHistory && Object.keys(state.voteHistory).length > 0;
+  const hasBadgeVotes = Object.keys(state.badge.history || {}).length > 0 ||
+    Object.values(state.dailySummaryVoteData || {}).some((voteData) => !!voteData?.sheriff_election);
+
+  if (hasExecutionVotes || hasBadgeVotes) {
     context += `\n\n<votes>`;
     const sheriffSeat = state.badge.holderSeat;
     const sheriffPlayer =
       sheriffSeat !== null ? state.players.find((p) => p.seat === sheriffSeat) : null;
     const sheriffPlayerId = sheriffPlayer?.playerId;
-    const currentDay = state.day;
-    
+
+    const badgeVoteDays = new Set<number>();
+    Object.keys(state.badge.history || {}).forEach((day) => badgeVoteDays.add(Number(day)));
+    Object.entries(state.dailySummaryVoteData || {}).forEach(([day, voteData]) => {
+      if (voteData?.sheriff_election) badgeVoteDays.add(Number(day));
+    });
+
+    Array.from(badgeVoteDays)
+      .filter((day) => Number.isFinite(day))
+      .sort((a, b) => a - b)
+      .forEach((day) => {
+        const summaryBadgeVote = state.dailySummaryVoteData?.[day]?.sheriff_election;
+        const badgeHistoryVotes = state.badge.history?.[day];
+        const voteGroups = summaryBadgeVote?.votes
+          ? buildVoteGroupsFromSeatTargets(summaryBadgeVote.votes)
+          : badgeHistoryVotes
+            ? buildVoteGroupsFromPlayerTargets(state, badgeHistoryVotes)
+            : {};
+        const voteLines = buildVoteGroupLines(state, voteGroups);
+        if (voteLines.length === 0 && !summaryBadgeVote) return;
+        context += `\nbadge_day_${day}:`;
+        voteLines.forEach((line) => {
+          context += `\n${line}`;
+        });
+        if (summaryBadgeVote) {
+          context += `\n  ${t("promptUtils.gameContext.result")}: ${formatSeatName(state, summaryBadgeVote.winner)} 当选警长`;
+        }
+      });
+
     Object.entries(state.voteHistory)
       .sort(([a], [b]) => Number(a) - Number(b))
       .forEach(([day, votes]) => {
         const dayNum = Number(day);
-        const isRecent = currentDay - dayNum <= 1; // Recent 2 days show details
+        const voteGroups = buildVoteGroupsFromPlayerTargets(state, votes);
+        const voteLines = buildVoteGroupLines(state, voteGroups, sheriffPlayerId);
         
-        const voteGroups: Record<number, number[]> = {};
-        Object.entries(votes).forEach(([voterId, targetSeat]) => {
-          const voter = state.players.find(p => p.playerId === voterId);
-          if (voter) {
-            if (!voteGroups[targetSeat]) voteGroups[targetSeat] = [];
-            voteGroups[targetSeat].push(voter.seat);
-          }
+        context += `\nday_${day}:`;
+        voteLines.forEach((line) => {
+          context += `\n${line}`;
         });
-        
-        // Sort by vote count descending
-        const sortedTargets = Object.entries(voteGroups)
-          .map(([target, voters]) => {
-            const weightedVotes = voters.reduce((sum, seat) => {
-              const voter = state.players.find((p) => p.seat === seat);
-              if (!voter) return sum;
-              return sum + (voter.playerId === sheriffPlayerId ? 1.5 : 1);
-            }, 0);
-            return { target: Number(target), voters, weightedVotes };
-          })
-          .sort((a, b) => b.weightedVotes - a.weightedVotes);
-        
-        if (isRecent) {
-          // Recent days: show full details in YAML format
-          context += `\nday_${day}:`;
-          sortedTargets.forEach(({ target, voters, weightedVotes }) => {
-            const targetPlayer = state.players.find(p => p.seat === target);
-            const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
-            const voterList = voters.map(s => s + 1).join(',');
-            context += `\n  ${t("promptUtils.gameContext.seatLabel", { seat: target + 1 })}${targetPlayer?.displayName || ''}: {${t("promptUtils.gameContext.voteCount")}: ${voteLabel}, ${t("promptUtils.gameContext.voters")}: [${voterList}]}`;
-          });
-        } else {
-          // Older days: compressed summary
-          const dayHistory = state.dayHistory?.[dayNum];
-          if (dayHistory?.executed) {
-            const executedSeat = dayHistory.executed.seat;
-            const executedPlayer = state.players.find(p => p.seat === executedSeat);
-            const topVoter = sortedTargets[0]?.voters[0];
-            const leaderSeat = topVoter !== undefined ? topVoter + 1 : null;
-            context += `\nday_${day}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: executedSeat + 1 })}${executedPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${dayHistory.executed.votes}${leaderSeat ? `, ${t("promptUtils.gameContext.mainVoter")}: ${t("promptUtils.gameContext.seatLabel", { seat: leaderSeat })}` : ''}}`;
-          } else if (dayHistory?.voteTie) {
-            context += `\nday_${day}: {${t("promptUtils.gameContext.result")}: ${t("promptUtils.gameContext.tie")}}`;
-          } else if (sortedTargets.length > 0) {
-            // 即使没有 dayHistory，也显示投票信息（防止投票信息丢失）
-            const topTarget = sortedTargets[0];
-            const targetPlayer = state.players.find(p => p.seat === topTarget.target);
-            const topVoter = topTarget.voters[0];
-            const leaderSeat = topVoter !== undefined ? topVoter + 1 : null;
-            const voteLabel = Number.isInteger(topTarget.weightedVotes) ? `${topTarget.weightedVotes}` : topTarget.weightedVotes.toFixed(1);
-            context += `\nday_${day}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: topTarget.target + 1 })}${targetPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${voteLabel}${leaderSeat ? `, ${t("promptUtils.gameContext.mainVoter")}: ${t("promptUtils.gameContext.seatLabel", { seat: leaderSeat })}` : ''}}`;
-          }
+
+        const dayHistory = state.dayHistory?.[dayNum];
+        if (dayHistory?.executed) {
+          const executedSeat = dayHistory.executed.seat;
+          const executedPlayer = state.players.find(p => p.seat === executedSeat);
+          context += `\n  ${t("promptUtils.gameContext.result")}: {${t("promptUtils.gameContext.eliminated").trim()}: ${t("promptUtils.gameContext.seatLabel", { seat: executedSeat + 1 })}${executedPlayer?.displayName || ''}, ${t("promptUtils.gameContext.voteCount")}: ${dayHistory.executed.votes}}`;
+        } else if (dayHistory?.voteTie) {
+          context += `\n  ${t("promptUtils.gameContext.result")}: ${t("promptUtils.gameContext.tie")}`;
         }
       });
     context += `\n</votes>`;

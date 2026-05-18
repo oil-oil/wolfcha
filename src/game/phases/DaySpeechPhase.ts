@@ -81,8 +81,8 @@ export class DaySpeechPhase extends GamePhase {
     const difficultyHint = buildDifficultySpeechHint(state.difficulty);
     const totalSeats = state.players.length;
 
-    const todayTranscript = buildTodayTranscript(state, 2000);
-    const selfSpeech = buildPlayerTodaySpeech(state, player, 1400);
+    const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
+    const selfSpeech = buildPlayerTodaySpeech(state, player);
 
     const todaySpeakers = new Set<string>();
     const dayStartIndex = getDayStartIndex(state);
@@ -394,7 +394,7 @@ export class DaySpeechPhase extends GamePhase {
         await playNarrator("discussionStart");
 
         const alivePlayers = speechState.players.filter((p) => p.alive);
-        const speechDirection: "clockwise" = "clockwise";
+        const speechDirection = "clockwise" as const;
         
         // 判断警徽是否移交成功
         const newSheriffSeat = speechState.badge.holderSeat;
@@ -451,7 +451,7 @@ export class DaySpeechPhase extends GamePhase {
     await playNarrator("discussionStart");
 
     const alivePlayers = speechState.players.filter((p) => p.alive);
-    const speechDirection: "clockwise" = "clockwise";
+    const speechDirection = "clockwise" as const;
     const sheriffSeat = speechState.badge.holderSeat;
     const isSheriffAlive =
       typeof sheriffSeat === "number" && alivePlayers.some((p) => p.seat === sheriffSeat);
@@ -534,7 +534,7 @@ export class DaySpeechPhase extends GamePhase {
         if (aliveCandidateSeats.length === 0) return null;
 
         const total = state.players.length;
-        let cursor = (state.currentSpeakerSeat ?? -1) + 1;
+        const cursor = (state.currentSpeakerSeat ?? -1) + 1;
         for (let step = 0; step < total; step++) {
           const seat = ((cursor + step) % total + total) % total;
           if (aliveCandidateSeats.includes(seat)) return seat;

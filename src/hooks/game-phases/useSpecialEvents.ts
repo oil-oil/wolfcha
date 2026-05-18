@@ -54,6 +54,42 @@ export function useSpecialEvents(
 
   const { setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid, getAccessToken } = callbacks;
 
+  /** 游戏结束 */
+  const endGame = useCallback(async (state: GameState, winner: Alignment) => {
+    const texts = getTexts();
+    let currentState = transitionPhase(state, "GAME_END");
+    currentState = { ...currentState, winner };
+
+    currentState = addSystemMessage(currentState, winner === "village" ? texts.systemMessages.villageWin : texts.systemMessages.wolfWin);
+    const roleRevealPayload = {
+      title: texts.t("specialEvents.roleRevealTitle"),
+      players: currentState.players
+        .slice()
+        .sort((a, b) => a.seat - b.seat)
+        .map((p) => ({
+          playerId: p.playerId,
+          seat: p.seat,
+          name: p.displayName,
+          role: p.role,
+          isHuman: p.isHuman,
+          modelRef: p.agentProfile?.modelRef,
+        })),
+    };
+    currentState = addSystemMessage(currentState, `[ROLE_REVEAL]${JSON.stringify(roleRevealPayload)}`);
+    setDialogue(texts.speakerHost, winner === "village" ? texts.t("specialEvents.villageWinLine") : texts.t("specialEvents.wolfWinLine"), false);
+
+    setGameState(currentState);
+
+    // 更新游戏会话数据（前端直接调用 Supabase）
+    const winnerType = winner === "village" ? "villager" : "wolf";
+    gameSessionTracker.end(winnerType, true).catch((err) => {
+      console.error("[game-session] Failed to end:", err);
+    });
+
+    // 播放游戏结束语音
+    await playNarrator(winner === "village" ? "villageWin" : "wolfWin");
+  }, [setGameState, setDialogue]);
+
   /** 处理猎人死亡开枪 */
   const handleHunterDeath = useCallback(async (
     state: GameState,
@@ -124,7 +160,7 @@ export function useSpecialEvents(
     if (!isTokenValid(token)) return;
 
     await afterHunter(currentState);
-  }, [ setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid]);
+  }, [setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid, endGame]);
 
   /** 人类猎人开枪 */
   const handleHumanHunterShoot = useCallback(async (
@@ -134,42 +170,6 @@ export function useSpecialEvents(
     // 这个函数返回更新后的状态，由主 hook 处理后续流程
     return {} as GameState; // 占位，实际逻辑在主 hook 中
   }, []);
-
-  /** 游戏结束 */
-  const endGame = useCallback(async (state: GameState, winner: Alignment) => {
-    const texts = getTexts();
-    let currentState = transitionPhase(state, "GAME_END");
-    currentState = { ...currentState, winner };
-
-    currentState = addSystemMessage(currentState, winner === "village" ? texts.systemMessages.villageWin : texts.systemMessages.wolfWin);
-    const roleRevealPayload = {
-      title: texts.t("specialEvents.roleRevealTitle"),
-      players: currentState.players
-        .slice()
-        .sort((a, b) => a.seat - b.seat)
-        .map((p) => ({
-          playerId: p.playerId,
-          seat: p.seat,
-          name: p.displayName,
-          role: p.role,
-          isHuman: p.isHuman,
-          modelRef: p.agentProfile?.modelRef,
-        })),
-    };
-    currentState = addSystemMessage(currentState, `[ROLE_REVEAL]${JSON.stringify(roleRevealPayload)}`);
-    setDialogue(texts.speakerHost, winner === "village" ? texts.t("specialEvents.villageWinLine") : texts.t("specialEvents.wolfWinLine"), false);
-
-    setGameState(currentState);
-    
-    // 更新游戏会话数据（前端直接调用 Supabase）
-    const winnerType = winner === "village" ? "villager" : "wolf";
-    gameSessionTracker.end(winnerType, true).catch((err) => {
-      console.error("[game-session] Failed to end:", err);
-    });
-    
-    // 播放游戏结束语音
-    await playNarrator(winner === "village" ? "villageWin" : "wolfWin");
-  }, [setGameState, setDialogue]);
 
   /** 结算夜晚 */
   const resolveNight = useCallback(async (
@@ -185,6 +185,17 @@ export function useSpecialEvents(
     let wolfKillSuccessful = false;
     let wolfVictimSeat: number | undefined;
     let poisonVictimSeat: number | undefined;
+    const nightDeaths: Array<{ seat: number; reason: "wolf" | "poison" | "milk" }> = [];
+    const addNightDeath = (seat: number, reason: "wolf" | "poison" | "milk") => {
+      const existing = nightDeaths.find((death) => death.seat === seat);
+      if (!existing) {
+        nightDeaths.push({ seat, reason });
+        return;
+      }
+      if (reason !== "wolf") {
+        existing.reason = reason;
+      }
+    };
 
     // 狼人击杀判定
     if (wolfTarget !== undefined) {
@@ -195,12 +206,14 @@ export function useSpecialEvents(
       if ((isProtected && isSaved) || (!isProtected && !isSaved)) {
         wolfKillSuccessful = true;
         wolfVictimSeat = wolfTarget;
+        addNightDeath(wolfTarget, isProtected && isSaved ? "milk" : "wolf");
       }
     }
 
     // 女巫毒杀判定
     if (witchPoison !== undefined) {
       poisonVictimSeat = witchPoison;
+      addNightDeath(witchPoison, "poison");
     }
 
     // 更新状态
@@ -226,6 +239,7 @@ export function useSpecialEvents(
           witchPoison: currentState.nightActions.witchPoison,
           seerTarget: currentState.nightActions.seerTarget,
           seerResult: currentState.nightActions.seerResult,
+          deaths: nightDeaths,
         },
       },
     };

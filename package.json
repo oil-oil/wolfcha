@@ -7,6 +7,10 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "dry-run:belief-dialogue": "node scripts/dry-run-belief-dialogue.mjs --live",
+    "dry-run:character-profiles": "node scripts/dry-run-character-profiles.mjs --live",
+    "dry-run:deepseek-compare": "node scripts/dry-run-deepseek-compare.mjs",
+    "dry-run:deepseek-long-context": "node scripts/dry-run-deepseek-long-context.mjs",
     "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
   },
   "dependencies": {

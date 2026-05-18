@@ -48,13 +48,7 @@ export class BadgePhase extends GamePhase {
       .filter((p) => p.alive && p.playerId !== player.playerId)
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
     const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
-    const wolfMates =
-      isWolfRole(player.role)
-        ? state.players
-          .filter((p) => p.alive && isWolfRole(p.role) && p.playerId !== player.playerId)
-          .map((p) => t("promptUtils.gameContext.seatLabel", { seat: p.seat + 1 }))
-          .join(t("promptUtils.gameContext.listSeparator"))
-        : "";
+    const context = buildGameContext(state, player, { excludePendingDeaths: true });
 
     const cacheableContent = t("prompts.badge.election.base", {
       seat: player.seat + 1,
@@ -88,8 +82,8 @@ export class BadgePhase extends GamePhase {
       .join("\n");
 
     const liteContextLines = [
+      context,
       t("prompts.badge.election.contextHeader", { day: state.day }),
-      wolfMates ? t("prompts.badge.election.contextWolves", { list: wolfMates }) : "",
       badgeSpeechText ? t("prompts.badge.election.contextRecent", { text: badgeSpeechText }) : "",
     ].filter(Boolean);
 
@@ -104,10 +98,10 @@ export class BadgePhase extends GamePhase {
     const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
-    const todayTranscript = buildTodayTranscript(state, 1500);
+    const todayTranscript = buildTodayTranscript(state);
 
     const { t } = getI18n();
-    
+
     // Wolf tactic hint injection: keep games varied and avoid rigid "scripts".
     let wolfTacticHint = "";
     if (isWolfRole(player.role)) {
@@ -189,7 +183,7 @@ export class BadgePhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const todayTranscript = buildTodayTranscript(state, 1500);
+    const todayTranscript = buildTodayTranscript(state);
 
     const user = t("prompts.badge.transfer.user", {
       context,

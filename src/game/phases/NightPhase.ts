@@ -32,9 +32,6 @@ import {
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { getI18n } from "@/i18n/translator";
 
-const NIGHT_TRANSCRIPT_MAX_CHARS = 2200;
-const NIGHT_SELF_SPEECH_MAX_CHARS = 700;
-
 function randomFakeActionDelay(): number {
   const min = DELAY_CONFIG.NIGHT_ROLE_ANIMATION_MIN;
   const max = DELAY_CONFIG.NIGHT_ROLE_ANIMATION_MAX;
@@ -206,7 +203,7 @@ export class NightPhase extends GamePhase {
         return currentState;
       }
 
-      let wolfVotes: Record<string, number> = {};
+      const wolfVotes: Record<string, number> = {};
       try {
         // 简化逻辑：第一个狼人决定目标，其他狼人自动达成共识
         const firstWolf = wolves[0];
@@ -417,7 +414,7 @@ export class NightPhase extends GamePhase {
   }
 
   private async continueNightAfterGuard(state: GameState, runtime: NightPhaseRuntime): Promise<void> {
-    let currentState = await this.runWolfAction(state, runtime);
+    const currentState = await this.runWolfAction(state, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;
 
     const humanWolf = currentState.players.find((p) => isWolfRole(p.role) && p.alive && p.isHuman);
@@ -433,7 +430,7 @@ export class NightPhase extends GamePhase {
   }
 
   private async continueNightAfterWolf(state: GameState, runtime: NightPhaseRuntime): Promise<void> {
-    let currentState = await this.runWitchAction(state, runtime);
+    const currentState = await this.runWitchAction(state, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;
 
     const witch = currentState.players.find((p) => p.role === "Witch" && p.alive);
@@ -453,7 +450,7 @@ export class NightPhase extends GamePhase {
   }
 
   private async continueNightAfterWitch(state: GameState, runtime: NightPhaseRuntime): Promise<void> {
-    let currentState = await this.runSeerAction(state, runtime);
+    const currentState = await this.runSeerAction(state, runtime);
     if (!runtime.isTokenValid(runtime.token)) return;
 
     const seer = currentState.players.find((p) => p.role === "Seer" && p.alive);
@@ -469,8 +466,8 @@ export class NightPhase extends GamePhase {
   }
 
   private buildNightEnhancements(state: GameContext["state"], player: Player) {
-    const todayTranscript = buildTodayTranscript(state, NIGHT_TRANSCRIPT_MAX_CHARS, { includeDeadSpeech: true });
-    const selfSpeech = buildPlayerTodaySpeech(state, player, NIGHT_SELF_SPEECH_MAX_CHARS);
+    const todayTranscript = buildTodayTranscript(state, { includeDeadSpeech: true, excludePlayerId: player.playerId });
+    const selfSpeech = buildPlayerTodaySpeech(state, player);
     const roleKnowHow = getRoleKnowHow(player.role);
     const situationalStrategy = buildSituationalStrategy(state, player);
     return { todayTranscript, selfSpeech, roleKnowHow, situationalStrategy };
