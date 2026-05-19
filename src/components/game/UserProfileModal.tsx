@@ -51,6 +51,7 @@ import {
   AVAILABLE_MODELS,
   DASHSCOPE_VALIDATION_MODEL,
   GENERATOR_MODEL,
+  ZENMUX_VALIDATION_MODEL,
   SUMMARY_MODEL,
   REVIEW_MODEL,
   filterPlayerModels,
@@ -357,7 +358,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       await validateProviderKey({
         provider: "zenmux",
         key: zenmuxKey.trim(),
-        model: GENERATOR_MODEL,
+        model: ZENMUX_VALIDATION_MODEL,
       });
       setValidatedKeys((prev) => ({ ...prev, zenmux: zenmuxKey.trim() }));
       setValidatedZenmuxKey(zenmuxKey.trim());

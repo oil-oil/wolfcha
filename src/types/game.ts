@@ -97,9 +97,19 @@ export interface Persona {
   wolfDeceptionStyle?: string;
 }
 
+export interface PlayerMind {
+  courage: string;
+  memoryBias: string;
+  suspicionThreshold: string;
+  selfProtection: string;
+  logicDepth: string;
+  tablePresence: string;
+}
+
 export interface AgentProfile {
   modelRef: ModelRef;
   persona: Persona;
+  playerMind?: PlayerMind;
 }
 
 export interface Player {

@@ -1490,6 +1490,7 @@ export function useGameLogic() {
               agentProfile: {
                 modelRef: aiModelRefs[match.index] ?? getRandomModelRef(),
                 persona: match.character.persona,
+                playerMind: match.character.playerMind,
               },
             };
           });
@@ -1530,6 +1531,7 @@ export function useGameLogic() {
                   agentProfile: {
                     modelRef: aiModelRefs[index] ?? getRandomModelRef(),
                     persona: character.persona,
+                    playerMind: character.playerMind,
                   },
                 };
               });
@@ -1556,6 +1558,7 @@ export function useGameLogic() {
                   agentProfile: {
                     modelRef: genshinModelRefs![index] ?? getRandomModelRef(),
                     persona: character.persona,
+                    playerMind: character.playerMind,
                   },
                 };
               });
@@ -1593,6 +1596,7 @@ export function useGameLogic() {
                     agentProfile: {
                       modelRef: aiModelRefs[index] ?? getRandomModelRef(),
                       persona: character.persona,
+                      playerMind: character.playerMind,
                     },
                   };
                 });

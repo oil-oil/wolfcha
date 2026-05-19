@@ -331,6 +331,7 @@ export function setupPlayers(
         agentProfile: {
           modelRef,
           persona: character.persona,
+          playerMind: character.playerMind,
         },
       });
     }

@@ -4,7 +4,7 @@
  */
 
 export const AI_TEMPERATURE = {
-  // 严谨模式：用于 JSON 修复、数据提取、总结历史
+  // 严谨模式：用于数据提取、总结历史
   // 要求绝对的准确性和格式依从性
   STRICT: 0.1,
 
@@ -29,7 +29,6 @@ export const AI_TEMPERATURE = {
 export const GAME_TEMPERATURE = {
   // 角色生成
   CHARACTER_GENERATION: AI_TEMPERATURE.WILD,
-  CHARACTER_REPAIR: AI_TEMPERATURE.STRICT,
 
   // 游戏总结
   SUMMARY: AI_TEMPERATURE.STRICT,

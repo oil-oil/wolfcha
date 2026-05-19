@@ -1,5 +1,4 @@
 import { generateJSON, generateCompletionStream, stripMarkdownCodeFences } from "./llm";
-import { LLMJSONParser } from "ai-json-fixer";
 import {
   ALL_MODELS,
   GENERATOR_MODEL,
@@ -9,10 +8,11 @@ import {
   type GameScenario,
   type ModelRef,
   type Persona,
+  type PlayerMind,
 } from "@/types/game";
 import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
-import { AI_TEMPERATURE, GAME_TEMPERATURE } from "./ai-config";
+import { GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
 import { resolveVoiceId, VOICE_PRESETS, type AppLocale } from "./voice-constants";
 import { getI18n } from "@/i18n/translator";
@@ -20,6 +20,7 @@ import { getI18n } from "@/i18n/translator";
 export interface GeneratedCharacter {
   displayName: string;
   persona: Persona;
+  playerMind?: PlayerMind;
   avatarSeed?: string;
 }
 
@@ -39,6 +40,8 @@ const MODEL_DISPLAY_NAME_MAP: Array<{ match: RegExp; label: string }> = [
   { match: /openai|gpt/i, label: "OpenAI" },
   { match: /kimi|moonshot/i, label: "Kimi" },
 ];
+
+const CHARACTER_GENERATOR_REASONING = { enabled: false } as const;
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -124,85 +127,6 @@ const getModelDisplayName = (modelRef: ModelRef): string => {
   if (mapped) return mapped;
   const fallback = raw.split("/").pop() ?? raw;
   return fallback.split("-")[0] || fallback || "AI";
-};
-
-type NicknameItem = { model: string; nicknames: string[] };
-
-const nicknameCache = new Map<string, string[]>();
-
-const buildNicknamePrompt = (requirements: Array<{ model: string; count: number }>) => {
-  const { t } = getI18n();
-  const list = requirements.map((r) => `- ${r.model} x${r.count}`).join("\n");
-  return t("characterGenerator.nicknamePrompt", { list });
-};
-
-const normalizeNicknameResponse = (raw: unknown): Map<string, string[]> => {
-  const result = new Map<string, string[]>();
-  if (!raw || typeof raw !== "object" || !("items" in raw) || !Array.isArray((raw as any).items)) {
-    return result;
-  }
-
-  const items = (raw as { items: NicknameItem[] }).items;
-  items.forEach((item) => {
-    if (!item || typeof item.model !== "string" || !Array.isArray(item.nicknames)) return;
-    const model = item.model.trim().toLowerCase();
-    if (!model) return;
-    const nicknames = item.nicknames
-      .map((n) => String(n ?? "").trim())
-      .filter(Boolean);
-    if (nicknames.length === 0) return;
-    result.set(model, nicknames);
-  });
-
-  return result;
-};
-
-const resolveNicknameMap = async (requirements: Array<{ model: string; count: number }>): Promise<Map<string, string[]>> => {
-  const missing = requirements.filter((req) => (nicknameCache.get(req.model)?.length ?? 0) < req.count);
-  if (missing.length === 0) {
-    return new Map(requirements.map((req) => [req.model, nicknameCache.get(req.model) as string[]]));
-  }
-
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const prompt = buildNicknamePrompt(missing);
-      const raw = await generateJSON<unknown>({
-        model: getGeneratorModel(),
-        messages: [{ role: "user", content: prompt }],
-        temperature: AI_TEMPERATURE.BALANCED,
-      });
-      const normalized = normalizeNicknameResponse(raw);
-      missing.forEach((req) => {
-        const nicknames = normalized.get(req.model.toLowerCase());
-        if (!nicknames || nicknames.length < req.count) {
-          throw new Error(`Missing nicknames for ${req.model}`);
-        }
-        const unique = Array.from(new Set(nicknames));
-        if (unique.length < req.count) {
-          throw new Error(`Duplicate nicknames for ${req.model}`);
-        }
-        nicknameCache.set(req.model, unique.slice(0, req.count));
-      });
-
-      const allNicknames = Array.from(nicknameCache.values()).flat();
-      const uniqueAll = new Set(allNicknames);
-      if (uniqueAll.size !== allNicknames.length) {
-        throw new Error("Duplicate nicknames across models");
-      }
-      lastError = undefined;
-      break;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (lastError) {
-    console.warn("[wolfcha] Nickname generation failed after retry.", lastError);
-    throw lastError;
-  }
-
-  return new Map(requirements.map((req) => [req.model, nicknameCache.get(req.model) as string[]]));
 };
 
 const createGenshinPersona = (voiceId?: string): Persona => {
@@ -310,6 +234,10 @@ const buildBaseProfilesPrompt = (count: number, scenario: GameScenario) => {
   });
 };
 
+const buildCharacterSchemaLine = (p: BaseProfile): string => (
+  `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} }, "playerMind": { "courage": string, "memoryBias": string, "suspicionThreshold": string, "selfProtection": string, "logicDepth": string, "tablePresence": string } }`
+);
+
 const normalizeGeneratedCharacters = (
   result: unknown
 ): { characters: GeneratedCharacter[]; raw: unknown } => {
@@ -354,13 +282,25 @@ const isValidPersonaForProfile = (p: any, profile: BaseProfile): p is Persona =>
   return true;
 };
 
-const isValidCharacters = (chars: any, count: number): chars is GeneratedCharacter[] => {
-  if (!Array.isArray(chars) || chars.length !== count) return false;
-  return chars.every((c) => {
-    if (!c || typeof c !== "object") return false;
-    if (typeof (c as any).displayName !== "string" || !(c as any).displayName.trim()) return false;
-    return isValidPersona((c as any).persona);
-  });
+const PLAYER_MIND_REQUIRED_FIELDS: Array<keyof PlayerMind> = [
+  "courage",
+  "memoryBias",
+  "suspicionThreshold",
+  "selfProtection",
+  "logicDepth",
+  "tablePresence",
+];
+
+const isValidPlayerMind = (mind: unknown): mind is PlayerMind => {
+  if (!mind || typeof mind !== "object") return false;
+  const record = mind as Record<string, unknown>;
+  if (PLAYER_MIND_REQUIRED_FIELDS.some((key) => {
+    const value = record[key];
+    return typeof value !== "string" || !value.trim();
+  })) {
+    return false;
+  }
+  return true;
 };
 
 const alignCharactersToProfiles = (
@@ -400,12 +340,14 @@ const alignCharactersToProfiles = (
       console.error(`[alignCharacters] character not found for profile: ${key}, available names:`, Array.from(byName.keys()));
       return null;
     }
-    if (!isValidPersonaForProfile(c.persona, profile)) {
+    if (!isValidPersonaForProfile(c.persona, profile) || !isValidPlayerMind(c.playerMind)) {
       const p = c.persona as any;
       console.error(`[alignCharacters] invalid persona for ${key}:`, {
         persona: c.persona,
+        playerMind: c.playerMind,
         profile: { gender: profile.gender, age: profile.age, mbti: profile.mbti },
         isValid: isValidPersona(c.persona),
+        isValidPlayerMind: isValidPlayerMind(c.playerMind),
         genderMatch: p?.gender === profile.gender,
         ageMatch: p?.age === profile.age,
         mbtiMatch: String(p?.mbti || "").trim() === profile.mbti,
@@ -431,67 +373,12 @@ const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfil
     )
     .join("\n");
 
-  const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
-    .join(",\n");
+  const schema = allProfiles.map(buildCharacterSchemaLine).join(",\n");
 
   return t("characterGenerator.fullPersonasPrompt", {
     title: scenario.title,
     description: scenario.description,
     roster,
-    count: allProfiles.length,
-    schema,
-  });
-};
-
-const buildRepairBaseProfilesPrompt = (count: number, scenario: GameScenario, raw: unknown) => {
-  const { t } = getI18n();
-  const rawStr = (() => {
-    try {
-      return JSON.stringify(raw);
-    } catch {
-      return String(raw);
-    }
-  })();
-
-  return t("characterGenerator.repairBaseProfilesPrompt", {
-    count,
-    title: scenario.title,
-    description: scenario.description,
-    raw: rawStr,
-  });
-};
-
-const buildRepairFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfile[], raw: unknown) => {
-  const { t } = getI18n();
-  const rawStr = (() => {
-    try {
-      return JSON.stringify(raw);
-    } catch {
-      return String(raw);
-    }
-  })();
-
-  const roster = allProfiles
-    .map((p, i) =>
-      t("characterGenerator.rosterLineSimple", {
-        index: i + 1,
-        name: p.displayName,
-        gender: p.gender,
-        basicInfo: p.basicInfo,
-      })
-    )
-    .join("\n");
-
-  const schema = allProfiles
-    .map((p) => `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} } }`)
-    .join(",\n");
-
-  return t("characterGenerator.repairFullPersonasPrompt", {
-    title: scenario.title,
-    description: scenario.description,
-    roster,
-    raw: rawStr,
     count: allProfiles.length,
     schema,
   });
@@ -518,26 +405,14 @@ export async function generateCharacters(
       messages: [{ role: "user", content: basePrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
       max_tokens: baseMaxTokens,
+      reasoning: CHARACTER_GENERATOR_REASONING,
     });
 
     const normalizedBase = normalizeBaseProfiles(baseResult);
-    let baseProfiles = normalizedBase.profiles;
+    const baseProfiles = normalizedBase.profiles;
 
     if (!isValidBaseProfiles(baseProfiles, count)) {
-      const baseRepairPrompt = buildRepairBaseProfilesPrompt(count, usedScenario, normalizedBase.raw);
-      const baseRepaired = await generateJSON<unknown>({
-        model: getGeneratorModel(),
-        messages: [{ role: "user", content: baseRepairPrompt }],
-        temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
-        max_tokens: baseMaxTokens,
-      });
-
-      const normalizedBaseRepaired = normalizeBaseProfiles(baseRepaired);
-      baseProfiles = normalizedBaseRepaired.profiles;
-
-      if (!isValidBaseProfiles(baseProfiles, count)) {
-        throw new Error("Base profile generation returned invalid schema after repair");
-      }
+      throw new Error("Base profile generation returned invalid schema");
     }
 
     options?.onBaseProfiles?.(baseProfiles);
@@ -548,28 +423,28 @@ export async function generateCharacters(
     const finalizedCharacters: GeneratedCharacter[] = [];
     const emittedIndices = new Set<number>();
     let accumulatedContent = "";
-    const parser = new LLMJSONParser();
     
-    // 完整 persona 生成需要更多 tokens：每个角色包含发言画像，按更宽预算生成
-    const fullMaxTokens = Math.max(7000, count * 950 + 1400);
+    // 完整角色生成需要 persona + playerMind，按更宽预算生成
+    const fullMaxTokens = Math.max(9000, count * 1250 + 1800);
     
     const stream = generateCompletionStream({
       model: getGeneratorModel(),
       messages: [{ role: "user", content: fullPrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
       max_tokens: fullMaxTokens,
+      reasoning: CHARACTER_GENERATOR_REASONING,
     });
 
     for await (const chunk of stream) {
       accumulatedContent += chunk;
       
       // 使用正则提取完整的角色对象
-      // 匹配 {"displayName": "...", "persona": {...}} 结构
+      // 匹配 {"displayName": "...", "persona": {...}, "playerMind": {...}} 结构
       const cleaned = stripMarkdownCodeFences(accumulatedContent);
       
       // 找到所有可能完整的角色对象
-      // 通过匹配 displayName 后跟 persona 对象的闭合 } 来识别完整角色
-      const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
+      // 通过匹配 displayName 后跟 persona 和 playerMind 对象的闭合 } 来识别完整角色
+      const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
       const matches = cleaned.match(characterPattern);
       
       if (matches) {
@@ -588,7 +463,7 @@ export async function generateCharacters(
             const profile = baseProfiles[profileIndex];
             
             // 验证 persona 是否有效
-            if (isValidPersonaForProfile(c.persona, profile)) {
+            if (isValidPersonaForProfile(c.persona, profile) && isValidPlayerMind(c.playerMind)) {
               emittedIndices.add(profileIndex);
               
               const voiceId = resolveVoiceId(
@@ -606,6 +481,7 @@ export async function generateCharacters(
                   voiceId,
                   relationships: undefined,
                 },
+                playerMind: c.playerMind,
               };
 
               finalizedCharacters[profileIndex] = character;
@@ -623,31 +499,13 @@ export async function generateCharacters(
     if (finalizedCharacters.filter(Boolean).length < baseProfiles.length) {
       // 回退到完整解析
       const cleaned = stripMarkdownCodeFences(accumulatedContent);
-      let fullResult: unknown;
-      try {
-        fullResult = JSON.parse(cleaned);
-      } catch {
-        fullResult = parser.parse(cleaned);
-      }
+      const fullResult = JSON.parse(cleaned) as unknown;
       
       const normalized = normalizeGeneratedCharacters(fullResult);
-      let alignedCharacters = alignCharactersToProfiles(normalized.characters, baseProfiles);
+      const alignedCharacters = alignCharactersToProfiles(normalized.characters, baseProfiles);
 
       if (!alignedCharacters) {
-        const repairPrompt = buildRepairFullPersonasPrompt(usedScenario, baseProfiles, normalized.raw);
-        const repaired = await generateJSON<unknown>({
-          model: getGeneratorModel(),
-          messages: [{ role: "user", content: repairPrompt }],
-          temperature: GAME_TEMPERATURE.CHARACTER_REPAIR,
-          max_tokens: fullMaxTokens,
-        });
-
-        const normalizedRepaired = normalizeGeneratedCharacters(repaired);
-        alignedCharacters = alignCharactersToProfiles(normalizedRepaired.characters, baseProfiles);
-
-        if (!alignedCharacters) {
-          throw new Error("Character generation returned invalid schema after repair");
-        }
+        throw new Error("Character generation returned invalid schema");
       }
 
       // 补充未生成的角色
@@ -671,6 +529,7 @@ export async function generateCharacters(
             voiceId,
             relationships: undefined,
           },
+          playerMind: c.playerMind,
         };
 
         finalizedCharacters[i] = character;
@@ -685,7 +544,20 @@ export async function generateCharacters(
         messages: [{ role: "user", content: fullPrompt }],
       },
       response: { 
-        content: JSON.stringify(finalizedCharacters.map(c => c.displayName)), 
+        content: JSON.stringify(finalizedCharacters.map((c) => ({
+          displayName: c.displayName,
+          hiddenCommunicationProfile: {
+            werewolfExperience: c.persona.werewolfExperience,
+            vocabularyStyle: c.persona.vocabularyStyle,
+            reasoningStyle: c.persona.reasoningStyle,
+            speechLengthHabit: c.persona.speechLengthHabit,
+            pressureStyle: c.persona.pressureStyle,
+            uncertaintyStyle: c.persona.uncertaintyStyle,
+            mistakePattern: c.persona.mistakePattern,
+            wolfDeceptionStyle: c.persona.wolfDeceptionStyle,
+          },
+          playerMind: c.playerMind,
+        }))),
         duration: Date.now() - startTime 
       },
     });
