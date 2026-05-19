@@ -10,11 +10,11 @@
 
 ## 🙏 Sponsors
 
-![ZenMux Banner](public/sponsor/zenmux-banner.png)
+![TokenDance Banner](public/sponsor/tokendance.svg)
 
 Current sponsors:
 
-*   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - Powers the core game flow, roleplay, and summary features with AI models
+*   [TokenDance](https://tokendance.agent-universe.cn/) - Powers the core game flow, roleplay, and summary features with AI models
 *   [Dashscope](https://bailian.console.aliyun.com/) - Provides additional AI model support
 *   [Watcha](https://watcha.cn/) - Provides AI model capabilities and showcase platform
 
@@ -90,7 +90,7 @@ Built with modern web technologies:
 *   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
 *   **Animations**: [Framer Motion](https://www.framer.com/motion/)
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [ZenMux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
+*   **AI Integration**: [TokenDance](https://tokendance.agent-universe.cn/) (Unified interface for LLMs)
 
 ## 🚀 Local Development
 
@@ -115,7 +115,7 @@ npm install
 
 3.  **Configure environment variables**
 
-You'll need to set up API keys (ZenMux, etc.) for full functionality. Refer to `.env.example` and create your `.env.local`.
+You'll need to set up API keys (TokenDance, etc.) for full functionality. Refer to `.env.example` and create your `.env.local`.
 
 4.  **Start the development server**
 

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="440" viewBox="0 0 1260 440" role="img" aria-labelledby="title desc">
+  <title id="title">TokenDance</title>
+  <desc id="desc">TokenDance sponsor logo with Chinese brand name.</desc>
+  <rect width="1260" height="440" fill="#000"/>
+  <g fill="#fff">
+    <text
+      x="74"
+      y="354"
+      font-family="Arial Black, Impact, Arial, sans-serif"
+      font-size="304"
+      font-style="italic"
+      font-weight="900"
+      letter-spacing="-28"
+    >TD</text>
+    <text
+      x="500"
+      y="224"
+      font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif"
+      font-size="146"
+      font-weight="900"
+      textLength="690"
+      lengthAdjust="spacingAndGlyphs"
+    >词元跳动</text>
+    <text
+      x="500"
+      y="358"
+      font-family="Arial Black, Impact, Arial, sans-serif"
+      font-size="92"
+      font-weight="900"
+      textLength="690"
+      lengthAdjust="spacingAndGlyphs"
+    >TokenDance</text>
+  </g>
+</svg>

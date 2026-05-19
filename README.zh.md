@@ -12,11 +12,11 @@
 
 ## 🙏 感谢赞助
 
-![ZenMux Banner](public/sponsor/zenmux-banner.png)
+![TokenDance Banner](public/sponsor/tokendance.svg)
 
 现有赞助商：
 
-*   [ZenMux](https://zenmux.ai/invite/DMMBVZ) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
+*   [TokenDance](https://tokendance.agent-universe.cn/) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
 *   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 模型能力支持
 *   [观猹](https://watcha.cn/) - 提供 AI 模型能力与展示平台
 
@@ -92,7 +92,7 @@
 *   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
 *   **Animations**: [Framer Motion](https://www.framer.com/motion/)
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [ZenMux](https://zenmux.ai/invite/DMMBVZ) (Unified interface for LLMs)
+*   **AI Integration**: [TokenDance](https://tokendance.agent-universe.cn/) (Unified interface for LLMs)
 
 ## 🚀 本地运行
 
@@ -117,7 +117,7 @@ npm install
 
 3.  **配置环境变量**
 
-你需要配置相应的 API Keys (ZenMux 等) 才能运行完整功能。请参考 `.env.example` 并创建 `.env.local`。
+你需要配置相应的 API Keys (TokenDance 等) 才能运行完整功能。请参考 `.env.example` 并创建 `.env.local`。
 
 4.  **启动开发服务器**
 
