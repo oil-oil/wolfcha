@@ -1,9 +1,7 @@
 import type { Player } from "@/types/game";
-import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
-import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
+import type { GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
-  buildDifficultyDecisionHint,
   buildGameContext,
   buildPersonaSection,
   buildTodayTranscript,
@@ -14,7 +12,7 @@ import {
 import { getI18n } from "@/i18n/translator";
 
 export class BadgePhase extends GamePhase {
-  async onEnter(_context: GameContext): Promise<void> {
+  async onEnter(): Promise<void> {
     return;
   }
 
@@ -32,11 +30,11 @@ export class BadgePhase extends GamePhase {
     return this.buildBadgeElectionPrompt(state, player);
   }
 
-  async handleAction(_context: GameContext, _action: GameAction): Promise<void> {
+  async handleAction(): Promise<void> {
     return;
   }
 
-  async onExit(_context: GameContext): Promise<void> {
+  async onExit(): Promise<void> {
     return;
   }
 
@@ -47,7 +45,6 @@ export class BadgePhase extends GamePhase {
     const alivePlayers = state.players
       .filter((p) => p.alive && p.playerId !== player.playerId)
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
-    const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const context = buildGameContext(state, player, { excludePendingDeaths: true });
 
     const cacheableContent = t("prompts.badge.election.base", {
@@ -55,7 +52,6 @@ export class BadgePhase extends GamePhase {
       name: player.displayName,
       role: getRoleText(player.role),
       winCondition: getWinCondition(player.role),
-      difficultyHint,
     });
     const dynamicContent = t("prompts.badge.election.task", {
       options: alivePlayers
@@ -95,37 +91,11 @@ export class BadgePhase extends GamePhase {
   private buildBadgeSignupPrompt(state: GameContext["state"], player: Player): PromptResult {
     // excludePendingDeaths: true - 警长竞选时夜间死亡还未公布，AI不应知道是否平安夜
     const context = buildGameContext(state, player, { excludePendingDeaths: true });
-    const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
     const todayTranscript = buildTodayTranscript(state);
 
     const { t } = getI18n();
-
-    // Wolf tactic hint injection: keep games varied and avoid rigid "scripts".
-    let wolfTacticHint = "";
-    if (isWolfRole(player.role)) {
-      const aliveWolves = state.players.filter((p) => isWolfRole(p.role) && p.alive);
-      if (aliveWolves.length > 0) {
-        // Randomly decide whether to apply a "designated jumper" tactic this game.
-        // Keep the probability below 1 to avoid the same meta every game.
-        const enableDesignatedJump = Math.random() < 0.65;
-        if (enableDesignatedJump) {
-          const selectedWolf = aliveWolves[Math.floor(Math.random() * aliveWolves.length)];
-
-          if (selectedWolf && selectedWolf.playerId === player.playerId) {
-            wolfTacticHint = t("prompts.badge.signup.wolfTacticJump");
-          } else {
-            const jumpWolfSeat = selectedWolf ? selectedWolf.seat + 1 : null;
-            // Sometimes provide a lighter "observe" hint to keep behavior diverse.
-            const preferSupport = Math.random() < 0.7;
-            wolfTacticHint = jumpWolfSeat && preferSupport
-              ? t("prompts.badge.signup.wolfTacticSupport", { seat: jumpWolfSeat })
-              : t("prompts.badge.signup.wolfTacticObserve");
-          }
-        }
-      }
-    }
     
     const cacheableContent = t("prompts.badge.signup.base", {
       seat: player.seat + 1,
@@ -133,13 +103,11 @@ export class BadgePhase extends GamePhase {
       role: getRoleText(player.role),
       winCondition: getWinCondition(player.role),
       persona,
-      difficultyHint,
     });
     const dynamicContent = t("prompts.badge.signup.task");
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
       { text: dynamicContent },
-      ...(wolfTacticHint ? [{ text: wolfTacticHint }] : []),
     ];
     const system = buildSystemTextFromParts(systemParts);
 
@@ -154,28 +122,20 @@ export class BadgePhase extends GamePhase {
   private buildBadgeTransferPrompt(state: GameContext["state"], player: Player): PromptResult {
     const { t } = getI18n();
     const context = buildGameContext(state, player);
-    const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );
-
-    const roleHints =
-      isWolfRole(player.role)
-        ? t("prompts.badge.transfer.roleHintWerewolf")
-        : t("prompts.badge.transfer.roleHintGood");
 
     const cacheableContent = t("prompts.badge.transfer.base", {
       seat: player.seat + 1,
       name: player.displayName,
       role: getRoleText(player.role),
       winCondition: getWinCondition(player.role),
-      difficultyHint,
     });
     const dynamicContent = t("prompts.badge.transfer.task", {
       options: alivePlayers
         .map((p) => t("prompts.badge.option", { seat: p.seat + 1, name: p.displayName }))
         .join(t("promptUtils.gameContext.listSeparator")),
-      roleHints,
     });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },

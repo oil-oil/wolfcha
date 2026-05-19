@@ -1,9 +1,8 @@
 import type { Player } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
-import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
+import type { GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
   buildGameContext,
-  buildDifficultyDecisionHint,
   getRoleText,
   getWinCondition,
   buildSystemTextFromParts,
@@ -11,7 +10,7 @@ import {
 import { getI18n } from "@/i18n/translator";
 
 export class HunterPhase extends GamePhase {
-  async onEnter(_context: GameContext): Promise<void> {
+  async onEnter(): Promise<void> {
     return;
   }
 
@@ -70,7 +69,6 @@ export class HunterPhase extends GamePhase {
     const { t } = getI18n();
     const state = context.state;
     const gameContext = buildGameContext(state, player);
-    const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );
@@ -84,7 +82,6 @@ export class HunterPhase extends GamePhase {
       name: player.displayName,
       role: getRoleText(player.role),
       winCondition: getWinCondition("Hunter"),
-      difficultyHint,
     });
     const options = alivePlayers
       .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
@@ -121,11 +118,11 @@ export class HunterPhase extends GamePhase {
     return { system, user, systemParts };
   }
 
-  async handleAction(_context: GameContext, _action: GameAction): Promise<void> {
+  async handleAction(): Promise<void> {
     return;
   }
 
-  async onExit(_context: GameContext): Promise<void> {
+  async onExit(): Promise<void> {
     return;
   }
 }

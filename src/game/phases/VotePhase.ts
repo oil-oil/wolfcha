@@ -1,15 +1,12 @@
 import type { GameState, Player } from "@/types/game";
-import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
   buildGameContext,
-  buildDifficultyDecisionHint,
   buildTodayTranscript,
   buildPlayerTodaySpeech,
   getRoleText,
   getWinCondition,
-  getRoleKnowHow,
   buildSystemTextFromParts,
 } from "@/lib/prompt-utils";
 import { getI18n } from "@/i18n/translator";
@@ -17,7 +14,6 @@ import {
   addSystemMessage,
   checkWinCondition,
   generateAIVote,
-  killPlayer,
   tallyVotes,
   transitionPhase,
 } from "@/lib/game-master";
@@ -126,7 +122,6 @@ export class VotePhase extends GamePhase {
       state.pkSource === "vote" && state.pkTargets && state.pkTargets.length > 0
         ? new Set(state.pkTargets)
         : null;
-    const difficultyHint = buildDifficultyDecisionHint(state.difficulty, player.role);
     const alivePlayers = state.players.filter(
       (p) =>
         p.alive &&
@@ -137,20 +132,15 @@ export class VotePhase extends GamePhase {
     const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
     const selfSpeech = buildPlayerTodaySpeech(state, player);
 
-    // Get role-specific strategy tips
-    const roleKnowHow = getRoleKnowHow(player.role);
-
     const { t } = getI18n();
     const cacheableContent = t("prompts.vote.base", {
       seat: player.seat + 1,
       name: player.displayName,
       role: getRoleText(player.role),
       winCondition: getWinCondition(player.role),
-      difficultyHint,
     });
     const dynamicContent = t("prompts.vote.task", {
       options: alivePlayers.map((p) => t("prompts.vote.option", { seat: p.seat + 1, name: p.displayName })).join(", "),
-      roleHints: roleKnowHow,
     });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
@@ -158,7 +148,6 @@ export class VotePhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const lastReason = state.lastVoteReasons?.[player.playerId];
     const user = t("prompts.vote.user", {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
@@ -175,7 +164,7 @@ export class VotePhase extends GamePhase {
     await this.resolveVotes(_context.state, runtime);
   }
 
-  async onExit(_context: GameContext): Promise<void> {
+  async onExit(): Promise<void> {
     return;
   }
 

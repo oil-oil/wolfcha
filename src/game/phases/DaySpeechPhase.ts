@@ -1,19 +1,16 @@
 import type { GameState, Player } from "@/types/game";
-import { isWolfRole } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
   buildGameContext,
-  buildDifficultySpeechHint,
   buildPersonaSection,
   buildPlayerTodaySpeech,
   buildTodayTranscript,
   getRoleText,
   getWinCondition,
-  getRoleKnowHow,
   buildSystemTextFromParts,
   getDayStartIndex,
-  buildSituationalStrategy,
+  buildFocusAngle,
 } from "@/lib/prompt-utils";
 import type { FlowToken } from "@/lib/game-flow-controller";
 import {
@@ -68,7 +65,7 @@ export class DaySpeechPhase extends GamePhase {
     return clockwiseSteps >= counterSteps ? "clockwise" : "counterclockwise";
   }
 
-  async onEnter(_context: GameContext): Promise<void> {
+  async onEnter(): Promise<void> {
     return;
   }
 
@@ -78,8 +75,6 @@ export class DaySpeechPhase extends GamePhase {
     const gameContext = buildGameContext(state, player);
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
-    const difficultyHint = buildDifficultySpeechHint(state.difficulty);
-    const totalSeats = state.players.length;
 
     const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
     const selfSpeech = buildPlayerTodaySpeech(state, player);
@@ -175,11 +170,7 @@ export class DaySpeechPhase extends GamePhase {
         ? t("prompts.daySpeech.campaign.pk")
         : "";
 
-    // Get role-specific strategy tips
-    const roleKnowHow = getRoleKnowHow(player.role);
-    
-    // Get situational strategy based on current game state
-    const situationalStrategy = buildSituationalStrategy(state, player);
+    const focusAngle = buildFocusAngle(state, player);
 
     const baseCacheable = t("prompts.daySpeech.base", {
       seat: player.seat + 1,
@@ -187,7 +178,6 @@ export class DaySpeechPhase extends GamePhase {
       role: getRoleText(player.role),
       winCondition: getWinCondition(player.role),
       persona,
-      difficultyHint,
     });
     const taskLine = isLastWords 
       ? t("prompts.daySpeech.task.lastWords", { seat: player.seat + 1, name: player.displayName }) 
@@ -195,21 +185,14 @@ export class DaySpeechPhase extends GamePhase {
         ? t("prompts.daySpeech.task.campaign") 
         : t("prompts.daySpeech.task.dayDiscussion");
     
-    // Add last words strategy for werewolves
-    const lastWordsStrategy = isLastWords && isWolfRole(player.role) 
-      ? "\n" + t("prompts.daySpeech.task.lastWordsWerewolfStrategy")
-      : "";
-    
-    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" }) + lastWordsStrategy;
-    const roleHintLine = isWolfRole(player.role) ? t("prompts.daySpeech.roleHints.werewolf") : player.role === "Seer" ? t("prompts.daySpeech.roleHints.seer") : "";
+    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" });
     const guidelinesSection = isGenshinMode
       ? t("prompts.daySpeech.guidelines.genshin")
-      : t("prompts.daySpeech.guidelines.default", { playerName: player.displayName, roleHintLine });
+      : t("prompts.daySpeech.guidelines.default");
     const systemParts: SystemPromptPart[] = [
       { text: baseCacheable, cacheable: true, ttl: "1h" },
       { text: taskSection },
-      { text: roleKnowHow },
-      ...(situationalStrategy ? [{ text: situationalStrategy }] : []),
+      ...(focusAngle ? [{ text: focusAngle }] : []),
       { text: guidelinesSection, cacheable: true, ttl: "1h" },
     ];
     const system = buildSystemTextFromParts(systemParts);
@@ -245,7 +228,7 @@ export class DaySpeechPhase extends GamePhase {
     }
   }
 
-  async onExit(_context: GameContext): Promise<void> {
+  async onExit(): Promise<void> {
     return;
   }
 

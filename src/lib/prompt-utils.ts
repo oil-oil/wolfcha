@@ -1,4 +1,4 @@
-import type { DifficultyLevel, GameState, Persona, Player } from "@/types/game";
+import type { GameState, Persona, Player } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
@@ -54,119 +54,10 @@ export const getWinCondition = (role: string) => {
 };
 
 /**
- * Role-specific strategy tips (know-how) to help AI make better decisions
- * These tips are tailored to each role to prevent homogenization
+ * Build a light public-info angle based on current game state.
  */
-export const getRoleKnowHow = (role: string): string => {
-  const { t } = getI18n();
-  switch (role) {
-    case "Werewolf":
-      return t.raw("promptUtils.roleKnowHow.werewolf");
-    case "WhiteWolfKing":
-      return t.raw("promptUtils.roleKnowHow.whiteWolfKing");
-    case "Seer":
-      return t.raw("promptUtils.roleKnowHow.seer");
-    case "Witch":
-      return t.raw("promptUtils.roleKnowHow.witch");
-    case "Hunter":
-      return t.raw("promptUtils.roleKnowHow.hunter");
-    case "Guard":
-      return t.raw("promptUtils.roleKnowHow.guard");
-    case "Idiot":
-      return t.raw("promptUtils.roleKnowHow.idiot");
-    default:
-      return t.raw("promptUtils.roleKnowHow.villager");
-  }
-};
-
-/**
- * Build situational strategy based on current game state.
- * Provides context-aware tactical suggestions without being overly restrictive.
- */
-export const buildSituationalStrategy = (state: GameState, player: Player): string => {
-  const lines: string[] = [];
-
-  // === Part 1: Role-specific private info strategy ===
-  if (player.role === "Seer") {
-    const checks = state.nightActions.seerHistory || [];
-    if (checks.length === 0) {
-      // no checks yet — skip role-specific tips
-    } else {
-      const hasWolfCheck = checks.some(c => c.isWolf);
-      const hasGoodCheck = checks.some(c => !c.isWolf);
-
-      lines.push("<situational_tips>");
-      if (hasWolfCheck && state.day === 1) {
-        lines.push("【当前情境】你首验查杀！这是强信息。");
-        lines.push("【可选策略】");
-        lines.push("- 跳身份带节奏，报出查杀的座位号");
-        lines.push("- 给出今日归票建议");
-        lines.push("- 准备好应对可能的狼人对跳");
-      } else if (hasGoodCheck && !hasWolfCheck) {
-        lines.push("【当前情境】你目前只有金水（好人验），信息量有限。");
-        lines.push("【可选策略】");
-        lines.push("- 潜水观察，等待更多信息后再跳");
-        lines.push("- 或跳身份报金水，争取话语权");
-        lines.push("- 观察是否有人对跳，判断真假预言家");
-      } else if (hasWolfCheck && state.day > 1) {
-        lines.push("【当前情境】你有查杀记录。");
-        lines.push("【可选策略】");
-        lines.push("- 继续推进查杀目标出局");
-        lines.push("- 结合新的查验结果分析局势");
-      }
-      lines.push("</situational_tips>");
-    }
-  }
-
-  if (isWolfRole(player.role)) {
-    const aliveWolves = state.players.filter(p => isWolfRole(p.role) && p.alive);
-    const isLastWolf = aliveWolves.length === 1;
-
-    lines.push("<situational_tips>");
-    if (isLastWolf) {
-      lines.push("【当前情境】你是最后一只狼！");
-      lines.push("【可选策略】");
-      lines.push("- 低调发言，避免被集火");
-      lines.push("- 引导好人内斗");
-      lines.push("- 寻找机会翻盘");
-    } else if (state.day === 1) {
-      lines.push("【当前情境】首日发言，建立信任很关键。");
-      lines.push("【可选策略】");
-      lines.push("- 像好人一样分析局势");
-      lines.push("- 不要过早站边或暴露狼视角");
-      lines.push("- 可以适当质疑可疑发言");
-    }
-    lines.push("</situational_tips>");
-  }
-
-  if (player.role === "Witch") {
-    const hasHeal = !state.roleAbilities.witchHealUsed;
-    const hasPoison = !state.roleAbilities.witchPoisonUsed;
-
-    if (hasHeal || hasPoison) {
-      lines.push("<situational_tips>");
-      lines.push("【当前情境】你是女巫。");
-      if (hasHeal && hasPoison) {
-        lines.push("- 解药和毒药都还在，谨慎使用");
-      } else if (hasHeal) {
-        lines.push("- 解药还在，留给关键好人");
-      } else if (hasPoison) {
-        lines.push("- 毒药还在，留给确认的狼人");
-      }
-      lines.push("- 你知道谁被刀了，这是重要信息");
-      lines.push("</situational_tips>");
-    }
-  }
-
-  // === Part 2: Public-info perspective hint (all roles) ===
-  // Give each player a unique analytical angle based on their observable game situation.
-  // This creates speech diversity without prescribing output format.
-  const perspectiveHint = buildPerspectiveHint(state, player);
-  if (perspectiveHint) {
-    lines.push(perspectiveHint);
-  }
-
-  return lines.join("\n");
+export const buildFocusAngle = (state: GameState, player: Player): string => {
+  return buildPerspectiveHint(state, player);
 };
 
 /**
@@ -195,7 +86,7 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
   }
   if (mentionedBy.length > 0) {
     const who = [...new Set(mentionedBy)].map(s => `${s + 1}号`).join("、");
-    hints.push(`你被${who}点名提到了——考虑是否需要回应或反驳`);
+    hints.push(`你被${who}点名提到了，可以考虑是否回应`);
   }
 
   // --- 2. Adjacent to a dead player: you have a spatial observation ---
@@ -206,20 +97,20 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
     return diff === 1 || diff === totalSeats - 1;
   });
   if (isAdjacentToDead && deadToday.length > 0) {
-    hints.push("你和出局的玩家座位相邻——你可以聊聊你对这个刀口的看法");
+    hints.push("你和出局的玩家座位相邻，可以从这个角度聊一句");
   }
 
   // --- 3. Sheriff-related: different angles depending on badge status ---
   const sheriffSeat = state.badge.holderSeat;
   if (sheriffSeat !== null && sheriffSeat === player.seat) {
-    hints.push("你是警长，你的归票建议有引导力——给出明确的方向");
+    hints.push("你是警长，你的发言会影响别人，可以自然给出你的方向");
   } else if (sheriffSeat !== null) {
     // Non-sheriff: randomly suggest either supporting or questioning the sheriff
     // Use seat number as a deterministic "random" seed for consistency
     if (player.seat % 2 === 0) {
-      hints.push("关注警长的归票建议，想想你是否认同");
+      hints.push("可以回应一下警长的方向，说明你是否认同");
     } else {
-      hints.push("不要盲从警长——如果你有不同看法，可以质疑他的判断");
+      hints.push("如果你不认同警长，可以自然提出疑问");
     }
   }
 
@@ -236,7 +127,7 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
           .filter((p): p is Player => !!p && p.alive);
         if (sameVoters.length > 0) {
           const names = sameVoters.slice(0, 2).map(p => `${p.seat + 1}号`).join("、");
-          hints.push(`昨天${names}和你投了同一个目标——思考一下这意味着什么`);
+          hints.push(`昨天${names}和你投了同一个目标，可以想想这件事要不要提`);
         }
       }
     }
@@ -256,10 +147,10 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
 
   if (spokenRatio === 0) {
     // First speaker
-    hints.push("你是第一个发言——没有人可以参考，大胆抛出你自己的分析");
+    hints.push("你是第一个发言，没有人可以参考，可以先抛出一个起手判断");
   } else if (spokenRatio >= 0.7) {
     // Late speaker
-    hints.push("你已经听了大部分人的发言——可以指出前面发言中你发现的矛盾或破绽");
+    hints.push("你已经听了大部分人的发言，可以挑你最在意的一点回应");
   }
 
   if (hints.length === 0) return "";
@@ -272,34 +163,6 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
 
   return `<focus_angle>\n【你的视角】\n${selected.map(h => `- ${h}`).join("\n")}\n</focus_angle>`;
 }
-
-/**
- * Build difficulty hint for speech generation.
- * Now always uses "hard" level strategy for better AI performance.
- * The difficulty parameter is kept for backward compatibility but ignored.
- */
-export const buildDifficultySpeechHint = (_difficulty?: DifficultyLevel): string => {
-  void _difficulty;
-  const { t } = getI18n();
-  // Always use hard difficulty for better strategic depth
-  return t("promptUtils.difficultySpeech.hard");
-};
-
-/**
- * Build difficulty hint for decision making.
- * Now always uses "hard" level strategy for better AI performance.
- * The difficulty parameter is kept for backward compatibility but ignored.
- */
-export const buildDifficultyDecisionHint = (_difficulty?: DifficultyLevel, role?: string): string => {
-  const { t } = getI18n();
-  const roleNote =
-    isWolfRole(role)
-      ? t("promptUtils.difficultyDecision.roleNoteWerewolf")
-      : t("promptUtils.difficultyDecision.roleNoteGood");
-
-  // Always use hard difficulty for better strategic depth
-  return t("promptUtils.difficultyDecision.hard", { roleNote });
-};
 
 const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string): string => {
   if (locale === "zh") {
@@ -329,6 +192,33 @@ const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string
   return `\n<hidden_communication_profile>\nUse this only to shape your Werewolf skill, vocabulary, and speech length. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
 };
 
+const buildHiddenPlayerMindSection = (player: Player, locale: string): string => {
+  const mind = player.agentProfile?.playerMind;
+  if (!mind) return "";
+
+  if (locale === "zh") {
+    const lines: string[] = [
+      `胆量：${mind.courage}`,
+      `记忆偏好：${mind.memoryBias}`,
+      `怀疑阈值：${mind.suspicionThreshold}`,
+      `自保倾向：${mind.selfProtection}`,
+      `逻辑水平：${mind.logicDepth}`,
+      `桌面存在感：${mind.tablePresence}`,
+    ];
+    return `\n<hidden_player_mind>\n这些信息是你稳定的玩家心智，只用于塑造你如何判断、站边、改口、承压和发言，不要向其他玩家明说。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
+  }
+
+  const lines: string[] = [
+    `Courage: ${mind.courage}`,
+    `Memory bias: ${mind.memoryBias}`,
+    `Suspicion threshold: ${mind.suspicionThreshold}`,
+    `Self-protection: ${mind.selfProtection}`,
+    `Logic depth: ${mind.logicDepth}`,
+    `Table presence: ${mind.tablePresence}`,
+  ];
+  return `\n<hidden_player_mind>\nUse this as your stable player mind. It shapes how you judge, take sides, change reads, handle pressure, and speak. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
+};
+
 export const buildPersonaSection = (player: Player, isGenshinMode: boolean = false): string => {
   if (isGenshinMode || !player.agentProfile) return "";
   const { t, locale } = getI18n();
@@ -343,7 +233,8 @@ export const buildPersonaSection = (player: Player, isGenshinMode: boolean = fal
     ? `\n${t("promptUtils.persona.basicInfo", { basicInfo: persona.basicInfo.trim() })}`
     : "";
   const hiddenCommunicationProfile = buildHiddenCommunicationProfileSection(persona, locale);
-  return `${base}${extraInfo}${hiddenCommunicationProfile}`;
+  const hiddenPlayerMind = buildHiddenPlayerMindSection(player, locale);
+  return `${base}${extraInfo}${hiddenCommunicationProfile}${hiddenPlayerMind}`;
 };
 
 export const buildAliveCountsSection = (state: GameState): string => {
