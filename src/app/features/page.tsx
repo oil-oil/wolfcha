@@ -14,14 +14,14 @@ import { LandingCta } from "@/components/seo/landing/LandingCta";
 export const metadata: Metadata = {
   title: "Features — AI Werewolf Game with Voice Acting | Wolfcha",
   description:
-    "Explore Wolfcha features: solo social deduction gameplay, multi-model AI arena, immersive voice acting, classic Werewolf roles, and instant browser-based play. No download required.",
+    "Explore Wolfcha features: solo Werewolf gameplay, AI opponents that reason and bluff, immersive voice acting, classic roles, and instant browser-based play. No download required.",
   alternates: {
     canonical: "https://wolf-cha.com/features",
   },
   openGraph: {
     title: "Wolfcha Features — AI Werewolf Game",
     description:
-      "Solo play, multi-model AI arena, voice acting, classic roles, and instant browser play — built for modern social deduction.",
+      "Solo play, AI opponents, voice acting, classic roles, and instant browser play — built for modern social deduction.",
     url: "https://wolf-cha.com/features",
     type: "website",
     images: [
@@ -48,14 +48,14 @@ const coreFeatures = [
     ],
   },
   {
-    title: "AI model arena",
-    description: "Watch different AI models compete. DeepSeek analyzes contradictions. Kimi builds trust. Doubao pressures aggressively. Compare strategies.",
+    title: "AI opponents that play the table",
+    description: "AI players track claims, votes, deaths, and pressure. They can accuse, defend, bluff, follow the crowd, or push a risky read.",
     icon: "🤖",
     details: [
-      "Multiple AI models with unique personalities",
-      "Different reasoning and arguing styles",
-      "Models learn and adapt during games",
-      "Compare which models you play best against",
+      "AI seats with distinct personalities",
+      "Role-aware reasoning and hidden information",
+      "Speech, voting, suspicion, and self-defense",
+      "Great for solo practice and quick games",
     ],
   },
   {
@@ -104,19 +104,6 @@ const coreFeatures = [
   },
 ];
 
-const aiModels = [
-  { name: "DeepSeek", logo: "/models/deepseek.svg", personality: "Analytical, logic-focused, catches contradictions" },
-  { name: "Qwen", logo: "/models/qwen.svg", personality: "Methodical, patient, long-term strategist" },
-  { name: "Kimi", logo: "/models/kimi.svg", personality: "Empathetic, trust-building, alliance-focused" },
-  { name: "Gemini", logo: "/models/gemini.svg", personality: "Creative, adaptive, unconventional plays" },
-  { name: "Claude", logo: "/models/claude.svg", personality: "Nuanced, persuasive, fair-minded" },
-  { name: "OpenAI GPT", logo: "/models/openai.svg", personality: "Narrative-driven, dramatic, memorable" },
-  { name: "GLM", logo: "/models/glm.svg", personality: "Observant, patient, speaks when it matters" },
-  { name: "Doubao", logo: "/models/doubao.svg", personality: "Aggressive, confrontational, direct" },
-  { name: "Seed", logo: "/models/bytedance.svg", personality: "Bold, risk-taking, high-stakes plays" },
-  { name: "MiniMax", logo: "/models/minimax.svg", personality: "Steady, reliable, consistent" },
-];
-
 const roles = [
   { name: "Werewolf", image: "/roles/werewolf.png", ability: "Hunt at night, deceive by day" },
   { name: "Seer", image: "/roles/seer.png", ability: "Check one player each night" },
@@ -154,19 +141,19 @@ const dialogueExamples = [
     ],
   },
   {
-    title: "AI models show distinct personalities",
-    subtitle: "Different reasoning styles create dynamic games.",
+    title: "AI players show distinct personalities",
+    subtitle: "Different speaking habits create dynamic games.",
     lines: [
       {
-        speaker: { seed: "casey-06", name: "Casey (DeepSeek)", modelLogo: "/models/deepseek.svg", meta: "analytical" },
-        content: "The probability of Riley being wolf is 73% based on vote alignment patterns.",
+        speaker: { seed: "casey-06", name: "Casey", modelLogo: "/models/deepseek.svg", meta: "analytical" },
+        content: "Riley defended the first player we eliminated, then backed away when the vote turned. That shift matters.",
       },
       {
-        speaker: { seed: "morgan-02", name: "Morgan (Gemini)", modelLogo: "/models/gemini.svg", meta: "creative" },
+        speaker: { seed: "morgan-02", name: "Morgan", modelLogo: "/models/gemini.svg", meta: "creative" },
         content: "Forget probabilities. What if we're all overthinking? The quietest player hasn't said a word about suspects.",
       },
       {
-        speaker: { seed: "drew-09", name: "Drew (GPT)", modelLogo: "/models/openai.svg", meta: "narrative" },
+        speaker: { seed: "drew-09", name: "Drew", modelLogo: "/models/openai.svg", meta: "narrative" },
         content: "There's a story here. Riley defended the first wolf, then changed when exposed. Classic arc of a wolf protecting a partner.",
       },
     ],
@@ -187,12 +174,12 @@ const faqs = [
     answer: "Voice acting is optional. When enabled, a narrator reads game events, and AI characters speak their dialogue. You can toggle it on/off in settings. Multiple voice styles are available.",
   },
   {
-    question: "What AI models are available?",
-    answer: "Wolfcha features multiple AI models including DeepSeek, Qwen, Kimi, Gemini, Claude, OpenAI GPT, GLM, Doubao, Seed, and MiniMax. Each has a distinct personality and reasoning style.",
+    question: "How do AI opponents behave?",
+    answer: "AI opponents follow the same public table information you see, plus private role information when their role allows it. They can bluff, accuse, defend, follow a trusted player, or change reads after new evidence appears.",
   },
   {
-    question: "Can I choose which AI models to play against?",
-    answer: "The game automatically assigns AI models to create diverse tables. Different combinations create different dynamics, keeping each game fresh.",
+    question: "Do AI players have different personalities?",
+    answer: "Yes. AI seats are generated with different speaking styles, confidence levels, suspicion thresholds, and self-defense habits, so a table can have quiet observers, aggressive pushers, cautious voters, and persuasive bluffers.",
   },
   {
     question: "What roles are included?",
@@ -211,7 +198,7 @@ const faqs = [
 const hubLinks = [
   { href: "/ai-werewolf", label: "AI Werewolf (Hub)", description: "What Wolfcha is and why solo vs AI works." },
   { href: "/how-to-play", label: "How to Play", description: "Learn the rules and get started." },
-  { href: "/ai-models", label: "AI Models", description: "Meet the different AI personalities." },
+  { href: "/guides/how-to-play-werewolf-with-ai", label: "Play with AI", description: "How AI opponents make solo Werewolf work." },
 ];
 
 const featureLinks = [
@@ -219,7 +206,7 @@ const featureLinks = [
   { href: "/werewolf-game-browser", label: "Browser Game", description: "No download required." },
   { href: "/free-werewolf-game-online", label: "Free to Play", description: "Start without registration." },
   { href: "/roles/seer", label: "Seer Role", description: "Master the information game." },
-  { href: "/models/deepseek", label: "DeepSeek AI", description: "The analytical opponent." },
+  { href: "/werewolf-game-with-ai-opponents", label: "AI Opponents", description: "A full table without waiting for players." },
   { href: "/guides/werewolf-rules", label: "Complete Rules", description: "Detailed rules reference." },
 ];
 
@@ -228,7 +215,7 @@ function buildSoftwareJsonLd() {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Wolfcha - AI Werewolf Game",
-    description: "A solo Werewolf (Mafia) social deduction game with AI opponents, voice acting, and multiple AI models.",
+    description: "A solo Werewolf (Mafia) social deduction game with AI opponents, voice acting, and classic roles.",
     url: "https://wolf-cha.com/features",
     applicationCategory: "GameApplication",
     operatingSystem: "Any",
@@ -239,7 +226,7 @@ function buildSoftwareJsonLd() {
     },
     featureList: [
       "Solo gameplay against AI",
-      "Multiple AI model personalities",
+      "AI opponents with distinct personalities",
       "Voice acting and narration",
       "Classic Werewolf roles",
       "Browser-based, no download",
@@ -312,36 +299,24 @@ export default function FeaturesPage() {
         </div>
       </LandingSection>
 
-      {/* AI Model Arena */}
+      {/* AI Opponents */}
       <LandingSection
-        id="ai-arena"
-        title="AI model arena"
-        subtitle="10 different AI models, each with a unique personality and reasoning style."
+        id="ai-opponents"
+        title="AI opponents"
+        subtitle="A full Werewolf table with AI players who speak, suspect, bluff, and vote."
       >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {aiModels.map((model) => (
-            <Link
-              key={model.name}
-              href={`/models/${model.name.toLowerCase().replace(/\s+/g, "").replace("gpt", "")}`}
-              className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              <div className="flex items-center gap-3">
-                <Image src={model.logo} alt={model.name} width={28} height={28} />
-                <div className="font-semibold text-[var(--text-primary)]">{model.name}</div>
-              </div>
-              <p className="mt-3 text-xs leading-relaxed text-[var(--text-secondary)]">
-                {model.personality}
-              </p>
-            </Link>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Role-aware", "AI players act from their own role perspective and do not receive hidden information they should not know."],
+            ["Memory-driven", "They remember public deaths, claims, votes, and contradictions across the game."],
+            ["Social pressure", "They can follow a leader, resist suspicion, push a counter-read, or stay quiet when that feels natural."],
+            ["Solo-friendly", "You get the tension of a full Werewolf table without waiting for 8-12 real players."],
+          ].map(([title, description]) => (
+            <div key={title} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-5">
+              <div className="font-semibold text-[var(--text-primary)]">{title}</div>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{description}</p>
+            </div>
           ))}
-        </div>
-        <div className="mt-6 text-center">
-          <Link
-            href="/ai-models"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--border-color)] px-5 py-2.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)]"
-          >
-            Explore all AI models →
-          </Link>
         </div>
       </LandingSection>
 

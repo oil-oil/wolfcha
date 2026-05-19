@@ -520,6 +520,7 @@ export function useGameLogic() {
     waitForUnpause,
     isTokenValid,
     getAccessToken,
+    prepareFinalState: (state) => maybeGenerateDailySummary(state, { force: true }),
   });
 
   const { endGame, resolveNight } = specialEvents;

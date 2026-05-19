@@ -62,7 +62,7 @@ const hubLinks: LandingRelatedLink[] = [
   { href: "/ai-werewolf", label: "AI Werewolf (Hub)", description: "What Wolfcha is and why solo vs AI works." },
   { href: "/how-to-play", label: "How to Play", description: "A quick rules overview for solo play." },
   { href: "/features", label: "Features", description: "All Wolfcha features explained." },
-  { href: "/ai-models", label: "AI Models", description: "Meet the AI personalities." },
+  { href: "/werewolf-game-with-ai-opponents", label: "AI Opponents", description: "How AI players fill the table." },
 ];
 
 const experienceClusterLinks: LandingRelatedLink[] = [

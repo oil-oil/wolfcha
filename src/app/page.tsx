@@ -528,6 +528,7 @@ export default function Home() {
   // UI 状态
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [isNotebookOpen, setIsNotebookOpen] = useState(false);
+  const [isEventLogOpen, setIsEventLogOpen] = useState(false);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
@@ -702,7 +703,7 @@ export default function Home() {
         activeEl?.closest("[contenteditable='true']") !== null;
 
       // 如果笔记本打开，不拦截 Enter 键（让笔记本正常换行）
-      if (isNotebookOpen && e.key === "Enter") return;
+      if ((isNotebookOpen || isEventLogOpen) && e.key === "Enter") return;
 
       // 如果焦点在输入元素内，不拦截左右方向键（让光标正常移动）
       if (isInInput && (e.key === "ArrowLeft" || e.key === "ArrowRight")) return;
@@ -734,7 +735,7 @@ export default function Home() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentDialogue, waitingForNextRound, advanceSpeech, handleNextRound, isRoleRevealOpen, isNotebookOpen]);
+  }, [currentDialogue, waitingForNextRound, advanceSpeech, handleNextRound, isRoleRevealOpen, isNotebookOpen, isEventLogOpen]);
 
   const handleAdvanceDialogue = useCallback(async () => {
     if (isRoleRevealOpen) return;
@@ -784,7 +785,7 @@ export default function Home() {
       clearAutoAdvanceTimeout();
       return;
     }
-    if (isNotebookOpen) {
+    if (isNotebookOpen || isEventLogOpen) {
       clearAutoAdvanceTimeout();
       return;
     }
@@ -843,6 +844,7 @@ export default function Home() {
     handleAdvanceDialogue,
     humanPlayer,
     isAutoAdvanceDialogueEnabled,
+    isEventLogOpen,
     isNotebookOpen,
     isRoleRevealOpen,
     isSettingsOpen,
@@ -1596,6 +1598,8 @@ export default function Home() {
                       onWhiteWolfKingBoom={handleWhiteWolfKingBoom}
                       onViewAnalysis={handleViewAnalysis}
                       isAnalysisLoading={isAnalysisLoading}
+                      isEventLogOpen={isEventLogOpen}
+                      onEventLogOpenChange={setIsEventLogOpen}
                     />
 
                     {/* 移动端玩家条 */}
@@ -1686,7 +1690,10 @@ export default function Home() {
 
       {/* 笔记本悬浮按钮 - 参考 style-unification-preview.html */}
       <button
-        onClick={() => setIsNotebookOpen((v) => !v)}
+        onClick={() => {
+          setIsNotebookOpen((v) => !v);
+          setIsEventLogOpen(false);
+        }}
         className="wc-notebook-fab"
         title={isNotebookOpen ? t("page.closeNotebook") : t("page.openNotebook")}
         type="button"

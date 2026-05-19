@@ -32,13 +32,23 @@ import { useAppLocale } from "@/i18n/useAppLocale";
 import { getMessages } from "@/i18n/messages";
 import { buildSimpleAvatarUrl, AvatarConfig } from "@/lib/avatar-config";
 
-const aiModels = [
-  { name: "DeepSeek V3.2", logo: "/models/deepseek.svg" },
-  { name: "Qwen3", logo: "/models/qwen.svg" },
-  { name: "Kimi K2", logo: "/models/kimi.svg" },
-  { name: "Gemini 3", logo: "/models/gemini.svg" },
-  { name: "Seed 1.8", logo: "/models/bytedance.svg" },
-  { name: "Claude", logo: "/models/claude.svg" },
+const aiPlayerTraits = [
+  {
+    title: { zh: "会记桌面信息", en: "Table memory" },
+    description: { zh: "记录死亡、发言、投票和站边变化。", en: "Tracks deaths, speeches, votes, and changing reads." },
+  },
+  {
+    title: { zh: "会保护自己", en: "Self-defense" },
+    description: { zh: "被质疑时会解释、反打或转移压力。", en: "Explains, counters, or redirects pressure when accused." },
+  },
+  {
+    title: { zh: "会伪装身份", en: "Bluffing" },
+    description: { zh: "狼人会隐藏视角，好人会谨慎暴露信息。", en: "Wolves hide their angle; villagers reveal information carefully." },
+  },
+  {
+    title: { zh: "会推动投票", en: "Voting pressure" },
+    description: { zh: "根据局势跟票、冲票、分票或带队。", en: "Follows, splits, pushes, or leads votes based on the table." },
+  },
 ];
 
 const roleKeys = ["werewolf", "seer", "witch", "hunter", "guard"] as const;
@@ -497,7 +507,7 @@ export function LandingContent() {
     {
       q: isZh ? "如何查看我的游戏数据？" : "How do I view my game data?",
       a: isZh
-        ? "点击头像进入个人中心，可以查看积分、邀请码、已邀请人数等信息。还可以配置自定义 API Key 使用更多模型。"
+        ? "点击头像进入个人中心，可以查看积分、邀请码、已邀请人数等信息。也可以配置自己的 API Key。"
         : "Click your avatar to access the profile center, where you can view credits, referral code, and referral count. You can also configure custom API keys to use more models.",
     },
     {
@@ -564,7 +574,7 @@ export function LandingContent() {
               {isZh ? "角色" : "Roles"}
             </a>
             <a
-              href="#models"
+              href="#ai-players"
               className="transition-colors hover:text-[var(--color-gold-dark)]"
             >
               {t("seo.nav.models")}
@@ -793,9 +803,9 @@ export function LandingContent() {
         </div>
       </section>
 
-      {/* AI Models Section */}
+      {/* AI Players Section */}
       <section
-        id="models"
+        id="ai-players"
         data-animate
         className={`border-y border-[var(--border-color)] bg-[var(--bg-secondary)]/60 px-6 py-20 transition-all duration-700 ${getAnimationClass("models")}`}
       >
@@ -807,25 +817,19 @@ export function LandingContent() {
             {t("seo.models.description")}
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12">
-            {aiModels.map((model, idx) => (
+          <div className="grid gap-4 md:grid-cols-4">
+            {aiPlayerTraits.map((trait, idx) => (
               <div
-                key={model.name}
-                className="group flex flex-col items-center gap-3"
+                key={trait.title.en}
+                className="rounded-xl border border-[var(--border-color)] bg-white/70 p-5 shadow-sm transition-all hover:border-[var(--color-gold)] hover:shadow-md"
                 style={{ animationDelay: `${idx * 100}ms` }}
               >
-                <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-[var(--border-color)] bg-white/70 p-3 shadow-sm transition-all group-hover:border-[var(--color-gold)] group-hover:shadow-md group-hover:-translate-y-1">
-                  <Image
-                    src={model.logo}
-                    alt={model.name}
-                    width={48}
-                    height={48}
-                    className="h-12 w-12"
-                  />
+                <div className="mb-2 text-sm font-bold text-[var(--text-primary)]">
+                  {isZh ? trait.title.zh : trait.title.en}
                 </div>
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
-                  {model.name}
-                </span>
+                <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+                  {isZh ? trait.description.zh : trait.description.en}
+                </p>
               </div>
             ))}
           </div>

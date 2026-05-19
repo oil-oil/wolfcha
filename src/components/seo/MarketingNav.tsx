@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import { GameController, BookOpen, Robot, Star } from "@phosphor-icons/react";
+import { GameController, BookOpen, Star } from "@phosphor-icons/react";
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +15,6 @@ export function MarketingNav() {
     { href: "/", label: t("home"), icon: GameController },
     { href: "/ai-werewolf", label: "AI Werewolf", icon: null }, // Brand keyword, keep English or specialized
     { href: "/features", label: t("features"), icon: Star },
-    { href: "/ai-models", label: t("models"), icon: Robot },
     { href: "/how-to-play", label: t("howTo"), icon: BookOpen },
   ];
 

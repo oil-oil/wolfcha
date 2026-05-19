@@ -44,8 +44,8 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/ai-models" className="hover:text-[var(--color-gold-dark)] transition-colors">
-                  {tNav("models")}
+                <Link href="/ai-werewolf" className="hover:text-[var(--color-gold-dark)] transition-colors">
+                  AI Werewolf
                 </Link>
               </li>
               <li>

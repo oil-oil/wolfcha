@@ -91,7 +91,7 @@ export const soloLandingDataByKey: Record<SoloLandingKey, SoloLandingData> = {
       { step: "Discover who wins", description: "Villagers or Werewolves—the better strategy prevails." },
     ],
     uniqueFeatures: [
-      { title: "Multiple AI models", description: "DeepSeek, Gemini, Qwen, Claude, and more—each with different reasoning." },
+      { title: "AI players with personalities", description: "Every seat can have different memory, confidence, suspicion, and speaking habits." },
       { title: "Personality system", description: "AI players are calm, aggressive, empathetic, skeptical, or any mix." },
       { title: "Adaptive difficulty", description: "AI opponents adjust to game state and player behavior." },
       { title: "Transparent reasoning", description: "Watch AI players explain their logic in natural dialogue." },
@@ -125,7 +125,7 @@ export const soloLandingDataByKey: Record<SoloLandingKey, SoloLandingData> = {
       },
     ],
     faqs: [
-      { question: "Which AI models power the opponents?", answer: "Wolfcha uses DeepSeek, Gemini, Qwen, Claude, and others. Each model brings different reasoning patterns." },
+      { question: "How do AI opponents behave?", answer: "AI opponents follow the public table, their private role information, and their own personality. They can accuse, defend, bluff, follow votes, or hold back." },
       { question: "Can AI opponents actually bluff?", answer: "Yes! AI wolves will claim innocent roles, misdirect suspicion, and coordinate eliminations." },
       { question: "How do AI personalities work?", answer: "Each AI is assigned traits like calm, aggressive, empathetic. These influence how they communicate and vote." },
       { question: "Do AI players remember previous games?", answer: "Each game is independent. AI players don't remember past games." },

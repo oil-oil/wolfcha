@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://wolf-cha.com/ai-models",
   },
+  robots: {
+    index: false,
+    follow: true,
+  },
   openGraph: {
     title: "AI Model Arena — Watch LLMs Play Werewolf | Wolfcha",
     description:

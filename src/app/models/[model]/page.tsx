@@ -119,6 +119,10 @@ export async function generateMetadata({
       title,
       description: comparisonData.heroDescription,
       alternates: { canonical },
+      robots: {
+        index: false,
+        follow: true,
+      },
       openGraph: {
         title,
         description: comparisonData.heroDescription,
@@ -150,6 +154,10 @@ export async function generateMetadata({
     description: data.heroDescription,
     alternates: {
       canonical,
+    },
+    robots: {
+      index: false,
+      follow: true,
     },
     openGraph: {
       title,

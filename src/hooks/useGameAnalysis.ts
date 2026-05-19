@@ -4,14 +4,18 @@
  */
 
 import { useEffect, useCallback } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import {
   gameStateAtom,
   gameAnalysisAtom,
   analysisLoadingAtom,
   analysisErrorAtom,
 } from "@/store/game-machine";
-import { generateGameAnalysis } from "@/lib/game-analysis";
+import {
+  GAME_ANALYSIS_VERSION,
+  generateGameAnalysis,
+  getGameAnalysisSourceFingerprint,
+} from "@/lib/game-analysis";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { getReviewModel } from "@/lib/api-keys";
 
@@ -55,17 +59,26 @@ export function useGameAnalysis() {
   }, [gameState, setAnalysisData, setIsLoading, setError]);
 
   useEffect(() => {
+    const sourceFingerprint = gameState.phase === "GAME_END"
+      ? getGameAnalysisSourceFingerprint(gameState)
+      : null;
+
     // 触发条件：游戏结束、有胜利方、未加载中
-    // 如果 analysisData 的 gameId 与当前游戏不匹配，也需要重新生成
+    // 如果缓存来自旧版本或旧状态，也需要重新生成
     const needsAnalysis = gameState.phase === "GAME_END" && 
       gameState.winner && 
       !isLoading &&
-      (!analysisData || analysisData.gameId !== gameState.gameId);
+      (
+        !analysisData ||
+        analysisData.gameId !== gameState.gameId ||
+        analysisData.analysisVersion !== GAME_ANALYSIS_VERSION ||
+        analysisData.sourceFingerprint !== sourceFingerprint
+      );
     
     if (needsAnalysis) {
       triggerAnalysis();
     }
-  }, [gameState.phase, gameState.winner, gameState.gameId, analysisData, isLoading, triggerAnalysis]);
+  }, [gameState, analysisData, isLoading, triggerAnalysis]);
 
   const clearAnalysis = useCallback(() => {
     setAnalysisData(null);

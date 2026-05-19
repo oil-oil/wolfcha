@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useMemo, useState, useCallback } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle, Prohibit } from "@phosphor-icons/react";
+import { ChatCircleDots, PaperPlaneTilt, CheckCircle, MoonStars, Eye, Drop, Crosshair, Skull, X, ArrowClockwise, CaretRight, UserCircle, Prohibit, ClipboardText } from "@phosphor-icons/react";
 import { WerewolfIcon, VillagerIcon, VoteIcon } from "@/components/icons/FlatIcons";
 import { VoteResultCard } from "./VoteResultCard";
 import { VotingProgress } from "./VotingProgress";
@@ -12,6 +12,7 @@ import { WolfPlanningPanel } from "./WolfPlanningPanel";
 import { MentionInput } from "./MentionInput";
 import { TalkingAvatar } from "./TalkingAvatar";
 import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
+import { EventLog } from "./EventLog";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { RoleRevealHistoryCard, type RoleRevealEntry } from "@/components/game/RoleRevealHistoryCard";
 import LoadingMiniGame from "./MiniGame/LoadingMiniGame";
@@ -24,6 +25,8 @@ import { useTranslations } from "next-intl";
 
 type WitchActionType = "save" | "poison" | "pass";
 import type { DialogueState } from "@/store/game-machine";
+
+const HISTORY_BOTTOM_THRESHOLD = 24;
 
 // 职业立绘映射
 const ROLE_PORTRAIT_MAP: Record<string, string> = {
@@ -276,6 +279,8 @@ interface DialogAreaProps {
   onWhiteWolfKingBoom?: () => void;
   onViewAnalysis?: () => void;
   isAnalysisLoading?: boolean;
+  isEventLogOpen?: boolean;
+  onEventLogOpenChange?: (open: boolean) => void;
 }
 
 // 等待状态动画组件已移除，与当前简洁风格不符
@@ -389,6 +394,8 @@ export function DialogArea({
   onWhiteWolfKingBoom,
   onViewAnalysis,
   isAnalysisLoading = false,
+  isEventLogOpen = false,
+  onEventLogOpenChange,
 }: DialogAreaProps) {
   const t = useTranslations();
   const isGenshinMode = !!gameState.isGenshinMode;
@@ -608,9 +615,6 @@ export function DialogArea({
   const userScrollIntentTimeoutRef = useRef<number | null>(null);
   const userInteractionSuppressRef = useRef(false);
   const userInteractionSuppressTimeoutRef = useRef<number | null>(null);
-  const wasAwayFromBottomRef = useRef(false);
-  const unlockBlockedUntilRef = useRef(0);
-  const lockedScrollTopRef = useRef(0);
   const userScrolledDuringTypingRef = useRef(false);
   const lastScrollTopRef = useRef(0);
   const prevMessageCountRef = useRef(visibleMessages.length);
@@ -633,7 +637,6 @@ export function DialogArea({
       
       isAutoScrollingRef.current = true;
       manualScrollLockRef.current = false;
-      wasAwayFromBottomRef.current = false;
       userScrolledDuringTypingRef.current = false;
       setIsManualScrollLocked(false);
       setUnreadCount(0);
@@ -664,12 +667,6 @@ export function DialogArea({
       manualScrollLockRef.current = true;
       setIsManualScrollLocked(true);
 
-      if (historyRef.current) {
-        lockedScrollTopRef.current = historyRef.current.scrollTop;
-      }
-
-      unlockBlockedUntilRef.current = Date.now() + 700;
-
       if (isAutoScrollingRef.current) {
         isAutoScrollingRef.current = false;
       }
@@ -685,24 +682,23 @@ export function DialogArea({
       }, 600);
 
       if (!(event instanceof WheelEvent)) {
-        userInteractionSuppressRef.current = true;
-        if (userInteractionSuppressTimeoutRef.current) {
-          window.clearTimeout(userInteractionSuppressTimeoutRef.current);
-        }
-        userInteractionSuppressTimeoutRef.current = window.setTimeout(() => {
-          userInteractionSuppressRef.current = false;
-        }, 900);
+        if (historyRef.current) {
+          const distanceToBottom = historyRef.current.scrollHeight - historyRef.current.scrollTop - historyRef.current.clientHeight;
+          if (distanceToBottom > HISTORY_BOTTOM_THRESHOLD) {
+            userInteractionSuppressRef.current = true;
+            if (userInteractionSuppressTimeoutRef.current) {
+              window.clearTimeout(userInteractionSuppressTimeoutRef.current);
+            }
+            userInteractionSuppressTimeoutRef.current = window.setTimeout(() => {
+              userInteractionSuppressRef.current = false;
+            }, 900);
 
-        lockManualScroll();
-        wasAwayFromBottomRef.current = true;
-        if (isTyping) {
-          userScrolledDuringTypingRef.current = true;
+            lockManualScroll();
+            if (isTyping) {
+              userScrolledDuringTypingRef.current = true;
+            }
+          }
         }
-        return;
-      }
-
-      if (isAutoScrollingRef.current) {
-        lockManualScroll();
         return;
       }
 
@@ -719,35 +715,23 @@ export function DialogArea({
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
-
-      if (manualScrollLockRef.current) {
-        const isUserActive = userScrollIntentRef.current || userInteractionSuppressRef.current;
-        if (isUserActive) {
-          lockedScrollTopRef.current = scrollTop;
-        } else if (Math.abs(scrollTop - lockedScrollTopRef.current) > 1) {
-          const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-          const isTrulyAtBottom = distanceToBottom <= 0.5;
-          if (isTrulyAtBottom) {
-            manualScrollLockRef.current = false;
-            wasAwayFromBottomRef.current = false;
-            userScrolledDuringTypingRef.current = false;
-            setIsManualScrollLocked(false);
-            setUnreadCount(0);
-            return;
-          }
-
-          isAutoScrollingRef.current = true;
-          container.scrollTop = lockedScrollTopRef.current;
-          window.setTimeout(() => {
-            isAutoScrollingRef.current = false;
-          }, 0);
-          return;
-        }
-      }
-
+      const distanceToBottom = Math.max(0, scrollHeight - scrollTop - clientHeight);
+      const isNearBottom = distanceToBottom <= HISTORY_BOTTOM_THRESHOLD;
       const prevTop = lastScrollTopRef.current;
       const scrolledUp = scrollTop < prevTop - 0.5;
       lastScrollTopRef.current = scrollTop;
+
+      setIsAtBottom(isNearBottom);
+
+      if (isNearBottom) {
+        userScrolledDuringTypingRef.current = false;
+        if (manualScrollLockRef.current) {
+          manualScrollLockRef.current = false;
+          setIsManualScrollLocked(false);
+        }
+        setUnreadCount(0);
+        return;
+      }
 
       if (isAutoScrollingRef.current && !userScrollIntentRef.current) {
         if (!scrolledUp) {
@@ -757,46 +741,15 @@ export function DialogArea({
         lockManualScroll();
       }
 
-      const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-      const isTrulyAtBottom = distanceToBottom <= 0.5;
-      
-      setIsAtBottom(distanceToBottom < 24);
-
-      if (isTrulyAtBottom) {
-        userScrolledDuringTypingRef.current = false;
-        if (manualScrollLockRef.current) {
-          manualScrollLockRef.current = false;
-          setIsManualScrollLocked(false);
-        }
-        wasAwayFromBottomRef.current = false;
-        setUnreadCount(0);
-      }
-
-      if (!isTrulyAtBottom) {
-        wasAwayFromBottomRef.current = true;
-      }
-
       if (scrolledUp) {
         lockManualScroll();
-        wasAwayFromBottomRef.current = true;
         if (isTyping) {
           userScrolledDuringTypingRef.current = true;
         }
         return;
       }
 
-      if (manualScrollLockRef.current) {
-        if (isTrulyAtBottom) {
-          manualScrollLockRef.current = false;
-          wasAwayFromBottomRef.current = false;
-          userScrolledDuringTypingRef.current = false;
-          setIsManualScrollLocked(false);
-          setUnreadCount(0);
-        }
-        return;
-      }
-
-      if (!isTrulyAtBottom) {
+      if (!manualScrollLockRef.current && userScrollIntentRef.current) {
         manualScrollLockRef.current = true;
         setIsManualScrollLocked(true);
       }
@@ -1079,9 +1032,31 @@ export function DialogArea({
 
           {/* 右侧：聊天历史记录 */}
           <div className="wc-dialog-history flex-1 min-w-0 min-h-0 relative">
+            <div className="absolute right-2 top-2 z-20">
+              <button
+                type="button"
+                onClick={() => onEventLogOpenChange?.(!isEventLogOpen)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium shadow-sm backdrop-blur-sm transition-all",
+                  isNight
+                    ? "border-white/15 bg-black/25 text-white/75 hover:bg-black/35 hover:text-white"
+                    : "border-[var(--border-color)] bg-white/75 text-[var(--text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]",
+                  isEventLogOpen && (isNight
+                    ? "border-[var(--color-gold)]/40 text-[var(--color-gold)]"
+                    : "border-[var(--color-accent)] text-[var(--color-accent)]")
+                )}
+              >
+                <ClipboardText size={14} />
+                <span>{isEventLogOpen ? t("eventLog.backToHistory") : t("eventLog.shortTitle")}</span>
+              </button>
+            </div>
+
             <motion.div 
               ref={historyRef}
-              className="absolute inset-0 overflow-y-scroll pb-4 scrollbar-hide"
+              className={cn(
+                "absolute inset-0 overflow-y-scroll pb-4 pt-10 scrollbar-hide transition-opacity duration-200",
+                isEventLogOpen && "pointer-events-none opacity-0"
+              )}
               style={{
                 scrollbarGutter: "stable",
                 overflowAnchor: "none",
@@ -1119,10 +1094,25 @@ export function DialogArea({
                 </LayoutGroup>
               </div>
             </motion.div>
+
+            <AnimatePresence>
+              {isEventLogOpen && (
+                <motion.div
+                  key="event-log-history-view"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                  className="absolute inset-0 overflow-y-auto px-3 pb-4 pt-12 scrollbar-hide"
+                >
+                  <EventLog gameState={gameState} />
+                </motion.div>
+              )}
+            </AnimatePresence>
             
             {/* 新消息提示：底部分割线 + 文案 */}
             <AnimatePresence>
-              {unreadCount > 0 && !isAtBottom && (
+              {unreadCount > 0 && !isAtBottom && !isEventLogOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.9 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}

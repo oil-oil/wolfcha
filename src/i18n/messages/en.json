@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Wolfcha | AI Werewolf - Play Werewolf with AI Online",
-    "description": "Play Werewolf with AI opponents online. The ultimate single-player social deduction game featuring DeepSeek, Qwen, Kimi & Gemini AI models with voice acting."
+    "title": "Wolfcha | AI Werewolf Game - Play Werewolf Online",
+    "description": "Play Werewolf with AI opponents online. A single-player social deduction game with classic roles, AI players that bluff and reason, optional voice acting, and no download."
   },
   "locale": {
     "label": "Language",
@@ -86,7 +86,7 @@
     "sponsor": {
       "title": "Become a sponsor",
       "subtitle": "Your support keeps Wolfcha running smoothly and free for everyone.",
-      "description": "Wolfcha is a community-driven AI Werewolf project. Our costs go toward AI models, voice synthesis, servers, and content creation. Any support—big or small—means the world to us.",
+      "description": "Wolfcha is a community-driven AI Werewolf project. Our costs go toward AI gameplay, voice synthesis, servers, and content creation. Any support—big or small—means the world to us.",
       "items": {
         "credits": "Model credits / compute / server resources",
         "media": "Voice, sound effects, character art assets",
@@ -101,9 +101,9 @@
       "showcaseLabel": "Sponsor showcase",
       "cards": {
         "openCreator": "OpenCreator helps us generate all night-time character art",
-        "bailian": "Dashscope provides us with AI model capabilities",
-        "tokendance": "TokenDance powers every strategic showdown with sharp AI model capabilities.",
-        "watcha": "Watcha provides AI model capabilities and showcase platform"
+        "bailian": "Dashscope provides us with AI capability support",
+        "tokendance": "TokenDance powers every strategic showdown with sharp AI capabilities.",
+        "watcha": "Watcha provides AI capability and showcase platform support"
       },
       "copySuccess": "Email copied",
       "copyFallback": "Email address",
@@ -290,14 +290,14 @@
     "nav": {
       "home": "Play",
       "features": "Features",
-      "models": "AI Models",
+      "models": "AI Players",
       "howTo": "How to Play",
       "blog": "Blog"
     },
     "hero": {
       "title": "AI Werewolf",
       "subtitle": "Play with AI Opponents",
-      "description": "Experience the classic social deduction game like never before. Battle against multiple AI models that reason, bluff, and strategize — all in a single-player experience.",
+      "description": "Play the classic Werewolf social deduction game online with AI opponents. Talk, bluff, vote, and practice anytime in a single-player browser game.",
       "playNow": "Play Now — Free",
       "howToPlay": "How to Play"
     },
@@ -308,8 +308,8 @@
         "description": "No need to gather friends. Play a full Werewolf game solo with AI opponents that reason, bluff, and strategize."
       },
       "models": {
-        "title": "Multiple AI Models",
-        "description": "Each AI player is powered by a different language model, creating diverse personalities and play styles."
+        "title": "AI Players with Personalities",
+        "description": "Each AI opponent has a stable personality, memory, and strategy, so every table feels different."
       },
       "voice": {
         "title": "Voice Acting",
@@ -321,8 +321,8 @@
       }
     },
     "models": {
-      "title": "Powered by Top AI Models",
-      "description": "Each AI player uses a different language model, creating unique personalities and strategies",
+      "title": "AI Players That Actually Play",
+      "description": "AI opponents read the table, accuse, defend, bluff, and vote through the full Werewolf flow.",
       "deepseek": "Strategic & Analytical",
       "qwen": "Balanced & Thoughtful",
       "kimi": "Creative & Unpredictable",
@@ -347,11 +347,11 @@
     "faq": {
       "title": "Frequently Asked Questions",
       "q1": "What is AI Werewolf?",
-      "a1": "AI Werewolf is a single-player version of the classic social deduction game where you play against AI opponents powered by advanced language models.",
+      "a1": "AI Werewolf is a single-player version of the classic social deduction game where you play against AI opponents that speak, reason, bluff, and vote.",
       "q2": "Can I really play Werewolf alone?",
       "a2": "Yes! All other players are AI-controlled, each with unique personalities and reasoning abilities. It feels like playing with real people.",
-      "q3": "Which AI models power the game?",
-      "a3": "We use DeepSeek V3.2, Qwen3-235B, Kimi K2, Gemini 3 Flash, and ByteDance Seed 1.8. Each brings different strengths to the game.",
+      "q3": "How do AI players work?",
+      "a3": "Every AI player only sees information their role should know. They track speeches, react to votes, protect themselves, bluff when needed, and try to win with their faction.",
       "q4": "Is it free to play?",
       "a4": "Yes, Wolfcha is free to play. Start immediately at wolf-cha.com.",
       "q5": "What roles are available?",
@@ -1381,6 +1381,27 @@
     "clear": "Clear notes",
     "clearConfirm": "Clear all notes?",
     "placeholder": "Write down clues here..."
+  },
+  "eventLog": {
+    "title": "Public events",
+    "shortTitle": "Events",
+    "backToHistory": "History",
+    "eventCount": "{count} events",
+    "empty": "No public events yet",
+    "currentSheriff": "Sheriff: {player}",
+    "dayLabel": "Day {day}",
+    "seat": "Seat {seat}",
+    "seatWithName": "Seat {seat} {name}",
+    "separator": ", ",
+    "nightDeaths": "Night: {players} died",
+    "peacefulNight": "Night: no deaths",
+    "executed": "Day: {player} was exiled ({votes} votes)",
+    "voteTie": "Day: tied vote, nobody was exiled",
+    "hunterShot": "Hunter {hunter} shot {target}",
+    "whiteWolfKingBoom": "White Wolf King {boom} exploded and took {target}",
+    "idiotRevealed": "{player} revealed as Idiot and survived exile",
+    "gameEndVillage": "Game over: Villagers win",
+    "gameEndWolf": "Game over: Werewolves win"
   },
   "wolfPlanning": {
     "title": "Wolf coordination",

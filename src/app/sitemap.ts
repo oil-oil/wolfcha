@@ -1,8 +1,6 @@
 import { MetadataRoute } from "next";
 import { roleLandingKeys } from "@/components/seo/landing/roleLandingData";
 import { soloLandingKeys } from "@/components/seo/landing/soloLandingData";
-import { modelLandingKeys } from "@/components/seo/landing/modelLandingData";
-import { modelComparisonKeys } from "@/components/seo/landing/modelComparisonData";
 import { experienceLandingKeys } from "@/components/seo/landing/experienceLandingData";
 import { gameComparisonKeys } from "@/components/seo/landing/gameComparisonData";
 
@@ -61,12 +59,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     {
-      url: `${baseUrl}/ai-models`,
-      lastModified,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
       url: `${baseUrl}/features`,
       lastModified,
       changeFrequency: "monthly",
@@ -99,20 +91,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified,
       changeFrequency: "monthly" as const,
       priority: 0.75,
-    })),
-    // Model landing pages (10)
-    ...modelLandingKeys.map((model) => ({
-      url: `${baseUrl}/models/${model}`,
-      lastModified,
-      changeFrequency: "monthly" as const,
-      priority: 0.7,
-    })),
-    // Model comparison pages (10)
-    ...modelComparisonKeys.map((comparison) => ({
-      url: `${baseUrl}/models/${comparison}`,
-      lastModified,
-      changeFrequency: "monthly" as const,
-      priority: 0.65,
     })),
     // Experience landing pages (8)
     ...experienceLandingKeys.map((slug) => ({

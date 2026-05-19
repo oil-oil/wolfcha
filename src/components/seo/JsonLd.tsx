@@ -23,7 +23,7 @@ export function getGameJsonLd() {
     name: "Wolfcha - AI Werewolf Game",
     alternateName: ["AI Werewolf", "猹杀", "AI狼人杀"],
     description:
-      "Play Werewolf with AI opponents. A single-player social deduction game featuring multiple AI models including DeepSeek, Qwen, Kimi, and Gemini. Experience immersive gameplay with voice acting and strategic reasoning.",
+      "Play Werewolf with AI opponents. A single-player social deduction game where AI players reason, bluff, accuse, defend, and vote through the full Werewolf flow.",
     url: "https://wolf-cha.com",
     image: "https://wolf-cha.com/og-image.png",
     genre: ["Social Deduction", "Strategy", "Party Game", "AI Game"],
@@ -42,7 +42,7 @@ export function getGameJsonLd() {
       url: "https://wolf-cha.com",
     },
     keywords:
-      "AI werewolf, werewolf game online, play werewolf alone, single player werewolf, AI mafia game, LLM werewolf, social deduction game",
+      "AI werewolf, play werewolf online, werewolf game online, play werewolf alone, single player werewolf, AI mafia game, werewolf with AI opponents, social deduction game",
     inLanguage: ["en", "zh-CN"],
     numberOfPlayers: {
       "@type": "QuantitativeValue",
@@ -61,7 +61,7 @@ export function getWebsiteJsonLd() {
     alternateName: "AI Werewolf Game",
     url: "https://wolf-cha.com",
     description:
-      "Play Werewolf with AI - The ultimate single-player social deduction experience powered by cutting-edge AI models.",
+      "Play Werewolf with AI opponents online. A single-player social deduction game with classic roles, AI dialogue, voting, bluffing, and optional voice acting.",
     potentialAction: {
       "@type": "PlayAction",
       target: "https://wolf-cha.com",
@@ -96,7 +96,7 @@ export function getFAQJsonLd() {
         name: "What is AI Werewolf?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "AI Werewolf is a single-player version of the classic Werewolf (Mafia) social deduction game where you play against AI opponents powered by advanced language models like DeepSeek, Qwen, Kimi, and Gemini.",
+          text: "AI Werewolf is a single-player version of the classic Werewolf (Mafia) social deduction game where you play against AI opponents that speak, reason, bluff, and vote.",
         },
       },
       {
@@ -104,15 +104,15 @@ export function getFAQJsonLd() {
         name: "Can I play Werewolf alone?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes! Wolfcha allows you to play Werewolf completely solo. All other players are controlled by different AI models, each with unique personalities and strategies.",
+          text: "Yes! Wolfcha allows you to play Werewolf completely solo. All other players are AI opponents with distinct personalities, memory, and strategies.",
         },
       },
       {
         "@type": "Question",
-        name: "Which AI models are used in the game?",
+        name: "How do AI players work in the game?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Wolfcha features multiple AI models including DeepSeek V3.2, Qwen3-235B, Kimi K2, Gemini 3 Flash, and ByteDance Seed 1.8. Each model brings different reasoning styles to the game.",
+          text: "AI players only know what their role should know. They follow speeches, vote history, night outcomes, and their own faction goal to accuse, defend, bluff, and vote.",
         },
       },
       {

@@ -109,6 +109,8 @@ export interface RoundState {
 
 export interface GameAnalysisData {
   gameId: string;
+  analysisVersion?: number;
+  sourceFingerprint?: string;
   timestamp: number;
   duration: number;
   playerCount: number;

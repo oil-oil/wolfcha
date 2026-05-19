@@ -176,7 +176,7 @@ const relatedLinks = [
   { href: "/guides/seer-strategy", label: "Seer Strategy", description: "How to use your checks effectively" },
   { href: "/guides/how-to-win-as-werewolf", label: "Werewolf Strategy", description: "Deception and manipulation tactics" },
   { href: "/how-to-play", label: "Quick Start Guide", description: "Get playing in 5 minutes" },
-  { href: "/ai-models", label: "AI Models", description: "Meet your AI opponents" },
+  { href: "/werewolf-game-with-ai-opponents", label: "AI Opponents", description: "Meet your AI table" },
 ];
 
 export default function WerewolfRulesPage() {

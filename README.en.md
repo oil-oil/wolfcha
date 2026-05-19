@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
-  <h3>Play Werewolf with AI — Watch the Models Battle It Out</h3>
+  <h3>Play Werewolf with AI — a full table, no party required</h3>
   <p>
     <a href="https://wolf-cha.com">Play Online (wolf-cha.com)</a>
   </p>
@@ -14,9 +14,9 @@
 
 Current sponsors:
 
-*   [TokenDance](https://tokendance.agent-universe.cn/) - Powers the core game flow, roleplay, and summary features with AI models
-*   [Dashscope](https://bailian.console.aliyun.com/) - Provides additional AI model support
-*   [Watcha](https://watcha.cn/) - Provides AI model capabilities and showcase platform
+*   [TokenDance](https://tokendance.agent-universe.cn/) - Powers the core game flow, roleplay, and summary features
+*   [Dashscope](https://bailian.console.aliyun.com/) - Provides AI capability support
+*   [Watcha](https://watcha.cn/) - Provides AI capability and showcase platform support
 
 ---
 
@@ -39,25 +39,10 @@ Thanks to the growing context windows and instruction-following capabilities of 
 
 Every conversation is generated in real-time, full of unpredictability and fun.
 
-### 2. AI Model Arena
-**This isn't just Werewolf — it's a battleground for AI models.**
+### 2. AI Opponents That Actually Play
+**This is Werewolf you can play alone, with a full table of AI players.**
 
-We've integrated multiple top AI models to compete against each other. After each game, you can see which model powered each character. It's a hidden "Turing test" — observe which model reasons sharply, which one seems "adorably clueless," and which one sounds the most human.
-
-Current built-in models (subject to project configuration):
-*   **DeepSeek V3.2**
-*   **Qwen3-235B-A22B**
-*   **Kimi K2**
-*   **Gemini 3 Flash**
-*   **Seed 1.8 (ByteDance)**
-
-<div align="center">
-  <img src="https://img.shields.io/badge/DeepSeek-V3.2-1B75FF?style=for-the-badge" alt="DeepSeek" />
-  <img src="https://img.shields.io/badge/Qwen-Qwen3-5A6CFF?style=for-the-badge" alt="Qwen" />
-  <img src="https://img.shields.io/badge/Moonshot%20AI-Kimi-111111?style=for-the-badge" alt="Kimi" />
-  <br/>
-  <img src="https://img.shields.io/badge/ByteDance-Seed-333333?style=for-the-badge" alt="Seed" />
-</div>
+Each AI player has a stable personality, role perspective, memory, and faction goal. They follow speeches, vote history, deaths, and pressure at the table, then decide whether to accuse, defend, bluff, follow, or hold back.
 
 ### 3. Immersive Retro Experience
 While we don't have a professional art team, we've crafted a polished UI/UX:
@@ -74,9 +59,9 @@ We're continuing to improve:
 *   **Flexible Player Count**: Support 8-12 player custom games.
 *   **Post-Game Review / Chat**: Reflect on strategies and memorable moments.
 *   **Special Abilities**: Unique mechanics like time rewind and AI insight.
-*   **Custom Model Selection**: Choose which AI models join your game.
+*   **Smarter AI Players**: Richer memory, stronger bluffing, and more varied table behavior.
 *   **Multiplayer Mode**: Play with friends alongside AI characters.
-*   **Character Ratings**: Upvote standout personalities/models to find the best Werewolf players.
+*   **Character Ratings**: Upvote standout AI personalities to find the most convincing Werewolf players.
 
 ## 🛠️ Tech Stack
 

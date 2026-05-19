@@ -14,14 +14,14 @@ import { LandingCta } from "@/components/seo/landing/LandingCta";
 export const metadata: Metadata = {
   title: "AI Werewolf (Mafia) Game — Play Solo with AI Opponents | Wolfcha",
   description:
-    "Wolfcha is an AI-powered Werewolf (Mafia) social deduction game you can play solo in your browser. Talk, deduce, vote, and watch different AI models battle it out. No friends needed — just you vs a table of AI personalities.",
+    "Play Werewolf (Mafia) online with AI opponents. Wolfcha is a solo social deduction game where AI players talk, bluff, accuse, defend, vote, and react like a real table. No friends or download needed.",
   alternates: {
     canonical: "https://wolf-cha.com/ai-werewolf",
   },
   openGraph: {
     title: "AI Werewolf (Mafia) Game — Play Solo | Wolfcha",
     description:
-      "Play Werewolf (Mafia) solo against AI opponents. A browser-based social deduction game with voice acting, multiple AI models, and classic roles.",
+      "Play Werewolf (Mafia) solo against AI opponents. A browser-based social deduction game with classic roles, AI dialogue, voting, bluffing, and optional voice acting.",
     url: "https://wolf-cha.com/ai-werewolf",
     type: "website",
     images: [
@@ -34,19 +34,6 @@ export const metadata: Metadata = {
     ],
   },
 };
-
-const aiModels = [
-  { name: "DeepSeek", logo: "/models/deepseek.svg", style: "Analytical & logical" },
-  { name: "Qwen", logo: "/models/qwen.svg", style: "Methodical & patient" },
-  { name: "Kimi", logo: "/models/kimi.svg", style: "Empathetic & trust-building" },
-  { name: "Gemini", logo: "/models/gemini.svg", style: "Creative & adaptive" },
-  { name: "Claude", logo: "/models/claude.svg", style: "Nuanced & persuasive" },
-  { name: "OpenAI GPT", logo: "/models/openai.svg", style: "Narrative storyteller" },
-  { name: "GLM", logo: "/models/glm.svg", style: "Observant & patient" },
-  { name: "Doubao", logo: "/models/doubao.svg", style: "Aggressive & direct" },
-  { name: "Seed", logo: "/models/bytedance.svg", style: "Bold & risk-taking" },
-  { name: "MiniMax", logo: "/models/minimax.svg", style: "Steady & reliable" },
-];
 
 const roles = [
   { name: "Werewolf", image: "/roles/werewolf.png", description: "Hunt at night, blend in by day." },
@@ -117,15 +104,15 @@ const dialogueExamples = [
 const faqs = [
   {
     question: "What is AI Werewolf?",
-    answer: "AI Werewolf (also known as Mafia) is a social deduction game where you try to identify hidden werewolves through discussion and voting. In Wolfcha, you play against AI opponents powered by different language models, each with unique personalities and reasoning styles.",
+    answer: "AI Werewolf (also known as Mafia) is a social deduction game where you try to identify hidden werewolves through discussion and voting. In Wolfcha, every other seat is an AI opponent with its own personality, memory, pressure level, and faction goal.",
   },
   {
     question: "Can I play alone without friends?",
     answer: "Yes! That's exactly what Wolfcha is designed for. Every other seat at the table is an AI opponent. You can start a game anytime, no group required.",
   },
   {
-    question: "How do different AI models play differently?",
-    answer: "Each AI model has a distinct personality. DeepSeek is analytical and logic-focused. Kimi builds trust and alliances. Doubao is aggressive and confrontational. Gemini is creative and adaptive. These differences make every game unique.",
+    question: "Do AI players actually reason and bluff?",
+    answer: "Yes. AI players follow the public history, their private role information, vote patterns, deaths, and table pressure. They can accuse, defend, hold back, fake confidence, form reads, and change their mind as the game develops.",
   },
   {
     question: "What roles are available?",
@@ -145,14 +132,14 @@ const faqs = [
   },
   {
     question: "What makes Wolfcha different from other Werewolf games?",
-    answer: "Wolfcha is designed for solo play with AI opponents that actually reason, argue, and form alliances. It's not just random decisions — AI players have distinct personalities and strategies, creating a genuine social deduction experience.",
+    answer: "Wolfcha is designed for solo play with AI opponents that actually reason, argue, remember, and form suspicions. It's built around dialogue and imperfect information, so it feels closer to a real social deduction table than a scripted bot match.",
   },
 ];
 
 const hubLinks = [
   { href: "/how-to-play", label: "How to Play", description: "Learn the rules and get started quickly." },
   { href: "/features", label: "Features", description: "Voice acting, AI arena, and more." },
-  { href: "/ai-models", label: "AI Models", description: "Meet the different AI personalities." },
+  { href: "/guides/how-to-play-werewolf-with-ai", label: "Play with AI", description: "How solo Werewolf with AI opponents works." },
 ];
 
 const spokeLinks = [
@@ -161,7 +148,7 @@ const spokeLinks = [
   { href: "/roles/seer", label: "Seer Role Guide", description: "Turn checks into winning votes." },
   { href: "/guides/werewolf-rules", label: "Werewolf Rules", description: "Complete rules reference." },
   { href: "/guides/werewolf-for-beginners", label: "Beginner's Guide", description: "New to Werewolf? Start here." },
-  { href: "/models/deepseek", label: "DeepSeek AI", description: "The analytical opponent." },
+  { href: "/werewolf-game-with-ai-opponents", label: "AI Opponents", description: "How AI seats create a full table." },
 ];
 
 function buildGameJsonLd() {
@@ -169,7 +156,7 @@ function buildGameJsonLd() {
     "@context": "https://schema.org",
     "@type": "VideoGame",
     name: "Wolfcha - AI Werewolf Game",
-    description: "A solo Werewolf (Mafia) social deduction game where you play against AI opponents powered by different language models.",
+    description: "A solo Werewolf (Mafia) social deduction game where you play against AI opponents that reason, bluff, accuse, defend, and vote.",
     url: "https://wolf-cha.com/ai-werewolf",
     genre: ["Social Deduction", "Party Game", "Strategy"],
     gamePlatform: "Web Browser",
@@ -207,31 +194,28 @@ export default function AiWerewolfPage() {
       <LandingHero
         title="AI Werewolf (Mafia), playable solo"
         subtitle="Social deduction meets AI"
-        description="Werewolf (also known as Mafia) is a social deduction game about hidden roles, persuasion, and imperfect information. Wolfcha turns it into a single-player experience: every other seat is controlled by AI, each with unique personalities and reasoning styles."
+        description="Werewolf (also known as Mafia) is a social deduction game about hidden roles, persuasion, and imperfect information. Wolfcha turns it into a single-player experience: every other seat is controlled by an AI player that talks, lies, doubts, votes, and remembers."
         primaryCta={{ href: "/", label: "Play now — free" }}
         secondaryCta={{ href: "/how-to-play", label: "Learn the rules" }}
         aside={<LandingAiSeats seats={aiSeats.slice(0, 6)} compact />}
       />
 
-      {/* AI Models Wall */}
+      {/* AI Opponent Traits */}
       <LandingSection
-        id="ai-models"
-        title="Powered by multiple AI models"
-        subtitle="Each model brings a different personality to the table. Watch them argue, bluff, and deduce."
+        id="ai-opponents"
+        title="AI opponents that fill the table"
+        subtitle="Every seat has a personality and a faction goal, so the game feels like a full Werewolf table even when you play alone."
       >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {aiModels.map((model) => (
-            <Link
-              key={model.name}
-              href={`/models/${model.name.toLowerCase().replace(/\s+/g, "").replace("gpt", "")}`}
-              className="flex items-center gap-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-4 transition-colors hover:bg-[var(--bg-hover)]"
-            >
-              <Image src={model.logo} alt={model.name} width={32} height={32} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-[var(--text-primary)]">{model.name}</div>
-                <div className="truncate text-xs text-[var(--text-secondary)]">{model.style}</div>
-              </div>
-            </Link>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            ["Private role view", "AI players only know what their role should know. Wolves know wolf-side information; villagers must infer from speech and votes."],
+            ["Memory and suspicion", "They track deaths, vote patterns, claims, contradictions, and pressure, then adjust their reads as the table changes."],
+            ["Human-like table behavior", "Some players push hard, some stay quiet, some defend themselves, and some bluff when their faction needs it."],
+          ].map(([title, description]) => (
+            <div key={title} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-5">
+              <div className="font-semibold text-[var(--text-primary)]">{title}</div>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{description}</p>
+            </div>
           ))}
         </div>
       </LandingSection>
@@ -278,10 +262,10 @@ export default function AiWerewolfPage() {
             </p>
           </div>
           <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6">
-            <div className="text-lg font-bold text-[var(--text-primary)]">AI model arena</div>
+            <div className="text-lg font-bold text-[var(--text-primary)]">AI table dynamics</div>
             <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
-              Watch different AI models compete. DeepSeek analyzes contradictions. Kimi builds trust.
-              Doubao pressures aggressively. Compare strategies and find your favorite matchup.
+              AI seats behave like different people at the table. Some are cautious, some pressure hard,
+              some build trust, and some change their reads after a vote goes wrong.
             </p>
           </div>
           <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-6">
@@ -305,7 +289,7 @@ export default function AiWerewolfPage() {
       <LandingSection
         id="ai-seats"
         title="Meet your AI opponents"
-        subtitle="Each seat at the table is an AI with a unique personality and reasoning style."
+        subtitle="Each seat at the table is an AI player with a unique personality, memory, and speaking style."
       >
         <LandingAiSeats seats={aiSeats} />
       </LandingSection>
@@ -342,7 +326,7 @@ export default function AiWerewolfPage() {
 
       <LandingCta
         title="Ready to play Werewolf with AI?"
-        description="Start a game in your browser. No party required — just you vs a table of AI personalities with different reasoning styles."
+        description="Start a game in your browser. No party required — just you vs a full table of AI opponents that speak, suspect, bluff, and vote."
         primary={{ href: "/", label: "Play now — free" }}
         secondary={{ href: "/how-to-play", label: "Learn the rules" }}
       />

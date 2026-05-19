@@ -25,6 +25,7 @@ export interface SpecialEventsCallbacks {
   waitForUnpause: () => Promise<void>;
   isTokenValid: (token: FlowToken) => boolean;
   getAccessToken: () => string | null;
+  prepareFinalState?: (state: GameState) => Promise<GameState>;
 }
 
 export interface SpecialEventsActions {
@@ -52,12 +53,13 @@ export function useSpecialEvents(
   };
   const [, setGameState] = useAtom(gameStateAtom);
 
-  const { setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid, getAccessToken } = callbacks;
+  const { setDialogue, setIsWaitingForAI, waitForUnpause, isTokenValid, getAccessToken, prepareFinalState } = callbacks;
 
   /** 游戏结束 */
   const endGame = useCallback(async (state: GameState, winner: Alignment) => {
     const texts = getTexts();
-    let currentState = transitionPhase(state, "GAME_END");
+    const finalInputState = prepareFinalState ? await prepareFinalState(state) : state;
+    let currentState = transitionPhase(finalInputState, "GAME_END");
     currentState = { ...currentState, winner };
 
     currentState = addSystemMessage(currentState, winner === "village" ? texts.systemMessages.villageWin : texts.systemMessages.wolfWin);
@@ -88,7 +90,7 @@ export function useSpecialEvents(
 
     // 播放游戏结束语音
     await playNarrator(winner === "village" ? "villageWin" : "wolfWin");
-  }, [setGameState, setDialogue]);
+  }, [setGameState, setDialogue, prepareFinalState]);
 
   /** 处理猎人死亡开枪 */
   const handleHunterDeath = useCallback(async (

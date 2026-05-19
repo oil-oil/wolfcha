@@ -10,8 +10,8 @@ import { LandingAiSeats } from "@/components/seo/landing/LandingAiSeats";
 
 export const metadata: Metadata = {
   title: "How to Play Werewolf with AI: Solo Play Guide | Wolfcha",
-  description: "Learn how to play Werewolf with AI opponents. Practice strategies, experience unique AI personalities, and enjoy the game anytime without needing friends.",
-  keywords: ["play werewolf with ai", "werewolf ai opponents", "solo werewolf", "werewolf practice", "ai werewolf game"],
+  description: "Learn how to play Werewolf with AI opponents online. Practice deduction, bluffing, voting, and role strategy in a solo Werewolf game without needing friends.",
+  keywords: ["play werewolf with ai", "werewolf ai opponents", "solo werewolf", "werewolf practice", "ai werewolf game", "play werewolf online", "single player werewolf"],
   alternates: { canonical: "https://wolf-cha.com/guides/how-to-play-werewolf-with-ai" },
 };
 
@@ -23,7 +23,7 @@ const aiSeats = [
 ];
 
 const faqItems = [
-  { question: "How realistic are the AI players?", answer: "Very! Each AI uses advanced language models with unique personalities. They lie, accuse, defend, and strategize like human players." },
+  { question: "How realistic are the AI players?", answer: "AI players have their own personalities, role goals, and table memory. They lie, accuse, defend, vote, and react to pressure like players at a real Werewolf table." },
   { question: "Can I choose my role?", answer: "Yes! You can select which role you want to play, or let the game randomly assign one for the full experience." },
   { question: "Is it good for practice?", answer: "Excellent for practice. Play as many games as you want, try different strategies, and learn without social pressure." },
   { question: "Do AI players cheat?", answer: "No! AI players only use information their role would have access to. Wolves don't know who other wolves are unless they're wolves themselves." },
@@ -32,7 +32,7 @@ const faqItems = [
 const relatedLinks = [
   { href: "/guides/werewolf-rules", label: "Game Rules", description: "Learn the basics" },
   { href: "/guides/werewolf-for-beginners", label: "Beginner Guide", description: "Start here" },
-  { href: "/ai-models", label: "AI Models", description: "Meet the AIs" },
+  { href: "/werewolf-game-with-ai-opponents", label: "AI Opponents", description: "Why solo vs AI works" },
   { href: "/guides/seer-strategy", label: "Seer Strategy", description: "Master a role" },
 ];
 
@@ -40,7 +40,7 @@ export default function HowToPlayWithAIPage() {
   return (
     <MarketingPageWrapper>
       <JsonLd id="article-jsonld" data={{ "@context": "https://schema.org", "@type": "Article", headline: "How to Play Werewolf with AI" }} />
-      <LandingHero title="How to Play Werewolf with AI" subtitle="SOLO PLAY GUIDE" description="No friends online? No problem. Play Werewolf anytime with AI opponents powered by advanced language models. Each AI has unique personality and strategy." primaryCta={{ href: "/", label: "Start Playing" }} image={{ src: "/roles/seer.png", alt: "AI Werewolf" }} />
+      <LandingHero title="How to Play Werewolf with AI" subtitle="SOLO PLAY GUIDE" description="No friends online? No problem. Play Werewolf anytime with AI opponents that speak, suspect, bluff, and vote. Each AI has its own personality, memory, and strategy." primaryCta={{ href: "/", label: "Start Playing" }} image={{ src: "/roles/seer.png", alt: "AI Werewolf" }} />
       
       <LandingSection id="why" title="Why Play with AI?" subtitle="Benefits of solo practice">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

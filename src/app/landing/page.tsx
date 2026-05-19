@@ -11,7 +11,7 @@ import {
 export const metadata: Metadata = {
   title: "Wolfcha - AI Werewolf Game | AI狼人杀 | Play Werewolf with AI Online",
   description:
-    "Play Werewolf with AI opponents online for free. The ultimate single-player social deduction game featuring DeepSeek, Qwen, Kimi & Gemini AI models with voice acting. 免费在线AI狼人杀游戏，一个人也能玩！",
+    "Play Werewolf with AI opponents online for free. A single-player social deduction game where AI players speak, bluff, suspect, vote, and react like a real table. 免费在线AI狼人杀游戏，一个人也能玩！",
   keywords: [
     "AI werewolf",
     "AI werewolf game",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     "mafia werewolf game online",
     "AI mafia game",
     "social deduction game",
-    "LLM werewolf",
+    "werewolf with AI opponents",
     "werewolf with AI",
     "AI狼人杀",
     "狼人杀游戏",
@@ -34,9 +34,8 @@ export const metadata: Metadata = {
     "免费狼人杀",
     "狼人杀单机",
     "AI对战狼人杀",
-    "大模型狼人杀",
-    "DeepSeek狼人杀",
-    "Qwen狼人杀",
+    "全AI对手狼人杀",
+    "社交推理游戏",
   ],
   alternates: {
     canonical: "https://wolf-cha.com/landing",
@@ -48,7 +47,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Wolfcha - AI Werewolf Game | AI狼人杀",
     description:
-      "Play Werewolf with AI opponents. Single-player social deduction with DeepSeek, Qwen, Kimi & Gemini. 免费AI狼人杀，一个人也能玩！",
+      "Play Werewolf with AI opponents. Single-player social deduction with AI players that speak, bluff, suspect, and vote. 免费AI狼人杀，一个人也能玩！",
     url: "https://wolf-cha.com/landing",
     siteName: "Wolfcha",
     locale: "en_US",
@@ -66,7 +65,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Wolfcha - AI Werewolf Game | AI狼人杀",
     description:
-      "Play Werewolf with AI opponents. Single-player social deduction game. 免费AI狼人杀！",
+      "Play Werewolf with AI opponents. Single-player social deduction game with AI dialogue, bluffing, and voting. 免费AI狼人杀！",
     images: ["https://wolf-cha.com/og-image.png"],
   },
   robots: {

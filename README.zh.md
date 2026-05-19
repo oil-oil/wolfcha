@@ -4,7 +4,7 @@
 
 <div align="center">
   <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
-  <h3>在狼人杀里，和 AI 赛博斗蛐蛐</h3>
+  <h3>一个人也能玩的在线 AI 狼人杀</h3>
   <p>
     <a href="https://wolf-cha.com">在线体验 (wolf-cha.com)</a>
   </p>
@@ -16,9 +16,9 @@
 
 现有赞助商：
 
-*   [TokenDance](https://tokendance.agent-universe.cn/) - 提供游戏核心流程、角色扮演、总结记录等 AI 模型能力支持
-*   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 模型能力支持
-*   [观猹](https://watcha.cn/) - 提供 AI 模型能力与展示平台
+*   [TokenDance](https://tokendance.agent-universe.cn/) - 提供游戏核心流程、角色扮演、总结记录等 AI 能力支持
+*   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 能力支持
+*   [观猹](https://watcha.cn/) - 提供 AI 能力与展示平台
 
 ---
 
@@ -41,25 +41,10 @@
 
 每一局的对话都是实时生成的，充满了不确定性和趣味性。
 
-### 2. 大模型赛博斗蛐蛐 (Model Arena)
-**这不仅是狼人杀，更是一场模型能力的竞技场。**
+### 2. 真正参与博弈的 AI 对手
+**这是一个人也能玩的狼人杀，有完整桌面，也有真实的推理压力。**
 
-我们在游戏中接入了多款大模型，让它们同台竞技。游戏结束后，你可以看到每个角色背后对应的模型。这是一场隐藏的“图灵测试”——你可以观察在这个复杂的博弈场景中，哪个模型逻辑严密，哪个模型表现得“蠢萌”，又是哪个模型说话最有人味儿。
-
-当前内置模型（以项目内配置为准）：
-*   **DeepSeek V3.2**
-*   **Qwen3-235B-A22B**
-*   **Kimi K2**
-*   **Gemini 3 Flash**
-*   **Seed 1.8 (ByteDance)**
-
-<div align="center">
-  <img src="https://img.shields.io/badge/DeepSeek-V3.2-1B75FF?style=for-the-badge" alt="DeepSeek" />
-  <img src="https://img.shields.io/badge/Qwen-Qwen3-5A6CFF?style=for-the-badge" alt="Qwen" />
-  <img src="https://img.shields.io/badge/Moonshot%20AI-Kimi-111111?style=for-the-badge" alt="Kimi" />
-  <br/>
-  <img src="https://img.shields.io/badge/ByteDance-Seed-333333?style=for-the-badge" alt="Seed" />
-</div>
+每个 AI 玩家都有稳定的人设、身份视角、记忆和阵营目标。他们会根据发言、投票、死亡结果和桌面压力，自主决定要怀疑谁、保护谁、反驳谁、跟票还是隐藏信息。
 
 ### 3. 沉浸式复古体验
 虽然没有专业的美术团队，但我们通过精心的 UI/UX 设计提升了游戏体验：
@@ -76,9 +61,9 @@
 *   **人数自由选择**：支持 8-12 人自定义人数开局。
 *   **结束后的复盘 / 闲聊**：沉淀一局中的思路与段子。
 *   **特色技能系统**：如时间回溯、AI 洞察等狼人杀特色玩法。
-*   **自定义参与模型**：选择你想上场的大模型。
+*   **更聪明的 AI 玩家**：更强记忆、更自然的伪装、更丰富的桌面行为。
 *   **联机模式**：可以和朋友一起跟 AI 玩狼人杀。
-*   **人物点赞**：为表现出色的性格/模型点赞，看到最会玩狼人杀的大模型。
+*   **人物点赞**：为表现出色的 AI 性格点赞，找到最会玩狼人杀的玩家类型。
 
 ## 🛠️ 技术栈
 

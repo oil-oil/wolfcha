@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Wolfcha - AI狼人杀｜一个人玩的沉浸式狼人杀游戏",
-    "description": "免费在线AI狼人杀游戏，一个人也能玩！多款顶级AI大模型（DeepSeek、Qwen、Kimi、Gemini）扮演其他玩家，带语音旁白的单人沉浸式狼人杀推理游戏。"
+    "title": "Wolfcha - AI狼人杀｜一个人玩的在线狼人杀游戏",
+    "description": "免费在线 AI 狼人杀游戏，一个人也能玩。全 AI 对手会发言、怀疑、带节奏和投票，支持经典角色与语音旁白，打开浏览器即可开始。"
   },
   "locale": {
     "label": "语言",
@@ -101,9 +101,9 @@
       "showcaseLabel": "赞助商展示",
       "cards": {
         "openCreator": "OpenCreator 帮助我们生成夜晚所有的角色立绘",
-        "bailian": "百炼为我们提供部分 AI 模型能力支持",
+        "bailian": "百炼为我们提供部分 AI 能力支持",
         "tokendance": "词元跳动为每一场逻辑博弈注入敏锐灵魂。",
-        "watcha": "观猹为猹杀提供AI模型能力与展示平台"
+        "watcha": "观猹为猹杀提供 AI 能力与展示平台支持"
       },
       "copySuccess": "已复制邮箱",
       "copyFallback": "邮箱地址",
@@ -290,14 +290,14 @@
     "nav": {
       "home": "开始游戏",
       "features": "特性",
-      "models": "AI 模型",
+      "models": "AI 玩家",
       "howTo": "玩法教程",
       "blog": "博客"
     },
     "hero": {
       "title": "AI 狼人杀",
       "subtitle": "与 AI 对手同台竞技",
-      "description": "前所未有的经典社交推理游戏体验。在单人模式下，与多个擅长推理、伪装和策略的 AI 模型对战。",
+      "description": "一个人也能玩的在线狼人杀。与会发言、会怀疑、会带节奏的 AI 对手同桌推理，随时开局，无需凑人。",
       "playNow": "立即开始 — 免费",
       "howToPlay": "玩法教程"
     },
@@ -308,8 +308,8 @@
         "description": "无需凑人，随时开启一局完整的狼人杀。与 AI 对手进行推理、伪装和策略博弈。"
       },
       "models": {
-        "title": "多模型驱动",
-        "description": "每个 AI 玩家由不同的语言模型驱动，拥有独特的性格和游戏风格。"
+        "title": "有性格的 AI 玩家",
+        "description": "每个 AI 对手都有稳定的人设、记忆和策略，会根据局势发言、反驳、站边和自保。"
       },
       "voice": {
         "title": "全语音配音",
@@ -321,8 +321,8 @@
       }
     },
     "models": {
-      "title": "由顶尖 AI 模型驱动",
-      "description": "每个 AI 玩家使用不同的语言模型，创造出独特的性格和策略。",
+      "title": "真正参与博弈的 AI 玩家",
+      "description": "AI 对手会读发言、看投票、保护自己、伪装身份，并为自己的阵营争取胜利。",
       "deepseek": "战略与分析型",
       "qwen": "平衡与深思型",
       "kimi": "创意与不可预测型",
@@ -347,11 +347,11 @@
     "faq": {
       "title": "常见问题",
       "q1": "什么是 AI 狼人杀？",
-      "a1": "AI 狼人杀是经典社交推理游戏的单人版本，你将与由 DeepSeek、Qwen、Kimi 和 Gemini 等高级语言模型驱动的 AI 对手对战。",
+      "a1": "AI 狼人杀是经典社交推理游戏的单人版本，你将与会发言、推理、伪装和投票的 AI 对手同桌博弈。",
       "q2": "真的可以一个人玩吗？",
       "a2": "是的！所有其他玩家都由 AI 控制，每个 AI 都有独特的性格和推理能力，感觉就像和真人一起玩一样。",
-      "q3": "游戏使用了哪些 AI 模型？",
-      "a3": "我们使用 DeepSeek V3.2、Qwen3-235B、Kimi K2、Gemini 3 Flash 和 ByteDance Seed 1.8。每个模型都为游戏带来了不同的优势。",
+      "q3": "AI 玩家是怎么行动的？",
+      "a3": "每个 AI 玩家只知道自己身份视角内的信息，会根据发言、投票和死亡结果做判断，主动发言、怀疑、辩解、带票或隐藏身份。",
       "q4": "游戏是免费的吗？",
       "a4": "是的，Wolfcha 是完全免费的。访问 wolf-cha.com 即可立即开始。",
       "q5": "有哪些角色？",
@@ -1463,6 +1463,27 @@
     "clear": "清空笔记",
     "clearConfirm": "确定要清空笔记吗？",
     "placeholder": "在这里记录游戏线索..."
+  },
+  "eventLog": {
+    "title": "公开事件",
+    "shortTitle": "事件",
+    "backToHistory": "历史",
+    "eventCount": "{count} 件",
+    "empty": "暂无公开大事件",
+    "currentSheriff": "当前警长：{player}",
+    "dayLabel": "第 {day} 天",
+    "seat": "{seat}号",
+    "seatWithName": "{seat}号 {name}",
+    "separator": "、",
+    "nightDeaths": "夜晚：{players} 死亡",
+    "peacefulNight": "夜晚：平安夜",
+    "executed": "白天：{player} 被放逐（{votes}票）",
+    "voteTie": "白天：投票平票，无人出局",
+    "hunterShot": "猎人 {hunter} 开枪带走 {target}",
+    "whiteWolfKingBoom": "白狼王 {boom} 自爆带走 {target}",
+    "idiotRevealed": "{player} 翻牌白痴，免疫放逐",
+    "gameEndVillage": "游戏结束：好人阵营胜利",
+    "gameEndWolf": "游戏结束：狼人阵营胜利"
   },
   "wolfPlanning": {
     "title": "狼人协作",

@@ -25,6 +25,7 @@ import { generateJSON } from "@/lib/llm";
 
 const MAX_SPEECH_ITEMS_PER_PHASE = 30;
 const MAX_SPEECH_CONTENT_LENGTH = 280;
+export const GAME_ANALYSIS_VERSION = 2;
 
 const ROLE_ALIGNMENT: Record<Role, Alignment> = {
   Werewolf: "wolf",
@@ -36,6 +37,78 @@ const ROLE_ALIGNMENT: Record<Role, Alignment> = {
   WhiteWolfKing: "wolf",
   Villager: "village",
 };
+
+function formatSeatName(state: GameState, seat: number): string {
+  const player = state.players.find((p) => p.seat === seat);
+  return player ? `${seat + 1}号 ${player.displayName}` : `${seat + 1}号`;
+}
+
+function formatAlignment(alignment: Alignment): string {
+  return alignment === "wolf" ? "狼人阵营" : "好人阵营";
+}
+
+function normalizeForFingerprint(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeForFingerprint);
+  }
+  if (value && typeof value === "object") {
+    const input = value as Record<string, unknown>;
+    return Object.keys(input)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = normalizeForFingerprint(input[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function hashString(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) + hash) ^ input.charCodeAt(i);
+  }
+  return `${input.length.toString(36)}-${(hash >>> 0).toString(36)}`;
+}
+
+export function getGameAnalysisSourceFingerprint(state: GameState): string {
+  const source = {
+    gameId: state.gameId,
+    phase: state.phase,
+    day: state.day,
+    winner: state.winner,
+    players: state.players
+      .slice()
+      .sort((a, b) => a.seat - b.seat)
+      .map((p) => ({
+        playerId: p.playerId,
+        seat: p.seat,
+        displayName: p.displayName,
+        role: p.role,
+        alive: p.alive,
+        isHuman: p.isHuman,
+      })),
+    badge: {
+      holderSeat: state.badge.holderSeat,
+      history: state.badge.history,
+    },
+    voteHistory: state.voteHistory,
+    nightHistory: state.nightHistory,
+    dayHistory: state.dayHistory,
+    dailySummaries: state.dailySummaries,
+    dailySummaryVoteData: state.dailySummaryVoteData,
+    messages: state.messages.map((m) => ({
+      id: m.id,
+      playerId: m.playerId,
+      content: m.content,
+      day: m.day,
+      phase: m.phase,
+      isSystem: m.isSystem,
+      isLastWords: m.isLastWords,
+    })),
+  };
+  return hashString(JSON.stringify(normalizeForFingerprint(source)));
+}
 
 interface EvaluationTagRule {
   tag: string;
@@ -597,6 +670,193 @@ function parseSummaryBullets(raw: unknown): string[] {
   return [];
 }
 
+function formatDeathCauseText(cause?: DeathCause): string {
+  switch (cause) {
+    case "killed": return "夜晚被刀";
+    case "exiled": return "白天被放逐";
+    case "poisoned": return "被女巫毒杀";
+    case "shot": return "被猎人带走";
+    case "milk": return "同守同救出局";
+    case "boom": return "白狼王自爆相关出局";
+    default: return "出局原因未记录";
+  }
+}
+
+function getTopVotedSeat(votes: Record<string, number> | undefined): number | null {
+  if (!votes) return null;
+  const counts = new Map<number, number>();
+  for (const targetSeat of Object.values(votes)) {
+    counts.set(targetSeat, (counts.get(targetSeat) ?? 0) + 1);
+  }
+  const ranked = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[0] ?? null;
+}
+
+function formatVoteGroups(state: GameState, votes: Record<string, number> | undefined): string {
+  if (!votes || Object.keys(votes).length === 0) return "无有效投票记录";
+  const groups = new Map<number, string[]>();
+  for (const [voterId, targetSeat] of Object.entries(votes)) {
+    const voter = state.players.find((p) => p.playerId === voterId);
+    if (!voter) continue;
+    const list = groups.get(targetSeat) ?? [];
+    list.push(formatSeatName(state, voter.seat));
+    groups.set(targetSeat, list);
+  }
+  if (groups.size === 0) return "无有效投票记录";
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([targetSeat, voters]) => `${formatSeatName(state, targetSeat)} <= ${voters.join("、")}`)
+    .join("；");
+}
+
+function getRelevantSystemMessages(state: GameState, day: number): string[] {
+  return state.messages
+    .filter((m) => m.isSystem && m.day === day)
+    .map((m) => m.content.trim())
+    .filter((content) => {
+      if (!content) return false;
+      if (content.startsWith("[VOTE_RESULT]")) return false;
+      if (content.startsWith("[ROLE_REVEAL]")) return false;
+      return true;
+    })
+    .slice(-12);
+}
+
+function buildStructuredDaySummary(
+  state: GameState,
+  day: number,
+  dayData: NonNullable<GameState["dayHistory"]>[number] | undefined,
+  nightData: NonNullable<GameState["nightHistory"]>[number] | undefined
+): string {
+  const parts: string[] = [];
+  const deaths = nightData?.deaths ?? [];
+  if (deaths.length > 0) {
+    parts.push(`夜晚${deaths.map((d) => formatSeatName(state, d.seat)).join("、")}出局`);
+  } else if (nightData && Array.isArray(nightData.deaths)) {
+    parts.push("平安夜");
+  }
+  if (dayData?.executed) {
+    parts.push(`${formatSeatName(state, dayData.executed.seat)}被放逐`);
+  } else if (dayData?.voteTie) {
+    parts.push("白天平票无人出局");
+  }
+  if (dayData?.hunterShot) {
+    parts.push(`猎人${formatSeatName(state, dayData.hunterShot.hunterSeat)}带走${formatSeatName(state, dayData.hunterShot.targetSeat)}`);
+  }
+  if (nightData?.hunterShot) {
+    parts.push(`猎人${formatSeatName(state, nightData.hunterShot.hunterSeat)}带走${formatSeatName(state, nightData.hunterShot.targetSeat)}`);
+  }
+  if (dayData?.whiteWolfKingBoom) {
+    parts.push(`白狼王${formatSeatName(state, dayData.whiteWolfKingBoom.boomSeat)}自爆带走${formatSeatName(state, dayData.whiteWolfKingBoom.targetSeat)}`);
+  }
+  if (dayData?.idiotRevealed) {
+    parts.push(`${formatSeatName(state, dayData.idiotRevealed.seat)}翻牌白痴`);
+  }
+  if (day === state.day && state.winner) {
+    parts.push(`${formatAlignment(state.winner)}获胜`);
+  }
+  return parts.join("；");
+}
+
+function buildAuthoritativeHistoryText(state: GameState): string {
+  const snapshots = buildPlayerSnapshots(state);
+  const lines: string[] = [];
+  const winnerText = state.winner ? formatAlignment(state.winner) : "未结算";
+
+  lines.push(`最终结果：${winnerText}获胜`);
+  lines.push(`结束进度：第${state.day}天，阶段 ${state.phase}`);
+  lines.push("玩家身份与最终状态：");
+  for (const snapshot of snapshots.slice().sort((a, b) => a.seat - b.seat)) {
+    const status = snapshot.isAlive
+      ? "存活"
+      : `出局，第${snapshot.deathDay ?? "未知"}天，${formatDeathCauseText(snapshot.deathCause)}`;
+    lines.push(`- ${snapshot.seat + 1}号 ${snapshot.name}：${snapshot.role}，${formatAlignment(snapshot.alignment)}，${status}`);
+  }
+
+  for (let day = 1; day <= state.day; day++) {
+    const nightData = state.nightHistory?.[day];
+    const dayData = state.dayHistory?.[day];
+    const dayLines: string[] = [];
+
+    if (nightData) {
+      const nightFacts: string[] = [];
+      if (nightData.guardTarget !== undefined) {
+        nightFacts.push(`守卫守护${formatSeatName(state, nightData.guardTarget)}`);
+      }
+      if (nightData.wolfTarget !== undefined) {
+        nightFacts.push(`狼人选择击杀${formatSeatName(state, nightData.wolfTarget)}`);
+      }
+      if (nightData.witchSave === true && nightData.wolfTarget !== undefined) {
+        nightFacts.push(`女巫救下${formatSeatName(state, nightData.wolfTarget)}`);
+      } else if (nightData.witchSave === false) {
+        nightFacts.push("女巫没有使用解药");
+      }
+      if (nightData.witchPoison !== undefined) {
+        nightFacts.push(`女巫毒杀${formatSeatName(state, nightData.witchPoison)}`);
+      }
+      if (nightData.seerResult) {
+        nightFacts.push(`预言家查验${formatSeatName(state, nightData.seerResult.targetSeat)}为${nightData.seerResult.isWolf ? "狼人" : "好人"}`);
+      }
+      if (Array.isArray(nightData.deaths)) {
+        nightFacts.push(
+          nightData.deaths.length > 0
+            ? `夜晚出局：${nightData.deaths.map((d) => `${formatSeatName(state, d.seat)}(${formatDeathCauseText(parseDeathCause(d.reason))})`).join("、")}`
+            : "夜晚无人出局"
+        );
+      }
+      if (nightData.hunterShot) {
+        nightFacts.push(`猎人开枪：${formatSeatName(state, nightData.hunterShot.hunterSeat)}带走${formatSeatName(state, nightData.hunterShot.targetSeat)}`);
+      }
+      if (nightFacts.length > 0) dayLines.push(`夜晚：${nightFacts.join("；")}`);
+    }
+
+    const badgeVotes = state.badge.history?.[day];
+    if (badgeVotes) {
+      const electedSeat = getTopVotedSeat(badgeVotes);
+      const electedText = electedSeat !== null ? `${formatSeatName(state, electedSeat)}当选或领先` : "无人当选";
+      dayLines.push(`警长竞选：${electedText}；投票明细：${formatVoteGroups(state, badgeVotes)}`);
+    } else if (day === 1 && state.badge.holderSeat !== null) {
+      dayLines.push(`警徽最终在${formatSeatName(state, state.badge.holderSeat)}`);
+    }
+
+    const voteRecord = state.voteHistory?.[day];
+    if (voteRecord && Object.keys(voteRecord).length > 0) {
+      dayLines.push(`放逐投票：${formatVoteGroups(state, voteRecord)}`);
+    }
+    if (dayData?.executed) {
+      dayLines.push(`放逐结果：${formatSeatName(state, dayData.executed.seat)}出局，票数${dayData.executed.votes}`);
+    } else if (dayData?.voteTie) {
+      dayLines.push("放逐结果：平票，无人出局");
+    }
+    if (dayData?.hunterShot) {
+      dayLines.push(`猎人开枪：${formatSeatName(state, dayData.hunterShot.hunterSeat)}带走${formatSeatName(state, dayData.hunterShot.targetSeat)}`);
+    }
+    if (dayData?.whiteWolfKingBoom) {
+      dayLines.push(`白狼王自爆：${formatSeatName(state, dayData.whiteWolfKingBoom.boomSeat)}带走${formatSeatName(state, dayData.whiteWolfKingBoom.targetSeat)}`);
+    }
+    if (dayData?.idiotRevealed) {
+      dayLines.push(`白痴翻牌：${formatSeatName(state, dayData.idiotRevealed.seat)}免疫放逐`);
+    }
+
+    const systemMessages = getRelevantSystemMessages(state, day);
+    if (systemMessages.length > 0) {
+      dayLines.push(`公开系统记录：${systemMessages.join("；")}`);
+    }
+
+    const summaryBullets = parseSummaryBullets(state.dailySummaries?.[day]);
+    if (summaryBullets.length > 0) {
+      dayLines.push(`发言摘要补充：${summaryBullets.join("；")}`);
+    }
+
+    if (dayLines.length > 0) {
+      lines.push(`第${day}天：`);
+      lines.push(...dayLines.map((line) => `- ${line}`));
+    }
+  }
+
+  return lines.join("\n");
+}
+
 interface AISpeechSummaryResult {
   discussion: Record<number, PlayerSpeech[]>;
   election: Record<number, PlayerSpeech[]>;
@@ -963,9 +1223,10 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
       idiotRevealEvent,
     });
 
+    const structuredSummary = buildStructuredDaySummary(state, day, dayData, nightData);
     entries.push({
       day,
-      summary: summaryBullets.join("；") || `第${day}天`,
+      summary: summaryBullets.join("；") || structuredSummary || `第${day}天`,
       nightEvents,
       dayEvents,
       dayPhases: dayPhases.length > 0 ? dayPhases : undefined,
@@ -1184,6 +1445,8 @@ export async function generateGameAnalysis(
 
   return {
     gameId: state.gameId,
+    analysisVersion: GAME_ANALYSIS_VERSION,
+    sourceFingerprint: getGameAnalysisSourceFingerprint(state),
     timestamp: Date.now(),
     duration: durationSeconds ?? 0,
     playerCount: state.players.length,
@@ -1241,9 +1504,7 @@ async function generateAIAnalysisData(
     `${p.seat + 1}号 ${p.displayName}（${p.role}${p.alive ? "" : "，已出局"}）`
   ).join("\n");
 
-  const historyText = Object.entries(state.dailySummaries || {})
-    .map(([day, bullets]) => `第${day}天：${bullets.join("；")}`)
-    .join("\n");
+  const historyText = buildAuthoritativeHistoryText(state);
 
   const humanMessages = state.messages
     .filter(m => m.playerName === humanPlayer.displayName && !m.isSystem)
@@ -1266,7 +1527,7 @@ ${playersSummary}
 - 队友（同阵营）：${alliesText}
 - 对手（敌对阵营）：${enemiesText}
 
-## 游戏历史
+## 游戏历史（结构化事实为准）
 ${historyText}
 
 ## 玩家（${humanPlayer.displayName}）的全部发言
@@ -1314,7 +1575,8 @@ ${allHumanSpeeches || "（无发言记录）"}
 4. 【重要】队友是指同一阵营的玩家，对手是指敌对阵营的玩家。${humanAlignmentText}的队友只能是${humanAlignmentText}的其他成员！
 5. highlightQuote必须是玩家的原话，从上面的发言记录中选取，如果无发言记录则返回空字符串""
 6. 角色名使用英文：Werewolf, Seer, Witch, Hunter, Guard, Villager, WhiteWolfKing, Idiot
-7. speechScores评分标准：
+7. 游戏进度、死亡、投票、胜负必须严格服从“游戏历史（结构化事实为准）”，不要用发言摘要覆盖结构化事实
+8. speechScores评分标准：
    - logic（逻辑严密度）：分析发言是否有逻辑漏洞、推理是否合理
    - clarity（发言清晰度）：分析表达是否清晰、是否容易理解
    - 如果无发言记录，两项均给50分`;
@@ -1331,7 +1593,7 @@ ${allHumanSpeeches || "（无发言记录）"}
     });
 
     // 校正 AI 返回的 playerId 和 avatar，确保与实际玩家数据匹配
-    const correctedResult = correctAIResult(result, state);
+    const correctedResult = correctAIResult(result, state, humanPlayer);
     return correctedResult;
   } catch (error) {
     console.error("AI analysis generation failed:", error);
@@ -1339,39 +1601,86 @@ ${allHumanSpeeches || "（无发言记录）"}
   }
 }
 
-function correctAIResult(result: AIAnalysisResult, state: GameState): AIAnalysisResult {
+function correctAIResult(result: AIAnalysisResult, state: GameState, humanPlayer: Player): AIAnalysisResult {
   const findPlayerByName = (name: string) => 
     state.players.find(p => p.displayName === name || p.playerId === name);
 
-  // 校正 MVP
-  const mvpPlayer = findPlayerByName(result.awards.mvp.playerName) || 
-                    findPlayerByName(result.awards.mvp.playerId);
-  if (mvpPlayer) {
-    result.awards.mvp.playerId = mvpPlayer.playerId;
-    result.awards.mvp.avatar = mvpPlayer.avatarSeed || mvpPlayer.displayName;
-  }
+  const winnerPlayers = state.players.filter((p) => ROLE_ALIGNMENT[p.role] === state.winner);
+  const loserPlayers = state.players.filter((p) => ROLE_ALIGNMENT[p.role] !== state.winner);
+  const pickFallbackAwardPlayer = (players: Player[]) => players.find((p) => p.alive) || players[0] || state.players[0];
 
-  // 校正 SVP
-  const svpPlayer = findPlayerByName(result.awards.svp.playerName) || 
-                    findPlayerByName(result.awards.svp.playerId);
-  if (svpPlayer) {
-    result.awards.svp.playerId = svpPlayer.playerId;
-    result.awards.svp.avatar = svpPlayer.avatarSeed || svpPlayer.displayName;
-  }
+  const normalizeAward = (
+    award: PlayerAward,
+    allowedPlayers: Player[],
+    fallbackReason: string
+  ): PlayerAward => {
+    const matched = findPlayerByName(award.playerName) || findPlayerByName(award.playerId);
+    const isAllowed = matched && allowedPlayers.some((p) => p.playerId === matched.playerId);
+    const player = isAllowed ? matched : pickFallbackAwardPlayer(allowedPlayers);
+    return {
+      ...award,
+      playerId: player.playerId,
+      playerName: player.displayName,
+      avatar: player.avatarSeed || player.displayName,
+      role: player.role,
+      reason: isAllowed && award.reason ? award.reason : fallbackReason,
+    };
+  };
 
-  // 校正 reviews
-  result.reviews = result.reviews.map(review => {
+  result.awards.mvp = normalizeAward(result.awards.mvp, winnerPlayers, "关键胜利贡献");
+  result.awards.svp = normalizeAward(result.awards.svp, loserPlayers, "虽败仍有亮点");
+
+  const humanAlignment = ROLE_ALIGNMENT[humanPlayer.role];
+  const normalizedReviews: PlayerReview[] = result.reviews.map((review): PlayerReview => {
     const reviewer = findPlayerByName(review.fromCharacterName) || 
                      findPlayerByName(review.fromPlayerId);
     if (reviewer) {
+      const relation: "ally" | "enemy" = ROLE_ALIGNMENT[reviewer.role] === humanAlignment ? "ally" : "enemy";
       return {
         ...review,
         fromPlayerId: reviewer.playerId,
+        fromCharacterName: reviewer.displayName,
         avatar: reviewer.avatarSeed || reviewer.displayName,
+        relation,
+        role: reviewer.role,
       };
     }
     return review;
   });
+
+  const usedReviewerIds = new Set<string>();
+  const addReview = (reviewer: Player, relation: "ally" | "enemy", content: string) => {
+    if (reviewer.playerId === humanPlayer.playerId || usedReviewerIds.has(reviewer.playerId)) return;
+    usedReviewerIds.add(reviewer.playerId);
+    normalizedReviews.push({
+      fromPlayerId: reviewer.playerId,
+      fromCharacterName: reviewer.displayName,
+      avatar: reviewer.avatarSeed || reviewer.displayName,
+      content,
+      relation,
+      role: reviewer.role,
+    });
+  };
+
+  normalizedReviews
+    .filter((review) => review.fromPlayerId !== humanPlayer.playerId)
+    .forEach((review) => usedReviewerIds.add(review.fromPlayerId));
+
+  const allyCount = normalizedReviews.filter((review) => review.relation === "ally" && review.fromPlayerId !== humanPlayer.playerId).length;
+  const enemyCount = normalizedReviews.filter((review) => review.relation === "enemy" && review.fromPlayerId !== humanPlayer.playerId).length;
+  const allies = state.players.filter((p) => p.playerId !== humanPlayer.playerId && ROLE_ALIGNMENT[p.role] === humanAlignment);
+  const enemies = state.players.filter((p) => ROLE_ALIGNMENT[p.role] !== humanAlignment);
+
+  if (allyCount < 2) {
+    allies.slice(0, 2 - allyCount).forEach((ally) => addReview(ally, "ally", "这局配合很关键。"));
+  }
+  if (enemyCount < 1) {
+    enemies.slice(0, 1 - enemyCount).forEach((enemy) => addReview(enemy, "enemy", "你的表现值得警惕。"));
+  }
+
+  result.reviews = normalizedReviews
+    .filter((review) => review.fromPlayerId !== humanPlayer.playerId)
+    .slice(0, 6);
 
   return result;
 }
@@ -1445,7 +1754,15 @@ function generateFallbackAIData(state: GameState, humanPlayer: Player): AIAnalys
 }
 
 export function extractSpeeches(state: GameState, day: number): PlayerSpeech[] {
-  // Parse dailySummaries bullets to extract per-player info
+  const speechesFromMessages = extractSpeechesFromMessages(state, {
+    day,
+    phases: ["DAY_SPEECH", "DAY_PK_SPEECH", "DAY_LAST_WORDS"],
+  });
+  if (speechesFromMessages.length > 0) {
+    return speechesFromMessages;
+  }
+
+  // Fallback only: parse dailySummaries bullets if raw messages are unavailable
   const bullets = state.dailySummaries?.[day];
   if (bullets && bullets.length > 0) {
     const speechMap = new Map<number, string[]>();
@@ -1474,10 +1791,7 @@ export function extractSpeeches(state: GameState, day: number): PlayerSpeech[] {
     }
   }
   
-  return extractSpeechesFromMessages(state, {
-    day,
-    phases: ["DAY_SPEECH", "DAY_PK_SPEECH", "DAY_LAST_WORDS"],
-  });
+  return [];
 }
 
 function convertToFirstPerson(text: string): string {
