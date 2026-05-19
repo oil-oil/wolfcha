@@ -1053,17 +1053,17 @@ export function WelcomeScreen({
             note={t("welcome.sponsor.cards.bailian")}
           />
 
-          {/* Sponsor card - ZenMux (右下) */}
+          {/* Sponsor card - TokenDance (右下) */}
           <SponsorCard
-            sponsorId="zenmux"
-            href="https://zenmux.ai/aboutus"
-            className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom"
+            sponsorId="tokendance"
+            href="https://tokendance.agent-universe.cn/"
+            className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom wc-sponsor-card--tokendance"
             rotate="-4deg"
             delay={0.6}
-            logoSrc="/sponsor/zenmux.png"
-            logoAlt="ZenMux"
-            name="ZenMux"
-            note={t("welcome.sponsor.cards.zenmux")}
+            logoSrc="/sponsor/tokendance.svg"
+            logoAlt="TokenDance"
+            name="TokenDance"
+            note={t("welcome.sponsor.cards.tokendance")}
           />
 
           {/* Sponsor card - Watcha (右侧居中) */}
@@ -1244,15 +1244,15 @@ export function WelcomeScreen({
                 <span className="wc-paper-stamp__name">百炼</span>
               </a>
               <a
-                href="https://zenmux.ai/aboutus?ref=wolfcha"
+                href="https://tokendance.agent-universe.cn/?ref=wolfcha"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="wc-paper-stamp"
+                className="wc-paper-stamp wc-paper-stamp--tokendance"
                 style={{ "--stamp-rotate": "-3deg" } as React.CSSProperties}
-                onClick={() => void trackSponsorClick("zenmux")}
+                onClick={() => void trackSponsorClick("tokendance")}
               >
-                <img src="/sponsor/zenmux.png" alt="ZenMux" className="wc-paper-stamp__logo" />
-                <span className="wc-paper-stamp__name">ZenMux</span>
+                <img src="/sponsor/tokendance.svg" alt="TokenDance" className="wc-paper-stamp__logo" />
+                <span className="wc-paper-stamp__name">TokenDance</span>
               </a>
               <a
                 href="https://watcha.cn/?ref=wolfcha"

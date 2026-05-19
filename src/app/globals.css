@@ -4220,6 +4220,19 @@ input[type="submit"]:not(:disabled),
   right: 4%;
 }
 
+.wc-sponsor-card--tokendance {
+  width: 220px;
+}
+
+.wc-sponsor-card--tokendance .wc-sponsor-card__logo {
+  width: 150px;
+  height: 52px;
+  border-radius: 4px;
+  filter: none;
+  mix-blend-mode: normal;
+  opacity: 0.9;
+}
+
 @media (max-width: 1280px) {
   .wc-sponsor-card--left-center {
     left: 6%;
@@ -4307,6 +4320,19 @@ input[type="submit"]:not(:disabled),
   border-radius: 6px;
   filter: grayscale(1) brightness(0.4) contrast(1.2);
   mix-blend-mode: multiply;
+}
+
+.wc-paper-stamp--tokendance .wc-paper-stamp__logo {
+  width: 48px;
+  height: 18px;
+  border-radius: 3px;
+  filter: none;
+  mix-blend-mode: normal;
+  opacity: 0.9;
+}
+
+.wc-paper-stamp--tokendance .wc-paper-stamp__name {
+  font-size: 7px;
 }
 
 .wc-paper-stamp__name {
