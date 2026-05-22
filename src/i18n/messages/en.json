@@ -1013,11 +1013,12 @@
     },
     "vote": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【Voting Rules】\nEach player votes to eliminate one suspect. Most votes = eliminated. Tie = PK speeches then revote.\n\n【Task】\nChoose one player to eliminate. Only output the seat number.\n\nOptions: {options}",
+      "task": "【Voting Rules】\nEach player votes to eliminate one suspect. Most votes = eliminated. Tie = PK speeches then revote.\n\n【Task】\nChoose one player to eliminate. Base the decision on your team's win condition, public checks, role claims, counterclaims, and vote calls.\n- If you are the Seer and a confirmed werewolf is eligible, you should usually vote that werewolf.\n- If you are on the village team, do not ignore a single Seer claim's checks, the sheriff or a credible player's vote call, or clear counterclaims.\n- If you are on the werewolf team, you may fake your stance, but avoid obviously self-exposing random choices.\n\nOptions: {options}",
       "option": "Seat {seat} ({name})",
+      "reasonExample": "one short reason for this vote",
       "userNoTranscript": "(None)",
       "userNoSelfSpeech": "(You didn't speak today)",
-      "user": "{gameContext}\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+      "user": "{gameContext}\n\n【Before voting, mentally check】\n- Whether today's discussion contains a Seer claim, a gold-water result, or a wolf check.\n- Whether key roles such as Hunter, Witch, or Guard have competing claims.\n- Whether the sheriff or someone you find credible made a clear vote call.\n- Your vote should stay consistent with your team's goal, your known information, and your own speech today.\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no extra text:\n{voteJsonFormat}"
     },
     "night": {
       "option": "Seat {seat} ({name})",

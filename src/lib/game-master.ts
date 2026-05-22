@@ -23,6 +23,7 @@ import { getGeneratorModel, getSummaryModel } from "@/lib/api-keys";
 import { PhaseManager } from "@/game/core/PhaseManager";
 import type { PromptResult } from "@/game/core/types";
 import { buildCachedSystemMessageFromParts } from "./prompt-utils";
+import { parseLLMJson } from "./llm-json";
 import { getI18n } from "@/i18n/translator";
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -706,24 +707,14 @@ export async function generateDailySummary(
     },
   });
 
-  // Parse the { "bullets": [...] } format (as per prompt template)
-  try {
-    const objectMatch = cleanedDaily.match(/\{[\s\S]*\}/);
-    if (objectMatch) {
-      const obj = JSON.parse(objectMatch[0]) as { bullets?: string[]; summary?: string };
-      
-      // Handle bullets array format (expected from AI)
-      if (obj.bullets && Array.isArray(obj.bullets) && obj.bullets.length > 0) {
-        return { bullets: obj.bullets.map(b => String(b)), voteData };
-      }
-
-      // Handle summary string format (fallback)
-      if (typeof obj.summary === "string" && obj.summary.trim()) {
-        return { bullets: [obj.summary.trim()], voteData };
-      }
+  const obj = parseLLMJson<{ bullets?: unknown; summary?: unknown }>(cleanedDaily);
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+    if (Array.isArray(obj.bullets) && obj.bullets.length > 0) {
+      return { bullets: obj.bullets.map(b => String(b)), voteData };
     }
-  } catch {
-    // ignore parse errors
+    if (typeof obj.summary === "string" && obj.summary.trim()) {
+      return { bullets: [obj.summary.trim()], voteData };
+    }
   }
 
   // Fallback: use raw content without JSON wrapper
@@ -1220,25 +1211,43 @@ export async function generateAIVote(
     const cleaned = cleanedVote.trim();
     
     let parsedResult: { seat: number; reason: string } | null = null;
+    const validSeats = alivePlayers.map((p) => p.seat);
+    const parseSeatValue = (value: unknown): number | null => {
+      const displaySeat =
+        typeof value === "number"
+          ? value
+          : typeof value === "string" && /^\d+$/.test(value.trim())
+            ? Number.parseInt(value.trim(), 10)
+            : NaN;
+      if (!Number.isFinite(displaySeat)) return null;
+      const seat = displaySeat - 1;
+      return validSeats.includes(seat) ? seat : null;
+    };
     
-    try {
-      const parsed = JSON.parse(cleaned) as { seat?: number; reason?: string };
-      const seat = typeof parsed.seat === "number" ? parsed.seat - 1 : NaN;
-      const validSeats = alivePlayers.map((p) => p.seat);
-      if (Number.isFinite(seat) && validSeats.includes(seat)) {
+    const parsed = parseLLMJson<{
+      seat?: unknown;
+      targetSeat?: unknown;
+      target?: unknown;
+      vote?: unknown;
+      reason?: unknown;
+    }>(cleaned);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const seat =
+        parseSeatValue(parsed.seat) ??
+        parseSeatValue(parsed.targetSeat) ??
+        parseSeatValue(parsed.target) ??
+        parseSeatValue(parsed.vote);
+      if (seat !== null) {
         const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
         parsedResult = { seat, reason: reason || t("gameMaster.voteFallback.missingReason") };
       }
-    } catch {
-      // Fallback to regex parsing below
     }
 
     if (!parsedResult) {
       const match = cleaned.match(/\d+/);
       if (match) {
-        const seat = parseInt(match[0], 10) - 1;
-        const validSeats = alivePlayers.map((p) => p.seat);
-        if (validSeats.includes(seat)) {
+        const seat = parseSeatValue(match[0]);
+        if (seat !== null) {
           parsedResult = { seat, reason: t("gameMaster.voteFallback.parseSeatOnly") };
         }
       }
@@ -1437,10 +1446,8 @@ export async function generateAIBadgeSignupBatch(
       },
     });
 
-    // 解析 JSON 响应
-    try {
-      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
-      
+    const parsed = parseLLMJson<Record<string, unknown>>(cleaned);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       // 支持多种响应格式
       // 格式1: { "decisions": { "1": true, "2": false, ... } }
       // 格式2: { "1": true, "2": false, ... }
@@ -1469,7 +1476,7 @@ export async function generateAIBadgeSignupBatch(
         const decision = decisions[String(info.seat)];
         parsedByPlayer[info.playerId] = decision === true;
       }
-    } catch {
+    } else {
       // 解析失败，默认所有人不上警
       for (const player of players) {
         parsedByPlayer[player.playerId] = false;

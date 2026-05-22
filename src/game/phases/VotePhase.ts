@@ -152,6 +152,7 @@ export class VotePhase extends GamePhase {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
       selfSpeech: selfSpeech || t("prompts.vote.userNoSelfSpeech"),
+      voteJsonFormat: JSON.stringify({ seat: 3, reason: t("prompts.vote.reasonExample") }),
     });
 
     return { system, user, systemParts };
