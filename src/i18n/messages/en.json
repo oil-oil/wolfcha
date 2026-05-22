@@ -1054,13 +1054,13 @@
         "victimLine": "Wolves attacked Seat {seat} {name}",
         "noSense": "Antidote already used; no info on the target",
         "noAttack": "No one was attacked tonight",
-        "saveOption": "- Input \"save\" to use antidote on Seat {seat}",
+        "saveOption": "- You may use antidote on Seat {seat}",
         "noSelfSave": "- Witch can self-save",
         "noSave": "- Antidote unavailable or no victim",
-        "poisonOption": "- Input \"poison X\" to poison Seat X (e.g., \"poison 3\")",
+        "poisonOption": "- You may use poison on one poison target",
         "noPoison": "- Poison already used",
-        "task": "【Witch Skill】\nYou have one antidote (save) and one poison (kill), each once per game.\n\n【Important Rules】\n- Antidote can save the wolf's victim (including yourself)\n- Poison can kill any player (usually confirmed wolves)\n- One potion max per night\n- If guard and witch both save the same target (milk poison), they still die\n\n【Potion Status】\nAntidote: {healStatus} | Poison: {poisonStatus}\n\n【Tonight】\n{tonightInfo}\n\n【Task】\nDecide whether to use a potion. Only output commands.\n{saveLine}\n{poisonLine}\n- Input \"pass\" to use no potion\n\nPoison targets: {poisonTargets}",
-        "user": "{context}\n\nWhat will you do?\n\n【Format】\nReply: save / poison X / pass\nOnly output the command itself, no explanation or extra text"
+        "task": "【Witch Skill】\nYou have one antidote (save) and one poison (kill), each once per game.\n\n【Important Rules】\n- Antidote can save the wolf's victim (including yourself)\n- Poison can kill any player (usually confirmed wolves)\n- One potion max per night\n- If guard and witch both save the same target (milk poison), they still die\n\n【Potion Status】\nAntidote: {healStatus} | Poison: {poisonStatus}\n\n【Tonight】\n{tonightInfo}\n\n【Task】\nDecide whether to use a potion.\n{saveLine}\n{poisonLine}\n- You may use no potion\n\nPoison targets: {poisonTargets}\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nSave example: {saveJsonFormat}\nPoison example: {poisonJsonFormat}\nPass example: {passJsonFormat}",
+        "user": "{context}\n\nWhat will you do? Return a strict JSON object."
       }
     }
     ,
@@ -1074,11 +1074,11 @@
       },
       "election": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-        "task": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death.\n\n【Task】\nSheriff election: choose a player to receive the badge.\nOnly output the seat number. No analysis or roleplay.\n\nOptions: {options}\n",
+        "task": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death.\n\n【Task】\nSheriff election: choose one candidate to receive the badge.\n\nOptions: {options}\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nExample: {jsonFormat}",
         "contextHeader": "Day {day} Sheriff election",
         "contextWolves": "Wolf teammates: {list}",
         "contextRecent": "Badge speeches:\n{text}",
-        "user": "{context}\n\nWhich seat do you vote for sheriff?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+        "user": "{context}\n\nWhich seat do you vote for sheriff? Return a strict JSON object."
       },
       "transfer": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
@@ -1097,8 +1097,8 @@
     },
     "whiteWolfKingBoom": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【White Wolf King Self-Destruct Ability】\nYou may choose to self-destruct during the day. When you self-destruct, you take one alive player with you (no last words for them). After self-destruct, the day ends and night begins immediately, skipping the vote.\n\n【Task】\nBased on the current situation, decide whether to self-destruct. If yes, choose a target seat number. If no, reply pass.\n\nAlive players: {options}",
-      "user": "{context}\n\nShould you self-destruct? If yes, which seat?\n\n【Format】\nReply with a seat number (self-destruct and take that player), e.g., 5\nReply pass (do not self-destruct)\nNo explanations, no extra text, no code blocks"
+      "task": "【White Wolf King Self-Destruct Ability】\nYou may choose to self-destruct during the day. When you self-destruct, you take one alive player with you (no last words for them). After self-destruct, the day ends and night begins immediately, skipping the vote.\n\n【Task】\nBased on the current situation, decide whether to self-destruct. If yes, choose only from alive players.\n\nAlive players: {options}\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nBoom example: {jsonFormat}\nPass example: {passJsonFormat}",
+      "user": "{context}\n\nShould you self-destruct? Return a strict JSON object.\nBoom example: {jsonFormat}\nPass example: {passJsonFormat}"
     }
   },
   "badgePhase": {

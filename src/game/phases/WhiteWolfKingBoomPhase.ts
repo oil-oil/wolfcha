@@ -32,14 +32,22 @@ export class WhiteWolfKingBoomPhase extends GamePhase {
       .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
       .join(t("promptUtils.gameContext.listSeparator"));
 
-    const dynamicContent = t("prompts.whiteWolfKingBoom.task", { options });
+    const dynamicContent = t("prompts.whiteWolfKingBoom.task", {
+      options,
+      jsonFormat: JSON.stringify({ action: "boom", seat: 5 }),
+      passJsonFormat: JSON.stringify({ action: "pass" }),
+    });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
       { text: dynamicContent },
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.whiteWolfKingBoom.user", { context: gameContext });
+    const user = t("prompts.whiteWolfKingBoom.user", {
+      context: gameContext,
+      jsonFormat: JSON.stringify({ action: "boom", seat: 5 }),
+      passJsonFormat: JSON.stringify({ action: "pass" }),
+    });
 
     return { system, user, systemParts };
   }

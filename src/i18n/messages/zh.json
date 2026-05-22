@@ -1060,13 +1060,13 @@
         "victimLine": "狼人袭击了 {seat}号 {name}",
         "noSense": "解药已用，无法感知刀口",
         "noAttack": "今晚无人被袭击",
-        "saveOption": "- 输入 \"save\" 使用解药救 {seat}号",
+        "saveOption": "- 可以使用解药救 {seat}号",
         "noSelfSave": "- 女巫可自救",
         "noSave": "- 解药已用完或无人被杀",
-        "poisonOption": "- 输入 \"poison X\" 毒杀X号玩家（如 \"poison 3\"）",
+        "poisonOption": "- 可以使用毒药毒杀一名可毒目标",
         "noPoison": "- 毒药已用完",
-        "task": "【女巫技能】\n拥有一瓶解药（救人）和一瓶毒药（杀人），全局各一瓶。\n\n【重要规则】\n- 解药可救被狼人杀害的玩家（包括自救）\n- 毒药可毒杀任意玩家（通常用于确认的狼人）\n- 每晚最多用一瓶药\n- 若守卫和女巫同时救同一人（毒奶），该玩家仍会死亡\n\n【药水状态】\n解药: {healStatus} | 毒药: {poisonStatus}\n\n【今晚情况】\n{tonightInfo}\n\n【任务】\n决定是否使用药水。只需输出指令。\n{saveLine}\n{poisonLine}\n- 输入 \"pass\" 不使用药水\n\n可毒目标: {poisonTargets}",
-        "user": "{context}\n\n你要怎么做？\n\n【格式】\n回复: save / poison X / pass\n只输出上述指令本身，不要解释，不要输出多余文字，不要代码块"
+        "task": "【女巫技能】\n拥有一瓶解药（救人）和一瓶毒药（杀人），全局各一瓶。\n\n【重要规则】\n- 解药可救被狼人杀害的玩家（包括自救）\n- 毒药可毒杀任意玩家（通常用于确认的狼人）\n- 每晚最多用一瓶药\n- 若守卫和女巫同时救同一人（毒奶），该玩家仍会死亡\n\n【药水状态】\n解药: {healStatus} | 毒药: {poisonStatus}\n\n【今晚情况】\n{tonightInfo}\n\n【任务】\n决定是否使用药水。\n{saveLine}\n{poisonLine}\n- 可以不使用药水\n\n可毒目标: {poisonTargets}\n\n【格式】\n严格返回 JSON 对象，不要代码块，不要解释，不要多余文字。\n救人示例：{saveJsonFormat}\n毒人示例：{poisonJsonFormat}\n不用药示例：{passJsonFormat}",
+        "user": "{context}\n\n你要怎么做？严格返回 JSON 对象。"
       }
     },
     "badge": {
@@ -1079,11 +1079,11 @@
       },
       "election": {
         "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}",
-        "task": "【警徽评选说明】\n警长拥有 1.5 票投票权，死亡时可移交警徽。\n\n【任务】\n现在进行警徽评选。选择一名玩家获得警徽。\n本环节只需要给出座位数字，不要分析，不要角色扮演。\n\n可选: {options}\n",
+        "task": "【警徽评选说明】\n警长拥有 1.5 票投票权，死亡时可移交警徽。\n\n【任务】\n现在进行警徽评选。只能从候选人里选择一名玩家获得警徽。\n\n可选: {options}\n\n【格式】\n严格返回 JSON 对象，不要代码块，不要解释，不要多余文字。\n示例：{jsonFormat}",
         "contextHeader": "第{day}天 警徽评选",
         "contextWolves": "狼队友: {list}",
         "contextRecent": "警上发言:\n{text}",
-        "user": "{context}\n\n你把警徽投给几号？\n\n【格式】\n只回复座位数字，如: 3\n不要解释，不要输出多余文字，不要代码块"
+        "user": "{context}\n\n你把警徽投给几号？严格返回 JSON 对象。"
       },
       "transfer": {
         "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}",
@@ -1102,8 +1102,8 @@
     },
     "whiteWolfKingBoom": {
       "base": "【身份】\n你是 {seat}号「{name}」\n身份: {role}\n\n{winCondition}",
-      "task": "【白狼王自爆技能】\n你可以选择在白天自爆。自爆时可带走一名存活的玩家（对方无遗言），自爆后直接进入黑夜，跳过投票。\n\n【任务】\n根据当前局势，决定是否自爆。如果自爆，选择带走目标的座位数字。如果不自爆，回复 pass。\n\n存活玩家: {options}",
-      "user": "{context}\n\n是否自爆？如果自爆带走几号？\n\n【格式】\n回复座位数字（表示自爆带走该玩家），如: 5\n回复 pass（表示不自爆）\n不要解释，不要输出多余文字，不要代码块"
+      "task": "【白狼王自爆技能】\n你可以选择在白天自爆。自爆时可带走一名存活的玩家（对方无遗言），自爆后直接进入黑夜，跳过投票。\n\n【任务】\n根据当前局势，决定是否自爆。如果自爆，只能从存活玩家里选择目标。\n\n存活玩家: {options}\n\n【格式】\n严格返回 JSON 对象，不要代码块，不要解释，不要多余文字。\n自爆示例：{jsonFormat}\n不自爆示例：{passJsonFormat}",
+      "user": "{context}\n\n是否自爆？严格返回 JSON 对象。\n自爆示例：{jsonFormat}\n不自爆示例：{passJsonFormat}"
     }
   },
   "badgePhase": {

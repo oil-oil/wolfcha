@@ -691,6 +691,9 @@ export class NightPhase extends GamePhase {
       saveLine,
       poisonLine,
       poisonTargets,
+      saveJsonFormat: JSON.stringify({ action: "save" }),
+      poisonJsonFormat: JSON.stringify({ action: "poison", seat: 3 }),
+      passJsonFormat: JSON.stringify({ action: "pass" }),
     });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },

@@ -1602,18 +1602,31 @@ export async function generateAIBadgeVote(
   player: Player
 ): Promise<number> {
   const prompt = resolvePhasePrompt("DAY_BADGE_ELECTION", state, player);
-  const alivePlayers = state.players.filter((p) => p.alive && p.playerId !== player.playerId);
+  const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
+  const alivePlayers = state.players
+    .filter((p) => p.alive && p.playerId !== player.playerId)
+    .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
+
+  if (validSeats.length === 0) return BADGE_VOTE_ABSTAIN;
 
   try {
-    const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      temperature: GAME_TEMPERATURE.ACTION,
-    }));
-
-    const cleanedBadgeVote = stripMarkdownCodeFences(result.content);
+    const completion = await generateCompletionWithParseRetry<number>(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "vote"]);
+        return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: (firstSeat(validSeats) ?? 0) + 1 }))
+    );
+    const parsedSeat = completion.parsed ?? BADGE_VOTE_ABSTAIN;
 
     await aiLogger.log({
       type: "badge_vote",
@@ -1623,25 +1636,16 @@ export async function generateAIBadgeVote(
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
       response: {
-        content: cleanedBadgeVote,
-        raw: result.content,
-        rawResponse: JSON.stringify(result.raw, null, 2),
-        finishReason: result.raw.choices?.[0]?.finish_reason,
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedSeat, attempts: completion.attempts },
         duration: Date.now() - startTime,
       },
     });
 
-    const match = cleanedBadgeVote.match(/\d+/);
-    if (match) {
-      const seat = parseInt(match[0]) - 1;
-      const validSeats = alivePlayers.map((p) => p.seat);
-      if (validSeats.includes(seat)) {
-        return seat;
-      }
-    }
-
-    // Parse failed or invalid seat: treat as abstain instead of random to avoid stuck flow
-    return BADGE_VOTE_ABSTAIN;
+    return parsedSeat;
   } catch (error) {
     // Network/API error: treat as abstain so the phase does not get stuck
     console.warn("[wolfcha] generateAIBadgeVote failed, treating as abstain:", error);
@@ -1901,71 +1905,94 @@ export async function generateWitchAction(
   const prompt = resolvePhasePrompt("NIGHT_WITCH_ACTION", state, player, { wolfTarget });
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
-
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
-
-  const cleanedWitch = stripMarkdownCodeFences(result.content);
-
-  const rawText = cleanedWitch.trim();
-  const contentLower = rawText.toLowerCase();
-
   const canSave =
     !state.roleAbilities.witchHealUsed &&
     wolfTarget !== undefined;
   const canPoison = !state.roleAbilities.witchPoisonUsed;
+  const validPoisonSeats = state.players
+    .filter((p) => p.alive && p.playerId !== player.playerId)
+    .map((p) => p.seat);
+  const passAction: WitchAction = { type: "pass" };
 
-  let parsedAction: WitchAction;
-  if (contentLower.startsWith("save")) {
-    parsedAction = canSave ? { type: "save" } : { type: "pass" };
-  } else if (contentLower.startsWith("pass")) {
-    parsedAction = { type: "pass" };
-  } else if (contentLower.startsWith("poison")) {
-    if (!canPoison) {
-      parsedAction = { type: "pass" };
-    } else {
-      const match = contentLower.match(/poison\s*(\d+)/);
-      if (!match) {
-        parsedAction = { type: "pass" };
-      } else {
-        const seat = parseInt(match[1], 10) - 1;
-        if (!Number.isFinite(seat) || seat === player.seat) {
-          parsedAction = { type: "pass" };
-        } else {
-          const target = state.players.find((p) => p.seat === seat);
-          if (!target || !target.alive) {
-            parsedAction = { type: "pass" };
-          } else {
-            parsedAction = { type: "poison", target: seat };
-          }
+  try {
+    const completion = await generateCompletionWithParseRetry<WitchAction>(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsed = parseLLMJson<unknown>(cleaned);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parseFail();
+
+        const record = parsed as Record<string, unknown>;
+        const action = String(record.action ?? record.type ?? "").trim().toLowerCase();
+        const seatValue = record.seat ?? record.targetSeat ?? record.target ?? record.poison;
+        const wantsPass =
+          action.includes("pass") ||
+          action.includes("skip") ||
+          action.includes("none") ||
+          seatValue === null ||
+          seatValue === 0 ||
+          seatValue === "0";
+
+        if (wantsPass) return parseOk(passAction);
+        if (action === "save" || action === "heal") {
+          return canSave ? parseOk({ type: "save" }) : parseFail();
         }
-      }
-    }
-  } else {
-    parsedAction = { type: "pass" };
+        if (action === "poison") {
+          if (!canPoison) return parseFail();
+          const target = parseLLMDisplaySeat(cleaned, validPoisonSeats, ["seat", "targetSeat", "target", "poison"]);
+          return target === null ? parseFail() : parseOk({ type: "poison", target });
+        }
+
+        return parseFail();
+      },
+      jsonRetryInstruction([
+        canSave ? JSON.stringify({ action: "save" }) : null,
+        canPoison && validPoisonSeats.length > 0 ? JSON.stringify({ action: "poison", seat: (firstSeat(validPoisonSeats) ?? 0) + 1 }) : null,
+        JSON.stringify({ action: "pass" }),
+      ].filter(Boolean).join(" 或 / or "))
+    );
+    const parsedAction = completion.parsed ?? passAction;
+
+    await aiLogger.log({
+      type: "witch_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { ...parsedAction, attempts: completion.attempts },
+        duration: Date.now() - startTime,
+      },
+    });
+
+    return parsedAction;
+  } catch (error) {
+    console.warn("[wolfcha] generateWitchAction failed, passing witch action:", error);
+    await aiLogger.log({
+      type: "witch_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: passAction,
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return passAction;
   }
-
-  await aiLogger.log({
-    type: "witch_action",
-    request: {
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: {
-      content: cleanedWitch,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: parsedAction,
-      duration: Date.now() - startTime,
-    },
-  });
-
-  return parsedAction;
 }
 
 // ...
@@ -2133,53 +2160,82 @@ export async function generateWhiteWolfKingBoomDecision(
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
 
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
+  if (validSeats.length === 0) return null;
 
-  const cleaned = stripMarkdownCodeFences(result.content);
-  const contentLower = cleaned.toLowerCase().trim();
+  try {
+    const completion = await generateCompletionWithParseRetry<number | null>(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsed = parseLLMJson<unknown>(cleaned);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parseFail();
 
-  let parsedTarget: number | null;
+        const record = parsed as Record<string, unknown>;
+        const action = String(record.action ?? record.type ?? "").trim().toLowerCase();
+        const seatValue = record.seat ?? record.targetSeat ?? record.target ?? record.boom;
+        const wantsPass =
+          action.includes("pass") ||
+          action.includes("skip") ||
+          action.includes("none") ||
+          seatValue === null ||
+          seatValue === 0 ||
+          seatValue === "0";
 
-  // AI 可以选择 "pass" 表示不自爆
-  if (contentLower.includes("pass") || contentLower === "0") {
-    parsedTarget = null;
-  } else {
-    const match = cleaned.match(/\d+/);
-    if (match) {
-      const seat = parseInt(match[0]) - 1;
-      const validSeats = alivePlayers.map((p) => p.seat);
-      if (validSeats.includes(seat)) {
-        parsedTarget = seat;
-      } else {
-        // 无效目标视为不自爆
-        parsedTarget = null;
-      }
-    } else {
-      parsedTarget = null;
-    }
+        if (wantsPass) return parseOk(null);
+        const wantsBoom =
+          action === "" ||
+          action.includes("boom") ||
+          action.includes("explode") ||
+          action.includes("self");
+        if (!wantsBoom) return parseFail();
+
+        const target = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "boom"]);
+        return target === null ? parseFail() : parseOk(target);
+      },
+      jsonRetryInstruction(`${JSON.stringify({ action: "boom", seat: (firstSeat(validSeats) ?? 0) + 1 })} 或 / or ${JSON.stringify({ action: "pass" })}`)
+    );
+    const parsedTarget = completion.parsed;
+
+    await aiLogger.log({
+      type: "wwk_boom_decision",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedTarget, attempts: completion.attempts },
+        duration: Date.now() - startTime,
+      },
+    });
+
+    return parsedTarget;
+  } catch (error) {
+    console.warn("[wolfcha] generateWhiteWolfKingBoomDecision failed, passing self-destruct:", error);
+    await aiLogger.log({
+      type: "wwk_boom_decision",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: null },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return null;
   }
-
-  await aiLogger.log({
-    type: "wwk_boom_decision",
-    request: {
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: {
-      content: cleaned,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: { targetSeat: parsedTarget },
-      duration: Date.now() - startTime,
-    },
-  });
-
-  return parsedTarget;
 }
