@@ -664,7 +664,7 @@ export const buildGameContext = (
   const deadPlayers = state.players.filter((p) => !p.alive);
   const totalSeats = state.players.length;
   const publicGenericDeathCause = t("promptUtils.gameContext.deathCauseDeath");
-  const publicExecutionCause = publicGenericDeathCause;
+  const publicExecutionCause = t("promptUtils.gameContext.deathCauseVote");
 
   // === 第一优先级：角色私有信息（放在最前面） ===
   const privateInfo = buildRolePrivateInfo(state, player);

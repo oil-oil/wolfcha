@@ -179,8 +179,16 @@ export class DaySpeechPhase extends GamePhase {
       winCondition: getWinCondition(player.role),
       persona,
     });
-    const taskLine = isLastWords 
-      ? t("prompts.daySpeech.task.lastWords", { seat: player.seat + 1, name: player.displayName }) 
+    const wasVotedOut = isLastWords && state.dayHistory?.[state.day]?.executed?.seat === player.seat;
+    const taskLine = isLastWords
+      ? t(
+        player.role === "Hunter" && wasVotedOut
+          ? "prompts.daySpeech.task.lastWordsVotedOutHunter"
+          : wasVotedOut
+            ? "prompts.daySpeech.task.lastWordsVotedOut"
+            : "prompts.daySpeech.task.lastWords",
+        { seat: player.seat + 1, name: player.displayName }
+      )
       : isCampaignSpeech 
         ? t("prompts.daySpeech.task.campaign") 
         : t("prompts.daySpeech.task.dayDiscussion");

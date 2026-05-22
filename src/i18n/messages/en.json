@@ -994,6 +994,8 @@
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n【Scenario】\nThis is an online Werewolf game. Players communicate by text.\n\n{winCondition}\n\n{persona}",
       "task": {
         "lastWords": "You've been eliminated. Deliver your last words.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
+        "lastWordsVotedOut": "You were voted out. Deliver your last words.\n【Death cause】This death cause is vote execution, unrelated to witch poison.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
+        "lastWordsVotedOutHunter": "You were voted out. Deliver your last words.\n【Death cause】This death cause is vote execution, unrelated to witch poison; a Hunter voted out can still shoot.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
         "campaign": "This is the sheriff campaign speech. You do not need to sound like a prepared speech; talk like a real player trying to win something at the table.",
         "dayDiscussion": "This is daytime discussion. Decide for yourself what this turn's speech is trying to achieve.",
         "section": "【Current position】\nYou are playing a live Werewolf game. You are not a commentator or a referee.\nYou only know information from your own perspective. You have your own personality, memory, team goal, and current pressure.\nIt is your turn to speak. {taskLine}\n{campaignRequirements}"
@@ -1087,7 +1089,7 @@
     },
     "hunter": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【Hunter Skill】\nOn death, you can shoot one player. Cannot shoot if poisoned. Shooting is immediate and irreversible.\n\n【Task】\nDecide whether to shoot.\n\nOptions: {options}",
+      "task": "【Hunter Skill】\nYou can shoot one player if voted out or killed by werewolves. You cannot shoot if poisoned by the Witch. Shooting is immediate and irreversible.\n\n【Task】\nDecide whether to shoot.\n\nOptions: {options}",
       "user": "{context}\n\nWhich seat do you want to shoot?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nShoot example: {jsonFormat}\nPass example: {passJsonFormat}",
       "lastWordsContext": "\n\n【Your Last Words】\n{lastWords}\n\n【Important】Please keep your shooting decision consistent with your last words. If you expressed intent to shoot in your last words, execute it now.",
       "lastWordsIntentHint": "You stated in your last words that you would shoot Seat {seat} ({name}). Please execute your decision.",
@@ -1585,7 +1587,7 @@
       "werewolf": "【Win condition】Werewolves win when their count >= good players.",
       "seer": "【Win condition】Good wins when all werewolves are eliminated. Only you know your check results.",
       "witch": "【Win condition】Good wins when all werewolves are eliminated. You have one antidote and one poison.",
-      "hunter": "【Win condition】Good wins when all werewolves are eliminated. You may shoot on death, unless poisoned.",
+      "hunter": "【Win condition】Good wins when all werewolves are eliminated. You can shoot if voted out or killed by werewolves. You cannot shoot if poisoned by the Witch.",
       "guard": "【Win condition】Good wins when all werewolves are eliminated. You can protect one player each night and cannot protect the same player twice in a row.",
       "villager": "【Win condition】Good wins when all werewolves are eliminated.",
       "idiot": "【Win condition】Good wins when all werewolves are eliminated. If voted out, you reveal and survive, then lose voting rights.",
