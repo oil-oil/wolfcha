@@ -384,7 +384,7 @@ export function useBadgePhase(
       .map((p) => p.seat);
 
     if (candidates.length === 0) {
-      let nextState = addSystemMessage(state, texts.t("badgePhase.noSignup"));
+      const nextState = addSystemMessage(state, texts.t("badgePhase.noSignup"));
       setGameState(nextState);
       setDialogue(texts.speakerHost, texts.t("badgePhase.noSignup"), false);
       await delay(DELAY_CONFIG.DIALOGUE);
@@ -540,9 +540,9 @@ export function useBadgePhase(
           targetSeat = BADGE_VOTE_ABSTAIN;
         }
 
-        // Abstain (-1) is recorded as-is; only correct non-abstain to a valid candidate
+        // Abstain (-1) is recorded as-is; invalid non-abstain results also abstain.
         if (targetSeat !== BADGE_VOTE_ABSTAIN && candidates.length > 0 && !candidates.includes(targetSeat)) {
-          targetSeat = candidates[Math.floor(Math.random() * candidates.length)];
+          targetSeat = BADGE_VOTE_ABSTAIN;
         }
 
         // 从最新状态获取投票，避免覆盖人类玩家的投票

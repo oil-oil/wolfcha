@@ -146,10 +146,12 @@ export class NightPhase extends GamePhase {
 
     if (!runtime.isTokenValid(runtime.token)) return currentState;
 
-    currentState = {
-      ...currentState,
-      nightActions: { ...currentState.nightActions, guardTarget },
-    };
+    if (guardTarget !== undefined) {
+      currentState = {
+        ...currentState,
+        nightActions: { ...currentState.nightActions, guardTarget },
+      };
+    }
     runtime.setGameState(currentState);
     runtime.setIsWaitingForAI(false);
 
@@ -207,25 +209,27 @@ export class NightPhase extends GamePhase {
         await runtime.waitForUnpause();
         if (!runtime.isTokenValid(runtime.token)) return currentState;
         
-        // 所有狼人投票给同一个目标
-        for (const wolf of wolves) {
-          wolfVotes[wolf.playerId] = targetSeat;
+        if (targetSeat !== undefined) {
+          // 所有狼人投票给同一个目标
+          for (const wolf of wolves) {
+            wolfVotes[wolf.playerId] = targetSeat;
+          }
         }
 
         currentState = {
           ...currentState,
-          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: targetSeat },
+          nightActions: {
+            ...currentState.nightActions,
+            wolfVotes,
+            ...(targetSeat !== undefined ? { wolfTarget: targetSeat } : {}),
+          },
         };
         runtime.setGameState(currentState);
       } catch (error) {
         console.error("[wolfcha] AI wolf vote failed:", error);
-        const villagers = currentState.players.filter((p) => p.alive && p.alignment === "village");
-        const fallbackSeat = villagers.length > 0
-          ? villagers[Math.floor(Math.random() * villagers.length)].seat
-          : 0;
         currentState = {
           ...currentState,
-          nightActions: { ...currentState.nightActions, wolfVotes, wolfTarget: fallbackSeat },
+          nightActions: { ...currentState.nightActions, wolfVotes },
         };
         runtime.setGameState(currentState);
       }
@@ -325,6 +329,13 @@ export class NightPhase extends GamePhase {
 
     const targetSeat = await generateSeerAction(currentState, seer);
     if (!runtime.isTokenValid(runtime.token)) return currentState;
+
+    if (targetSeat === undefined) {
+      runtime.setGameState(currentState);
+      runtime.setIsWaitingForAI(false);
+      await playNarrator("seerClose");
+      return currentState;
+    }
 
     const targetPlayer = currentState.players.find((p) => p.seat === targetSeat);
     const isWolf = targetPlayer ? targetPlayer.alignment === "wolf" : false;
@@ -520,7 +531,10 @@ export class NightPhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.night.seer.user", { context: this.buildContextWithDay(context, todayTranscript, selfSpeech) });
+    const user = t("prompts.night.seer.user", {
+      context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
+      jsonFormat: JSON.stringify({ seat: 5 }),
+    });
 
     return { system, user, systemParts };
   }
@@ -579,7 +593,10 @@ export class NightPhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.night.wolf.user", { context: this.buildContextWithDay(context, todayTranscript, selfSpeech) });
+    const user = t("prompts.night.wolf.user", {
+      context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
+      jsonFormat: JSON.stringify({ seat: 2 }),
+    });
 
     return { system, user, systemParts };
   }
@@ -613,7 +630,10 @@ export class NightPhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.night.guard.user", { context: this.buildContextWithDay(context, todayTranscript, selfSpeech) });
+    const user = t("prompts.night.guard.user", {
+      context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
+      jsonFormat: JSON.stringify({ seat: 3 }),
+    });
 
     return { system, user, systemParts };
   }

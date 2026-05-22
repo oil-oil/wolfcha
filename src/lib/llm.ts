@@ -3,6 +3,7 @@ import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/t
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { getAuthHeaders } from "@/lib/auth-headers";
+import { parseLLMJson } from "./llm-json";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -413,6 +414,9 @@ function escapeDanglingQuotesInStrings(text: string): string {
 
 function parseJsonTolerant<T>(raw: string): T {
   const trimmed = stripJsonPrefix(stripMarkdownCodeFences(raw));
+  const repairedJson = parseLLMJson<T>(trimmed);
+  if (repairedJson !== null) return repairedJson;
+
   const direct = normalizeJsonText(trimmed);
   try {
     return JSON.parse(direct) as T;
@@ -776,5 +780,28 @@ export async function generateJSON<T>(
     messages: messagesWithFormat,
   });
 
-  return parseJsonTolerant<T>(result.content);
+  try {
+    return parseJsonTolerant<T>(result.content);
+  } catch (firstError) {
+    const retryMessages: LLMMessage[] = [
+      ...messagesWithFormat,
+      { role: "assistant", content: result.content.slice(0, 4000) },
+      {
+        role: "user",
+        content: "The previous response was not valid JSON for the requested schema. Return valid JSON only, with no markdown and no extra text.",
+      },
+    ];
+
+    const retryResult = await generateCompletion({
+      ...options,
+      ...(shouldForceJsonObject ? { response_format: { type: "json_object" as const } } : {}),
+      messages: retryMessages,
+    });
+
+    try {
+      return parseJsonTolerant<T>(retryResult.content);
+    } catch {
+      throw firstError;
+    }
+  }
 }

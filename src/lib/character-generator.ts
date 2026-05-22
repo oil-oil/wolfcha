@@ -16,6 +16,7 @@ import { GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
 import { resolveVoiceId, VOICE_PRESETS, type AppLocale } from "./voice-constants";
 import { getI18n } from "@/i18n/translator";
+import { parseLLMJson } from "./llm-json";
 
 export interface GeneratedCharacter {
   displayName: string;
@@ -450,7 +451,8 @@ export async function generateCharacters(
       if (matches) {
         for (const match of matches) {
           try {
-            const c = JSON.parse(match) as GeneratedCharacter;
+            const c = parseLLMJson<GeneratedCharacter>(match);
+            if (!c) continue;
             if (!c.displayName || !c.persona) continue;
             
             // 找到对应的 profile index
@@ -499,7 +501,10 @@ export async function generateCharacters(
     if (finalizedCharacters.filter(Boolean).length < baseProfiles.length) {
       // 回退到完整解析
       const cleaned = stripMarkdownCodeFences(accumulatedContent);
-      const fullResult = JSON.parse(cleaned) as unknown;
+      const fullResult = parseLLMJson<unknown>(cleaned);
+      if (!fullResult) {
+        throw new Error("Character generation returned invalid JSON");
+      }
       
       const normalized = normalizeGeneratedCharacters(fullResult);
       const alignedCharacters = alignCharactersToProfiles(normalized.characters, baseProfiles);

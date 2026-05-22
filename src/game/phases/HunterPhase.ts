@@ -113,7 +113,11 @@ export class HunterPhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const user = t("prompts.hunter.user", { context: gameContext });
+    const user = t("prompts.hunter.user", {
+      context: gameContext,
+      jsonFormat: JSON.stringify({ seat: 5 }),
+      passJsonFormat: JSON.stringify({ action: "pass" }),
+    });
 
     return { system, user, systemParts };
   }

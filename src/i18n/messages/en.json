@@ -1028,8 +1028,8 @@
       "seer": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
         "checkedLine": "Already checked: {list} (avoid repeat checks)",
-        "task": "【Seer Skill】\nEach night you can check one player's identity (Werewolf/Good). Only you know the result; you can reveal or hide it.\n\n【Task】\nChoose one player to check. Only output the seat number.\n{checkedLine}\n\nOptions: {options}",
-        "user": "{context}\n\nWhich seat will you check?\n\n【Format】\nReply with a seat number only, e.g., 5\nNo explanations, no extra text, no code blocks"
+        "task": "【Seer Skill】\nEach night you can check one player's identity (Werewolf/Good). Only you know the result; you can reveal or hide it.\n\n【Task】\nChoose one player to check.\n{checkedLine}\n\nOptions: {options}",
+        "user": "{context}\n\nWhich seat will you check?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text:\n{jsonFormat}"
       },
       "wolf": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}",
@@ -1038,14 +1038,14 @@
         "rules": "{winCondition}",
         "teammateVotes": "【Teammate intent】\n{lines}",
         "voteLine": "- Seat {seat} ({name}) wants to kill: Seat {targetSeat}{targetName}",
-        "task": "【Werewolf Skill】\nEach night wolves collectively decide to kill one player. Can kill good players, teammates (self-kill), or skip (no kill).\n\n【Task】\nChoose one player to kill. Only output the seat number.\n{teammateVotesSection}\n\nOptions: {options}\n",
-        "user": "{context}\n\nWhich seat do you want to kill?\n\n【Format】\nReply with a seat number only, e.g., 2\nNo explanations, no extra text, no code blocks"
+        "task": "【Werewolf Skill】\nEach night wolves collectively decide to kill one player. Can kill good players, teammates (self-kill), or skip (no kill).\n\n【Task】\nChoose one player to kill.\n{teammateVotesSection}\n\nOptions: {options}\n",
+        "user": "{context}\n\nWhich seat do you want to kill?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text:\n{jsonFormat}"
       },
       "guard": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
         "lastTarget": "You protected Seat {seat} last night; cannot pick again",
-        "task": "【Guard Skill】\nEach night you can protect one player from wolf kills. If successful, the target survives.\n\n【Important Rules】\n- Cannot protect the same player on consecutive nights\n- Can protect yourself\n- If guard and witch both save the same target (milk poison), they still die\n\n【Task】\nChoose one player to protect. Only output the seat number.\n\nOptions: {options}\n{lastTargetLine}",
-        "user": "{context}\n\nWhich seat do you want to protect?\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks"
+        "task": "【Guard Skill】\nEach night you can protect one player from wolf kills. If successful, the target survives.\n\n【Important Rules】\n- Cannot protect the same player on consecutive nights\n- Can protect yourself\n- If guard and witch both save the same target (milk poison), they still die\n\n【Task】\nChoose one player to protect.\n\nOptions: {options}\n{lastTargetLine}",
+        "user": "{context}\n\nWhich seat do you want to protect?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text:\n{jsonFormat}"
       },
       "witch": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
@@ -1080,15 +1080,15 @@
       },
       "transfer": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-        "task": "【Task】\nYou are eliminated. Transfer the badge to a living player or tear it.\nIf tearing, reply \"0\".\n\nOptions: {options}, or reply \"0\" to tear the badge\n\n【Format】\nReply with a seat number only, e.g., 3\nNo explanations, no extra text, no code blocks",
+        "task": "【Task】\nYou are eliminated. Transfer the badge to a living player or tear it.\n\nOptions: {options}\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nTransfer example: {jsonFormat}\nTear example: {tearJsonFormat}",
         "noTranscript": "(None)",
         "user": "{context}\n\n【Today's discussion】\n{todayTranscript}\n\nWhich seat do you transfer the badge to? (Reply \"0\" to tear it)"
       }
     },
     "hunter": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【Hunter Skill】\nOn death, you can shoot one player. Cannot shoot if poisoned. Shooting is immediate and irreversible.\n\n【Task】\nDecide whether to shoot. Only output seat number or pass.\n\nOptions: {options}",
-      "user": "{context}\n\nWhich seat do you want to shoot?\n\n【Format】\nReply with a seat number only, e.g., 5\nIf you don't want to shoot, reply: pass\nNo explanations, no extra text, no code blocks",
+      "task": "【Hunter Skill】\nOn death, you can shoot one player. Cannot shoot if poisoned. Shooting is immediate and irreversible.\n\n【Task】\nDecide whether to shoot.\n\nOptions: {options}",
+      "user": "{context}\n\nWhich seat do you want to shoot?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nShoot example: {jsonFormat}\nPass example: {passJsonFormat}",
       "lastWordsContext": "\n\n【Your Last Words】\n{lastWords}\n\n【Important】Please keep your shooting decision consistent with your last words. If you expressed intent to shoot in your last words, execute it now.",
       "lastWordsIntentHint": "You stated in your last words that you would shoot Seat {seat} ({name}). Please execute your decision.",
       "lastWordsPassHint": "You stated in your last words that you would not shoot. Please stay consistent."
@@ -1889,7 +1889,8 @@
       "missingReason": "No reason provided",
       "parseSeatOnly": "Parse failed - seat only",
       "noTargets": "No available targets",
-      "randomPick": "Random pick"
+      "parseFailedAbstain": "Parse failed, abstained automatically",
+      "apiFailedAbstain": "Model request failed, abstained automatically"
     }
   },
   "api": {

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { generateCompletion, generateCompletionBatch, generateCompletionStream, mergeOptionsFromModelRef, stripMarkdownCodeFences, stripReasoningArtifacts, type LLMMessage } from "./llm";
+import { generateCompletion, generateCompletionBatch, generateCompletionStream, mergeOptionsFromModelRef, stripMarkdownCodeFences, stripReasoningArtifacts, type GenerateOptions, type LLMMessage } from "./llm";
 import type { ChatCompletionResponse } from "./llm";
 import { StreamingSpeechParser } from "./streaming-speech-parser";
 import {
@@ -420,7 +420,7 @@ export function transitionPhase(state: GameState, newPhase: Phase): GameState {
   // Clear currentSpeakerSeat when transitioning to night phases
   const isNightPhase = newPhase.startsWith("NIGHT_");
   const shouldClearSpeaker = isNightPhase || newPhase === "DAY_VOTE" || newPhase === "DAY_RESOLVE";
-  
+
   return {
     ...state,
     phase: newPhase,
@@ -461,12 +461,12 @@ export function getNextAliveSeat(
 ): number | null {
   const sheriffSeat = state.badge.holderSeat;
   let alivePlayers = state.players.filter((p) => p.alive);
-  
+
   // 如果需要排除警长（警长最后发言），则从候选列表中移除警长
   if (excludeSheriff && sheriffSeat !== null) {
     alivePlayers = alivePlayers.filter((p) => p.seat !== sheriffSeat);
   }
-  
+
   if (alivePlayers.length === 0) return null;
 
   const sortedSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
@@ -496,13 +496,13 @@ export function getSpeakingOrder(
   const sheriffSeat = state.badge.holderSeat;
   const alivePlayers = state.players.filter((p) => p.alive);
   const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
-  
+
   if (aliveSeats.length === 0) return [];
-  
+
   // 找到起始座位在排序列表中的索引
   const startIndex = aliveSeats.indexOf(startSeat);
   if (startIndex === -1) return aliveSeats;
-  
+
   // 从起始座位开始，按顺时针顺序排列
   const order: number[] = [];
   for (let i = 0; i < aliveSeats.length; i++) {
@@ -511,12 +511,12 @@ export function getSpeakingOrder(
     if (sheriffLast && seat === sheriffSeat) continue;
     order.push(seat);
   }
-  
+
   // 如果警长最后发言且警长存活，将警长添加到最后
   if (sheriffLast && sheriffSeat !== null && aliveSeats.includes(sheriffSeat)) {
     order.push(sheriffSeat);
   }
-  
+
   return order;
 }
 
@@ -533,23 +533,23 @@ export function resolveSpeechStartSeat(
 ): number | null {
   const alivePlayers = state.players.filter((p) => p.alive);
   const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
-  
+
   if (aliveSeats.length === 0) return null;
-  
+
   const sheriffSeat = state.badge.holderSeat;
-  const isSheriffAlive = options?.hasSheriff ?? 
+  const isSheriffAlive = options?.hasSheriff ??
     (sheriffSeat !== null && aliveSeats.includes(sheriffSeat));
-  
+
   // 场上存在警长：从警长下一位开始
   if (isSheriffAlive && sheriffSeat !== null) {
     return getNextAliveSeat(state, sheriffSeat, true, "clockwise");
   }
-  
+
   // 无警长但有死者：从死者下一位开始
   if (options?.deadSeat !== undefined) {
     return getNextAliveSeat(state, options.deadSeat, false, "clockwise");
   }
-  
+
   // 默认：从最小座位号开始
   return aliveSeats[0];
 }
@@ -559,13 +559,13 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
   const sheriffSeat = state.badge.holderSeat;
   const aliveById = new Set(state.players.filter((p) => p.alive).map((p) => p.playerId));
   const aliveBySeat = new Set(state.players.filter((p) => p.alive).map((p) => p.seat));
-  
+
   // 找到警长的 playerId
-  const sheriffPlayer = sheriffSeat !== null 
+  const sheriffPlayer = sheriffSeat !== null
     ? state.players.find((p) => p.seat === sheriffSeat && p.alive)
     : null;
   const sheriffPlayerId = sheriffPlayer?.playerId;
-  
+
   // 已翻牌白痴的投票不计入
   const revealedIdiotId = state.roleAbilities.idiotRevealed
     ? state.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
@@ -683,14 +683,26 @@ export async function generateDailySummary(
     { role: "user", content: user },
   ];
 
-  const result = await generateCompletion({
-    model: summaryModel,
-    messages,
-    temperature: GAME_TEMPERATURE.SUMMARY,
-    response_format: { type: "json_object" },
-  });
-
-  const cleanedDaily = stripMarkdownCodeFences(result.content);
+  const completion = await generateCompletionWithParseRetry(
+    {
+      model: summaryModel,
+      messages,
+      temperature: GAME_TEMPERATURE.SUMMARY,
+      response_format: { type: "json_object" },
+    },
+    (cleaned) => {
+      const obj = parseLLMJson<{ bullets?: unknown; summary?: unknown }>(cleaned);
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) return parseFail();
+      if (Array.isArray(obj.bullets) && obj.bullets.length > 0) {
+        return parseOk({ bullets: obj.bullets.map(b => String(b)), voteData });
+      }
+      if (typeof obj.summary === "string" && obj.summary.trim()) {
+        return parseOk({ bullets: [obj.summary.trim()], voteData });
+      }
+      return parseFail();
+    },
+    jsonRetryInstruction(JSON.stringify({ bullets: ["要点1", "要点2"] }))
+  );
 
   await aiLogger.log({
     type: "daily_summary",
@@ -699,26 +711,19 @@ export async function generateDailySummary(
       messages,
     },
     response: {
-      content: cleanedDaily,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
+      content: completion.cleaned,
+      raw: completion.result.content,
+      rawResponse: JSON.stringify(completion.result.raw, null, 2),
+      finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+      parsed: completion.parsed,
       duration: Date.now() - startTime,
     },
   });
 
-  const obj = parseLLMJson<{ bullets?: unknown; summary?: unknown }>(cleanedDaily);
-  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-    if (Array.isArray(obj.bullets) && obj.bullets.length > 0) {
-      return { bullets: obj.bullets.map(b => String(b)), voteData };
-    }
-    if (typeof obj.summary === "string" && obj.summary.trim()) {
-      return { bullets: [obj.summary.trim()], voteData };
-    }
-  }
+  if (completion.parsed) return completion.parsed;
 
   // Fallback: use raw content without JSON wrapper
-  const fallback = result.content
+  const fallback = completion.result.content
     .replace(/```json\s*|\s*```/g, "")
     .trim();
 
@@ -748,7 +753,7 @@ export async function* generateAISpeechStream(
     const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players);
     await aiLogger.log({
       type: "speech",
-      request: { 
+      request: {
         model: player.agentProfile!.modelRef.model,
         messages,
         temperature: GAME_TEMPERATURE.SPEECH,
@@ -764,7 +769,7 @@ export async function* generateAISpeechStream(
     const sanitizedSpeech = sanitizeSeatMentions(sanitizeModelArtifacts(fullResponse), state.players);
     await aiLogger.log({
       type: "speech",
-      request: { 
+      request: {
         model: player.agentProfile!.modelRef.model,
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
@@ -841,7 +846,7 @@ export async function generateAISpeechSegments(
     const objectMatch = text.match(/\{[\s\S]*\}/);
     if (!objectMatch) return [];
     try {
-      const parsed = JSON.parse(objectMatch[0]) as unknown;
+      const parsed = parseLLMJson<unknown>(objectMatch[0]);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
 
       const out: string[] = [];
@@ -884,7 +889,7 @@ export async function generateAISpeechSegments(
 
     await aiLogger.log({
       type: "speech",
-      request: { 
+      request: {
         model: player.agentProfile!.modelRef.model,
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
@@ -902,7 +907,7 @@ export async function generateAISpeechSegments(
     try {
       const jsonMatch = sanitizedSpeech.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const segments = JSON.parse(jsonMatch[0]) as unknown[];
+        const segments = parseLLMJson<unknown[]>(jsonMatch[0]);
         if (Array.isArray(segments) && segments.length > 0) {
           const normalized: string[] = [];
           for (const item of segments) {
@@ -945,7 +950,7 @@ export async function generateAISpeechSegments(
       .split(/[。！？]+(?=\s|$)|\n+/)  // 按句号、感叹号、问号（后面跟空格或结尾）或换行分割
       .map(s => s.trim().replace(/^["']+|["']+$/g, ""))  // 移除首尾引号
       .filter(s => s.length > 2);  // 过滤掉长度小于等于2的片段
-    
+
     if (fallbackSegments.length > 0) return fallbackSegments;
 
     const cleanedSingle = sanitizedSpeech
@@ -958,7 +963,7 @@ export async function generateAISpeechSegments(
   } catch (error) {
     await aiLogger.log({
       type: "speech",
-      request: { 
+      request: {
         model: player.agentProfile!.modelRef.model,
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
@@ -1027,13 +1032,13 @@ export async function generateAISpeechSegmentsStream(
       chunkCount++;
       accumulatedContent += chunk;
       parser.processChunk(chunk);
-      
+
       // 调试：每10个chunk输出一次
       if (chunkCount % 10 === 0) {
         console.log(`[streaming] chunks: ${chunkCount}, accumulated: ${accumulatedContent.length} chars, segments: ${parser.getSegmentCount()}`);
       }
     }
-    
+
     console.log(`[streaming] done. total chunks: ${chunkCount}, segments emitted: ${parser.getSegmentCount()}, unique emitted: ${emittedSegments.size}`);
 
     // 结束解析
@@ -1049,7 +1054,7 @@ export async function generateAISpeechSegmentsStream(
       const jsonMatch = sanitizedSpeech.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         try {
-          const parsed = JSON.parse(jsonMatch[0]) as unknown[];
+          const parsed = parseLLMJson<unknown[]>(jsonMatch[0]);
           if (Array.isArray(parsed) && parsed.length > 0) {
             const normalized: string[] = [];
             for (const item of parsed) {
@@ -1119,7 +1124,7 @@ export async function generateAISpeechSegmentsStream(
       options.onComplete?.(result);
       return result;
     }
-    
+
     // 如果流式已经发射了 segments 但 parser.end() 返回空，使用已发射的
     if (segments.length === 0 && emittedSegments.size > 0) {
       const emittedList = Array.from(emittedSegments);
@@ -1197,20 +1202,7 @@ export async function generateAIVote(
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
 
-  let result: { content: string; raw: ChatCompletionResponse };
   try {
-    result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      temperature: GAME_TEMPERATURE.ACTION,
-      response_format: { type: "json_object" },
-    }));
-
-    const rawContent = result.content;
-    const cleanedVote = stripMarkdownCodeFences(rawContent);
-    const cleaned = cleanedVote.trim();
-    
-    let parsedResult: { seat: number; reason: string } | null = null;
     const validSeats = alivePlayers.map((p) => p.seat);
     const parseSeatValue = (value: unknown): number | null => {
       const displaySeat =
@@ -1223,69 +1215,45 @@ export async function generateAIVote(
       const seat = displaySeat - 1;
       return validSeats.includes(seat) ? seat : null;
     };
-    
-    const parsed = parseLLMJson<{
-      seat?: unknown;
-      targetSeat?: unknown;
-      target?: unknown;
-      vote?: unknown;
-      reason?: unknown;
-    }>(cleaned);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const seat =
-        parseSeatValue(parsed.seat) ??
-        parseSeatValue(parsed.targetSeat) ??
-        parseSeatValue(parsed.target) ??
-        parseSeatValue(parsed.vote);
-      if (seat !== null) {
-        const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
-        parsedResult = { seat, reason: reason || t("gameMaster.voteFallback.missingReason") };
-      }
-    }
 
-    if (!parsedResult) {
-      const match = cleaned.match(/\d+/);
-      if (match) {
-        const seat = parseSeatValue(match[0]);
-        if (seat !== null) {
-          parsedResult = { seat, reason: t("gameMaster.voteFallback.parseSeatOnly") };
-        }
-      }
-    }
-
-    if (!parsedResult) {
-      if (alivePlayers.length === 0) {
-        parsedResult = { seat: player.seat, reason: t("gameMaster.voteFallback.noTargets") };
-      } else {
-        const fallback = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-        parsedResult = { seat: fallback, reason: t("gameMaster.voteFallback.randomPick") };
-      }
-    }
-
-    // Log with both raw and parsed data
-    await aiLogger.log({
-      type: "vote",
-      request: { 
+    const completion = await generateCompletionWithParseRetry(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
-        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-      },
-      response: { 
-        content: cleanedVote, 
-        raw: rawContent,
-        rawResponse: JSON.stringify(result.raw, null, 2),
-        finishReason: result.raw.choices?.[0]?.finish_reason,
-        parsed: parsedResult,
-        duration: Date.now() - startTime 
-      },
-    });
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsed = parseLLMJson<{
+          seat?: unknown;
+          targetSeat?: unknown;
+          target?: unknown;
+          vote?: unknown;
+          reason?: unknown;
+        }>(cleaned);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parseFail();
 
-    return parsedResult;
-  } catch (error) {
-    const fallbackResult = alivePlayers.length === 0
-      ? { seat: player.seat, reason: t("gameMaster.voteFallback.noTargets") }
-      : { seat: alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat, reason: t("gameMaster.voteFallback.randomPick") };
-    
+        const seat =
+          parseSeatValue(parsed.seat) ??
+          parseSeatValue(parsed.targetSeat) ??
+          parseSeatValue(parsed.target) ??
+          parseSeatValue(parsed.vote);
+        if (seat === null) return parseFail();
+
+        const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
+        return parseOk({ seat, reason: reason || t("gameMaster.voteFallback.missingReason") });
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 3, reason: t("gameMaster.voteFallback.missingReason") }))
+    );
+
+    const parsedResult = completion.parsed ?? {
+      seat: AI_VOTE_ABSTAIN,
+      reason: alivePlayers.length === 0
+        ? t("gameMaster.voteFallback.noTargets")
+        : t("gameMaster.voteFallback.parseFailedAbstain"),
+    };
+
+    // Log with both raw and parsed data
     await aiLogger.log({
       type: "vote",
       request: {
@@ -1293,10 +1261,36 @@ export async function generateAIVote(
         messages,
         player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
       },
-      response: { 
-        content: "", 
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: parsedResult,
+        duration: Date.now() - startTime
+      }
+    });
+
+    return parsedResult;
+  } catch (error) {
+    const fallbackResult = {
+      seat: AI_VOTE_ABSTAIN,
+      reason: alivePlayers.length === 0
+        ? t("gameMaster.voteFallback.noTargets")
+        : t("gameMaster.voteFallback.apiFailedAbstain"),
+    };
+
+    await aiLogger.log({
+      type: "vote",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
         parsed: fallbackResult,
-        duration: Date.now() - startTime 
+        duration: Date.now() - startTime
       },
       error: String(error),
     });
@@ -1306,9 +1300,100 @@ export async function generateAIVote(
 }
 
 /** Sentinel for abstain when AI fails to vote or parse. Counting logic skips -1 via aliveBySeat.has(seat). */
+export const AI_VOTE_ABSTAIN = -1;
+
+/** Sentinel for abstain when AI fails to vote or parse. Counting logic skips -1 via aliveBySeat.has(seat). */
 export const BADGE_VOTE_ABSTAIN = -1;
 
 export const BADGE_TRANSFER_TORN = -1;
+
+function parseDisplaySeatValue(value: unknown, validSeats: number[]): number | null {
+  const displaySeat =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && /^-?\d+$/.test(value.trim())
+        ? Number.parseInt(value.trim(), 10)
+        : NaN;
+
+  if (!Number.isFinite(displaySeat)) return null;
+  const seat = displaySeat - 1;
+  return validSeats.includes(seat) ? seat : null;
+}
+
+function parseLLMDisplaySeat(raw: string, validSeats: number[], keys: string[] = ["seat", "targetSeat", "target", "vote"]): number | null {
+  if (validSeats.length === 0) return null;
+
+  const cleaned = stripMarkdownCodeFences(raw).trim();
+  const parsed = parseLLMJson<unknown>(cleaned);
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const record = parsed as Record<string, unknown>;
+    for (const key of keys) {
+      const seat = parseDisplaySeatValue(record[key], validSeats);
+      if (seat !== null) return seat;
+    }
+  }
+
+  return null;
+}
+
+function firstSeat(validSeats: number[]): number | undefined {
+  return [...validSeats].sort((a, b) => a - b)[0];
+}
+
+type ParseAttempt<T> = { ok: true; value: T } | { ok: false };
+
+type ParsedCompletion<T> = {
+  result: { content: string; raw: ChatCompletionResponse };
+  cleaned: string;
+  parsed: T | null;
+  attempts: number;
+};
+
+function parseOk<T>(value: T): ParseAttempt<T> {
+  return { ok: true, value };
+}
+
+function parseFail(): ParseAttempt<never> {
+  return { ok: false };
+}
+
+async function generateCompletionWithParseRetry<T>(
+  options: GenerateOptions,
+  parse: (cleaned: string) => ParseAttempt<T>,
+  retryInstruction: string
+): Promise<ParsedCompletion<T>> {
+  let messages = options.messages;
+  let last: ParsedCompletion<T> | null = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const result = await generateCompletion({ ...options, messages });
+    const cleaned = stripMarkdownCodeFences(result.content).trim();
+    const parsed = parse(cleaned);
+
+    last = {
+      result,
+      cleaned,
+      parsed: parsed.ok ? parsed.value : null,
+      attempts: attempt,
+    };
+
+    if (parsed.ok) return last;
+
+    messages = [
+      ...options.messages,
+      { role: "assistant", content: result.content.slice(0, 4000) },
+      { role: "user", content: retryInstruction },
+    ];
+  }
+
+  if (!last) throw new Error("No LLM completion attempts were made");
+  return last;
+}
+
+function jsonRetryInstruction(formatHint: string): string {
+  return `上一轮输出无法按预期 JSON 结构解析。The previous output did not match the expected JSON schema. 请严格只返回 JSON / Return JSON only, no markdown, no explanation, no extra text. 预期结构 / Expected shape: ${formatHint}`;
+}
 
 /**
  * 使用 SUMMARY_MODEL 一次性判断所有玩家是否上警
@@ -1365,9 +1450,9 @@ export async function generateAIBadgeSignupBatch(
     } else if (player.role === "Guard" && state.nightActions.lastGuardTarget !== undefined) {
       const targetPlayer = state.players.find((p) => p.seat === state.nightActions.lastGuardTarget);
       if (targetPlayer) {
-        nightActionInfo = t("gameMaster.badgeSignup.guardProtected", { 
+        nightActionInfo = t("gameMaster.badgeSignup.guardProtected", {
           targetSeat: state.nightActions.lastGuardTarget + 1,
-          targetName: targetPlayer.displayName 
+          targetName: targetPlayer.displayName
         });
       }
     } else if (isWolfRole(player.role)) {
@@ -1420,14 +1505,50 @@ export async function generateAIBadgeSignupBatch(
   const parsedByPlayer: Record<string, boolean> = {};
 
   try {
-    const result = await generateCompletion({
-      model: getSummaryModel(),
-      messages,
-      temperature: GAME_TEMPERATURE.BADGE_SIGNUP,
-      response_format: { type: "json_object" },
-    });
+    const parseBadgeSignup = (cleaned: string): ParseAttempt<Record<string, boolean>> => {
+      const parsed = parseLLMJson<Record<string, unknown>>(cleaned);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parseFail();
 
-    const cleaned = stripMarkdownCodeFences(result.content).trim();
+      // 支持多种响应格式
+      // 格式1: { "decisions": { "1": true, "2": false, ... } }
+      // 格式2: { "1": true, "2": false, ... }
+      // 格式3: { "signup": [1, 3, 5] } (seats that signup)
+      let decisions: Record<string, boolean> = {};
+
+      if (parsed.decisions && typeof parsed.decisions === "object") {
+        decisions = parsed.decisions as Record<string, boolean>;
+      } else if (parsed.signup && Array.isArray(parsed.signup)) {
+        const signupSeats = new Set(parsed.signup.map(Number));
+        for (const info of playersInfo) {
+          decisions[String(info.seat)] = signupSeats.has(info.seat);
+        }
+      } else {
+        for (const [key, value] of Object.entries(parsed)) {
+          if (typeof value === "boolean" || value === 0 || value === 1) {
+            decisions[key] = Boolean(value);
+          }
+        }
+      }
+
+      const parsedDecisions: Record<string, boolean> = {};
+      for (const info of playersInfo) {
+        const decision = decisions[String(info.seat)];
+        parsedDecisions[info.playerId] = decision === true;
+      }
+      return parseOk(parsedDecisions);
+    };
+
+    const completion = await generateCompletionWithParseRetry(
+      {
+        model: getSummaryModel(),
+        messages,
+        temperature: GAME_TEMPERATURE.BADGE_SIGNUP,
+        response_format: { type: "json_object" },
+      },
+      parseBadgeSignup,
+      jsonRetryInstruction("{\"2\": true, \"3\": false}")
+    );
+
     const duration = Date.now() - startTime;
 
     await aiLogger.log({
@@ -1438,46 +1559,18 @@ export async function generateAIBadgeSignupBatch(
         player: { playerId: "batch", displayName: "All Players", seat: -1, role: "Villager" as Role },
       },
       response: {
-        content: cleaned,
-        raw: result.content,
-        rawResponse: JSON.stringify(result.raw, null, 2),
-        finishReason: result.raw.choices?.[0]?.finish_reason,
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: completion.parsed,
         duration,
       },
     });
 
-    const parsed = parseLLMJson<Record<string, unknown>>(cleaned);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      // 支持多种响应格式
-      // 格式1: { "decisions": { "1": true, "2": false, ... } }
-      // 格式2: { "1": true, "2": false, ... }
-      // 格式3: { "signup": [1, 3, 5] } (seats that signup)
-      let decisions: Record<string, boolean> = {};
-
-      if (parsed.decisions && typeof parsed.decisions === "object") {
-        decisions = parsed.decisions as Record<string, boolean>;
-      } else if (parsed.signup && Array.isArray(parsed.signup)) {
-        // 如果返回的是上警座位列表
-        const signupSeats = new Set(parsed.signup.map(Number));
-        for (const info of playersInfo) {
-          decisions[String(info.seat)] = signupSeats.has(info.seat);
-        }
-      } else {
-        // 直接作为 seat -> decision 的映射
-        for (const [key, value] of Object.entries(parsed)) {
-          if (typeof value === "boolean" || value === 0 || value === 1) {
-            decisions[key] = Boolean(value);
-          }
-        }
-      }
-
-      // 将座位号映射回 playerId
-      for (const info of playersInfo) {
-        const decision = decisions[String(info.seat)];
-        parsedByPlayer[info.playerId] = decision === true;
-      }
+    if (completion.parsed) {
+      Object.assign(parsedByPlayer, completion.parsed);
     } else {
-      // 解析失败，默认所有人不上警
       for (const player of players) {
         parsedByPlayer[player.playerId] = false;
       }
@@ -1581,166 +1674,218 @@ export async function generateBadgeTransfer(
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
-
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
-
-  const cleanedTransfer = stripMarkdownCodeFences(result.content);
-
-  await aiLogger.log({
-    type: "badge_transfer",
-    request: {
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: {
-      content: cleanedTransfer,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      duration: Date.now() - startTime,
-    },
-  });
-
   const validSeats = alivePlayers.map((p) => p.seat);
-  const pickFallbackSeat = (): number => {
-    if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.size > 0) {
-      const safeSeats = validSeats.filter((s) => !confirmedWolfSeats.has(s));
-      if (safeSeats.length > 0) {
-        return safeSeats[Math.floor(Math.random() * safeSeats.length)];
-      }
-      return BADGE_TRANSFER_TORN;
-    }
-    return validSeats[Math.floor(Math.random() * validSeats.length)];
-  };
 
-  const match = cleanedTransfer.match(/-?\d+/);
-  if (match) {
-    const parsed = Number.parseInt(match[0], 10);
-    if (parsed === 0) {
-      return BADGE_TRANSFER_TORN;
-    }
-    const seat = parsed - 1;
-    if (validSeats.includes(seat)) {
-      if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.has(seat)) {
-        return pickFallbackSeat();
+  try {
+    const pickSafeSeat = (): number => {
+      if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.size > 0) {
+        const safeSeat = firstSeat(validSeats.filter((s) => !confirmedWolfSeats.has(s)));
+        return safeSeat ?? BADGE_TRANSFER_TORN;
       }
-      return seat;
-    }
+
+      return BADGE_TRANSFER_TORN;
+    };
+
+    const completion = await generateCompletionWithParseRetry(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsedTransfer = parseLLMJson<{ seat?: unknown; targetSeat?: unknown; target?: unknown; transfer?: unknown; action?: unknown }>(cleaned);
+        if (!parsedTransfer || typeof parsedTransfer !== "object" || Array.isArray(parsedTransfer)) return parseFail();
+
+        const action = String(parsedTransfer.action ?? "").toLowerCase();
+        const rawSeat = parsedTransfer.seat ?? parsedTransfer.targetSeat ?? parsedTransfer.target ?? parsedTransfer.transfer;
+        const wantsTear =
+          action.includes("tear") ||
+          action.includes("destroy") ||
+          action.includes("撕") ||
+          rawSeat === 0 ||
+          rawSeat === "0";
+        if (wantsTear) return parseOk(BADGE_TRANSFER_TORN);
+
+        const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "transfer"]);
+        if (parsedSeat === null) return parseFail();
+        if (player.alignment === "village" && player.role === "Seer" && confirmedWolfSeats.has(parsedSeat)) {
+          return parseOk(pickSafeSeat());
+        }
+        return parseOk(parsedSeat);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 3 }))
+    );
+
+    const parsedSeat = completion.parsed ?? BADGE_TRANSFER_TORN;
+
+    await aiLogger.log({
+      type: "badge_transfer",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedSeat },
+        duration: Date.now() - startTime,
+      }
+    });
+
+    return parsedSeat;
+  } catch (error) {
+    console.warn("[wolfcha] generateBadgeTransfer failed, tearing badge:", error);
+    await aiLogger.log({
+      type: "badge_transfer",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: BADGE_TRANSFER_TORN },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return BADGE_TRANSFER_TORN;
   }
-
-  return pickFallbackSeat();
 }
 
 export async function generateSeerAction(
   state: GameState,
   player: Player
-): Promise<number> {
+): Promise<number | undefined> {
   const prompt = resolvePhasePrompt("NIGHT_SEER_ACTION", state, player);
   const alivePlayers = state.players.filter(
     (p) => p.alive && p.playerId !== player.playerId
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
 
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
+  try {
+    const completion = await generateCompletionWithParseRetry(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "check"]);
+        return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 5 }))
+    );
+    const parsedSeat = completion.parsed ?? undefined;
 
-  const rawContent = result.content;
-  const cleanedSeer = stripMarkdownCodeFences(rawContent);
+    await aiLogger.log({
+      type: "seer_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedSeat },
+        duration: Date.now() - startTime
+      },
+    });
 
-  const match = cleanedSeer.match(/\d+/);
-  let parsedSeat: number;
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      parsedSeat = seat;
-    } else {
-      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-    }
-  } else {
-    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    return parsedSeat;
+  } catch (error) {
+    console.warn("[wolfcha] generateSeerAction failed, skipping seer check:", error);
+    await aiLogger.log({
+      type: "seer_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: undefined },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return undefined;
   }
-
-  await aiLogger.log({
-    type: "seer_action",
-    request: { 
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: { 
-      content: cleanedSeer, 
-      raw: rawContent,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: { targetSeat: parsedSeat },
-      duration: Date.now() - startTime 
-    },
-  });
-
-  return parsedSeat;
 }
 
 export async function generateWolfAction(
   state: GameState,
   player: Player,
   existingVotes: Record<string, number> = {}
-): Promise<number> {
+): Promise<number | undefined> {
   const prompt = resolvePhasePrompt("NIGHT_WOLF_ACTION", state, player, { existingVotes });
   const alivePlayers = state.players.filter((p) => p.alive);
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
 
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
+  try {
+    const completion = await generateCompletionWithParseRetry(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "kill"]);
+        return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 2 }))
+    );
+    const parsedSeat = completion.parsed ?? undefined;
 
-  const rawContent = result.content;
-  const cleanedWolf = stripMarkdownCodeFences(rawContent);
+    await aiLogger.log({
+      type: "wolf_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedSeat },
+        duration: Date.now() - startTime
+      },
+    });
 
-  const match = cleanedWolf.match(/\d+/);
-  let parsedSeat: number;
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      parsedSeat = seat;
-    } else {
-      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-    }
-  } else {
-    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    return parsedSeat;
+  } catch (error) {
+    console.warn("[wolfcha] generateWolfAction failed, skipping wolf kill:", error);
+    await aiLogger.log({
+      type: "wolf_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: undefined },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return undefined;
   }
-
-  await aiLogger.log({
-    type: "wolf_action",
-    request: { 
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: { 
-      content: cleanedWolf, 
-      raw: rawContent,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: { targetSeat: parsedSeat },
-      duration: Date.now() - startTime 
-    },
-  });
-
-  return parsedSeat;
 }
 
 export type WitchAction =
@@ -1828,7 +1973,7 @@ export async function generateWitchAction(
 export async function generateGuardAction(
   state: GameState,
   player: Player
-): Promise<number> {
+): Promise<number | undefined> {
   const prompt = resolvePhasePrompt("NIGHT_GUARD_ACTION", state, player);
   const lastTarget = state.nightActions.lastGuardTarget;
   const alivePlayers = state.players.filter(
@@ -1836,47 +1981,60 @@ export async function generateGuardAction(
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
 
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
+  try {
+    const completion = await generateCompletionWithParseRetry(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "protect"]);
+        return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 3 }))
+    );
+    const parsedSeat = completion.parsed ?? undefined;
 
-  const cleanedGuard = stripMarkdownCodeFences(result.content);
+    await aiLogger.log({
+      type: "guard_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedSeat },
+        duration: Date.now() - startTime,
+      },
+    });
 
-  const match = cleanedGuard.match(/\d+/);
-  let parsedSeat: number;
-  if (match) {
-    const seat = parseInt(match[0]) - 1;
-    const validSeats = alivePlayers.map((p) => p.seat);
-    if (validSeats.includes(seat)) {
-      parsedSeat = seat;
-    } else {
-      parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-    }
-  } else {
-    parsedSeat = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
+    return parsedSeat;
+  } catch (error) {
+    console.warn("[wolfcha] generateGuardAction failed, skipping guard protection:", error);
+    await aiLogger.log({
+      type: "guard_action",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: undefined },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return undefined;
   }
-
-  await aiLogger.log({
-    type: "guard_action",
-    request: { 
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: {
-      content: cleanedGuard,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: { targetSeat: parsedSeat },
-      duration: Date.now() - startTime,
-    },
-  });
-
-  return parsedSeat;
 }
 
 // ...
@@ -1891,55 +2049,75 @@ export async function generateHunterShoot(
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
 
-  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
-    model: player.agentProfile!.modelRef.model,
-    messages,
-    temperature: GAME_TEMPERATURE.ACTION,
-  }));
+  try {
+    const completion = await generateCompletionWithParseRetry<number | null>(
+      mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        temperature: GAME_TEMPERATURE.ACTION,
+        response_format: { type: "json_object" },
+      }),
+      (cleaned) => {
+        const parsed = parseLLMJson<{ seat?: unknown; targetSeat?: unknown; target?: unknown; shoot?: unknown; action?: unknown }>(cleaned);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return parseFail();
 
-  const cleanedHunter = stripMarkdownCodeFences(result.content);
+        const action = String(parsed.action ?? "").toLowerCase();
+        const rawSeat = parsed.seat ?? parsed.targetSeat ?? parsed.target ?? parsed.shoot;
+        const wantsPass =
+          action.includes("pass") ||
+          action.includes("skip") ||
+          action.includes("不开") ||
+          rawSeat === null ||
+          rawSeat === 0 ||
+          rawSeat === "0" ||
+          rawSeat === "pass";
+        if (wantsPass) return parseOk(null);
 
-  const contentLower = cleanedHunter.toLowerCase().trim();
-  let parsedTarget: number | null;
-  
-  if (contentLower.includes("pass")) {
-    parsedTarget = null;
-  } else {
-    const match = cleanedHunter.match(/\d+/);
-    if (match) {
-      const seat = parseInt(match[0]) - 1;
-      const validSeats = alivePlayers.map((p) => p.seat);
-      if (validSeats.includes(seat)) {
-        parsedTarget = seat;
-      } else {
-        // 猎人随机选择一个目标
-        parsedTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-      }
-    } else {
-      // 猎人随机选择一个目标
-      parsedTarget = alivePlayers[Math.floor(Math.random() * alivePlayers.length)].seat;
-    }
+        const parsedTarget = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "shoot"]);
+        return parsedTarget === null ? parseFail() : parseOk(parsedTarget);
+      },
+      jsonRetryInstruction(JSON.stringify({ seat: 5 }))
+    );
+    const parsedTarget = completion.parsed;
+
+    await aiLogger.log({
+      type: "hunter_shoot",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: completion.cleaned,
+        raw: completion.result.content,
+        rawResponse: JSON.stringify(completion.result.raw, null, 2),
+        finishReason: completion.result.raw.choices?.[0]?.finish_reason,
+        parsed: { targetSeat: parsedTarget },
+        duration: Date.now() - startTime,
+      },
+    });
+
+    return parsedTarget;
+  } catch (error) {
+    console.warn("[wolfcha] generateHunterShoot failed, passing hunter shot:", error);
+    await aiLogger.log({
+      type: "hunter_shoot",
+      request: {
+        model: player.agentProfile!.modelRef.model,
+        messages,
+        player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
+      },
+      response: {
+        content: "",
+        parsed: { targetSeat: null },
+        duration: Date.now() - startTime,
+      },
+      error: String(error),
+    });
+    return null;
   }
-
-  await aiLogger.log({
-    type: "hunter_shoot",
-    request: { 
-      model: player.agentProfile!.modelRef.model,
-      messages,
-      player: { playerId: player.playerId, displayName: player.displayName, seat: player.seat, role: player.role },
-    },
-    response: {
-      content: cleanedHunter,
-      raw: result.content,
-      rawResponse: JSON.stringify(result.raw, null, 2),
-      finishReason: result.raw.choices?.[0]?.finish_reason,
-      parsed: { targetSeat: parsedTarget },
-      duration: Date.now() - startTime,
-    },
-  });
-
-  return parsedTarget;
 }
 
 /**
