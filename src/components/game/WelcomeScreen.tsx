@@ -1060,7 +1060,7 @@ export function WelcomeScreen({
             className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom wc-sponsor-card--tokendance"
             rotate="-4deg"
             delay={0.6}
-            logoSrc="/sponsor/tokendance-icon.png"
+            logoSrc="/sponsor/tokendance-icon.svg"
             logoAlt="TokenDance"
             name="TokenDance"
             note={t("welcome.sponsor.cards.tokendance")}
@@ -1251,7 +1251,7 @@ export function WelcomeScreen({
                 style={{ "--stamp-rotate": "-3deg" } as React.CSSProperties}
                 onClick={() => void trackSponsorClick("tokendance")}
               >
-                <img src="/sponsor/tokendance-icon.png" alt="TokenDance" className="wc-paper-stamp__logo" />
+                <img src="/sponsor/tokendance-icon.svg" alt="TokenDance" className="wc-paper-stamp__logo" />
                 <span className="wc-paper-stamp__name">TokenDance</span>
               </a>
               <a
