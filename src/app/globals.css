@@ -4221,16 +4221,16 @@ input[type="submit"]:not(:disabled),
 }
 
 .wc-sponsor-card--tokendance {
-  width: 220px;
+  width: 180px;
 }
 
 .wc-sponsor-card--tokendance .wc-sponsor-card__logo {
-  width: 150px;
-  height: 52px;
-  border-radius: 4px;
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
   filter: none;
   mix-blend-mode: normal;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 @media (max-width: 1280px) {
@@ -4323,12 +4323,12 @@ input[type="submit"]:not(:disabled),
 }
 
 .wc-paper-stamp--tokendance .wc-paper-stamp__logo {
-  width: 48px;
-  height: 18px;
-  border-radius: 3px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   filter: none;
   mix-blend-mode: normal;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 .wc-paper-stamp--tokendance .wc-paper-stamp__name {
