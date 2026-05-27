@@ -4,7 +4,7 @@ import { DAILY_BONUS_ENABLED } from "@/lib/welfare-config";
 
 export const dynamic = "force-dynamic";
 
-const DAILY_BONUS_AMOUNT = 3;
+const DAILY_BONUS_AMOUNT = 1;
 const MAX_CREDITS = 10;
 const DAILY_BONUS_REASON = {
   firstDay: "first_day",
