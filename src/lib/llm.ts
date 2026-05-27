@@ -234,6 +234,10 @@ const REASONING_TAG_PATTERN = REASONING_TAG_NAMES.join("|");
 
 /** Remove model reasoning artifacts that may be embedded in assistant content. */
 export function stripReasoningArtifacts(text: string): string {
+  return stripReasoningArtifactsPreserveWhitespace(text).trim();
+}
+
+function stripReasoningArtifactsPreserveWhitespace(text: string): string {
   if (!text) return text;
 
   return text
@@ -244,8 +248,7 @@ export function stripReasoningArtifacts(text: string): string {
       ),
       ""
     )
-    .replace(new RegExp(`<\\s*\\/?\\s*(${REASONING_TAG_PATTERN})\\b[^>]*>`, "gi"), "")
-    .trim();
+    .replace(new RegExp(`<\\s*\\/?\\s*(${REASONING_TAG_PATTERN})\\b[^>]*>`, "gi"), "");
 }
 
 function findReasoningEnd(text: string): { end: number } | null {
@@ -706,7 +709,7 @@ export async function* generateCompletionStream(
         const delta = json.choices?.[0]?.delta?.content;
         if (delta) {
           if (thinkStripped) {
-            const cleaned = stripReasoningArtifacts(delta);
+            const cleaned = stripReasoningArtifactsPreserveWhitespace(delta);
             totalOutputChars += cleaned.length;
             if (cleaned) yield cleaned;
           } else {
@@ -714,7 +717,7 @@ export async function* generateCompletionStream(
             const reasoningEnd = findReasoningEnd(thinkBuffer);
             if (reasoningEnd) {
               // 找到 </think>，丢弃之前内容，从之后开始输出
-              const after = stripReasoningArtifacts(thinkBuffer.slice(reasoningEnd.end).replace(/^\n+/, ""));
+              const after = stripReasoningArtifactsPreserveWhitespace(thinkBuffer.slice(reasoningEnd.end).replace(/^\n+/, ""));
               thinkStripped = true;
               thinkBuffer = "";
               if (after) {
@@ -724,7 +727,7 @@ export async function* generateCompletionStream(
             } else if (!couldBeReasoningStart(thinkBuffer) && thinkBuffer.length >= 1) {
               // 确认不是 <think> 块，直接透传
               thinkStripped = true;
-              const cleaned = stripReasoningArtifacts(thinkBuffer);
+              const cleaned = stripReasoningArtifactsPreserveWhitespace(thinkBuffer);
               totalOutputChars += cleaned.length;
               if (cleaned) yield cleaned;
               thinkBuffer = "";

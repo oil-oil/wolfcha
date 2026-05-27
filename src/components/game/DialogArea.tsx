@@ -937,7 +937,9 @@ export function DialogArea({
     }
   };
 
-  const baseDialogueText = (displayedText || currentSpeaker?.text || "").trim();
+  const baseDialogueText = currentDialogue?.isStreaming
+    ? displayedText
+    : (displayedText || currentSpeaker?.text || "");
   // When human has voted in badge election, show "你已经投票给 x 号" instead of "点击头像投票选警徽"
   const humanBadgeVote = humanPlayer ? gameState.badge.votes[humanPlayer.playerId] : undefined;
   const dialogueText =
@@ -950,7 +952,7 @@ export function DialogArea({
           return t("dialog.alreadyVotedFor", { seat: humanBadgeVote + 1, name: vp?.displayName || "" });
         })()
       : baseDialogueText;
-  const shouldShowDialogue = waitingForNextRound || dialogueText.length > 0;
+  const shouldShowDialogue = waitingForNextRound || dialogueText.trim().length > 0;
   const isNightActionPhase = [
     "NIGHT_GUARD_ACTION",
     "NIGHT_WOLF_ACTION",
