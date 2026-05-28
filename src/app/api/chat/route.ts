@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, requireCredits } from "@/lib/api-auth";
+import { authenticateRequest, hasRecentUnfinishedGameSession, requireCredits } from "@/lib/api-auth";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
 import { Agent, setGlobalDispatcher } from "undici";
 
@@ -504,12 +504,24 @@ export async function POST(request: NextRequest) {
 
   const earlyZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const earlyDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
-  const hasCustomKeys = Boolean((earlyZenmuxKey ?? "") || (earlyDashscopeKey ?? ""));
+  const earlyTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
+  const earlyTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
+  const hasCustomKeys = Boolean(
+    (earlyZenmuxKey ?? "") ||
+    (earlyDashscopeKey ?? "") ||
+    ((earlyTokendanceKey ?? "") && (earlyTokendanceBaseUrl ?? ""))
+  );
 
   if (!hasCustomKeys) {
     const hasCredits = await requireCredits(auth.user.id);
     if (!hasCredits) {
-      return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
+      const hasRecentSession = await hasRecentUnfinishedGameSession(auth.user.id);
+      if (!hasRecentSession) {
+        return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
+      }
+      console.warn("[api-chat] allowed by recent unfinished game session", {
+        userId: auth.user.id,
+      });
     }
   }
 

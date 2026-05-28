@@ -61,3 +61,30 @@ export async function requireCredits(userId: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function hasRecentUnfinishedGameSession(userId: string): Promise<boolean> {
+  if (await isDemoModeActiveServer()) return true;
+
+  try {
+    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("game_sessions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("completed", false)
+      .eq("used_custom_key", false)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error("[api-auth] hasRecentUnfinishedGameSession error", error);
+      return false;
+    }
+
+    return Array.isArray(data) && data.length > 0;
+  } catch (error) {
+    console.error("[api-auth] hasRecentUnfinishedGameSession error", error);
+    return false;
+  }
+}
