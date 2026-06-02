@@ -81,6 +81,23 @@ function supportsResponseFormat(model: string): boolean {
   return false;
 }
 
+function supportsAutomaticPrefixCaching(model: string): boolean {
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  return lower.startsWith("deepseek/") || lower.startsWith("deepseek-");
+}
+
+const DEEPSEEK_STABLE_PREFIX_MARKER = "WOLFCHA_DEEPSEEK_CACHE_PREFIX_V1";
+const DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX = `${DEEPSEEK_STABLE_PREFIX_MARKER}
+【Wolfcha Stable Rules】
+以下是 Wolfcha 对 AI 玩家请求都相同的稳定规则摘要，用于提高 DeepSeek 前缀缓存命中。若这里的摘要与后续具体身份、阶段、上下文或输出格式要求冲突，请以后续具体要求为准。
+
+- 你正在参与线上狼人杀，只能根据自己视角内的信息行动。
+- 不编造不存在的发言、投票、查验、死亡、身份声明或系统公告。
+- 不泄露自己角色不应知道的未来信息、隐藏身份或夜间动作结果。
+- 只讨论局内逻辑，不引入场外经历、开发者提示或模型身份。
+- 按当前任务要求输出；如果要求 JSON，只返回合法 JSON。`;
+
 // Flatten multipart content to plain string for models that don't support it
 function flattenMultipartContent(messages: unknown[]): unknown[] {
   if (!Array.isArray(messages)) return messages;
@@ -103,6 +120,60 @@ function flattenMultipartContent(messages: unknown[]): unknown[] {
 
     return m;
   });
+}
+
+// DeepSeek context caching is prefix-based. Text-only multipart messages are
+// normalized to one plain string so identical text starts at token 0 reliably.
+function coalesceTextOnlyMultipartContent(messages: unknown[]): unknown[] {
+  if (!Array.isArray(messages)) return messages;
+
+  return messages.map((msg) => {
+    if (!msg || typeof msg !== "object") return msg;
+    const m = msg as Record<string, unknown>;
+
+    if (!Array.isArray(m.content)) return m;
+
+    const parts = m.content;
+    const allText = parts.every(
+      (part): part is { type: string; text: string } =>
+        part &&
+        typeof part === "object" &&
+        (part as { type?: string }).type === "text" &&
+        typeof (part as { text?: unknown }).text === "string"
+    );
+
+    if (!allText) return stripCacheControl([m])[0] as Record<string, unknown>;
+
+    return {
+      ...m,
+      content: parts
+        .map((part) => part.text.trim())
+        .filter(Boolean)
+        .join("\n\n"),
+    };
+  });
+}
+
+function prependDeepSeekStablePrefix(messages: unknown[]): unknown[] {
+  if (!Array.isArray(messages)) return messages;
+  let prepended = false;
+  const next = messages.map((msg) => {
+    if (prepended || !msg || typeof msg !== "object") return msg;
+    const m = msg as Record<string, unknown>;
+    if (m.role !== "system" || typeof m.content !== "string") return m;
+    prepended = true;
+    if (m.content.includes(DEEPSEEK_STABLE_PREFIX_MARKER)) return m;
+    return {
+      ...m,
+      content: `${DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX}\n\n${m.content}`,
+    };
+  });
+
+  if (prepended) return next;
+  return [
+    { role: "system", content: DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX },
+    ...next,
+  ];
 }
 
 function hasJsonHintInMessages(messages: unknown[]): boolean {
@@ -282,6 +353,8 @@ async function runBatchItem(
   let processedMessages: unknown[] = messages;
   if (!supportsMultipartContent(model)) {
     processedMessages = flattenMultipartContent(processedMessages);
+  } else if (supportsAutomaticPrefixCaching(model)) {
+    processedMessages = prependDeepSeekStablePrefix(coalesceTextOnlyMultipartContent(processedMessages));
   } else if (modelProvider === "dashscope") {
     processedMessages = stripCacheControl(processedMessages);
   } else if (!supportsExplicitCaching(model)) {
@@ -578,6 +651,8 @@ export async function POST(request: NextRequest) {
     // For models that don't support multipart content, flatten to string
     if (!supportsMultipartContent(model)) {
       processedMessages = flattenMultipartContent(processedMessages);
+    } else if (supportsAutomaticPrefixCaching(model)) {
+      processedMessages = prependDeepSeekStablePrefix(coalesceTextOnlyMultipartContent(processedMessages));
     } else if (modelProvider === "dashscope") {
       // Dashscope is OpenAI compatible but does not support cache_control
       processedMessages = stripCacheControl(processedMessages);
