@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       await supabaseAdmin
         .from("user_credits")
         .upsert(
-          { id: supabaseUserId, credits: 3, updated_at: new Date().toISOString() } as never,
+          { id: supabaseUserId, credits: 0, updated_at: new Date().toISOString() } as never,
           { onConflict: "id" }
         );
     } else {
