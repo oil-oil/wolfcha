@@ -3,8 +3,8 @@
  * 记录所有 AI 调用用于复盘
  */
 
-import type { ApiKeySource, LLMMessage } from "./llm";
-import { resolveApiKeySource } from "./llm";
+import type { ApiKeySource, LLMMessage, PromptCacheUsage } from "./llm";
+import { extractPromptCacheUsage, resolveApiKeySource } from "./llm";
 import { generateUUID } from "./utils";
 
 const LOCAL_LOGS_STORAGE_KEY = "wolfcha_ai_logs";
@@ -46,8 +46,20 @@ export interface AILogEntry {
     rawResponse?: string; // Full API response object as JSON string
     finishReason?: string; // finish_reason from API response
     parsed?: unknown; // Parsed/structured result
+    cache?: PromptCacheUsage; // Official provider cache counters normalized for reporting
   };
   error?: string;
+}
+
+function parseCacheUsageFromRawResponse(rawResponse: string | undefined): PromptCacheUsage | undefined {
+  if (!rawResponse) return undefined;
+  try {
+    const parsed = JSON.parse(rawResponse) as { usage?: unknown };
+    const usage = parsed && typeof parsed === "object" ? parsed.usage : undefined;
+    return extractPromptCacheUsage(usage as Parameters<typeof extractPromptCacheUsage>[0]);
+  } catch {
+    return undefined;
+  }
 }
 
 class AILogger {
@@ -105,6 +117,10 @@ class AILogger {
             ? resolveApiKeySource(entry.request.model)
             : undefined),
       },
+      response: {
+        ...entry.response,
+        cache: entry.response.cache ?? parseCacheUsageFromRawResponse(entry.response.rawResponse),
+      },
       id: generateUUID(),
       timestamp: Date.now(),
     };
@@ -151,6 +167,9 @@ class AILogger {
     }
     if (entry.response.parsed) {
       console.log("Parsed Result:", entry.response.parsed);
+    }
+    if (entry.response.cache) {
+      console.log("Prompt Cache:", entry.response.cache);
     }
     console.log("Duration:", `${entry.response.duration}ms`);
     if (entry.error) {
