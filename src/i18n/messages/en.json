@@ -2085,7 +2085,7 @@
     "validate": "Validate",
     "llmKey": {
       "title": "Language Model Key",
-      "description": "Configure at least Zenmux or Dashscope for gameplay and character generation"
+      "description": "Configure at least one language model key for gameplay and character generation"
     },
     "zenmux": {
       "label": "Zenmux API Key",
@@ -2103,6 +2103,18 @@
       "get": "Get Dashscope Key",
       "note": "DeepSeek / Qwen / Kimi, etc.",
       "short": "Dashscope"
+    },
+    "tokendance": {
+      "label": "TokenDance API Key",
+      "placeholder": "Enter TokenDance API Key",
+      "baseUrlPlaceholder": "Enter TokenDance Base URL",
+      "hide": "Hide TokenDance API Key",
+      "show": "Show TokenDance API Key",
+      "hideBaseUrl": "Hide TokenDance Base URL",
+      "showBaseUrl": "Show TokenDance Base URL",
+      "get": "Get TokenDance Key",
+      "note": "Supports MiniMax, DeepSeek, Qwen, GLM, Kimi, etc.",
+      "short": "TokenDance"
     },
     "modelConfig": {
       "title": "Model Configuration",
@@ -2136,7 +2148,7 @@
       "notValidated": "Validation failed. Cannot save.",
       "notValidatedDesc": "Please click 'Validate' first.",
       "needLlmKey": "Please configure at least one LLM Key",
-      "needLlmKeyDesc": "Either Zenmux or Dashscope is required",
+      "needLlmKeyDesc": "Zenmux, Dashscope, or TokenDance is required",
       "modelsAdjusted": "Some models unavailable. Auto-adjusted.",
       "modelsAdjustedDesc": "Check if selected models match your configured keys.",
       "saved": "API Key saved",

@@ -300,6 +300,7 @@ export const DEFAULT_MODEL_CONFIG = {
   validation: {
     zenmux: MODEL_IDS.zenmux.geminiFlashLite,
     dashscope: MODEL_IDS.dashscope.deepseek,
+    tokendance: MODEL_IDS.tokendance.minimaxM27,
   },
 } as const;
 
@@ -309,6 +310,7 @@ export const SUMMARY_MODEL = DEFAULT_MODEL_CONFIG.summary;
 export const REVIEW_MODEL = DEFAULT_MODEL_CONFIG.review;
 export const ZENMUX_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.zenmux;
 export const DASHSCOPE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.dashscope;
+export const TOKENDANCE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.tokendance;
 
 export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
   BUILTIN_DEEPSEEK_V4_PRO_MODEL,
@@ -343,6 +345,13 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "zenmux", model: MODEL_IDS.zenmux.grok4 },
   { provider: "zenmux", model: MODEL_IDS.zenmux.glm47, temperature: 1, reasoning: { enabled: false } },
   { provider: "zenmux", model: MODEL_IDS.zenmux.minimaxM21, temperature: 1, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Pro, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Flash, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25, temperature: 1, reasoning: { enabled: false } },
+  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV32, reasoning: { enabled: false } },
 ];
 
 // Models not allowed for in-game players (summary & generation only).

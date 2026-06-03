@@ -7,7 +7,13 @@ import {
   getDefaultDemoModeConfigSnapshot,
   type DemoModePublicConfigSnapshot,
 } from "@/lib/demo-config";
-import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getDashscopeApiKey,
+  getTokendanceApiKey,
+  getTokendanceBaseUrl,
+  getZenmuxApiKey,
+  isCustomKeyEnabled,
+} from "@/lib/api-keys";
 import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
 import { supabase } from "@/lib/supabase";
 import {
@@ -89,12 +95,16 @@ export function useCredits() {
       const customEnabled = isCustomKeyEnabled();
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
+      const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
+      const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
       const res = await fetch("/api/credits/consume", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
+          ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
+          ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
         },
       });
 

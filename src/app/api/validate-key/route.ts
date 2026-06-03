@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DASHSCOPE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
+import { DASHSCOPE_VALIDATION_MODEL, TOKENDANCE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
+import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -141,7 +142,7 @@ async function validateTokendanceKey(apiKey: string, baseUrl: string): Promise<V
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "minimax-m2.7",
+        model: TOKENDANCE_VALIDATION_MODEL,
         messages: [{ role: "user", content: "hi" }],
         max_tokens: 1,
       }),
@@ -329,7 +330,7 @@ export async function POST(request: NextRequest) {
     const zenmuxKey = request.headers.get("x-zenmux-api-key")?.trim() || "";
     const dashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || "";
     const tokendanceKey = request.headers.get("x-tokendance-api-key")?.trim() || "";
-    const tokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || "";
+    const tokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || TOKENDANCE_BASE_URL;
 
     if (!zenmuxKey && !dashscopeKey && !tokendanceKey) {
       return NextResponse.json(
@@ -347,15 +348,8 @@ export async function POST(request: NextRequest) {
     if (dashscopeKey) {
       validationPromises.push(validateDashscopeKey(dashscopeKey));
     }
-    if (tokendanceKey && tokendanceBaseUrl) {
+    if (tokendanceKey) {
       validationPromises.push(validateTokendanceKey(tokendanceKey, tokendanceBaseUrl));
-    } else if (tokendanceKey && !tokendanceBaseUrl) {
-      results.push({
-        provider: "tokendance",
-        valid: false,
-        error: "未提供 TokenDance Base URL",
-        errorCode: "missing_base_url",
-      });
     }
 
     const settled = await Promise.all(validationPromises);

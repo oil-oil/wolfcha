@@ -2,6 +2,7 @@ import { ALL_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/type
 
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
+const TOKENDANCE_API_KEY_STORAGE = "wolfcha_tokendance_api_key";
 const MINIMAX_API_KEY_STORAGE = "wolfcha_minimax_api_key";
 const MINIMAX_GROUP_ID_STORAGE = "wolfcha_minimax_group_id";
 const CUSTOM_KEY_ENABLED_STORAGE = "wolfcha_custom_key_enabled";
@@ -11,6 +12,8 @@ const SUMMARY_MODEL_STORAGE = "wolfcha_summary_model";
 const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
+const VALIDATED_TOKENDANCE_KEY_STORAGE = "wolfcha_validated_tokendance_key";
+export const TOKENDANCE_BASE_URL = "https://tokendance.agent-universe.cn/gateway/v1";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -48,12 +51,28 @@ export function getDashscopeApiKey(): string {
   return readStorage(DASHSCOPE_API_KEY_STORAGE);
 }
 
+export function getTokendanceApiKey(): string {
+  return readStorage(TOKENDANCE_API_KEY_STORAGE);
+}
+
+export function getTokendanceBaseUrl(): string {
+  return TOKENDANCE_BASE_URL;
+}
+
 export function setMinimaxApiKey(key: string) {
   writeStorage(MINIMAX_API_KEY_STORAGE, key);
 }
 
 export function setDashscopeApiKey(key: string) {
   writeStorage(DASHSCOPE_API_KEY_STORAGE, key);
+}
+
+export function setTokendanceApiKey(key: string) {
+  writeStorage(TOKENDANCE_API_KEY_STORAGE, key);
+}
+
+export function setTokendanceBaseUrl() {
+  // TokenDance gateway URL is fixed for custom-key gameplay.
 }
 
 export function getMinimaxGroupId(): string {
@@ -84,8 +103,28 @@ export function setValidatedDashscopeKey(key: string) {
   writeStorage(VALIDATED_DASHSCOPE_KEY_STORAGE, key);
 }
 
+export function getValidatedTokendanceKey(): string {
+  return readStorage(VALIDATED_TOKENDANCE_KEY_STORAGE);
+}
+
+export function setValidatedTokendanceKey(key: string) {
+  writeStorage(VALIDATED_TOKENDANCE_KEY_STORAGE, key);
+}
+
+export function getValidatedTokendanceBaseUrl(): string {
+  return TOKENDANCE_BASE_URL;
+}
+
+export function setValidatedTokendanceBaseUrl() {
+  // TokenDance gateway URL is fixed for custom-key gameplay.
+}
+
 export function hasDashscopeKey(): boolean {
   return Boolean(getDashscopeApiKey());
+}
+
+export function hasTokendanceKey(): boolean {
+  return Boolean(getTokendanceApiKey());
 }
 
 export function hasMinimaxKey(): boolean {
@@ -97,6 +136,7 @@ function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: str
   const allowedProviders = new Set<(typeof ALL_MODELS)[number]["provider"]>();
   if (hasZenmuxKey()) allowedProviders.add("zenmux");
   if (hasDashscopeKey()) allowedProviders.add("dashscope");
+  if (hasTokendanceKey()) allowedProviders.add("tokendance");
 
   if (allowedProviders.size === 0) return preferred;
 
@@ -128,7 +168,7 @@ export function isCustomKeyEnabled(): boolean {
   if (!flagEnabled) return false;
   // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
   // 这可以防止用户开启了开关但没有正确配置 key 的情况
-  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey();
+  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey();
   return hasAnyLLMKey;
 }
 
@@ -228,6 +268,7 @@ export function clearApiKeys() {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(ZENMUX_API_KEY_STORAGE);
   window.localStorage.removeItem(DASHSCOPE_API_KEY_STORAGE);
+  window.localStorage.removeItem(TOKENDANCE_API_KEY_STORAGE);
   window.localStorage.removeItem(MINIMAX_API_KEY_STORAGE);
   window.localStorage.removeItem(MINIMAX_GROUP_ID_STORAGE);
   window.localStorage.removeItem(CUSTOM_KEY_ENABLED_STORAGE);
@@ -237,6 +278,9 @@ export function clearApiKeys() {
   window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
   window.localStorage.removeItem(VALIDATED_ZENMUX_KEY_STORAGE);
   window.localStorage.removeItem(VALIDATED_DASHSCOPE_KEY_STORAGE);
+  window.localStorage.removeItem(VALIDATED_TOKENDANCE_KEY_STORAGE);
+  window.localStorage.removeItem("wolfcha_tokendance_base_url");
+  window.localStorage.removeItem("wolfcha_validated_tokendance_base_url");
 }
 
 export interface KeyValidationResult {
@@ -252,7 +296,9 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
 
   const zenmuxKey = getZenmuxApiKey();
   const dashscopeKey = getDashscopeApiKey();
-  if (!zenmuxKey && !dashscopeKey) {
+  const tokendanceKey = getTokendanceApiKey();
+  const tokendanceBaseUrl = getTokendanceBaseUrl();
+  if (!zenmuxKey && !dashscopeKey && !tokendanceKey) {
     return { valid: false, error: "未配置任何 API Key", errorCode: "no_key" };
   }
 
@@ -265,6 +311,12 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
     }
     if (dashscopeKey) {
       headers["X-Dashscope-Api-Key"] = dashscopeKey;
+    }
+    if (tokendanceKey) {
+      headers["X-Tokendance-Api-Key"] = tokendanceKey;
+    }
+    if (tokendanceBaseUrl) {
+      headers["X-Tokendance-Base-Url"] = tokendanceBaseUrl;
     }
 
     const response = await fetch("/api/validate-key", {

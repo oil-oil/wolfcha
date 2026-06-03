@@ -1,4 +1,10 @@
-import { getDashscopeApiKey, getZenmuxApiKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getDashscopeApiKey,
+  getTokendanceApiKey,
+  getTokendanceBaseUrl,
+  getZenmuxApiKey,
+  isCustomKeyEnabled,
+} from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
@@ -51,10 +57,25 @@ export function resolveApiKeySource(model: string): ApiKeySource {
      return getDashscopeApiKey() ? "user" : "project";
    }
    if (provider === "tokendance") {
-     return "project";
+     return getTokendanceApiKey() && getTokendanceBaseUrl() ? "user" : "project";
    }
    return getZenmuxApiKey() ? "user" : "project";
  }
+
+function buildCustomKeyHeaders(customEnabled: boolean): Record<string, string> {
+  if (!customEnabled) return {};
+
+  const zenmuxApiKey = getZenmuxApiKey();
+  const dashscopeApiKey = getDashscopeApiKey();
+  const tokendanceApiKey = getTokendanceApiKey();
+  const tokendanceBaseUrl = getTokendanceBaseUrl();
+  return {
+    ...(zenmuxApiKey ? { "X-Zenmux-Api-Key": zenmuxApiKey } : {}),
+    ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
+    ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
+    ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
+  };
+}
 
 export interface ChatCompletionResponse {
   id: string;
@@ -457,27 +478,21 @@ export async function generateCompletion(
       : undefined;
 
   const customEnabled = isCustomKeyEnabled();
-  const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
-  const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...buildCustomKeyHeaders(customEnabled),
   };
-  if (headerApiKey) {
-    headers["X-Zenmux-Api-Key"] = headerApiKey;
-  }
-  if (dashscopeApiKey) {
-    headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
-  }
 
   Object.assign(headers, await getAuthHeaders());
 
   console.log("[LLM] generateCompletion:", {
     customEnabled,
-    hasZenmuxKey: !!headerApiKey,
-    hasDashscopeKey: !!dashscopeApiKey,
+    hasZenmuxKey: !!headers["X-Zenmux-Api-Key"],
+    hasDashscopeKey: !!headers["X-Dashscope-Api-Key"],
+    hasTokendanceKey: !!headers["X-Tokendance-Api-Key"],
     model: modelToUse,
   });
 
@@ -558,20 +573,13 @@ export async function generateCompletionBatch(
   if (!Array.isArray(requests) || requests.length === 0) return [];
 
   const customEnabled = isCustomKeyEnabled();
-  const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
-  const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
   const resolvedRequests = customEnabled
     ? requests
     : requests.map((r) => ({ ...r, model: resolveModelForBuiltin(r.model) }));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...buildCustomKeyHeaders(customEnabled),
   };
-  if (headerApiKey) {
-    headers["X-Zenmux-Api-Key"] = headerApiKey;
-  }
-  if (dashscopeApiKey) {
-    headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
-  }
 
   Object.assign(headers, await getAuthHeaders());
 
@@ -625,20 +633,13 @@ export async function* generateCompletionStream(
       : undefined;
 
   const customEnabled = isCustomKeyEnabled();
-  const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
-  const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
   const modelToUse = customEnabled
     ? options.model
     : resolveModelForBuiltin(options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    ...buildCustomKeyHeaders(customEnabled),
   };
-  if (headerApiKey) {
-    headers["X-Zenmux-Api-Key"] = headerApiKey;
-  }
-  if (dashscopeApiKey) {
-    headers["X-Dashscope-Api-Key"] = dashscopeApiKey;
-  }
 
   Object.assign(headers, await getAuthHeaders());
 

@@ -2167,7 +2167,7 @@
     "validate": "验证",
     "llmKey": {
       "title": "语言模型 Key",
-      "description": "至少配置 Zenmux 或百炼其一，用于对局与人物生成"
+      "description": "至少配置一个语言模型 Key，用于对局与人物生成"
     },
     "zenmux": {
       "label": "Zenmux API Key",
@@ -2185,6 +2185,18 @@
       "get": "获取百炼 Key",
       "note": "DeepSeek / Qwen / Kimi 等",
       "short": "百炼"
+    },
+    "tokendance": {
+      "label": "TokenDance API Key",
+      "placeholder": "请输入 TokenDance API Key",
+      "baseUrlPlaceholder": "请输入 TokenDance Base URL",
+      "hide": "隐藏 TokenDance API Key",
+      "show": "显示 TokenDance API Key",
+      "hideBaseUrl": "隐藏 TokenDance Base URL",
+      "showBaseUrl": "显示 TokenDance Base URL",
+      "get": "获取 TokenDance Key",
+      "note": "支持 MiniMax、DeepSeek、Qwen、GLM、Kimi 等",
+      "short": "TokenDance"
     },
     "modelConfig": {
       "title": "模型配置",
@@ -2218,7 +2230,7 @@
       "notValidated": "未通过验证，无法保存",
       "notValidatedDesc": "请先点击「验证配置」",
       "needLlmKey": "请至少配置一个 LLM Key",
-      "needLlmKeyDesc": "Zenmux 或百炼二选一即可",
+      "needLlmKeyDesc": "Zenmux、百炼或 TokenDance 至少配置一个",
       "modelsAdjusted": "部分模型不可用，已自动调整",
       "modelsAdjustedDesc": "请检查所选模型与已配置的 Key 是否匹配",
       "saved": "已保存 API Key",

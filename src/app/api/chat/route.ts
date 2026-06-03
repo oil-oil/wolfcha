@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, hasRecentUnfinishedGameSession, requireCredits } from "@/lib/api-auth";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
+import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
 import { Agent, setGlobalDispatcher } from "undici";
 
 // 将 undici 底层 TCP 连接超时从默认 10s 调高到 60s
@@ -254,8 +255,8 @@ async function runBatchItem(
     if (modelProvider === "dashscope" && !headerDashscopeKey) {
       return { ok: false, status: 401, error: "此模型需要您提供百炼 API Key" };
     }
-    if (modelProvider === "tokendance" && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
-      return { ok: false, status: 401, error: "此模型需要您提供 TokenDance Key 和 Base URL" };
+    if (modelProvider === "tokendance" && !headerTokendanceKey) {
+      return { ok: false, status: 401, error: "此模型需要您提供 TokenDance Key" };
     }
   }
 
@@ -357,11 +358,11 @@ async function runBatchItem(
   }
 
   if (modelProvider === "tokendance") {
-    if (hasAnyCustomKeyHeader && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
-      return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 TokenDance Key 或 Base URL（已拒绝回退到系统 Key）" };
+    if (hasAnyCustomKeyHeader && !headerTokendanceKey) {
+      return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 TokenDance Key（已拒绝回退到系统 Key）" };
     }
     const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-    const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL;
+    const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL || TOKENDANCE_BASE_URL;
     if (!tokendanceApiKey || !tokendanceBaseUrl) {
       return { ok: false, status: 500, error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" };
     }
@@ -505,11 +506,10 @@ export async function POST(request: NextRequest) {
   const earlyZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const earlyDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
   const earlyTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
-  const earlyTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
   const hasCustomKeys = Boolean(
     (earlyZenmuxKey ?? "") ||
     (earlyDashscopeKey ?? "") ||
-    ((earlyTokendanceKey ?? "") && (earlyTokendanceBaseUrl ?? ""))
+    (earlyTokendanceKey ?? "")
   );
 
   if (!hasCustomKeys) {
@@ -611,9 +611,9 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
-      if (modelProvider === "tokendance" && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
+      if (modelProvider === "tokendance" && !headerTokendanceKey) {
         return NextResponse.json(
-          { error: "此模型需要您提供 TokenDance Key 和 Base URL" },
+          { error: "此模型需要您提供 TokenDance Key" },
           { status: 401 }
         );
       }
@@ -711,15 +711,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (modelProvider === "tokendance") {
-      if (hasAnyCustomKeyHeader && (!headerTokendanceKey || !headerTokendanceBaseUrl)) {
+      if (hasAnyCustomKeyHeader && !headerTokendanceKey) {
         return NextResponse.json(
-          { error: "已启用自定义 Key，但未提供 TokenDance Key 或 Base URL（已拒绝回退到系统 Key）" },
+          { error: "已启用自定义 Key，但未提供 TokenDance Key（已拒绝回退到系统 Key）" },
           { status: 401 }
         );
       }
 
       const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-      const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL;
+      const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL || TOKENDANCE_BASE_URL;
       if (!tokendanceApiKey || !tokendanceBaseUrl) {
         return NextResponse.json(
           { error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" },

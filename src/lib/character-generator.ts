@@ -10,7 +10,14 @@ import {
   type Persona,
   type PlayerMind,
 } from "@/types/game";
-import { getGeneratorModel, getSelectedModels, hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getGeneratorModel,
+  getSelectedModels,
+  hasDashscopeKey,
+  hasTokendanceKey,
+  hasZenmuxKey,
+  isCustomKeyEnabled,
+} from "@/lib/api-keys";
 import { aiLogger } from "./ai-logger";
 import { GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
@@ -77,6 +84,7 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
     const allowedProviders = new Set<ModelRef["provider"]>();
     if (hasZenmuxKey()) allowedProviders.add("zenmux");
     if (hasDashscopeKey()) allowedProviders.add("dashscope");
+    if (hasTokendanceKey()) allowedProviders.add("tokendance");
     if (allowedProviders.size === 0) return defaultPool;
 
     // Filter by allowed providers, then exclude non-player models
@@ -175,7 +183,15 @@ export const generateGenshinModeCharacters = async (
   });
 };
 
-const isValidMbti = (v: any): v is string => typeof v === "string" && /^[A-Z]{4}$/.test(v.trim());
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function hasStringField(value: unknown, field: string): value is Record<string, string> {
+  return isRecord(value) && typeof value[field] === "string";
+}
+
+const isValidMbti = (v: unknown): v is string => typeof v === "string" && /^[A-Z]{4}$/.test(v.trim());
 
 export interface BaseProfile {
   displayName: string;
@@ -190,12 +206,12 @@ interface BaseProfilesResponse {
 }
 
 const normalizeBaseProfiles = (result: unknown): { profiles: BaseProfile[]; raw: unknown } => {
-  if (result && typeof result === "object" && "profiles" in result && Array.isArray((result as any).profiles)) {
-    return { profiles: (result as BaseProfilesResponse).profiles, raw: result };
+  if (isRecord(result) && Array.isArray(result.profiles)) {
+    return { profiles: result.profiles as BaseProfile[], raw: result };
   }
 
   if (Array.isArray(result)) {
-    if (result.length > 0 && typeof result[0] === "object" && result[0] && "displayName" in (result[0] as any)) {
+    if (result.length > 0 && hasStringField(result[0], "displayName")) {
       return { profiles: result as BaseProfile[], raw: result };
     }
     return { profiles: [], raw: result };
@@ -204,22 +220,22 @@ const normalizeBaseProfiles = (result: unknown): { profiles: BaseProfile[]; raw:
   return { profiles: [], raw: result };
 };
 
-const isValidGender = (g: any): g is Gender => g === "male" || g === "female" || g === "nonbinary";
+const isValidGender = (g: unknown): g is Gender => g === "male" || g === "female" || g === "nonbinary";
 
-const isValidBaseProfiles = (profiles: any, count: number): profiles is BaseProfile[] => {
+const isValidBaseProfiles = (profiles: unknown, count: number): profiles is BaseProfile[] => {
   if (!Array.isArray(profiles) || profiles.length !== count) return false;
   const ok = profiles.every((p) => {
-    if (!p || typeof p !== "object") return false;
-    if (typeof (p as any).displayName !== "string" || !(p as any).displayName.trim()) return false;
-    if (!isValidGender((p as any).gender)) return false;
-    if (typeof (p as any).age !== "number" || !Number.isFinite((p as any).age) || (p as any).age < 16 || (p as any).age > 70) return false;
-    if (!isValidMbti((p as any).mbti)) return false;
-    if (typeof (p as any).basicInfo !== "string" || !(p as any).basicInfo.trim()) return false;
+    if (!isRecord(p)) return false;
+    if (typeof p.displayName !== "string" || !p.displayName.trim()) return false;
+    if (!isValidGender(p.gender)) return false;
+    if (typeof p.age !== "number" || !Number.isFinite(p.age) || p.age < 16 || p.age > 70) return false;
+    if (!isValidMbti(p.mbti)) return false;
+    if (typeof p.basicInfo !== "string" || !p.basicInfo.trim()) return false;
     return true;
   });
 
   if (!ok) return false;
-  const names = profiles.map((p: any) => String(p.displayName).trim()).filter(Boolean);
+  const names = profiles.map((p) => String(p.displayName).trim()).filter(Boolean);
   if (names.length !== count) return false;
   if (new Set(names).size !== count) return false;
   return true;
@@ -246,12 +262,12 @@ const normalizeGeneratedCharacters = (
     return { characters: [result as GeneratedCharacter], raw: result };
   }
 
-  if (result && typeof result === "object" && "characters" in result && Array.isArray((result as any).characters)) {
-    return { characters: (result as GeneratedCharacters).characters, raw: result };
+  if (isRecord(result) && Array.isArray(result.characters)) {
+    return { characters: result.characters as GeneratedCharacter[], raw: result };
   }
 
   if (Array.isArray(result)) {
-    if (result.length > 0 && typeof result[0] === "object" && result[0] && "displayName" in (result[0] as any)) {
+    if (result.length > 0 && hasStringField(result[0], "displayName")) {
       return { characters: result as GeneratedCharacter[], raw: result };
     }
     return { characters: [], raw: result };
@@ -260,22 +276,22 @@ const normalizeGeneratedCharacters = (
   return { characters: [], raw: result };
 };
 
-const isValidPersona = (p: any): p is Persona => {
-  if (!p || typeof p !== "object") return false;
+const isValidPersona = (p: unknown): p is Persona => {
+  if (!isRecord(p)) return false;
   // styleLabel is now optional
   if (p.styleLabel !== undefined && typeof p.styleLabel !== "string") return false;
-  if (!Array.isArray(p.voiceRules) || p.voiceRules.filter((x: any) => typeof x === "string" && x.trim()).length === 0) return false;
+  if (!Array.isArray(p.voiceRules) || p.voiceRules.filter((x): x is string => typeof x === "string" && x.trim().length > 0).length === 0) return false;
   if (!isValidMbti(p.mbti)) return false;
   if (!isValidGender(p.gender)) return false;
   if (typeof p.age !== "number" || !Number.isFinite(p.age) || p.age < 16 || p.age > 70) return false;
   if (p.relationships !== undefined) {
     if (!Array.isArray(p.relationships)) return false;
-    if (p.relationships.some((x: any) => typeof x !== "string")) return false;
+    if (p.relationships.some((x) => typeof x !== "string")) return false;
   }
   return true;
 };
 
-const isValidPersonaForProfile = (p: any, profile: BaseProfile): p is Persona => {
+const isValidPersonaForProfile = (p: unknown, profile: BaseProfile): p is Persona => {
   if (!isValidPersona(p)) return false;
   if (p.gender !== profile.gender) return false;
   if (p.age !== profile.age) return false;
@@ -303,6 +319,129 @@ const isValidPlayerMind = (mind: unknown): mind is PlayerMind => {
   }
   return true;
 };
+
+const PERSONA_TEXT_FIELDS = [
+  "werewolfExperience",
+  "vocabularyStyle",
+  "reasoningStyle",
+  "speechLengthHabit",
+  "pressureStyle",
+  "uncertaintyStyle",
+  "mistakePattern",
+  "wolfDeceptionStyle",
+ ] as const satisfies ReadonlyArray<
+  "werewolfExperience" |
+  "vocabularyStyle" |
+  "reasoningStyle" |
+  "speechLengthHabit" |
+  "pressureStyle" |
+  "uncertaintyStyle" |
+  "mistakePattern" |
+  "wolfDeceptionStyle"
+>;
+
+const OPTIONAL_PERSONA_STRING_FIELDS = ["logicStyle", "socialHabit", "humorStyle"] as const satisfies ReadonlyArray<
+  "logicStyle" | "socialHabit" | "humorStyle"
+>;
+
+const PLAYER_MIND_FALLBACKS: Record<keyof PlayerMind, string> = {
+  courage: "Usually avoids flashy risks, but will commit when the table direction becomes clear.",
+  memoryBias: "Remembers voting patterns and obvious contradictions first, then tone and timing.",
+  suspicionThreshold: "Needs more than one clue before fully changing sides, with votes and incentives carrying the most weight.",
+  selfProtection: "Tends to explain their logic first, then push back if pressure keeps building.",
+  logicDepth: "Can connect a few players and vote relationships, but still prefers concrete table evidence.",
+  tablePresence: "Speaks in measured turns, not loud by default, and becomes firmer in key moments.",
+};
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
+}
+
+function normalizePlayerMind(mind: unknown): PlayerMind {
+  const record = mind && typeof mind === "object" ? (mind as Record<string, unknown>) : {};
+  return {
+    courage: typeof record.courage === "string" && record.courage.trim() ? record.courage.trim() : PLAYER_MIND_FALLBACKS.courage,
+    memoryBias:
+      typeof record.memoryBias === "string" && record.memoryBias.trim()
+        ? record.memoryBias.trim()
+        : PLAYER_MIND_FALLBACKS.memoryBias,
+    suspicionThreshold:
+      typeof record.suspicionThreshold === "string" && record.suspicionThreshold.trim()
+        ? record.suspicionThreshold.trim()
+        : PLAYER_MIND_FALLBACKS.suspicionThreshold,
+    selfProtection:
+      typeof record.selfProtection === "string" && record.selfProtection.trim()
+        ? record.selfProtection.trim()
+        : PLAYER_MIND_FALLBACKS.selfProtection,
+    logicDepth:
+      typeof record.logicDepth === "string" && record.logicDepth.trim()
+        ? record.logicDepth.trim()
+        : PLAYER_MIND_FALLBACKS.logicDepth,
+    tablePresence:
+      typeof record.tablePresence === "string" && record.tablePresence.trim()
+        ? record.tablePresence.trim()
+        : PLAYER_MIND_FALLBACKS.tablePresence,
+  };
+}
+
+function normalizePersonaForProfile(persona: unknown, profile: BaseProfile): Persona {
+  const record = isRecord(persona) ? persona : {};
+  const voiceRules = normalizeStringArray(record.voiceRules);
+  const normalized: Persona = {
+    styleLabel: typeof record.styleLabel === "string" && record.styleLabel.trim() ? record.styleLabel.trim() : undefined,
+    voiceRules: voiceRules.length > 0 ? voiceRules : ["speaks in a natural, table-focused way"],
+    mbti: profile.mbti,
+    gender: profile.gender,
+    age: profile.age,
+    voiceId: typeof record.voiceId === "string" && record.voiceId.trim() ? record.voiceId.trim() : undefined,
+    relationships: undefined,
+    basicInfo: profile.basicInfo,
+  };
+
+  for (const field of PERSONA_TEXT_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) {
+      normalized[field] = value.trim();
+    }
+  }
+
+  for (const field of OPTIONAL_PERSONA_STRING_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) {
+      normalized[field] = value.trim();
+    }
+  }
+
+  const triggerTopics = normalizeStringArray(record.triggerTopics);
+  if (triggerTopics.length > 0) {
+    normalized.triggerTopics = triggerTopics;
+  }
+
+  return normalized;
+}
+
+function normalizeGeneratedCharacterForProfile(char: unknown, profile: BaseProfile): GeneratedCharacter | null {
+  if (!char || typeof char !== "object") return null;
+  const record = char as Record<string, unknown>;
+  const rawName = typeof record.displayName === "string" ? record.displayName.trim() : "";
+  if (!rawName) return null;
+
+  return {
+    displayName: rawName,
+    persona: normalizePersonaForProfile(record.persona, profile),
+    playerMind: normalizePlayerMind(record.playerMind),
+    avatarSeed: typeof record.avatarSeed === "string" && record.avatarSeed.trim() ? record.avatarSeed.trim() : undefined,
+  };
+}
 
 const alignCharactersToProfiles = (
   chars: unknown,
@@ -336,22 +475,23 @@ const alignCharactersToProfiles = (
   const ordered: GeneratedCharacter[] = [];
   for (const profile of profiles) {
     const key = profile.displayName.trim();
-    const c = byName.get(key);
-    if (!c) {
+    const rawCharacter = byName.get(key);
+    if (!rawCharacter) {
       console.error(`[alignCharacters] character not found for profile: ${key}, available names:`, Array.from(byName.keys()));
       return null;
     }
-    if (!isValidPersonaForProfile(c.persona, profile) || !isValidPlayerMind(c.playerMind)) {
-      const p = c.persona as any;
+    const c = normalizeGeneratedCharacterForProfile(rawCharacter, profile);
+    if (!c || !isValidPersonaForProfile(c.persona, profile) || !isValidPlayerMind(c.playerMind)) {
+      const p = isRecord(rawCharacter) ? rawCharacter.persona : undefined;
       console.error(`[alignCharacters] invalid persona for ${key}:`, {
-        persona: c.persona,
-        playerMind: c.playerMind,
+        rawCharacter,
+        normalizedCharacter: c,
         profile: { gender: profile.gender, age: profile.age, mbti: profile.mbti },
-        isValid: isValidPersona(c.persona),
-        isValidPlayerMind: isValidPlayerMind(c.playerMind),
+        isValid: c ? isValidPersona(c.persona) : false,
+        isValidPlayerMind: c ? isValidPlayerMind(c.playerMind) : false,
         genderMatch: p?.gender === profile.gender,
         ageMatch: p?.age === profile.age,
-        mbtiMatch: String(p?.mbti || "").trim() === profile.mbti,
+        mbtiMatch: isRecord(p) ? String(p.mbti || "").trim() === profile.mbti : false,
       });
       return null;
     }
@@ -453,7 +593,7 @@ export async function generateCharacters(
           try {
             const c = parseLLMJson<GeneratedCharacter>(match);
             if (!c) continue;
-            if (!c.displayName || !c.persona) continue;
+            if (!c.displayName) continue;
             
             // 找到对应的 profile index
             const profileIndex = baseProfiles.findIndex(p => 
@@ -463,27 +603,27 @@ export async function generateCharacters(
             if (profileIndex === -1) continue;
             
             const profile = baseProfiles[profileIndex];
-            
-            // 验证 persona 是否有效
-            if (isValidPersonaForProfile(c.persona, profile) && isValidPlayerMind(c.playerMind)) {
+            const normalizedCharacter = normalizeGeneratedCharacterForProfile(c, profile);
+
+            if (normalizedCharacter && isValidPersonaForProfile(normalizedCharacter.persona, profile) && isValidPlayerMind(normalizedCharacter.playerMind)) {
               emittedIndices.add(profileIndex);
-              
+
               const voiceId = resolveVoiceId(
-                c.persona.voiceId,
-                c.persona.gender,
-                c.persona.age,
+                normalizedCharacter.persona.voiceId,
+                normalizedCharacter.persona.gender,
+                normalizedCharacter.persona.age,
                 "zh" as AppLocale
               );
 
               const character: GeneratedCharacter = {
                 displayName: profile.displayName,
                 persona: {
-                  ...c.persona,
-                  basicInfo: profile.basicInfo, // Carry over basicInfo from BaseProfile
+                  ...normalizedCharacter.persona,
+                  basicInfo: profile.basicInfo,
                   voiceId,
                   relationships: undefined,
                 },
-                playerMind: c.playerMind,
+                playerMind: normalizedCharacter.playerMind,
               };
 
               finalizedCharacters[profileIndex] = character;
@@ -573,7 +713,9 @@ export async function generateCharacters(
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      console.log(`[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}`);
+      console.log(
+        `[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
+      );
       return await runOnce();
     } catch (error) {
       lastError = error;

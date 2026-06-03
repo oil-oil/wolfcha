@@ -26,21 +26,25 @@ import {
   getMinimaxGroupId,
   getSelectedModels,
   getSummaryModel,
+  getTokendanceApiKey,
   getReviewModel,
   getZenmuxApiKey,
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
+  getValidatedTokendanceKey,
   setGeneratorModel,
   setMinimaxApiKey,
   setMinimaxGroupId,
   setSelectedModels,
   setSummaryModel,
   setReviewModel,
+  setTokendanceApiKey,
   setZenmuxApiKey,
   setDashscopeApiKey,
   setCustomKeyEnabled,
   setValidatedZenmuxKey,
   setValidatedDashscopeKey,
+  setValidatedTokendanceKey,
   isCustomKeyEnabled as getCustomKeyEnabled,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
@@ -51,6 +55,7 @@ import {
   AVAILABLE_MODELS,
   DASHSCOPE_VALIDATION_MODEL,
   GENERATOR_MODEL,
+  TOKENDANCE_VALIDATION_MODEL,
   ZENMUX_VALIDATION_MODEL,
   SUMMARY_MODEL,
   REVIEW_MODEL,
@@ -100,10 +105,12 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const t = useTranslations();
   const [zenmuxKey, setZenmuxKeyState] = useState("");
   const [dashscopeKey, setDashscopeKeyState] = useState("");
+  const [tokendanceKey, setTokendanceKeyState] = useState("");
   const [minimaxKey, setMinimaxKeyState] = useState("");
   const [minimaxGroupId, setMinimaxGroupIdState] = useState("");
   const [showZenmuxKey, setShowZenmuxKey] = useState(false);
   const [showDashscopeKey, setShowDashscopeKey] = useState(false);
+  const [showTokendanceKey, setShowTokendanceKey] = useState(false);
   const [showMinimaxKey, setShowMinimaxKey] = useState(false);
   const [showMinimaxGroupId, setShowMinimaxGroupId] = useState(false);
   const [isCustomKeyEnabled, setIsCustomKeyEnabled] = useState(false);
@@ -114,9 +121,11 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isValidatingZenmux, setIsValidatingZenmux] = useState(false);
   const [isValidatingDashscope, setIsValidatingDashscope] = useState(false);
-  const [validatedKeys, setValidatedKeys] = useState<{ zenmux: string; dashscope: string }>({
+  const [isValidatingTokendance, setIsValidatingTokendance] = useState(false);
+  const [validatedKeys, setValidatedKeys] = useState<{ zenmux: string; dashscope: string; tokendance: string }>({
     zenmux: "",
     dashscope: "",
+    tokendance: "",
   });
   const [purchaseQuantity, setPurchaseQuantity] = useState(10);
   const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("10");
@@ -129,6 +138,11 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     : "grid grid-cols-1 gap-2";
   const shouldShowSpringCampaignQuota = SPRING_CAMPAIGN_ENABLED && springCampaign?.active;
   const shouldShowSpringCampaignStatus = SPRING_CAMPAIGN_ENABLED;
+  const getProviderLabel = (provider: ModelRef["provider"]) => {
+    if (provider === "zenmux") return "Zenmux";
+    if (provider === "tokendance") return "TokenDance";
+    return t("customKey.dashscope.short");
+  };
 
    const displayCredits = useMemo(() => {
     if (credits === null || credits === undefined) return t("userProfile.empty");
@@ -140,6 +154,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     let mounted = true;
     const nextZenmuxKey = getZenmuxApiKey();
     const nextDashscopeKey = getDashscopeApiKey();
+    const nextTokendanceKey = getTokendanceApiKey();
     const nextMinimaxKey = getMinimaxApiKey();
     const nextMinimaxGroupId = getMinimaxGroupId();
     const nextSelectedModels = getSelectedModels();
@@ -150,6 +165,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     if (mounted) {
       setZenmuxKeyState(nextZenmuxKey);
       setDashscopeKeyState(nextDashscopeKey);
+      setTokendanceKeyState(nextTokendanceKey);
       setMinimaxKeyState(nextMinimaxKey);
       setMinimaxGroupIdState(nextMinimaxGroupId);
       setSelectedModelsState(nextSelectedModels);
@@ -159,9 +175,11 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setIsCustomKeyEnabled(storedCustomEnabled);
       const z = nextZenmuxKey;
       const d = nextDashscopeKey;
+      const td = nextTokendanceKey;
       setValidatedKeys({
         zenmux: z && getValidatedZenmuxKey() === z ? z : "",
         dashscope: d && getValidatedDashscopeKey() === d ? d : "",
+        tokendance: td && getValidatedTokendanceKey() === td ? td : "",
       });
     }
     return () => {
@@ -171,6 +189,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
+  const tokendanceConfigured = Boolean(tokendanceKey.trim());
   const modelPool = useMemo(() => {
     return ALL_MODELS;
   }, []);
@@ -181,16 +200,18 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (tokendanceConfigured) providers.add("tokendance");
     if (providers.size === 0) return [];
     return modelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, modelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, modelPool, tokendanceConfigured, zenmuxConfigured]);
   const defaultAvailableModels = useMemo(() => {
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
+    if (tokendanceConfigured) providers.add("tokendance");
     if (providers.size === 0) return [];
     return defaultModelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, defaultModelPool, zenmuxConfigured]);
+  }, [dashscopeConfigured, defaultModelPool, tokendanceConfigured, zenmuxConfigured]);
   const playerModelPool = useMemo(() => {
     return filterPlayerModels(availableModelPool);
   }, [availableModelPool]);
@@ -260,7 +281,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     if (isCustomKeyEnabled) {
       const zenmuxOk = !zenmuxKey.trim() || validatedKeys.zenmux === zenmuxKey.trim();
       const dashscopeOk = !dashscopeKey.trim() || validatedKeys.dashscope === dashscopeKey.trim();
-      if (!zenmuxOk || !dashscopeOk) {
+      const tokendanceOk = !tokendanceKey.trim() || validatedKeys.tokendance === tokendanceKey.trim();
+      if (!zenmuxOk || !dashscopeOk || !tokendanceOk) {
         toast(t("customKey.toasts.notValidated"), { description: t("customKey.toasts.notValidatedDesc") });
         return;
       }
@@ -300,6 +322,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     }
     setZenmuxApiKey(zenmuxKey);
     setDashscopeApiKey(dashscopeKey);
+    setTokendanceApiKey(tokendanceKey);
     setMinimaxApiKey(minimaxKey);
     setMinimaxGroupId(minimaxGroupId);
     setSelectedModels(nextSelectedModels);
@@ -315,7 +338,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   };
 
   const validateProviderKey = async (options: {
-    provider: "zenmux" | "dashscope";
+    provider: "zenmux" | "dashscope" | "tokendance";
     key: string;
     model: string;
   }) => {
@@ -327,6 +350,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       headers["X-Zenmux-Api-Key"] = key;
     } else if (provider === "dashscope") {
       headers["X-Dashscope-Api-Key"] = key;
+    } else if (provider === "tokendance") {
+      headers["X-Tokendance-Api-Key"] = key;
     }
 
     const response = await fetch("/api/validate-key", {
@@ -395,10 +420,38 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     }
   };
 
+  const handleValidateTokendance = async () => {
+    if (isValidatingTokendance || !tokendanceKey.trim()) return;
+    setIsValidatingTokendance(true);
+    try {
+      await validateProviderKey({
+        provider: "tokendance",
+        key: tokendanceKey.trim(),
+        model: TOKENDANCE_VALIDATION_MODEL,
+      });
+      setValidatedKeys((prev) => ({
+        ...prev,
+        tokendance: tokendanceKey.trim(),
+      }));
+      setValidatedTokendanceKey(tokendanceKey.trim());
+    } catch {
+      setValidatedKeys((prev) => ({ ...prev, tokendance: "" }));
+      if (tokendanceKey.trim() === getValidatedTokendanceKey()) {
+        setValidatedTokendanceKey("");
+      }
+      toast(t("customKey.toasts.validateFailed"), {
+        description: t("customKey.toasts.validateFailedDesc"),
+      });
+    } finally {
+      setIsValidatingTokendance(false);
+    }
+  };
+
   const handleClearKeys = () => {
     clearApiKeys();
     setZenmuxKeyState("");
     setDashscopeKeyState("");
+    setTokendanceKeyState("");
     setMinimaxKeyState("");
     setMinimaxGroupIdState("");
     setSelectedModelsState([]);
@@ -406,7 +459,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     setSummaryModelState(getSummaryModel());
     setReviewModelState(getReviewModel());
     setIsCustomKeyEnabled(false);
-    setValidatedKeys({ zenmux: "", dashscope: "" });
+    setValidatedKeys({ zenmux: "", dashscope: "", tokendance: "" });
     onCustomKeyEnabledChange?.(false);
     toast(t("customKey.toasts.cleared"));
   };
@@ -746,6 +799,57 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                     </div>
 
                     <div className="space-y-2">
+                      <Label htmlFor="tokendance-key" className="text-xs">{t("customKey.tokendance.label")}</Label>
+
+                      <div className="flex gap-2">
+                        <Input
+                          id="tokendance-key"
+                          name="wolfcha-tokendance-api-key"
+                          type={showTokendanceKey ? "text" : "password"}
+                          autoComplete="new-password"
+                          placeholder={t("customKey.tokendance.placeholder")}
+                          value={tokendanceKey}
+                          onChange={(e) => {
+                            setTokendanceKeyState(e.target.value);
+                            setValidatedKeys((prev) => ({ ...prev, tokendance: "" }));
+                          }}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowTokendanceKey((v) => !v)}
+                          aria-label={showTokendanceKey ? t("customKey.tokendance.hide") : t("customKey.tokendance.show")}
+                        >
+                          {showTokendanceKey ? <EyeSlash size={16} /> : <Eye size={16} />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleValidateTokendance}
+                          disabled={
+                            isValidatingTokendance ||
+                            !tokendanceKey.trim() ||
+                            (!!validatedKeys.tokendance && validatedKeys.tokendance === tokendanceKey.trim())
+                          }
+                        >
+                          {isValidatingTokendance ? t("customKey.validating") : validatedKeys.tokendance && validatedKeys.tokendance === tokendanceKey.trim() ? <Check size={16} className="text-[var(--color-success)]" /> : t("customKey.validate")}
+                        </Button>
+                      </div>
+
+                      <a href="https://tokendance.agent-universe.cn/?ref=wolfcha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
+                        <img src="/sponsor/tokendance-icon.svg" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.tokendance.get")}</span>
+                          <span className="text-[11px] text-[var(--text-muted)] ml-1.5">{t("customKey.tokendance.note")}</span>
+                        </div>
+                        <ArrowRight size={14} className="shrink-0 text-[var(--text-muted)]" />
+                      </a>
+                    </div>
+
+                    <div className="border-t border-[var(--border-color)] pt-3 space-y-2">
                       <Label htmlFor="zenmux-key" className="text-xs">{t("customKey.zenmux.label")}</Label>
                      
                       <div className="flex gap-2">
@@ -846,7 +950,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="generator-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={getProviderLabel(r.provider)} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -860,7 +964,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="summary-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={getProviderLabel(r.provider)} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -874,7 +978,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                             <SelectTrigger id="review-model"><SelectValue placeholder={t("customKey.selectModel")} /></SelectTrigger>
                             <SelectContent className="max-h-60">
                               {availableModelPool.map((r) => (
-                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")} icon={getModelLogoPath(r)} />
+                                <SelectItem key={`${r.provider}:${r.model}`} value={r.model} label={r.model} description={getProviderLabel(r.provider)} icon={getModelLogoPath(r)} />
                               ))}
                             </SelectContent>
                           </Select>
@@ -908,7 +1012,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                               >
                                 <img src={getModelLogoPath(r)} alt="" className="h-4 w-4 shrink-0 rounded object-contain" />
                                 <span className="min-w-0 flex-1 truncate text-[var(--text-primary)]">{r.model}</span>
-                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({r.provider === "zenmux" ? "Zenmux" : t("customKey.dashscope.short")})</span>
+                                <span className="shrink-0 text-xs text-[var(--text-muted)]">({getProviderLabel(r.provider)})</span>
                               </DropdownMenuCheckboxItem>
                             ))}
                           </DropdownMenuContent>
