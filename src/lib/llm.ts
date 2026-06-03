@@ -91,6 +91,63 @@ export interface ChatCompletionResponse {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    } | null;
+  };
+}
+
+export interface PromptCacheUsage {
+  promptCacheInputTokens: number;
+  promptCacheHitTokens: number;
+  promptCacheMissTokens: number;
+  promptCacheHitRatio: number;
+  source: "prompt_cache_hit_tokens" | "prompt_tokens_details.cached_tokens" | "none";
+}
+
+export function extractPromptCacheUsage(usage: ChatCompletionResponse["usage"] | undefined): PromptCacheUsage {
+  const promptTokens =
+    typeof usage?.prompt_tokens === "number" && Number.isFinite(usage.prompt_tokens)
+      ? usage.prompt_tokens
+      : 0;
+
+  if (typeof usage?.prompt_cache_hit_tokens === "number") {
+    const hit = Math.max(0, usage.prompt_cache_hit_tokens);
+    const miss =
+      typeof usage.prompt_cache_miss_tokens === "number"
+        ? Math.max(0, usage.prompt_cache_miss_tokens)
+        : Math.max(0, promptTokens - hit);
+    const input = hit + miss || promptTokens;
+    return {
+      promptCacheInputTokens: input,
+      promptCacheHitTokens: hit,
+      promptCacheMissTokens: miss,
+      promptCacheHitRatio: input > 0 ? hit / input : 0,
+      source: "prompt_cache_hit_tokens",
+    };
+  }
+
+  const cachedTokens = usage?.prompt_tokens_details?.cached_tokens;
+  if (typeof cachedTokens === "number" && Number.isFinite(cachedTokens)) {
+    const hit = Math.max(0, cachedTokens);
+    const miss = Math.max(0, promptTokens - hit);
+    return {
+      promptCacheInputTokens: promptTokens,
+      promptCacheHitTokens: hit,
+      promptCacheMissTokens: miss,
+      promptCacheHitRatio: promptTokens > 0 ? hit / promptTokens : 0,
+      source: "prompt_tokens_details.cached_tokens",
+    };
+  }
+
+  return {
+    promptCacheInputTokens: promptTokens,
+    promptCacheHitTokens: 0,
+    promptCacheMissTokens: promptTokens,
+    promptCacheHitRatio: 0,
+    source: "none",
   };
 }
 
