@@ -110,6 +110,10 @@
       "mailSubject": "Wolfcha 赞助合作",
       "mailBody": "你好，我对 Wolfcha 项目很感兴趣，希望能够提供以下支持：\n\n-（模型额度/算力）\n-（语音/音效资源）\n-（设计/产品协作）\n-（其他）\n\n我的联系方式：\n\n"
     },
+    "watchaRating": {
+      "title": "观猹评分",
+      "ariaLabel": "在观猹上查看猹杀评分"
+    },
     "settings": "设置",
     "tutorial": "玩法教学",
     "subtitle": "The Shadow Game",

@@ -644,6 +644,30 @@ input[type="submit"]:not(:disabled),
   font-family: var(--font-chinese), ui-serif, Georgia, serif;
 }
 
+/* Watcha official badge embedded inside the welcome card */
+.wc-watcha-paper-badge {
+  display: inline-block;
+  text-decoration: none;
+  border: 0;
+  outline: none;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.wc-watcha-paper-badge img {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border: 0;
+  outline: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.wc-watcha-paper-badge:hover {
+  transform: scale(1.02);
+}
+
 .wc-contract-oath {
   font-size: 14px;
   line-height: 1.9;
@@ -4214,6 +4238,8 @@ input[type="submit"]:not(:disabled),
 .wc-sponsor-card--watcha .wc-sponsor-card__name {
   font-size: 16px;
 }
+
+/* ========== Watcha Rating Badge (replaces the desktop Watcha sponsor stamp) ========== */
 
 .wc-sponsor-card--bottom-right {
   bottom: 18%;

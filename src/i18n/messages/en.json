@@ -110,6 +110,10 @@
       "mailSubject": "Wolfcha sponsorship inquiry",
       "mailBody": "Hi, I'm interested in supporting Wolfcha and would like to offer help in the following ways:\n\n- (Model credits / compute)\n- (Voice / SFX assets)\n- (Design / product collaboration)\n- (Other)\n\nMy contact info:\n\n"
     },
+    "watchaRating": {
+      "title": "Watcha Rating",
+      "ariaLabel": "View Wolfcha's rating on Watcha"
+    },
     "settings": "Settings",
     "tutorial": "How to play",
     "subtitle": "The Shadow Game",

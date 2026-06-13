@@ -1066,7 +1066,7 @@ export function WelcomeScreen({
             note={t("welcome.sponsor.cards.tokendance")}
           />
 
-          {/* Sponsor card - Watcha (右侧居中) */}
+          {/* Sponsor card - Watcha (right-center) */}
           <SponsorCard
             sponsorId="watcha"
             href="https://watcha.cn/"
@@ -1300,6 +1300,27 @@ export function WelcomeScreen({
                 </div>
               ) : null}
             </div>
+
+            {/* Watcha official rating badge (style=1) — sits inside the welcome card */}
+            <div className="mt-5 flex justify-center">
+              <a
+                href="https://watcha.cn/products/wolfcha?tab=review&utm_source=product-badge&utm_content=review"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="wc-watcha-paper-badge"
+                aria-label={t("welcome.watchaRating.ariaLabel")}
+                title={t("welcome.watchaRating.title")}
+              >
+                <img
+                  src="https://watcha.cn/api/v2/products/wolfcha/badge?style=1&dark=false"
+                  alt={t("welcome.watchaRating.title")}
+                  width={360}
+                  loading="lazy"
+                  draggable={false}
+                />
+              </a>
+            </div>
+
             <div className="mt-7 text-center wc-contract-body">
               <div className="wc-contract-oath">
                 {t("welcome.oath.line1")}
