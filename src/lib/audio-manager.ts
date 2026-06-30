@@ -1,5 +1,6 @@
 import { getMinimaxApiKey, getMinimaxGroupId, isCustomKeyEnabled } from "@/lib/api-keys";
 import { getAuthHeaders } from "@/lib/auth-headers";
+import { gameSessionTracker } from "@/lib/game-session-tracker";
 
 export interface AudioTask {
   id: string; // unique message id
@@ -35,6 +36,10 @@ class AudioManager {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     const authHeaders = await getAuthHeaders();
     Object.assign(headers, authHeaders);
+    const sessionId = gameSessionTracker.getSessionId();
+    if (sessionId) {
+      headers["X-Game-Session-Id"] = sessionId;
+    }
     if (isCustomKeyEnabled()) {
       const apiKey = getMinimaxApiKey();
       const groupId = getMinimaxGroupId();
@@ -250,9 +255,10 @@ class AudioManager {
 
       try {
         await startPlayback();
-      } catch (e: any) {
-        const name = e?.name || "";
-        const msg = String(e?.message || e || "");
+      } catch (e: unknown) {
+        const errorLike = typeof e === "object" && e !== null ? e as { name?: unknown; message?: unknown } : null;
+        const name = typeof errorLike?.name === "string" ? errorLike.name : "";
+        const msg = typeof errorLike?.message === "string" ? errorLike.message : String(e || "");
         const isBlocked = name === "NotAllowedError" || msg.includes("user gesture") || msg.includes("not allowed");
         if (!isBlocked) throw e;
 

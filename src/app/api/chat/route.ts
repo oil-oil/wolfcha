@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, hasRecentUnfinishedGameSession, requireCredits } from "@/lib/api-auth";
+import { authenticateRequest, hasAuthorizedActiveGameSession } from "@/lib/api-auth";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
 import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
 import { Agent, setGlobalDispatcher } from "undici";
@@ -14,6 +14,7 @@ const DASHSCOPE_CHAT_COMPLETIONS_URL = `${DASHSCOPE_API_BASE_URL}/chat/completio
 
 // API 调用超时时间（毫秒）
 const API_TIMEOUT_MS = 60000;
+const MAX_BATCH_REQUESTS = 12;
 
 type Provider = "zenmux" | "dashscope" | "tokendance";
 
@@ -586,15 +587,10 @@ export async function POST(request: NextRequest) {
   );
 
   if (!hasCustomKeys) {
-    const hasCredits = await requireCredits(auth.user.id);
-    if (!hasCredits) {
-      const hasRecentSession = await hasRecentUnfinishedGameSession(auth.user.id);
-      if (!hasRecentSession) {
-        return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
-      }
-      console.warn("[api-chat] allowed by recent unfinished game session", {
-        userId: auth.user.id,
-      });
+    const sessionId = request.headers.get("x-game-session-id")?.trim() || null;
+    const hasAuthorizedSession = await hasAuthorizedActiveGameSession(auth.user.id, sessionId);
+    if (!hasAuthorizedSession) {
+      return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
     }
   }
 
@@ -606,6 +602,12 @@ export async function POST(request: NextRequest) {
       const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim() || null;
       const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || null;
       const requests = body.requests as ChatRequestPayload[];
+      if (requests.length > MAX_BATCH_REQUESTS) {
+        return NextResponse.json(
+          { error: `Too many batch requests. Maximum is ${MAX_BATCH_REQUESTS}.` },
+          { status: 400 }
+        );
+      }
       const results = await Promise.all(
         requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerTokendanceKey, headerTokendanceBaseUrl))
       );

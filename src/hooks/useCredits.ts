@@ -35,6 +35,22 @@ const AUTH_EVENT = {
   SIGNED_IN: "SIGNED_IN",
 } as const;
 
+export type ConsumeCreditOptions = {
+  createSession?: boolean;
+  playerCount?: number;
+  difficulty?: string;
+  usedCustomKey?: boolean;
+  modelUsed?: string;
+  userEmail?: string | null;
+  region?: string | null;
+};
+
+export type ConsumeCreditResult = {
+  success: boolean;
+  credits?: number;
+  sessionId?: string | null;
+};
+
 export function useCredits() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -87,9 +103,9 @@ export function useCredits() {
     return snapshot;
   }, []);
 
-  const consumeCredit = useCallback(async (): Promise<boolean> => {
-    if (isDemoMode) return true;
-    if (!session) return false;
+  const consumeCredit = useCallback(async (options: ConsumeCreditOptions = {}): Promise<ConsumeCreditResult> => {
+    if (isDemoMode) return { success: true };
+    if (!session) return { success: false };
 
     try {
       const customEnabled = isCustomKeyEnabled();
@@ -101,11 +117,13 @@ export function useCredits() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": JSON_CONTENT_TYPE,
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
           ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
           ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
         },
+        body: JSON.stringify(options),
       });
 
       if (!res.ok) {
@@ -117,17 +135,21 @@ export function useCredits() {
         } catch {
           // no-op
         }
-        return false;
+        return { success: false };
       }
 
-      const payload = (await res.json()) as { credits: number; campaign?: SpringCampaignSnapshot };
+      const payload = (await res.json()) as {
+        credits: number;
+        campaign?: SpringCampaignSnapshot;
+        sessionId?: string | null;
+      };
       setCredits(payload.credits);
       if (payload.campaign) {
         setSpringCampaign(payload.campaign);
       }
-      return true;
+      return { success: true, credits: payload.credits, sessionId: payload.sessionId ?? null };
     } catch {
-      return false;
+      return { success: false };
     }
   }, [isDemoMode, session]);
 

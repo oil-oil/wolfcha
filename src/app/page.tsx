@@ -1305,7 +1305,7 @@ export default function Home() {
               setHumanName={setHumanName}
               onStart={(options) => {
                 setAiVoiceEnabled(false);
-                startGame({ ...(options ?? {}), isGenshinMode, isSpectatorMode });
+                return startGame({ ...(options ?? {}), isGenshinMode, isSpectatorMode });
               }}
               onAbort={restartGame}
               isLoading={isLoading}

@@ -525,6 +525,12 @@ function parseJsonTolerant<T>(raw: string): T {
   }
 }
 
+function attachGameSessionHeader(headers: Record<string, string>) {
+  const sessionId = gameSessionTracker.getSessionId();
+  if (sessionId) {
+    headers["X-Game-Session-Id"] = sessionId;
+  }
+}
 
 export async function generateCompletion(
   options: GenerateOptions
@@ -544,6 +550,7 @@ export async function generateCompletion(
   };
 
   Object.assign(headers, await getAuthHeaders());
+  attachGameSessionHeader(headers);
 
   console.log("[LLM] generateCompletion:", {
     customEnabled,
@@ -639,6 +646,7 @@ export async function generateCompletionBatch(
   };
 
   Object.assign(headers, await getAuthHeaders());
+  attachGameSessionHeader(headers);
 
   const response = await fetchWithRetry(
     "/api/chat",
@@ -699,6 +707,7 @@ export async function* generateCompletionStream(
   };
 
   Object.assign(headers, await getAuthHeaders());
+  attachGameSessionHeader(headers);
 
   const response = await fetchWithRetry(
     "/api/chat",

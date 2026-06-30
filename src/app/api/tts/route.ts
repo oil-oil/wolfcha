@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, requireCredits } from "@/lib/api-auth";
+import { authenticateRequest, hasAuthorizedActiveGameSession } from "@/lib/api-auth";
 import type { IncomingHttpHeaders } from "node:http";
 import * as https from "node:https";
 import { URL } from "node:url";
@@ -9,22 +9,35 @@ import { DEFAULT_VOICE_ID } from "@/lib/voice-constants";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export async function POST(req: NextRequest) {
   const auth = await authenticateRequest(req as unknown as Request);
   if ("error" in auth) return auth.error;
 
   const headerApiKey = req.headers.get("x-minimax-api-key")?.trim();
-  if (!headerApiKey) {
-    const hasCredits = await requireCredits(auth.user.id);
-    if (!hasCredits) {
+  const headerGroupId = req.headers.get("x-minimax-group-id")?.trim();
+  const hasCustomTtsKey = Boolean(headerApiKey || headerGroupId);
+
+  if (hasCustomTtsKey && (!headerApiKey || !headerGroupId)) {
+    return NextResponse.json({ error: "MiniMax API key and group ID are both required" }, { status: 400 });
+  }
+
+  if (!hasCustomTtsKey) {
+    const sessionId = req.headers.get("x-game-session-id")?.trim() || null;
+    const hasAuthorizedSession = await hasAuthorizedActiveGameSession(auth.user.id, sessionId);
+    if (!hasAuthorizedSession) {
       return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
     }
   }
 
   try {
-    const parsed = await req.json().catch(() => ({} as any));
-    const text = typeof parsed?.text === "string" ? parsed.text : String(parsed?.text ?? "");
-    const voiceId = typeof parsed?.voiceId === "string" ? parsed.voiceId : String(parsed?.voiceId ?? "");
+    const parsed: unknown = await req.json().catch(() => ({}));
+    const parsedRecord = isRecord(parsed) ? parsed : {};
+    const text = typeof parsedRecord.text === "string" ? parsedRecord.text : String(parsedRecord.text ?? "");
+    const voiceId = typeof parsedRecord.voiceId === "string" ? parsedRecord.voiceId : String(parsedRecord.voiceId ?? "");
 
     const normText = text.trim();
     const normVoiceId = voiceId.trim();
@@ -33,10 +46,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing text or voiceId" }, { status: 400 });
     }
 
-    const headerApiKey = req.headers.get("x-minimax-api-key")?.trim();
-    const headerGroupId = req.headers.get("x-minimax-group-id")?.trim();
-    const apiKey = headerApiKey || process.env.MINIMAX_API_KEY;
-    const groupId = headerGroupId || process.env.MINIMAX_GROUP_ID;
+    const apiKey = hasCustomTtsKey ? headerApiKey : process.env.MINIMAX_API_KEY;
+    const groupId = hasCustomTtsKey ? headerGroupId : process.env.MINIMAX_GROUP_ID;
 
     if (!apiKey || !groupId) {
       console.error("Missing MiniMax credentials");
@@ -266,7 +277,7 @@ export async function POST(req: NextRequest) {
       const contentType = response.headers["content-type"];
 
       if (typeof contentType === "string" && contentType.includes("application/json")) {
-        let json: any;
+        let json: unknown;
         try {
           json = JSON.parse(response.body.toString("utf8"));
         } catch (e) {
@@ -278,9 +289,11 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        if (json.base_resp && json.base_resp.status_code !== 0) {
-          const code = Number(json.base_resp.status_code);
-          const msg = String(json.base_resp.status_msg || "");
+        const jsonRecord = isRecord(json) ? json : {};
+        const baseResp = isRecord(jsonRecord.base_resp) ? jsonRecord.base_resp : null;
+        if (baseResp && baseResp.status_code !== 0) {
+          const code = Number(baseResp.status_code);
+          const msg = String(baseResp.status_msg || "");
 
           if (code === 2054 && attempt === 0) {
             const fallback = pickFallbackVoiceId(usedVoiceId);
@@ -308,14 +321,16 @@ export async function POST(req: NextRequest) {
           );
         }
 
+        const dataRecord = isRecord(jsonRecord.data) ? jsonRecord.data : null;
+        const audioRecord = isRecord(jsonRecord.audio) ? jsonRecord.audio : null;
         const dataStr: unknown =
-          (typeof json.data === "string" ? json.data : undefined) ??
-          json.data?.audio ??
-          json.data?.data ??
-          json.audio?.data ??
-          json.audio_data;
+          (typeof jsonRecord.data === "string" ? jsonRecord.data : undefined) ??
+          dataRecord?.audio ??
+          dataRecord?.data ??
+          audioRecord?.data ??
+          jsonRecord.audio_data;
 
-        const audioUrl: unknown = json.audio?.url ?? json.data?.url ?? json.url;
+        const audioUrl: unknown = audioRecord?.url ?? dataRecord?.url ?? jsonRecord.url;
 
         if (typeof audioUrl === "string" && audioUrl.startsWith("http")) {
           const audioResp = await requestBuffer(audioUrl, {

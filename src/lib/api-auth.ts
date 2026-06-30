@@ -62,29 +62,49 @@ export async function requireCredits(userId: string): Promise<boolean> {
   }
 }
 
-export async function hasRecentUnfinishedGameSession(userId: string): Promise<boolean> {
+const AUTHORIZED_SESSION_WINDOW_MS = 4 * 60 * 60 * 1000;
+
+export async function hasAuthorizedActiveGameSession(userId: string, sessionId?: string | null): Promise<boolean> {
   if (await isDemoModeActiveServer()) return true;
+  if (!sessionId) return false;
 
   try {
-    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const since = new Date(Date.now() - AUTHORIZED_SESSION_WINDOW_MS).toISOString();
     const { data, error } = await supabaseAdmin
       .from("game_sessions")
       .select("id")
       .eq("user_id", userId)
       .eq("completed", false)
       .eq("used_custom_key", false)
-      .gte("created_at", since)
-      .order("created_at", { ascending: false })
+      .eq("credit_authorized", true)
+      .gte("last_activity_at", since)
+      .eq("id", sessionId)
+      .order("last_activity_at", { ascending: false })
       .limit(1);
 
     if (error) {
-      console.error("[api-auth] hasRecentUnfinishedGameSession error", error);
+      console.error("[api-auth] hasAuthorizedActiveGameSession error", error);
       return false;
     }
 
-    return Array.isArray(data) && data.length > 0;
+    const row = Array.isArray(data) ? (data[0] as { id?: string } | undefined) : undefined;
+    if (!row?.id) return false;
+
+    const { error: touchError } = await supabaseAdmin
+      .from("game_sessions")
+      .update({ last_activity_at: new Date().toISOString() } as never)
+      .eq("id", row.id)
+      .eq("user_id", userId);
+
+    if (touchError) {
+      console.warn("[api-auth] failed to refresh game session activity", touchError);
+    }
+
+    return true;
   } catch (error) {
-    console.error("[api-auth] hasRecentUnfinishedGameSession error", error);
+    console.error("[api-auth] hasAuthorizedActiveGameSession error", error);
     return false;
   }
 }
+
+export const hasRecentUnfinishedGameSession = hasAuthorizedActiveGameSession;

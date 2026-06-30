@@ -14,6 +14,7 @@ export interface GameSessionConfig {
   difficulty?: string;
   usedCustomKey: boolean;
   modelUsed?: string;
+  sessionId?: string | null;
 }
 
 interface SessionState {
@@ -189,6 +190,13 @@ export const gameSessionTracker = {
       config,
       userId: effectiveUserId,
     };
+
+    if (config.sessionId) {
+      state.sessionId = config.sessionId;
+      state.lastSyncTime = Date.now();
+      console.log("[game-session] Reusing authorized session:", config.sessionId);
+      return config.sessionId;
+    }
 
     // 获取用户地区信息（基于浏览器语言和时区）
     const region = typeof navigator !== "undefined" 
