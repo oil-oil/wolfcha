@@ -23,7 +23,7 @@ import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
-import { hasDashscopeKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import { getGeneratorModel, hasDashscopeKey, hasTokendanceKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 import {
   SPRING_CAMPAIGN_CODE,
@@ -599,6 +599,98 @@ export function WelcomeScreen({
     toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
   };
 
+  const hasUserProvidedLlmKey = () => (
+    isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())
+  );
+
+  const buildStartOptions = (gameSessionId?: string | null): StartGameOptions => {
+    const roles = devTab === "roles" && devRoleOverrideEnabled && roleConfigValid ? (fixedRoles as Role[]) : undefined;
+    const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
+    const selectedCustomChars = customCharacters.characters
+      .filter(c => selectedCharacterIds.has(c.id))
+      .map(c => ({
+        id: c.id,
+        display_name: c.display_name,
+        gender: c.gender,
+        age: c.age,
+        mbti: c.mbti,
+        basic_info: c.basic_info,
+        style_label: c.style_label,
+        avatar_seed: c.avatar_seed,
+      }));
+
+    return {
+      fixedRoles: roles,
+      devPreset: preset,
+      difficulty,
+      playerCount,
+      gameSessionId: gameSessionId || undefined,
+      customCharacters: selectedCustomChars,
+      preferredRole: preferredRole || undefined,
+    };
+  };
+
+  const getClientRegion = () => {
+    if (typeof navigator === "undefined") return null;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown";
+    return `${navigator.language || "unknown"}|${timeZone}`;
+  };
+
+  const waitForStartAnimation = async (startedAt: number) => {
+    const remaining = Math.max(0, 800 - (Date.now() - startedAt));
+    if (remaining <= 0) return;
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, remaining);
+    });
+  };
+
+  const startGameWithCreditGuard = async (skipCredit: boolean) => {
+    if (isStartingRef.current) {
+      return;
+    }
+
+    isStartingRef.current = true;
+    const animationStartedAt = Date.now();
+
+    const seal = sealButtonRef.current;
+    if (seal) createParticles(seal);
+
+    setIsTransitioning(true);
+
+    try {
+      let gameSessionId: string | null = null;
+      if (!skipCredit) {
+        const result = await consumeCredit({
+          createSession: true,
+          playerCount,
+          difficulty,
+          usedCustomKey: false,
+          modelUsed: getGeneratorModel(),
+          userEmail: user?.email ?? null,
+          region: getClientRegion(),
+        });
+        if (!result.success) {
+          handleCreditFailure();
+          return;
+        }
+        gameSessionId = result.sessionId ?? null;
+      }
+
+      await waitForStartAnimation(animationStartedAt);
+      await onStart(buildStartOptions(gameSessionId));
+    } catch (error) {
+      console.error("[welcome] failed to start game", error);
+      if (!skipCredit) {
+        handleCreditFailure();
+      } else {
+        setIsTransitioning(false);
+        onAbort?.();
+      }
+    } finally {
+      isStartingRef.current = false;
+    }
+  };
+
   const handleConfirm = async () => {
     if (!canConfirm) {
       return;
@@ -617,7 +709,7 @@ export function WelcomeScreen({
       return;
     }
 
-    const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
+    const hasUserKey = hasUserProvidedLlmKey();
 
     if (
       !demoModeActive &&
@@ -631,58 +723,7 @@ export function WelcomeScreen({
       return;
     }
 
-    isStartingRef.current = true;
-
-    const seal = sealButtonRef.current;
-    if (seal) createParticles(seal);
-
-    setIsTransitioning(true);
-
-    window.setTimeout(() => {
-      // 传递开发模式配置
-      const roles = devTab === "roles" && devRoleOverrideEnabled && roleConfigValid ? (fixedRoles as Role[]) : undefined;
-      const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
-
-      // Get selected custom characters
-      const selectedCustomChars = customCharacters.characters
-        .filter(c => selectedCharacterIds.has(c.id))
-        .map(c => ({
-          id: c.id,
-          display_name: c.display_name,
-          gender: c.gender,
-          age: c.age,
-          mbti: c.mbti,
-          basic_info: c.basic_info,
-          style_label: c.style_label,
-          avatar_seed: c.avatar_seed,
-        }));
-
-      void onStart({
-        fixedRoles: roles,
-        devPreset: preset,
-        difficulty,
-        playerCount,
-        customCharacters: selectedCustomChars,
-        preferredRole: preferredRole || undefined,
-      });
-    }, 800);
-
-    if (demoModeActive || hasUserKey) {
-      isStartingRef.current = false;
-      return;
-    }
-
-    void consumeCredit()
-      .then((consumed) => {
-        if (consumed) return;
-        handleCreditFailure();
-      })
-      .catch(() => {
-        handleCreditFailure();
-      })
-      .finally(() => {
-        isStartingRef.current = false;
-      });
+    await startGameWithCreditGuard(demoModeActive || hasUserKey);
   };
 
   const handleOpenPayAsYouGo = () => {
@@ -691,58 +732,9 @@ export function WelcomeScreen({
   };
 
   const handleStartGameFromLowCreditModal = async () => {
-    isStartingRef.current = true;
-
-    const seal = sealButtonRef.current;
-    if (seal) createParticles(seal);
-
-    setIsTransitioning(true);
-
-    window.setTimeout(() => {
-      const roles = devTab === "roles" && devRoleOverrideEnabled && roleConfigValid ? (fixedRoles as Role[]) : undefined;
-      const preset = devTab === "preset" && devPreset ? (devPreset as DevPreset) : undefined;
-
-      const selectedCustomChars = customCharacters.characters
-        .filter(c => selectedCharacterIds.has(c.id))
-        .map(c => ({
-          id: c.id,
-          display_name: c.display_name,
-          gender: c.gender,
-          age: c.age,
-          mbti: c.mbti,
-          basic_info: c.basic_info,
-          style_label: c.style_label,
-          avatar_seed: c.avatar_seed,
-        }));
-
-      void onStart({
-        fixedRoles: roles,
-        devPreset: preset,
-        difficulty,
-        playerCount,
-        customCharacters: selectedCustomChars,
-        preferredRole: preferredRole || undefined,
-      });
-    }, 800);
-
     const latestDemoConfig = await refreshDemoConfig(true);
-    const hasUserKey = isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey());
-    if (latestDemoConfig.active || hasUserKey) {
-      isStartingRef.current = false;
-      return;
-    }
-
-    void consumeCredit()
-      .then((consumed) => {
-        if (consumed) return;
-        handleCreditFailure();
-      })
-      .catch(() => {
-        handleCreditFailure();
-      })
-      .finally(() => {
-        isStartingRef.current = false;
-      });
+    const hasUserKey = hasUserProvidedLlmKey();
+    await startGameWithCreditGuard(latestDemoConfig.active || hasUserKey);
   };
 
   const handleOpenGroup = () => {

@@ -232,9 +232,11 @@ export interface Database {
           ai_prompt_tokens: number;
           ai_completion_tokens: number;
           used_custom_key: boolean;
+          credit_authorized: boolean;
           model_used: string | null;
           user_email: string | null;
           region: string | null;
+          last_activity_at: string;
           created_at: string;
           ended_at: string | null;
         };
@@ -253,9 +255,11 @@ export interface Database {
           ai_prompt_tokens?: number;
           ai_completion_tokens?: number;
           used_custom_key?: boolean;
+          credit_authorized?: boolean;
           model_used?: string | null;
           user_email?: string | null;
           region?: string | null;
+          last_activity_at?: string;
           created_at?: string;
           ended_at?: string | null;
         };
@@ -274,9 +278,11 @@ export interface Database {
           ai_prompt_tokens?: number;
           ai_completion_tokens?: number;
           used_custom_key?: boolean;
+          credit_authorized?: boolean;
           model_used?: string | null;
           user_email?: string | null;
           region?: string | null;
+          last_activity_at?: string;
           created_at?: string;
           ended_at?: string | null;
         };

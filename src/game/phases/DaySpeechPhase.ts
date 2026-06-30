@@ -72,7 +72,17 @@ export class DaySpeechPhase extends GamePhase {
   getPrompt(context: GameContext, player: Player): PromptResult {
     const { t } = getI18n();
     const state = context.state;
-    const gameContext = buildGameContext(state, player);
+    // 警长竞选发言(及警徽 PK)发生在夜间死亡正式公布之前，必须与 BadgePhase 的报名/竞选投票
+    // 一样隐藏未公布的夜间结果（平安夜/今日死亡），否则会提前泄露"昨晚是否死人"。
+    // 投票平票产生的 PK(pkSource==="vote")发生在死亡已公布之后，不需隐藏。
+    const isPreAnnouncementCampaign =
+      state.phase === "DAY_BADGE_SPEECH" ||
+      (state.phase === "DAY_PK_SPEECH" && state.pkSource === "badge");
+    const gameContext = buildGameContext(
+      state,
+      player,
+      isPreAnnouncementCampaign ? { excludePendingDeaths: true } : undefined
+    );
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
 

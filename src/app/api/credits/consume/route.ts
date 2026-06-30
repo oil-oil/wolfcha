@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
-import type { Database } from "@/types/database";
 import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import {
   SPRING_CAMPAIGN_CODE,
@@ -18,6 +17,119 @@ type CampaignQuotaRow = {
   consumed_quota: number;
   expires_at: string;
 };
+
+type ConsumeCreditPayload = {
+  createSession?: boolean;
+  playerCount?: number;
+  difficulty?: string;
+  usedCustomKey?: boolean;
+  modelUsed?: string;
+  userEmail?: string | null;
+  region?: string | null;
+};
+
+type AuthenticatedUser = {
+  id: string;
+  email?: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function readPayload(request: Request): Promise<ConsumeCreditPayload> {
+  try {
+    const json: unknown = await request.json();
+    if (!isRecord(json)) return {};
+    return json as ConsumeCreditPayload;
+  } catch {
+    return {};
+  }
+}
+
+async function createGameSessionForConsume(
+  user: AuthenticatedUser,
+  payload: ConsumeCreditPayload,
+  options: { creditAuthorized: boolean; usedCustomKey: boolean }
+): Promise<string | null> {
+  if (!payload.createSession) return null;
+
+  const playerCount = Number(payload.playerCount);
+  if (!Number.isFinite(playerCount) || playerCount <= 0) {
+    throw new Error("Invalid player count");
+  }
+
+  const nowIso = new Date().toISOString();
+  const insertData = {
+    user_id: user.id,
+    player_count: Math.floor(playerCount),
+    difficulty: payload.difficulty || null,
+    completed: false,
+    used_custom_key: options.usedCustomKey,
+    credit_authorized: options.creditAuthorized,
+    model_used: payload.modelUsed || null,
+    user_email: payload.userEmail ?? user.email ?? null,
+    region: payload.region || null,
+    last_activity_at: nowIso,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from("game_sessions")
+    .insert(insertData as never)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    console.error("[credits/consume] failed to create game session", error);
+    throw new Error("Failed to create game session");
+  }
+
+  return (data as { id: string }).id;
+}
+
+async function consumeCreditAndCreateSession(
+  user: AuthenticatedUser,
+  payload: ConsumeCreditPayload
+): Promise<{ sessionId: string | null; credits: number }> {
+  const playerCount = Number(payload.playerCount);
+  if (!payload.createSession) {
+    throw new Error("Game session is required for project credits");
+  }
+  if (!Number.isFinite(playerCount) || playerCount <= 0) {
+    throw new Error("Invalid player count");
+  }
+
+  const { data, error } = await supabaseAdmin.rpc(
+    "consume_credit_for_authorized_game_session" as never,
+    {
+      p_user_id: user.id,
+      p_player_count: Math.floor(playerCount),
+      p_difficulty: payload.difficulty || null,
+      p_model_used: payload.modelUsed || null,
+      p_user_email: payload.userEmail ?? user.email ?? null,
+      p_region: payload.region || null,
+    } as never
+  );
+
+  if (error) {
+    if (error.message.includes("insufficient_credits")) {
+      throw new Error("Insufficient credits");
+    }
+    console.error("[credits/consume] rpc failed", error);
+    throw new Error("Failed to consume credit");
+  }
+
+  const rows = data as unknown as Array<{ session_id: string; credits: number }>;
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Failed to consume credit");
+  }
+
+  return {
+    sessionId: row.session_id,
+    credits: row.credits,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -41,6 +153,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const payload = await readPayload(request);
+
   // Demo mode: skip credit consumption entirely
   if (await isDemoModeActiveServer()) {
     const { data } = await supabaseAdmin
@@ -49,11 +163,16 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
     const creditsRow = data as { credits: number } | null;
+    const sessionId = await createGameSessionForConsume(user, payload, {
+      creditAuthorized: false,
+      usedCustomKey: Boolean(payload.usedCustomKey),
+    });
     return NextResponse.json({
       success: true,
       credits: creditsRow?.credits ?? 0,
       bypassed: true,
       demoMode: true,
+      sessionId,
     });
   }
 
@@ -105,12 +224,17 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .single();
     const creditsRow = data as { credits: number } | null;
+    const sessionId = await createGameSessionForConsume(user, payload, {
+      creditAuthorized: false,
+      usedCustomKey: true,
+    });
     return NextResponse.json({
       success: true,
       credits: creditsRow?.credits ?? 0,
       bypassed: true,
       usedTemporaryQuota: false,
       campaign: buildCampaignPayload(campaignRow),
+      sessionId,
     });
   }
 
@@ -172,12 +296,17 @@ export async function POST(request: Request) {
           .eq("id", user.id)
           .single();
         const creditsRow = creditsData as { credits: number } | null;
+        const sessionId = await createGameSessionForConsume(user, payload, {
+          creditAuthorized: true,
+          usedCustomKey: false,
+        });
 
         return NextResponse.json({
           success: true,
           credits: creditsRow?.credits ?? 0,
           usedTemporaryQuota: true,
           campaign: buildCampaignPayload(updatedCampaignRow),
+          sessionId,
         });
       }
 
@@ -196,19 +325,17 @@ export async function POST(request: Request) {
     campaignRow = latestCampaignRow;
   }
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { data, error } = await supabaseAdmin
-      .from("user_credits")
-      .select("credits")
-      .eq("id", user.id)
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to read credits" }, { status: 500 });
-    }
-
-    const creditsRow = data as { credits: number } | null;
-    if (!creditsRow || creditsRow.credits <= 0) {
+  try {
+    const result = await consumeCreditAndCreateSession(user, payload);
+    return NextResponse.json({
+      success: true,
+      credits: result.credits,
+      usedTemporaryQuota: false,
+      campaign: buildCampaignPayload(campaignRow),
+      sessionId: result.sessionId,
+    });
+  } catch (error) {
+    if (String(error).includes("Insufficient credits")) {
       return NextResponse.json(
         {
           error: "Insufficient credits",
@@ -218,33 +345,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const nextCredits = creditsRow.credits - 1;
-    const updatePayload: Partial<Database["public"]["Tables"]["user_credits"]["Row"]> = {
-      credits: nextCredits,
-      updated_at: new Date().toISOString(),
-    };
-    const { data: updatedRows, error: updateError } = await supabaseAdmin
-      .from("user_credits")
-      .update(updatePayload as never)
-      .eq("id", user.id)
-      .eq("credits", creditsRow.credits)
-      .select("credits")
-      .maybeSingle();
-
-    if (updateError) {
-      return NextResponse.json({ error: "Failed to update credits" }, { status: 500 });
-    }
-
-    if (updatedRows) {
-      const updatedCreditsRow = updatedRows as { credits: number };
-      return NextResponse.json({
-        success: true,
-        credits: updatedCreditsRow.credits,
-        usedTemporaryQuota: false,
-        campaign: buildCampaignPayload(campaignRow),
-      });
-    }
+    return NextResponse.json({ error: "Failed to consume credit" }, { status: 500 });
   }
-
-  return NextResponse.json({ error: "Conflict while updating credits" }, { status: 409 });
 }

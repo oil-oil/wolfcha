@@ -75,7 +75,12 @@ export class BadgePhase extends GamePhase {
         const seat = seatByPlayerId.get(m.playerId);
         return typeof seat === "number" && candidateSet.has(seat);
       })
-      .map((m) => `${m.playerName}: ${m.content}`)
+      .map((m) => {
+        // 与 buildTodayTranscript/buildPastDaysTranscript 一致：对模型匿名为"N号"，缺座位才回退真名
+        const seat = seatByPlayerId.get(m.playerId);
+        const speaker = typeof seat === "number" ? t("mentions.seatLabel", { seat: seat + 1 }) : m.playerName;
+        return `${speaker}: ${m.content}`;
+      })
       .join("\n");
 
     const liteContextLines = [

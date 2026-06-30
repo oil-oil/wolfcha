@@ -80,8 +80,10 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
     const m = state.messages[i];
     if (m.isSystem || m.playerId === player.playerId) continue;
     if (m.content.includes(seatStr)) {
+      // 这是对"今天谁点名了我"的历史回读：发言已经发生，与说话人此刻是否存活无关。
+      // 若按当前 alive 过滤，会吞掉"当天先发言点名、随后被票出/枪杀"玩家的点名。
       const speaker = state.players.find(p => p.playerId === m.playerId);
-      if (speaker && speaker.alive) mentionedBy.push(speaker.seat);
+      if (speaker) mentionedBy.push(speaker.seat);
     }
   }
   if (mentionedBy.length > 0) {
@@ -90,7 +92,27 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
   }
 
   // --- 2. Adjacent to a dead player: you have a spatial observation ---
-  const deadToday = state.players.filter(p => !p.alive);
+  // 必须只取"当天"出局者，而非全程累计死者：否则到第 3、4 天后几乎人人都"与出局者相邻"，
+  // 这条空间观察会被永久误触发，并把跨天旧死者当成可聊的相邻死亡。
+  // 另外：警长竞选(报名/发言/投票/警徽PK)发生在夜间死亡公布之前，此时不得据"当晚死者"给相邻提示，否则提前泄露死讯。
+  const deathsAnnounced = !(
+    state.phase === "DAY_BADGE_SIGNUP" ||
+    state.phase === "DAY_BADGE_SPEECH" ||
+    state.phase === "DAY_BADGE_ELECTION" ||
+    (state.phase === "DAY_PK_SPEECH" && state.pkSource === "badge")
+  );
+  const deadTodaySeats = new Set<number>();
+  if (deathsAnnounced) {
+    getRecordedNightDeaths(state.nightHistory?.[state.day]).forEach((d) => deadTodaySeats.add(d.seat));
+    const todayDayHistory = state.dayHistory?.[state.day];
+    if (todayDayHistory?.executed) deadTodaySeats.add(todayDayHistory.executed.seat);
+    if (todayDayHistory?.hunterShot) deadTodaySeats.add(todayDayHistory.hunterShot.targetSeat);
+    if (todayDayHistory?.whiteWolfKingBoom) {
+      deadTodaySeats.add(todayDayHistory.whiteWolfKingBoom.boomSeat);
+      deadTodaySeats.add(todayDayHistory.whiteWolfKingBoom.targetSeat);
+    }
+  }
+  const deadToday = state.players.filter((p) => deadTodaySeats.has(p.seat));
   const totalSeats = state.players.length;
   const isAdjacentToDead = deadToday.some(d => {
     const diff = Math.abs(d.seat - player.seat);
@@ -398,6 +420,10 @@ export const buildPastDaysTranscript = (state: GameState): string => {
     if (dayHistory?.hunterShot) {
       parts.push(`猎人开枪: ${formatSeatName(state, dayHistory.hunterShot.hunterSeat)} 带走 ${formatSeatName(state, dayHistory.hunterShot.targetSeat)}`);
     }
+    // 猎人在夜间死亡触发的开枪记录在 nightHistory，而非 dayHistory；两者互斥，需一并复盘。
+    if (nightHistory?.hunterShot) {
+      parts.push(`猎人开枪: ${formatSeatName(state, nightHistory.hunterShot.hunterSeat)} 带走 ${formatSeatName(state, nightHistory.hunterShot.targetSeat)}`);
+    }
     if (dayHistory?.whiteWolfKingBoom) {
       parts.push(`白狼王自爆: ${formatSeatName(state, dayHistory.whiteWolfKingBoom.boomSeat)} 带走 ${formatSeatName(state, dayHistory.whiteWolfKingBoom.targetSeat)}`);
     }
@@ -551,7 +577,15 @@ export const buildSystemAnnouncementsSinceDawn = (state: GameState, maxLines?: n
  * Build role-specific private information section.
  * This is placed at the TOP of the context to ensure AI sees it first.
  */
-const buildRolePrivateInfo = (state: GameState, player: Player): string | null => {
+const buildRolePrivateInfo = (
+  state: GameState,
+  player: Player,
+  options?: { excludePendingDeaths?: boolean }
+): string | null => {
+  // 夜间"结果"(刀/守/救是否致死)在天亮公布前不得泄露给当前行动者。目标"身份"(刀谁/守谁/夜里看到的刀口)
+  // 本就属于该角色夜间合法所知，可照常展示；这里只对"当晚(state.day)结果"在死亡公布前做门控，过往夜次已公开。
+  const outcomeKnownForDay = (day: number): boolean =>
+    !options?.excludePendingDeaths || day < state.day;
   if (player.role === "Seer") {
     const history = state.nightActions.seerHistory || [];
     if (history.length === 0) return null;
@@ -574,10 +608,21 @@ ${checks.join("\n")}
     const witchActions: string[] = [];
     const wolfTargetInfo: string[] = [];
 
+    // 女巫只有在"当晚仍持有解药"时才会被告知刀口（与 NightPhase.buildWitchPrompt 的夜间逻辑一致）。
+    // 解药在 witchSave 为 true 的那一晚用掉，因此该晚（含）之前可见刀口，之后不再可见，
+    // 否则女巫用完解药后白天仍会拿到本不该知道的历史刀口（上帝视角）。
+    let healUsedNight: number | null = null;
     if (state.nightHistory) {
       Object.entries(state.nightHistory).forEach(([day, history]) => {
-        // 收集狼人刀口信息，只有当解药未使用或已被使用但未救人时才显示刀口
-        if (history.wolfTarget !== undefined) {
+        if (history.witchSave) healUsedNight = Number(day);
+      });
+    }
+
+    if (state.nightHistory) {
+      Object.entries(state.nightHistory).forEach(([day, history]) => {
+        // 收集狼人刀口信息：仅在女巫当晚仍可使用解药时才可见
+        const witchHadAntidoteThatNight = healUsedNight === null || Number(day) <= healUsedNight;
+        if (history.wolfTarget !== undefined && witchHadAntidoteThatNight) {
           const targetPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (targetPlayer) {
             wolfTargetInfo.push(`  第${day}夜：狼目标为 ${history.wolfTarget + 1}号${targetPlayer.displayName}`);
@@ -587,7 +632,14 @@ ${checks.join("\n")}
         if (history.witchSave && history.wolfTarget !== undefined) {
           const savedPlayer = state.players.find(p => p.seat === history.wolfTarget);
           if (savedPlayer) {
-            witchActions.push(`  第${day}夜：救了 ${history.wolfTarget + 1}号${savedPlayer.displayName}`);
+            // 守+救叠加(milk)等情形下被救者当晚仍会出局，需据当晚结算标注救援是否生效，避免女巫误以为救活了人。
+            // 救援"结果"在天亮公布前不展示，与狼/守卫一致显示"结果待天亮公布"（当晚 outcome 门控）。
+            const saveNote = !outcomeKnownForDay(Number(day))
+              ? "（结果待天亮公布）"
+              : getRecordedNightDeaths(history).some((d) => d.seat === history.wolfTarget)
+                ? "（救援未生效，仍出局）"
+                : "";
+            witchActions.push(`  第${day}夜：救了 ${history.wolfTarget + 1}号${savedPlayer.displayName}${saveNote}`);
           }
         }
         if (history.witchPoison !== undefined) {
@@ -617,11 +669,24 @@ ${checks.join("\n")}
     const guardedSeat = state.nightActions.lastGuardTarget;
     
     if (guardedSeat !== undefined && lastTarget) {
-      const wasProtectionEffective = lastTarget.alive;
-      const protectionResult = wasProtectionEffective 
-        ? `${guardedSeat + 1}号${lastTarget.displayName} 今天仍然存活`
-        : `${guardedSeat + 1}号${lastTarget.displayName} 已出局`;
-      
+      // 守护结果必须基于"昨晚结算"，而不是当前存活状态：
+      // 否则被守玩家若是白天被投票/猎人/自爆带走，会被误判为"昨晚没守住"。
+      const lastNightDay = Object.keys(state.nightHistory || {})
+        .map(Number)
+        .filter((d) => Number.isFinite(d))
+        .sort((a, b) => b - a)[0];
+      const lastNightRecord =
+        lastNightDay !== undefined ? state.nightHistory?.[lastNightDay] : undefined;
+      const guardOutcomeKnown = lastNightDay !== undefined && outcomeKnownForDay(lastNightDay);
+      const diedThatNight = getRecordedNightDeaths(lastNightRecord).some(
+        (d) => d.seat === guardedSeat
+      );
+      const protectionResult = !guardOutcomeKnown
+        ? `${guardedSeat + 1}号${lastTarget.displayName} 守护结果待天亮公布`
+        : diedThatNight
+          ? `${guardedSeat + 1}号${lastTarget.displayName} 昨晚未能守住，已出局`
+          : `${guardedSeat + 1}号${lastTarget.displayName} 昨晚平安无事`;
+
       return `<your_guard_info>
 【昨晚守护】${guardedSeat + 1}号${lastTarget.displayName}
 【守护结果】${protectionResult}
@@ -641,14 +706,39 @@ ${checks.join("\n")}
     );
     const allWolves = state.players.filter((p) => isWolfRole(p.role));
     const aliveWolves = allWolves.filter((p) => p.alive);
-    const teammateList = teammates.length > 0 
+    const teammateList = teammates.length > 0
       ? teammates.map((tm) => `${tm.seat + 1}号${tm.displayName}`).join("、")
       : "无存活队友";
-    
-    return `<your_wolf_team>
+
+    // 狼队历次出刀记录：这是狼阵营自己的夜间行动，属于合法私有信息。
+    // 缺失它会导致狼人白天对死者归因/悍跳/自爆时与自己真实刀法脱节。
+    const killRecords: string[] = [];
+    if (state.nightHistory) {
+      Object.entries(state.nightHistory)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .forEach(([day, history]) => {
+          if (history.wolfTarget === undefined) return;
+          const target = state.players.find((p) => p.seat === history.wolfTarget);
+          if (!target) return;
+          // 目标当晚是否出局（基于夜间结算，公开可知，不泄露被守/被救的具体原因）；
+          // 当晚结果在天亮公布前不展示（避免狼在竞选发言阶段提前得知刀法是否成功）。
+          const outcome = !outcomeKnownForDay(Number(day))
+            ? "结果待天亮公布"
+            : getRecordedNightDeaths(history).some((d) => d.seat === history.wolfTarget)
+              ? "目标当晚出局"
+              : "目标当晚存活（被守护或被解药救下）";
+          killRecords.push(`  第${day}夜：刀 ${history.wolfTarget + 1}号${target.displayName} → ${outcome}`);
+        });
+    }
+
+    let wolfInfo = `<your_wolf_team>
 【狼队友】${teammateList}
-【狼人存活】${aliveWolves.length}/${allWolves.length}
-</your_wolf_team>`;
+【狼人存活】${aliveWolves.length}/${allWolves.length}`;
+    if (killRecords.length > 0) {
+      wolfInfo += `\n【狼队出刀记录】\n${killRecords.join("\n")}`;
+    }
+    wolfInfo += `\n</your_wolf_team>`;
+    return wolfInfo;
   }
   
   return null;
@@ -667,7 +757,7 @@ export const buildGameContext = (
   const publicExecutionCause = t("promptUtils.gameContext.deathCauseVote");
 
   // === 第一优先级：角色私有信息（放在最前面） ===
-  const privateInfo = buildRolePrivateInfo(state, player);
+  const privateInfo = buildRolePrivateInfo(state, player, options);
   let context = privateInfo ? `${privateInfo}\n\n` : "";
 
   // Build YAML-formatted game state

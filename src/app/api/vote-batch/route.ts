@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
     const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
     const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
+    const headerGameSessionId = request.headers.get("x-game-session-id")?.trim();
     const origin = request.nextUrl.origin;
 
     const chatRequests = requests.map(({ voterId: _voterId, ...payload }) => payload);
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
         ...(headerDashscopeKey ? { "X-Dashscope-Api-Key": headerDashscopeKey } : {}),
         ...(headerTokendanceKey ? { "X-Tokendance-Api-Key": headerTokendanceKey } : {}),
         ...(headerTokendanceBaseUrl ? { "X-Tokendance-Base-Url": headerTokendanceBaseUrl } : {}),
+        ...(headerGameSessionId ? { "X-Game-Session-Id": headerGameSessionId } : {}),
         Authorization: request.headers.get("Authorization") || "",
       },
       body: JSON.stringify({ requests: chatRequests }),

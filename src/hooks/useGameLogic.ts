@@ -1355,6 +1355,7 @@ export function useGameLogic() {
       devPreset,
       difficulty = "normal",
       playerCount = 10,
+      gameSessionId,
       isGenshinMode = false,
       isSpectatorMode = false,
       customCharacters = [],
@@ -1385,19 +1386,19 @@ export function useGameLogic() {
       };
       gameStatsTracker.start(statsConfig);
 
-      // 创建游戏会话记录（前端直接调用 Supabase）
-      gameSessionTracker.start({
+      const sessionId = await gameSessionTracker.start({
         playerCount,
         difficulty,
         usedCustomKey: isCustomKeyEnabled(),
         modelUsed: getGeneratorModel(),
-      }).then((sessionId) => {
-        if (sessionId) {
-          gameStatsTracker.setSessionId(sessionId);
-        }
+        sessionId: gameSessionId,
       }).catch((err) => {
         console.error("[game-session] Failed to create:", err);
+        return null;
       });
+      if (sessionId) {
+        gameStatsTracker.setSessionId(sessionId);
+      }
 
       const systemMessages = getSystemMessages();
       const scenario = isGenshinMode ? undefined : getRandomScenario();
@@ -1716,6 +1717,7 @@ export function useGameLogic() {
       setDialogue(t("speakers.system"), t("gameLogicMessages.errorOccurred", { error: String(error) }), false);
       setGameStarted(false);
       setShowTable(false);
+      throw error;
     } finally {
       setIsLoading(false);
     }

@@ -90,15 +90,18 @@ export async function POST(request: Request) {
   const effectiveUserId = user?.id ?? guestId!;
 
   if (payload.action === "create") {
+    const nowIso = new Date().toISOString();
     const insertData = {
       user_id: effectiveUserId,
       player_count: payload.playerCount,
       difficulty: payload.difficulty || null,
       completed: false,
       used_custom_key: payload.usedCustomKey,
+      credit_authorized: false,
       model_used: payload.modelUsed || null,
       user_email: payload.userEmail || null,
       region: payload.region || null,
+      last_activity_at: nowIso,
     };
 
     const { data, error: insertError } = await supabaseAdmin
@@ -125,6 +128,7 @@ export async function POST(request: Request) {
   }
 
   if (payload.action === "update") {
+    const nowIso = new Date().toISOString();
     const updateData = {
       winner: payload.winner,
       completed: payload.completed,
@@ -135,18 +139,24 @@ export async function POST(request: Request) {
       ai_output_chars: payload.aiOutputChars,
       ai_prompt_tokens: payload.aiPromptTokens,
       ai_completion_tokens: payload.aiCompletionTokens,
-      ...(payload.completed ? { ended_at: new Date().toISOString() } : {}),
+      last_activity_at: nowIso,
+      ...(payload.completed ? { ended_at: nowIso } : {}),
     };
 
-    const { error: updateError } = await supabaseAdmin
+    const { data: updatedSession, error: updateError } = await supabaseAdmin
       .from("game_sessions")
       .update(updateData as never)
       .eq("id", payload.sessionId)
-      .eq("user_id", effectiveUserId);
+      .eq("user_id", effectiveUserId)
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       console.error("[game-sessions] Update error:", updateError);
       return NextResponse.json({ error: "Failed to update game session" }, { status: 500 });
+    }
+    if (!updatedSession) {
+      return NextResponse.json({ error: "Game session not found" }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
