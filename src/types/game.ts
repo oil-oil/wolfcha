@@ -262,7 +262,7 @@ export interface DailySummaryVoteData {
 // Shared model IDs
 export const MODEL_IDS = {
   zenmux: {
-    geminiFlashLite: "google/gemini-3.1-flash-lite-preview",
+    geminiFlashLite: "google/gemini-3.1-flash-lite",
     geminiFlashPreview: "google/gemini-3-flash-preview",
     deepseek: "deepseek/deepseek-v3.2",
     gpt52Chat: "openai/gpt-5.2-chat",
@@ -270,7 +270,7 @@ export const MODEL_IDS = {
     claudeSonnet45: "anthropic/claude-sonnet-4.5",
     claudeOpus45: "anthropic/claude-opus-4.5",
     deepseekV4Flash: "deepseek/deepseek-v4-flash",
-    grok4: "x-ai/grok-4",
+    grok4: "x-ai/grok-4.5",
     glm47: "z-ai/glm-4.7",
     minimaxM21: "minimax/minimax-m2.1",
   },
