@@ -1058,7 +1058,7 @@ export function WelcomeScreen({
             note={t("welcome.sponsor.cards.tokendance")}
           />
 
-          {/* Sponsor card - Watcha (right-center) */}
+          {/* Temporarily hidden: Sponsor card - Watcha (right-center)
           <SponsorCard
             sponsorId="watcha"
             href="https://watcha.cn/"
@@ -1070,6 +1070,7 @@ export function WelcomeScreen({
             name="观猹"
             note={t("welcome.sponsor.cards.watcha")}
           />
+          */}
         </div>
 
         <div className="wc-welcome-actions absolute top-5 right-5 z-20 flex items-center gap-2">
@@ -1246,6 +1247,7 @@ export function WelcomeScreen({
                 <img src="/sponsor/tokendance-icon.svg" alt="TokenDance" className="wc-paper-stamp__logo" />
                 <span className="wc-paper-stamp__name">TokenDance</span>
               </a>
+              {/* Temporarily hidden: Watcha paper stamp
               <a
                 href="https://watcha.cn/?ref=wolfcha"
                 target="_blank"
@@ -1257,6 +1259,7 @@ export function WelcomeScreen({
                 <img src="/sponsor/watcha.svg" alt="观猹" className="wc-paper-stamp__logo" />
                 <span className="wc-paper-stamp__name">观猹</span>
               </a>
+              */}
             </div>
 
             <div className="mt-2 text-center">
@@ -1293,7 +1296,7 @@ export function WelcomeScreen({
               ) : null}
             </div>
 
-            {/* Watcha official rating badge (style=1) — sits inside the welcome card */}
+            {/* Temporarily hidden: Watcha official rating badge
             <div className="mt-5 flex justify-center">
               <a
                 href="https://watcha.cn/products/wolfcha?tab=review&utm_source=product-badge&utm_content=review"
@@ -1312,6 +1315,7 @@ export function WelcomeScreen({
                 />
               </a>
             </div>
+            */}
 
             <div className="mt-7 text-center wc-contract-body">
               <div className="wc-contract-oath">
