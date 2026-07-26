@@ -3,9 +3,12 @@
 感谢你对 Wolfcha 的贡献！
 
 ## Development Setup
-- Node.js 18+
-- 安装依赖：`npm install`
-- 本地开发：`npm run dev`
+
+- Node.js 20.9+
+- pnpm
+- 安装依赖：`pnpm install`
+- 本地开发：`pnpm dev`
+- 提交前检查：`pnpm lint` 和 `pnpm build`
 
 ## Pull Request Flow
 1. Fork 仓库并从 `main` 创建分支
