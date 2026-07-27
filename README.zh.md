@@ -1,117 +1,83 @@
-[English](./README.md) | [简体中文](./README.zh.md)
+<p align="right"><a href="./README.md">English</a></p>
 
-# Wolfcha (猹杀)
+![Wolfcha 猹杀 — 一个人也能玩狼人杀](assets/readme/hero-zh.png)
 
-<div align="center">
-  <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
-  <h3>一个人也能玩的在线 AI 狼人杀</h3>
-  <p>
-    <a href="https://wolf-cha.com">在线体验 (wolf-cha.com)</a>
-  </p>
-</div>
+<p align="center">
+  <strong>你坐一席，剩下的人交给 AI。</strong><br />
+  随时开一桌有推理、有伪装、也有意外的狼人杀。
+</p>
 
-## 🙏 感谢赞助
+<p align="center">
+  <a href="https://wolf-cha.com"><strong>在线开局</strong></a>
+  ·
+  <a href="#本地运行">本地运行</a>
+  ·
+  <a href="./README.md">English</a>
+</p>
 
-![TokenDance Banner](public/sponsor/tokendance.svg)
+## 一个人，也能凑齐一桌
 
-现有赞助商：
+Wolfcha 保留了狼人杀最难替代、也最难约齐的部分：一整桌性格不同的玩家。你选择一个身份，加入 8–12 人对局；其余玩家的人设、秘密、发言和投票全部由 AI 驱动。
 
-*   [TokenDance](https://tokendance.agent-universe.cn/) - 提供游戏核心流程、角色扮演、总结记录等 AI 能力支持
-*   [Bailian](https://bailian.console.aliyun.com/) - 提供部分 AI 能力支持
-*   [观猹](https://watcha.cn/) - 提供 AI 能力与展示平台
+| 先有人设 | 记得桌面 | 为阵营行动 |
+| --- | --- | --- |
+| 每个 AI 都有稳定性格，再叠加一层隐藏的游戏身份。 | 他们会记住发言、投票、死亡结果和不断变化的怀疑链。 | 他们会根据阵营目标选择怀疑、保护、反驳、跟票或隐藏信息。 |
 
----
+## 一局是怎么发生的
 
-> **Note**: 这是一个诞生于 **「观猹 + 魔搭 环球黑客松」** 的 AI 原生游戏项目。
-> 
-> "Wolfcha" 这个名字由 Wolf (狼人杀) + Cha (猹) 组成。既是为了致敬黑客松的主办方，取 "Watch" (观察) 之意；同时也呼应了在狼人杀游戏中，我们观察 AI 互动的“吃瓜”心态。
+1. **黑夜行动**：狼人选择目标，神职根据各自掌握的信息行动。
+2. **白天发言**：存活玩家解释、怀疑、误导，或者推动自己的判断。
+3. **全员投票**：把语言博弈变成一次真正的桌面决策。
+4. **局势重写**：死亡与新信息继续改变下一轮的关系。
 
-## 📖 项目背景
+可选身份包括 **村民、狼人、白狼王、预言家、女巫、猎人、守卫和白痴**。所有对话实时生成，即使配置相同，也可能打出完全不同的一桌。
 
-自从大学毕业后，想要凑齐 8 到 12 个人玩一局完整的狼人杀，变得越来越困难。狼人杀本质上是一个社交游戏，但抛开社交属性，其核心的逻辑推理、话术博弈以及从只言片语中寻找线索的过程，依然非常迷人。
+## 为氛围服务的细节
 
-为了让自己随时随地都能体验到狼人杀的乐趣，我们开发了这款 **AI 版本的狼人杀**。顾名思义，除了你自己，其他所有角色（女巫、猎人、守卫、狼人等）都由 AI 扮演。
+- 复古视觉风格，以及昼夜切换时的眨眼转场。
+- 角色发言时的口型动画。
+- 神职夜间行动的专属立绘。
+- 可选 AI 语音与观战模式。
 
-## ✨ 核心玩法与亮点
+## 项目由来
 
-### 1. 双层 AI 扮演机制
-得益于大语言模型（LLM）日益增长的上下文窗口（Context Window）和指令遵循能力，我们实现了一个复杂的双层扮演系统：
-*   **第一层**：AI 扮演一个具有特定性格、背景的“虚拟玩家”。
-*   **第二层**：这个“虚拟玩家”在游戏中扮演狼人杀的具体身份（如预言家），并基于游戏局势进行发言、伪装和推理。
+Wolfcha 诞生于 **观猹 × 魔搭环球黑客松**。名字由 **Wolf（狼人杀）** 和 **Cha（猹）** 组成：既在桌上参与推理，也像观众一样看一群 AI 人格互相碰撞。
 
-每一局的对话都是实时生成的，充满了不确定性和趣味性。
+## 本地运行
 
-### 2. 真正参与博弈的 AI 对手
-**这是一个人也能玩的狼人杀，有完整桌面，也有真实的推理压力。**
-
-每个 AI 玩家都有稳定的人设、身份视角、记忆和阵营目标。他们会根据发言、投票、死亡结果和桌面压力，自主决定要怀疑谁、保护谁、反驳谁、跟票还是隐藏信息。
-
-### 3. 沉浸式复古体验
-虽然没有专业的美术团队，但我们通过精心的 UI/UX 设计提升了游戏体验：
-*   **复古设计风格**：清爽的排版与复古色调。
-*   **动态交互细节**：
-    *   天黑/天亮时的眨眼转场效果。
-    *   角色发言时，嘴巴会随语音节奏张合。
-    *   神职角色发言时配有专属立绘。
-
-## 🧭 后续计划
-
-我们还会继续打磨这些方向：
-*   **移动端适配**：让大家随时爽玩。
-*   **人数自由选择**：支持 8-12 人自定义人数开局。
-*   **结束后的复盘 / 闲聊**：沉淀一局中的思路与段子。
-*   **特色技能系统**：如时间回溯、AI 洞察等狼人杀特色玩法。
-*   **更聪明的 AI 玩家**：更强记忆、更自然的伪装、更丰富的桌面行为。
-*   **联机模式**：可以和朋友一起跟 AI 玩狼人杀。
-*   **人物点赞**：为表现出色的 AI 性格点赞，找到最会玩狼人杀的玩家类型。
-
-## 🛠️ 技术栈
-
-本项目基于现代 Web 技术栈构建：
-
-*   **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-*   **UI Components**: [Radix UI](https://www.radix-ui.com/), [Lucide React](https://lucide.dev/)
-*   **State Management**: [Jotai](https://jotai.org/) 
-*   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
-*   **Animations**: [Framer Motion](https://www.framer.com/motion/)
-*   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [TokenDance](https://tokendance.agent-universe.cn/) (Unified interface for LLMs)
-
-## 🚀 本地运行
-
-如果你想在本地运行本项目：
-
-1.  **克隆仓库**
+需要安装 Node.js 和 [pnpm](https://pnpm.io/)。
 
 ```bash
 git clone https://github.com/oil-oil/wolfcha.git
 cd wolfcha
-```
-
-2.  **安装依赖**
-
-```bash
-# Using pnpm (recommended)
 pnpm install
-
-# Or using npm
-npm install
-```
-
-3.  **配置环境变量**
-
-你需要配置相应的 API Keys (TokenDance 等) 才能运行完整功能。请参考 `.env.example` 并创建 `.env.local`。
-
-4.  **启动开发服务器**
-
-```bash
+cp .env.example .env.local
 pnpm dev
 ```
 
-打开浏览器访问 [http://localhost:3000](http://localhost:3000) 即可看到效果。
+打开 [http://localhost:3000](http://localhost:3000)。在 `.env.local` 中配置需要使用的服务，完整变量说明见 [`.env.example`](./.env.example)。
 
-## 📄 License
+## 技术栈
 
-MIT
+[Next.js 16](https://nextjs.org/) · [TypeScript](https://www.typescriptlang.org/) · [Tailwind CSS 4](https://tailwindcss.com/) · [Jotai](https://jotai.org/) · [Radix UI](https://www.radix-ui.com/) · [Framer Motion](https://www.framer.com/motion/) · [Tiptap](https://tiptap.dev/)
+
+## 感谢赞助
+
+![TokenDance](public/sponsor/tokendance.svg)
+
+- [TokenDance](https://tokendance.agent-universe.cn/) — 提供核心游戏流程、角色扮演和总结能力
+- [百炼 DashScope](https://bailian.console.aliyun.com/) — 提供 AI 能力支持
+- [观猹](https://watcha.cn/) — 提供 AI 能力与展示平台支持
+
+## 后续计划
+
+- 更好的移动端体验
+- 结束后的复盘与自由聊天
+- 更强的记忆、伪装和桌面行为
+- 时间回溯、AI 洞察等特殊机制
+- 和朋友一起加入 AI 圆桌
+- 为表现出色的 AI 人格点赞
+
+## License
+
+[MIT](./LICENSE)

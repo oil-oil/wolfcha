@@ -1,0 +1,7 @@
+Use case: stylized-concept. Create a single original hero character asset for the GitHub README of the Wolfcha AI Werewolf game. Use the existing Wolfcha logo only as a project identity and mood reference: retain the idea of a dark hooded wolf, moonlit mystery, red eyes, and a black/charcoal/cream/blood-red/moon-gold palette, but design a new polished “wolf arbiter / game master” character.
+
+Subject: one anthropomorphic wolf game master, three-quarter waist-up portrait, positioned toward the right side of the canvas and facing left toward a future headline. Black hood and layered cloak, bold chunky cel-shaded fur tufts with a clean hard silhouette, calm cunning expression, luminous deep red eyes, holding a fan of blank unmarked role cards in one paw and a small red-thread token in the other. Premium dark gothic editorial game illustration, 2.5D cel shading, graphic shapes, restrained detail, strong moon-gold rim light from upper left and blood-red rim light from the right.
+
+Background and cutout constraints: perfectly flat solid chroma green #00FF00 across the entire background. No gradient, no texture, no scenery, no floor, no cast shadow, no reflection, no atmospheric particles. The subject must contain no green hues. Generous empty padding around the entire silhouette. Clean anti-aliased outer edge suitable for chroma-key removal.
+
+No text, letters, numbers, logos, watermark, table, or extra characters.

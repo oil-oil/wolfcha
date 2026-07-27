@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1280" height="480" viewBox="0 0 1280 480" role="img" aria-labelledby="title desc">
+  <title id="title">Wolfcha 猹杀 — 一个人也能玩狼人杀</title>
+  <desc id="desc">月夜下，狼人格主持人与八席 AI 玩家围绕圆桌展开推理。</desc>
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080809"/>
+      <stop offset="0.58" stop-color="#111014"/>
+      <stop offset="1" stop-color="#09080b"/>
+    </linearGradient>
+    <pattern id="grain" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="3" r="0.65" fill="#f2ddaf" opacity=".08"/>
+      <circle cx="13" cy="12" r="0.5" fill="#f2ddaf" opacity=".05"/>
+    </pattern>
+    <clipPath id="frame">
+      <rect x="16" y="16" width="1248" height="448" rx="30"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="480" fill="url(#night)"/>
+    <rect width="1280" height="480" fill="url(#grain)"/>
+    <path d="M0 414 C250 356 444 470 705 408 S1078 326 1280 382 V480 H0Z" fill="#130b0d"/>
+
+    <circle cx="1040" cy="126" r="113" fill="#d7aa50" opacity=".92"/>
+    <circle cx="1006" cy="102" r="113" fill="#0d0c0f"/>
+    <circle cx="1040" cy="126" r="128" fill="none" stroke="#d7aa50" stroke-width="1" opacity=".34"/>
+
+    <g opacity=".76">
+      <ellipse cx="904" cy="384" rx="195" ry="60" fill="#0b0a0c" stroke="#725a32" stroke-width="2"/>
+      <ellipse cx="904" cy="384" rx="145" ry="38" fill="none" stroke="#5b171c" stroke-width="2"/>
+      <path d="M779 364 C840 331 884 429 943 364 S1035 356 1053 389" fill="none" stroke="#b3222c" stroke-width="2"/>
+      <path d="M758 397 C827 430 889 335 958 403 S1024 406 1061 373" fill="none" stroke="#6f1a20" stroke-width="1.5"/>
+      <g fill="#111014" stroke="#d7aa50" stroke-width="2">
+        <circle cx="742" cy="376" r="16"/><circle cx="775" cy="331" r="16"/>
+        <circle cx="846" cy="310" r="16"/><circle cx="928" cy="310" r="16"/>
+        <circle cx="1001" cy="331" r="16"/><circle cx="1062" cy="375" r="16"/>
+        <circle cx="1018" cy="424" r="16"/><circle cx="785" cy="425" r="16"/>
+      </g>
+      <g fill="#f2ddaf" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" text-anchor="middle">
+        <text x="742" y="379">01</text><text x="775" y="334">02</text>
+        <text x="846" y="313">03</text><text x="928" y="313">04</text>
+        <text x="1001" y="334">05</text><text x="1062" y="378">06</text>
+        <text x="1018" y="427">07</text><text x="785" y="428">08</text>
+      </g>
+    </g>
+
+    <path d="M71 82 H142" stroke="#b3222c" stroke-width="3"/>
+    <text x="158" y="87" fill="#d7aa50" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="700" letter-spacing="4">AI SOCIAL DEDUCTION</text>
+
+    <text x="68" y="225" fill="#f6ead1" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="700" letter-spacing="-4">WOLFCHA</text>
+    <circle cx="558" cy="203" r="8" fill="#b3222c"/>
+
+    <text x="72" y="294" fill="#f6ead1" font-family="'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif" font-size="31" font-weight="700">一个人，也能玩</text>
+    <text x="289" y="294" fill="#c62a34" font-family="'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif" font-size="31" font-weight="800">狼人杀。</text>
+    <text x="72" y="335" fill="#9b9187" font-family="'PingFang SC', 'Noto Sans CJK SC', Arial, sans-serif" font-size="16">完整 AI 圆桌，随时开局，不用等人。</text>
+
+    <g transform="translate(72 375)">
+      <rect width="498" height="46" rx="7" fill="#0e0d10" stroke="#4b4135"/>
+      <text x="18" y="29" fill="#d7aa50" font-family="'PingFang SC', Arial, sans-serif" font-size="11" font-weight="700" letter-spacing="2">8–12 人圆桌</text>
+      <circle cx="128" cy="23" r="2.5" fill="#7b2027"/>
+      <text x="144" y="29" fill="#aaa096" font-family="'PingFang SC', Arial, sans-serif" font-size="11" letter-spacing="2">记忆</text>
+      <circle cx="206" cy="23" r="2.5" fill="#7b2027"/>
+      <text x="222" y="29" fill="#aaa096" font-family="'PingFang SC', Arial, sans-serif" font-size="11" letter-spacing="2">伪装</text>
+      <circle cx="284" cy="23" r="2.5" fill="#7b2027"/>
+      <text x="300" y="29" fill="#aaa096" font-family="'PingFang SC', Arial, sans-serif" font-size="11" letter-spacing="2">推理</text>
+      <circle cx="362" cy="23" r="2.5" fill="#7b2027"/>
+      <text x="378" y="29" fill="#aaa096" font-family="'PingFang SC', Arial, sans-serif" font-size="11" letter-spacing="2">阵营目标</text>
+    </g>
+
+    <image x="650" y="-8" width="720" height="480" xlink:href="hero-subject.png" preserveAspectRatio="xMidYMid meet"/>
+    <rect x="16" y="16" width="1248" height="448" rx="30" fill="none" stroke="#463c31" stroke-width="2"/>
+  </g>
+</svg>

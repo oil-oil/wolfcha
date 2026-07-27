@@ -1,117 +1,83 @@
-[English](./README.md) | [简体中文](./README.zh.md)
+<p align="right"><a href="./README.zh.md">简体中文</a></p>
 
-# Wolfcha
+![Wolfcha — Play Werewolf solo](assets/readme/hero-en.png)
 
-<div align="center">
-  <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
-  <h3>Play Werewolf with AI — a full table, no party required</h3>
-  <p>
-    <a href="https://wolf-cha.com">Play Online (wolf-cha.com)</a>
-  </p>
-</div>
+<p align="center">
+  <strong>You take one seat. AI players fill the rest.</strong><br />
+  An AI-native Werewolf game for deduction, bluffing, and chaos on demand.
+</p>
 
-## 🙏 Sponsors
+<p align="center">
+  <a href="https://wolf-cha.com"><strong>Play online</strong></a>
+  ·
+  <a href="#local-development">Run locally</a>
+  ·
+  <a href="./README.zh.md">中文说明</a>
+</p>
 
-![TokenDance Banner](public/sponsor/tokendance.svg)
+## One human. A table that talks back.
 
-Current sponsors:
+Wolfcha recreates the part of Werewolf that is hardest to schedule: a complete table of distinct players. Choose your role, enter an 8–12 seat game, and let the AI handle every other personality, secret, accusation, and vote.
 
-*   [TokenDance](https://tokendance.agent-universe.cn/) - Powers the core game flow, roleplay, and summary features
-*   [Dashscope](https://bailian.console.aliyun.com/) - Provides AI capability support
-*   [Watcha](https://watcha.cn/) - Provides AI capability and showcase platform support
+| Characters first | Table-aware memory | Decisions with intent |
+| --- | --- | --- |
+| Each AI has a stable personality layered over a hidden game role. | Players follow speeches, votes, deaths, and changing suspicions. | They accuse, defend, bluff, follow, or hold back according to their faction goal. |
 
----
+## What happens at the table
 
-> **Note**: This project was born at the **"Watcha + ModelScope Global Hackathon"** as an AI-native game.
-> 
-> "Wolfcha" combines Wolf (Werewolf) + Cha (猹, a character from Chinese literature). It's a nod to the hackathon host while also capturing the fun of watching AI characters interact — like spectating a show.
+1. **Night falls** — Werewolves choose a target while special roles act on private information.
+2. **The table speaks** — Every surviving player explains, suspects, misdirects, or pushes a read.
+3. **Everyone votes** — The group turns conversation into a decision.
+4. **The story changes** — New deaths and revealed information reshape the next round.
 
-## 📖 Background
+You can play as **Villager, Werewolf, White Wolf King, Seer, Witch, Hunter, Guard, or Idiot**. Conversations are generated in real time, so the same setup can produce a very different table.
 
-After graduating, getting 8-12 people together for a proper Werewolf game became nearly impossible. While Werewolf is fundamentally a social game, its core appeal — logical deduction, verbal sparring, and reading between the lines — remains captivating even without the social element.
+## Built for atmosphere
 
-To enjoy Werewolf anytime, anywhere, we built this **AI-powered version**. As the name suggests, every player except you (Seer, Witch, Hunter, Guard, Werewolves, etc.) is controlled by AI.
+- Retro visual direction with day/night eye-blink transitions.
+- Lip-sync animation while characters speak.
+- Dedicated role artwork for night actions.
+- Optional AI voice playback and spectator mode.
 
-## ✨ Core Features
+## Project origin
 
-### 1. Dual-Layer AI Roleplay
-Thanks to the growing context windows and instruction-following capabilities of large language models (LLMs), we've implemented a sophisticated dual-layer roleplay system:
-*   **Layer 1**: The AI plays a "virtual player" with a unique personality and background.
-*   **Layer 2**: This virtual player then takes on a Werewolf role (e.g., Seer) and speaks, bluffs, and reasons based on the game state.
+Wolfcha was created at the **Watcha × ModelScope Global Hackathon**. The name combines **Wolf** with **Cha (猹)** — part Werewolf, part spectator watching a table of AI personalities collide.
 
-Every conversation is generated in real-time, full of unpredictability and fun.
+## Local development
 
-### 2. AI Opponents That Actually Play
-**This is Werewolf you can play alone, with a full table of AI players.**
-
-Each AI player has a stable personality, role perspective, memory, and faction goal. They follow speeches, vote history, deaths, and pressure at the table, then decide whether to accuse, defend, bluff, follow, or hold back.
-
-### 3. Immersive Retro Experience
-While we don't have a professional art team, we've crafted a polished UI/UX:
-*   **Retro Design Style**: Clean layouts with vintage color palettes.
-*   **Dynamic Interactions**:
-    *   Eye-blink transitions for day/night changes.
-    *   Character lip-sync animations during speech.
-    *   Unique character portraits for special roles during night actions.
-
-## 🧭 Roadmap
-
-We're continuing to improve:
-*   **Mobile Optimization**: Play seamlessly on any device.
-*   **Flexible Player Count**: Support 8-12 player custom games.
-*   **Post-Game Review / Chat**: Reflect on strategies and memorable moments.
-*   **Special Abilities**: Unique mechanics like time rewind and AI insight.
-*   **Smarter AI Players**: Richer memory, stronger bluffing, and more varied table behavior.
-*   **Multiplayer Mode**: Play with friends alongside AI characters.
-*   **Character Ratings**: Upvote standout AI personalities to find the most convincing Werewolf players.
-
-## 🛠️ Tech Stack
-
-Built with modern web technologies:
-
-*   **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
-*   **UI Components**: [Radix UI](https://www.radix-ui.com/), [Lucide React](https://lucide.dev/)
-*   **State Management**: [Jotai](https://jotai.org/) 
-*   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
-*   **Animations**: [Framer Motion](https://www.framer.com/motion/)
-*   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [TokenDance](https://tokendance.agent-universe.cn/) (Unified interface for LLMs)
-
-## 🚀 Local Development
-
-To run this project locally:
-
-1.  **Clone the repository**
+Requirements: Node.js and [pnpm](https://pnpm.io/).
 
 ```bash
 git clone https://github.com/oil-oil/wolfcha.git
 cd wolfcha
-```
-
-2.  **Install dependencies**
-
-```bash
-# Using pnpm (recommended)
 pnpm install
-
-# Or using npm
-npm install
-```
-
-3.  **Configure environment variables**
-
-You'll need to set up API keys (TokenDance, etc.) for full functionality. Refer to `.env.example` and create your `.env.local`.
-
-4.  **Start the development server**
-
-```bash
+cp .env.example .env.local
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000). Configure the providers you need in `.env.local`; the available variables are documented in [`.env.example`](./.env.example).
 
-## 📄 License
+## Tech stack
 
-MIT
+[Next.js 16](https://nextjs.org/) · [TypeScript](https://www.typescriptlang.org/) · [Tailwind CSS 4](https://tailwindcss.com/) · [Jotai](https://jotai.org/) · [Radix UI](https://www.radix-ui.com/) · [Framer Motion](https://www.framer.com/motion/) · [Tiptap](https://tiptap.dev/)
+
+## Sponsors
+
+![TokenDance](public/sponsor/tokendance.svg)
+
+- [TokenDance](https://tokendance.agent-universe.cn/) — core game flow, roleplay, and summaries
+- [DashScope](https://bailian.console.aliyun.com/) — AI capability support
+- [Watcha](https://watcha.cn/) — AI capability and showcase platform support
+
+## Roadmap
+
+- Better mobile play
+- Post-game review and free chat
+- Richer memory, bluffing, and table behavior
+- Special mechanics such as time rewind and AI insight
+- Multiplayer with friends and AI players
+- Community ratings for standout AI personalities
+
+## License
+
+[MIT](./LICENSE)
