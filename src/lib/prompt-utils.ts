@@ -122,21 +122,10 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
     hints.push("你和出局的玩家座位相邻，可以从这个角度聊一句");
   }
 
-  // --- 3. Sheriff-related: different angles depending on badge status ---
-  const sheriffSeat = state.badge.holderSeat;
-  if (sheriffSeat !== null && sheriffSeat === player.seat) {
-    hints.push("你是警长，你的发言会影响别人，可以自然给出你的方向");
-  } else if (sheriffSeat !== null) {
-    // Non-sheriff: randomly suggest either supporting or questioning the sheriff
-    // Use seat number as a deterministic "random" seed for consistency
-    if (player.seat % 2 === 0) {
-      hints.push("可以回应一下警长的方向，说明你是否认同");
-    } else {
-      hints.push("如果你不认同警长，可以自然提出疑问");
-    }
-  }
+  // 立场类提示（警长支持/质疑）已移除：与对局事实无关的方向性暗示会推动同一玩家前后立场漂移。
+  // 只保留基于真实对局状态的事实类提示。
 
-  // --- 4. Voting pattern awareness (day 2+): who voted together yesterday? ---
+  // --- 3. Voting pattern awareness (day 2+): who voted together yesterday? ---
   if (state.day >= 2 && state.voteHistory) {
     const yesterdayVotes = state.voteHistory[state.day - 1];
     if (yesterdayVotes) {
@@ -155,7 +144,7 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
     }
   }
 
-  // --- 5. First speaker vs late speaker: different information burden ---
+  // --- 4. First speaker vs late speaker: different information burden ---
   // Count how many have already spoken today
   const todaySpeakers = new Set<string>();
   for (let i = dayStartIndex; i < state.messages.length; i++) {
@@ -198,7 +187,7 @@ const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string
     if (persona.mistakePattern) lines.push(`常见误判：${persona.mistakePattern}`);
     if (persona.wolfDeceptionStyle) lines.push(`拿狼伪装：${persona.wolfDeceptionStyle}`);
     if (lines.length === 0) return "";
-    return `\n<hidden_communication_profile>\n这些信息只用于塑造你的狼人杀水平、词汇和发言长度，不要向其他玩家明说。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
+    return `\n<hidden_communication_profile>\n这些信息只用于塑造你的狼人杀水平、词汇和发言长度，不要向其他玩家明说。其中的缺陷和不确定倾向偶尔体现即可，不要每次发言都表现出来。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
   }
 
   const lines: string[] = [];
@@ -211,7 +200,7 @@ const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string
   if (persona.mistakePattern) lines.push(`Common wrong reads: ${persona.mistakePattern}`);
   if (persona.wolfDeceptionStyle) lines.push(`Wolf disguise habit: ${persona.wolfDeceptionStyle}`);
   if (lines.length === 0) return "";
-  return `\n<hidden_communication_profile>\nUse this only to shape your Werewolf skill, vocabulary, and speech length. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
+  return `\n<hidden_communication_profile>\nUse this only to shape your Werewolf skill, vocabulary, and speech length. Do not state it to other players. Let the flaws and uncertainty show only occasionally, not in every speech.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
 };
 
 const buildHiddenPlayerMindSection = (player: Player, locale: string): string => {
@@ -227,7 +216,7 @@ const buildHiddenPlayerMindSection = (player: Player, locale: string): string =>
       `逻辑水平：${mind.logicDepth}`,
       `桌面存在感：${mind.tablePresence}`,
     ];
-    return `\n<hidden_player_mind>\n这些信息是你稳定的玩家心智，只用于塑造你如何判断、站边、改口、承压和发言，不要向其他玩家明说。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
+    return `\n<hidden_player_mind>\n这些信息是你稳定的玩家心智，只用于塑造你如何判断、站边、承压和发言，不要向其他玩家明说。\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
   }
 
   const lines: string[] = [
@@ -238,7 +227,7 @@ const buildHiddenPlayerMindSection = (player: Player, locale: string): string =>
     `Logic depth: ${mind.logicDepth}`,
     `Table presence: ${mind.tablePresence}`,
   ];
-  return `\n<hidden_player_mind>\nUse this as your stable player mind. It shapes how you judge, take sides, change reads, handle pressure, and speak. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
+  return `\n<hidden_player_mind>\nUse this as your stable player mind. It shapes how you judge, take sides, handle pressure, and speak. Do not state it to other players.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_player_mind>`;
 };
 
 export const buildPersonaSection = (player: Player, isGenshinMode: boolean = false): string => {
