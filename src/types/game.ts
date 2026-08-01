@@ -296,8 +296,8 @@ const BUILTIN_DEEPSEEK_V4_FLASH_0731_MODEL: ModelRef = {
 
 export const DEFAULT_MODEL_CONFIG = {
   generator: MODEL_IDS.zenmux.geminiFlashLite,
-  summary: MODEL_IDS.tokendance.deepseekV4Pro,
-  review: MODEL_IDS.tokendance.deepseekV4Pro,
+  summary: MODEL_IDS.tokendance.deepseekV4Flash0731,
+  review: MODEL_IDS.tokendance.deepseekV4Flash0731,
   validation: {
     zenmux: MODEL_IDS.zenmux.geminiFlashLite,
     dashscope: MODEL_IDS.dashscope.deepseek,
