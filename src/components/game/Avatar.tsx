@@ -321,6 +321,7 @@ export interface StaticAvatarProps {
   alt?: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   backgroundColor?: string | "transparent";
+  loading?: "eager" | "lazy";
 }
 
 export function StaticAvatar({
@@ -332,12 +333,13 @@ export function StaticAvatar({
   alt = "Avatar",
   size,
   backgroundColor,
+  loading,
 }: StaticAvatarProps) {
   const sizeClass = size ? SIZE_CLASSES[size] : "";
   const combinedClassName = `${sizeClass} ${className}`.trim();
 
   if (useModelLogo) {
-    return <img src={getModelLogoUrl(modelRef)} alt={alt} className={combinedClassName} />;
+    return <img src={getModelLogoUrl(modelRef)} alt={alt} className={combinedClassName} loading={loading} decoding="async" />;
   }
 
   const url = useMemo(
@@ -351,7 +353,7 @@ export function StaticAvatar({
     [seed, gender, backgroundColor]
   );
 
-  return <img src={url} alt={alt} className={combinedClassName} />;
+  return <img src={url} alt={alt} className={combinedClassName} loading={loading} decoding="async" />;
 }
 
 // ============================================

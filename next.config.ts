@@ -6,8 +6,9 @@ import type { NextConfig } from "next";
 const pkg = require("./package.json") as { version?: string };
 
 const nextConfig: NextConfig = {
-  // Note: Removed 'output: "standalone"' - not needed for Vercel deployment
-  // standalone mode is for Docker/self-hosted environments and makes deploy much larger
+  // 默认使用完整 Next.js 产物；其他部署环境可按需显式开启 standalone。
+  output: process.env.NEXT_BUILD_STANDALONE === "true" ? "standalone" : undefined,
+  outputFileTracingRoot: __dirname,
   reactCompiler: true,
   async rewrites() {
     return [

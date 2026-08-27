@@ -37,19 +37,6 @@ export const DELAY_CONFIG = {
   AI_MAX: 1200,
 } as const;
 
-/** 角色配置 */
-export const ROLE_CONFIG = {
-  /** 10人局角色配置 */
-  STANDARD_ROLES: [
-    "Werewolf", "Werewolf", "WhiteWolfKing",
-    "Seer",
-    "Witch",
-    "Hunter",
-    "Guard",
-    "Villager", "Villager", "Villager",
-  ] as const,
-} as const;
-
 /** 阶段分类 */
 export const PHASE_CATEGORIES = {
   NIGHT_PHASES: [

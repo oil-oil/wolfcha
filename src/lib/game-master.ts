@@ -25,6 +25,9 @@ import type { PromptResult } from "@/game/core/types";
 import { buildCachedSystemMessageFromParts } from "./prompt-utils";
 import { parseLLMJson } from "./llm-json";
 import { getI18n } from "@/i18n/translator";
+import { getRoleConfiguration } from "@/lib/role-configuration";
+
+export { getRoleConfiguration } from "@/lib/role-configuration";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -182,55 +185,6 @@ export function createInitialGameState(): GameState {
     },
     winner: null,
   };
-}
-
-export function getRoleConfiguration(playerCount: number): Role[] {
-  const configs: Record<number, Role[]> = {
-    8: ["Werewolf", "Werewolf", "Werewolf", "Seer", "Witch", "Hunter", "Villager", "Villager"],
-    9: ["Werewolf", "Werewolf", "Werewolf", "Seer", "Witch", "Hunter", "Villager", "Villager", "Villager"],
-    10: [
-      "Werewolf",
-      "Werewolf",
-      "WhiteWolfKing",
-      "Seer",
-      "Witch",
-      "Hunter",
-      "Guard",
-      "Villager",
-      "Villager",
-      "Villager",
-    ],
-    11: [
-      "Werewolf",
-      "Werewolf",
-      "Werewolf",
-      "WhiteWolfKing",
-      "Seer",
-      "Witch",
-      "Hunter",
-      "Guard",
-      "Idiot",
-      "Villager",
-      "Villager",
-    ],
-    12: [
-      "Werewolf",
-      "Werewolf",
-      "Werewolf",
-      "WhiteWolfKing",
-      "Seer",
-      "Witch",
-      "Hunter",
-      "Guard",
-      "Idiot",
-      "Villager",
-      "Villager",
-      "Villager",
-    ],
-  };
-
-  const roles = configs[playerCount] ?? configs[10];
-  return roles.slice();
 }
 
 export function setupPlayers(

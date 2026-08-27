@@ -6,6 +6,7 @@ import { WerewolfIcon } from "@/components/icons/FlatIcons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useAtom } from "jotai";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -1361,6 +1362,17 @@ export function WelcomeScreen({
                 </div>
               </div>
             </div>
+
+            <Link href="/rooms" className="wc-multiplayer-invite">
+              <span className="wc-multiplayer-invite__seal" aria-hidden="true">
+                <Users size={18} weight="fill" />
+              </span>
+              <span className="wc-multiplayer-invite__copy">
+                <strong>{locale === "zh" ? "与朋友共同入局" : "Enter with friends"}</strong>
+                <small>{locale === "zh" ? "创建或加入多人房间" : "Create or join a multiplayer room"}</small>
+              </span>
+              <span className="wc-multiplayer-invite__arrow" aria-hidden="true">→</span>
+            </Link>
 
 
             {/* Custom Character Entry */}

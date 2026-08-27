@@ -34,7 +34,7 @@ create or replace function public.consume_credit_for_authorized_game_session(
 returns table(session_id uuid, credits integer)
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, public
 as $$
 declare
   v_credits integer;
@@ -92,3 +92,10 @@ begin
   return query select v_session_id, v_credits;
 end;
 $$;
+
+revoke all on function public.consume_credit_for_authorized_game_session(
+  uuid, integer, text, text, text, text
+) from public, anon, authenticated;
+grant execute on function public.consume_credit_for_authorized_game_session(
+  uuid, integer, text, text, text, text
+) to service_role;

@@ -11,19 +11,13 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { SoundSettingsSection } from "@/components/game/SettingsModal";
+import { getRoleConfiguration } from "@/lib/role-configuration";
 import { useTranslations } from "next-intl";
 import type { Role } from "@/types/game";
 
 /** Return the unique roles present in the default configuration for a given player count. */
 function getAvailableRoles(playerCount: number): Role[] {
-  const configs: Record<number, Role[]> = {
-    8: ["Werewolf", "Seer", "Witch", "Hunter", "Villager"],
-    9: ["Werewolf", "Seer", "Witch", "Hunter", "Villager"],
-    10: ["Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Villager"],
-    11: ["Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Idiot", "Villager"],
-    12: ["Werewolf", "WhiteWolfKing", "Seer", "Witch", "Hunter", "Guard", "Idiot", "Villager"],
-  };
-  return configs[playerCount] ?? configs[10];
+  return [...new Set(getRoleConfiguration(playerCount))];
 }
 
 interface GameSetupModalProps {

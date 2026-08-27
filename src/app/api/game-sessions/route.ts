@@ -129,9 +129,24 @@ export async function POST(request: Request) {
 
   if (payload.action === "update") {
     const nowIso = new Date().toISOString();
+    const { data: currentSession, error: currentError } = await supabaseAdmin
+      .from("game_sessions")
+      .select("id, completed")
+      .eq("id", payload.sessionId)
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (currentError) {
+      console.error("[game-sessions] Read before update error:", currentError);
+      return NextResponse.json({ error: "Failed to update game session" }, { status: 500 });
+    }
+    if (!currentSession) {
+      return NextResponse.json({ error: "Game session not found" }, { status: 404 });
+    }
+    const current = currentSession as { id: string; completed: boolean };
+    const completed = Boolean(current.completed) || payload.completed === true;
     const updateData = {
       winner: payload.winner,
-      completed: payload.completed,
+      completed,
       rounds_played: payload.roundsPlayed,
       duration_seconds: payload.durationSeconds,
       ai_calls_count: payload.aiCallsCount,
@@ -140,7 +155,7 @@ export async function POST(request: Request) {
       ai_prompt_tokens: payload.aiPromptTokens,
       ai_completion_tokens: payload.aiCompletionTokens,
       last_activity_at: nowIso,
-      ...(payload.completed ? { ended_at: nowIso } : {}),
+      ...(completed ? { ended_at: nowIso } : {}),
     };
 
     const { data: updatedSession, error: updateError } = await supabaseAdmin
@@ -148,6 +163,7 @@ export async function POST(request: Request) {
       .update(updateData as never)
       .eq("id", payload.sessionId)
       .eq("user_id", effectiveUserId)
+      .eq("completed", Boolean(current.completed))
       .select("id")
       .maybeSingle();
 

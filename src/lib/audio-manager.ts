@@ -193,6 +193,21 @@ class AudioManager {
     this.queue = [];
   }
 
+  /** 只移除指定作用域的任务，避免多人页面卸载时打断单机语音队列。 */
+  clearTasks(predicate: (task: AudioTask) => boolean, options?: { notify?: boolean }) {
+    this.queue = this.queue.filter((task) => !predicate(task));
+    if (this.currentTask && predicate(this.currentTask)) {
+      const objectUrl = this.currentAudio?.src;
+      this.currentAudio?.pause();
+      if (objectUrl?.startsWith("blob:")) URL.revokeObjectURL(objectUrl);
+      this.currentAudio = null;
+      if (options?.notify !== false) this.onPlayEnd?.(this.currentTask.playerId);
+      this.currentTask = null;
+      this.state = "idle";
+      this.processQueue();
+    }
+  }
+
   clearCache() {
     this.cache.clear();
   }

@@ -1,0 +1,29 @@
+FROM node:22-alpine AS deps
+
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+FROM node:22-alpine AS runner
+
+RUN corepack enable
+WORKDIR /app
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 gameserver
+
+COPY --from=deps --chown=gameserver:nodejs /app/node_modules ./node_modules
+COPY --chown=gameserver:nodejs package.json tsconfig.json ./
+COPY --chown=gameserver:nodejs server ./server
+COPY --chown=gameserver:nodejs src ./src
+
+USER gameserver
+EXPOSE 3011
+ENV GAME_SERVER_PORT=3011
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:${GAME_SERVER_PORT}/health >/dev/null || exit 1
+
+CMD ["./node_modules/.bin/tsx", "server/index.ts"]

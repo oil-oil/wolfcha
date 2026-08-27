@@ -716,6 +716,82 @@ input[type="submit"]:not(:disabled),
   opacity: 0.95;
 }
 
+.wc-multiplayer-invite {
+  width: 100%;
+  margin: 18px auto 0;
+  min-height: 58px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: var(--color-wolf);
+  text-decoration: none;
+  border-top: 1px dashed rgba(138, 28, 28, 0.28);
+  border-bottom: 1px dashed rgba(138, 28, 28, 0.28);
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.wc-multiplayer-invite:hover {
+  color: #6f1515;
+  background: rgba(138, 28, 28, 0.055);
+  transform: translateY(-1px);
+}
+
+.wc-multiplayer-invite:active {
+  transform: translateY(0);
+}
+
+.wc-multiplayer-invite:focus-visible {
+  outline: 2px solid rgba(138, 28, 28, 0.55);
+  outline-offset: 3px;
+}
+
+.wc-multiplayer-invite__seal {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  color: rgba(240, 230, 210, 0.82);
+  border: 2px solid rgba(88, 16, 16, 0.38);
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #b93636, #8a1c1c 58%, #581010);
+  box-shadow: 0 4px 10px rgba(88, 16, 16, 0.22), inset 1px 1px 3px rgba(255, 255, 255, 0.18);
+}
+
+.wc-multiplayer-invite__copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.wc-multiplayer-invite__copy strong {
+  font-family: var(--font-chinese), ui-serif, Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.wc-multiplayer-invite__copy small {
+  color: rgba(44, 24, 16, 0.56);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.wc-multiplayer-invite__arrow {
+  font-family: var(--font-title), ui-serif, Georgia, serif;
+  font-size: 18px;
+  opacity: 0.5;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.wc-multiplayer-invite:hover .wc-multiplayer-invite__arrow {
+  opacity: 0.85;
+  transform: translateX(3px);
+}
+
 .wc-seal-hint {
   font-size: 12px;
   font-style: italic;
@@ -1917,14 +1993,13 @@ input[type="submit"]:not(:disabled),
 
 .wc-role-reveal-card {
   max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
 }
 
 .wc-role-reveal-card .glass-panel {
   max-height: inherit;
-}
-
-.wc-role-reveal-card .glass-panel > div {
-  max-height: inherit;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* 发言者大头像 - 严格对齐HTML */
@@ -2409,8 +2484,7 @@ input[type="submit"]:not(:disabled),
   }
 
   .wc-role-reveal-card .glass-panel {
-    max-height: calc(100vh - 24px);
-    overflow-y: auto;
+    max-height: calc(100dvh - 24px);
   }
 
   .wc-vote-result-row {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   WerewolfIcon,
@@ -151,12 +151,26 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
   const isNight = phase.includes("NIGHT");
 
   const [revealed, setRevealed] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const continueButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     queueMicrotask(() => setRevealed(false));
-    const t = window.setTimeout(() => setRevealed(true), 650);
-    return () => window.clearTimeout(t);
+    const dialogFocusFrame = requestAnimationFrame(() => dialogRef.current?.focus());
+    const t = window.setTimeout(() => {
+      setRevealed(true);
+      continueButtonRef.current?.focus();
+    }, 650);
+    return () => {
+      cancelAnimationFrame(dialogFocusFrame);
+      window.clearTimeout(t);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
   }, [open]);
 
   const cardAccent = useMemo(() => meta.color, [meta.color]);
@@ -166,14 +180,24 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
       {open && (
         <motion.div
           key="role-reveal-overlay"
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="role-reveal-title"
+          tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            event.preventDefault();
+            continueButtonRef.current?.focus();
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center wc-role-reveal-overlay"
+          className="fixed inset-0 z-[60] overflow-hidden wc-role-reveal-overlay"
         >
           <motion.div
-            className="absolute inset-0"
+            className="fixed inset-0"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -183,7 +207,8 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
             }}
           />
 
-          <div className="relative w-full max-w-[680px] px-6 wc-role-reveal-card">
+          <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-4 py-4 sm:px-6 wc-role-reveal-scroll-frame">
+          <div className="w-full max-w-[680px] wc-role-reveal-card">
             <motion.div
               initial={{ opacity: 0, y: 14, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -263,7 +288,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                               <meta.Icon size={24} className="text-white" />
                             </div>
                             <div className="min-w-0">
-                              <div className="text-2xl font-black tracking-tight text-white font-serif">
+                              <div id="role-reveal-title" className="text-2xl font-black tracking-tight text-white font-serif">
                                 {meta.title}
                               </div>
                               <div className="mt-1 text-sm text-white/70 leading-relaxed">{meta.subtitle}</div>
@@ -323,6 +348,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                         </div>
                         <div className="shrink-0">
                           <button
+                            ref={continueButtonRef}
                             onClick={onContinue}
                             className="inline-flex items-center justify-center h-10 px-5 text-sm font-bold rounded-xl border-none cursor-pointer transition-all duration-150 bg-white text-black hover:bg-white/90 active:scale-[0.98]"
                             style={{ boxShadow: `0 10px 30px rgba(0,0,0,0.35), 0 0 0 2px ${String(cardAccent)}22` }}
@@ -336,6 +362,7 @@ export function RoleRevealOverlay({ open, player, phase, onContinue }: RoleRevea
                 </motion.div>
               </div>
             </motion.div>
+          </div>
           </div>
         </motion.div>
       )}

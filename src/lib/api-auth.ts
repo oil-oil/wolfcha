@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authenticateAccessToken } from "@/lib/access-token-auth";
 import { ensureAdminClient, supabaseAdmin } from "@/lib/supabase-admin";
 import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import { isGuestUser } from "@/lib/demo-mode";
@@ -32,15 +33,22 @@ export async function authenticateRequest(request: Request): Promise<
     };
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) {
-    console.error("[api-auth] getUser error", error);
+  let user: { id: string } | null;
+  try {
+    user = await authenticateAccessToken(token);
+  } catch (error) {
+    console.error("[api-auth] authenticateAccessToken error", error);
+    return {
+      error: NextResponse.json({ error: "Server configuration error" }, { status: 500 }),
+    };
+  }
+  if (!user) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
 
-  return { user: { id: data.user.id } };
+  return { user };
 }
 
 export async function requireCredits(userId: string): Promise<boolean> {
@@ -107,4 +115,47 @@ export async function hasAuthorizedActiveGameSession(userId: string, sessionId?:
   }
 }
 
-export const hasRecentUnfinishedGameSession = hasAuthorizedActiveGameSession;
+/**
+ * 原子占用一个已扣费 session。重复占用同一房间可安全重试，
+ * 但同一 session 不能再启动另一个房间。
+ */
+export async function claimAuthorizedGameSession(
+  userId: string,
+  sessionId: string | null | undefined,
+  roomId: string,
+): Promise<boolean> {
+  if (await isDemoModeActiveServer()) return true;
+  if (!sessionId || !roomId) return false;
+  try {
+    const { data, error } = await supabaseAdmin.rpc(
+      "claim_multiplayer_game_session" as never,
+      {
+        p_session_id: sessionId,
+        p_user_id: userId,
+        p_room_id: roomId,
+      } as never,
+    );
+    if (error) {
+      console.error("[api-auth] claimAuthorizedGameSession error", error);
+      return false;
+    }
+    return data === true;
+  } catch (error) {
+    console.error("[api-auth] claimAuthorizedGameSession error", error);
+    return false;
+  }
+}
+
+/** 仅释放仍属于指定用户和房间的占用，数据库函数负责校验房间生命周期。 */
+export async function releaseAuthorizedGameSessionClaim(
+  userId: string,
+  sessionId: string,
+  roomId: string,
+): Promise<void> {
+  if (await isDemoModeActiveServer()) return;
+  const { error } = await supabaseAdmin.rpc(
+    "release_multiplayer_game_session" as never,
+    { p_session_id: sessionId, p_user_id: userId, p_room_id: roomId } as never,
+  );
+  if (error) throw error;
+}
