@@ -3,7 +3,9 @@ import {
   getTokendanceApiKey,
   getTokendanceBaseUrl,
   getZenmuxApiKey,
+  isTokenPayConnected,
   isCustomKeyEnabled,
+  setTokenPayConnected,
 } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
@@ -57,7 +59,9 @@ export function resolveApiKeySource(model: string): ApiKeySource {
      return getDashscopeApiKey() ? "user" : "project";
    }
    if (provider === "tokendance") {
-     return getTokendanceApiKey() && getTokendanceBaseUrl() ? "user" : "project";
+     return (getTokendanceApiKey() && getTokendanceBaseUrl()) || isTokenPayConnected()
+       ? "user"
+       : "project";
    }
    return getZenmuxApiKey() ? "user" : "project";
  }
@@ -68,12 +72,16 @@ function buildCustomKeyHeaders(customEnabled: boolean): Record<string, string> {
   const zenmuxApiKey = getZenmuxApiKey();
   const dashscopeApiKey = getDashscopeApiKey();
   const tokendanceApiKey = getTokendanceApiKey();
+  const tokenPayConnected = isTokenPayConnected();
   const tokendanceBaseUrl = getTokendanceBaseUrl();
   return {
     ...(zenmuxApiKey ? { "X-Zenmux-Api-Key": zenmuxApiKey } : {}),
     ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
     ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
-    ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
+    ...(tokendanceApiKey && tokendanceBaseUrl
+      ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
+      : {}),
+    ...(tokenPayConnected ? { "X-TokenPay-Mode": "true" } : {}),
   };
 }
 
@@ -232,11 +240,15 @@ function isQuotaExhaustedError(status: number, errorText: string): boolean {
 
 function formatApiError(status: number, errorText: string): string {
   let msg = `API error: ${status}`;
+  let recoveryAction = "";
   try {
     const errorJson: unknown = JSON.parse(errorText);
     if (isRecord(errorJson)) {
       if (typeof errorJson.error === "string" && errorJson.error.trim()) {
         msg = errorJson.error.trim();
+      }
+      if (typeof errorJson.recoveryAction === "string") {
+        recoveryAction = errorJson.recoveryAction;
       }
 
       const details = errorJson.details;
@@ -250,6 +262,17 @@ function formatApiError(status: number, errorText: string): string {
   } catch {
     const trimmed = (errorText || "").trim();
     msg = trimmed ? `${msg} - ${trimmed.slice(0, 600)}` : msg;
+  }
+
+  if (recoveryAction === "top_up_balance") {
+    return `${QUOTA_EXHAUSTED_MARKER} TokenPay 余额不足，请到账户中心充值后重试`;
+  }
+  if (recoveryAction === "reauthorize_api_key") {
+    setTokenPayConnected(false);
+    return "TokenPay 授权已失效，请到账户中心重新授权";
+  }
+  if (recoveryAction === "api_key_quota") {
+    return `${QUOTA_EXHAUSTED_MARKER} TokenPay API Key 已达到额度限制，请稍后重试或重新授权`;
   }
 
   if (isQuotaExhaustedError(status, errorText)) {
@@ -668,9 +691,20 @@ export async function generateCompletionBatch(
 
   return results.map((item): BatchCompletionResult => {
     if (!isRecord(item) || item.ok !== true) {
+      const recoveryAction = isRecord(item) ? item.recoveryAction : undefined;
+      if (recoveryAction === "reauthorize_api_key") {
+        setTokenPayConnected(false);
+      }
+      const recoveryError = recoveryAction === "top_up_balance"
+        ? `${QUOTA_EXHAUSTED_MARKER} TokenPay 余额不足，请到账户中心充值后重试`
+        : recoveryAction === "reauthorize_api_key"
+          ? "TokenPay 授权已失效，请到账户中心重新授权"
+          : recoveryAction === "api_key_quota"
+            ? `${QUOTA_EXHAUSTED_MARKER} TokenPay API Key 已达到额度限制，请稍后重试或重新授权`
+            : null;
       return {
         ok: false,
-        error: String(isRecord(item) ? (item.error ?? "Unknown error") : "Unknown error"),
+        error: recoveryError ?? String(isRecord(item) ? (item.error ?? "Unknown error") : "Unknown error"),
         status: isRecord(item) && typeof item.status === "number" ? item.status : undefined,
       };
     }

@@ -13,6 +13,8 @@ import {
   getTokendanceBaseUrl,
   getZenmuxApiKey,
   isCustomKeyEnabled,
+  isTokenPayConnected,
+  setTokenPayConnected,
 } from "@/lib/api-keys";
 import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
 import { supabase } from "@/lib/supabase";
@@ -33,6 +35,7 @@ const AUTH_EVENT = {
   INITIAL_SESSION: "INITIAL_SESSION",
   PASSWORD_RECOVERY: "PASSWORD_RECOVERY",
   SIGNED_IN: "SIGNED_IN",
+  SIGNED_OUT: "SIGNED_OUT",
 } as const;
 
 export type ConsumeCreditOptions = {
@@ -108,10 +111,14 @@ export function useCredits() {
     if (!session) return { success: false };
 
     try {
-      const customEnabled = isCustomKeyEnabled();
+      // Multiplayer currently executes AI on the game server with the project key.
+      // Callers explicitly passing usedCustomKey=false must therefore buy a normal
+      // game session instead of bypassing credits with a browser-side key hint.
+      const customEnabled = options.usedCustomKey !== false && isCustomKeyEnabled();
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
       const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
+      const tokenPayConnected = customEnabled && isTokenPayConnected();
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
       const res = await fetch("/api/credits/consume", {
         method: "POST",
@@ -121,7 +128,10 @@ export function useCredits() {
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
           ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
-          ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
+          ...(tokendanceApiKey && tokendanceBaseUrl
+            ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
+            : {}),
+          ...(tokenPayConnected ? { "X-TokenPay-Mode": "true" } : {}),
         },
         body: JSON.stringify(options),
       });
@@ -328,6 +338,7 @@ export function useCredits() {
   }, [refreshDemoConfig]);
 
   useEffect(() => {
+    setTokenPayConnected(false);
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -338,6 +349,12 @@ export function useCredits() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (
+          event === AUTH_EVENT.SIGNED_IN ||
+          event === AUTH_EVENT.SIGNED_OUT
+        ) {
+          setTokenPayConnected(false);
+        }
         setSession(session);
         setUser(session?.user ?? null);
 

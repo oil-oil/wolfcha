@@ -23,7 +23,14 @@ import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
-import { getGeneratorModel, hasDashscopeKey, hasTokendanceKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getGeneratorModel,
+  hasDashscopeKey,
+  hasTokendanceKey,
+  hasZenmuxKey,
+  isCustomKeyEnabled,
+  setTokenPayConnected as setTokenPayConnectionHint,
+} from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 import {
   SPRING_CAMPAIGN_CODE,
@@ -256,6 +263,7 @@ export function WelcomeScreen({
 
   const {
     user,
+    session,
     credits,
     referralCode,
     totalReferrals,
@@ -286,6 +294,12 @@ export function WelcomeScreen({
   const [isCustomCharacterOpen, setIsCustomCharacterOpen] = useState(false);
   const [isLowCreditOpen, setIsLowCreditOpen] = useState(false);
   const [userProfileDefaultTab, setUserProfileDefaultTab] = useState<string | undefined>(undefined);
+  const [tokenPayConnected, setTokenPayConnectedState] = useState(false);
+  const [tokenPaySyncedUserId, setTokenPaySyncedUserId] = useState<string | null>(null);
+  const tokenPaySyncing = Boolean(
+    session?.user.id && tokenPaySyncedUserId !== session.user.id,
+  );
+  const tokenPayQueryHandledRef = useRef(false);
   const selectionStorageKey = useMemo(() => {
     return user?.id
       ? `${CUSTOM_CHARACTER_SELECTION_STORAGE_KEY}:${user.id}`
@@ -342,6 +356,24 @@ export function WelcomeScreen({
       description: t("welcome.springCampaign.toast.claimed.description"),
     });
   }, [springCampaign?.active, springCampaign?.justClaimed, t]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || tokenPayQueryHandledRef.current) return;
+    const url = new URL(window.location.href);
+    const tokenPayResult = url.searchParams.get("tokenpay");
+    if (!tokenPayResult) return;
+    const tokenPayErrorResults = new Set(["error", "denied", "invalid_callback", "failed"]);
+    if (tokenPayResult !== "connected" && !tokenPayErrorResults.has(tokenPayResult)) return;
+
+    tokenPayQueryHandledRef.current = true;
+    url.searchParams.delete("tokenpay");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+    if (tokenPayErrorResults.has(tokenPayResult)) {
+      toast.error(t("tokenPay.oauthError"));
+    }
+  }, [t]);
 
   useEffect(() => {
     if (!springCampaignActiveNow) return;
@@ -698,6 +730,10 @@ export function WelcomeScreen({
     if (isStartingRef.current) {
       return;
     }
+    if (tokenPaySyncing) {
+      toast(t("tokenPay.syncing"));
+      return;
+    }
 
     const latestDemoConfig = await refreshDemoConfig(true);
     const demoModeActive = latestDemoConfig.active;
@@ -731,7 +767,54 @@ export function WelcomeScreen({
     setIsUserProfileOpen(true);
   };
 
+  const handleOpenTokenPay = () => {
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+  };
+
+  const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
+    setTokenPayConnectionHint(connected);
+    setTokenPayConnectedState(connected);
+    setCustomKeyEnabled(isCustomKeyEnabled());
+  }, []);
+
+  useEffect(() => {
+    if (creditsLoading) return;
+    if (!session?.access_token) {
+      handleTokenPayConnectionChange(false);
+      setTokenPaySyncedUserId(null);
+      return;
+    }
+
+    let active = true;
+    handleTokenPayConnectionChange(false);
+    void fetch("/api/tokenpay/connection", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`tokenpay_connection_${response.status}`);
+        return response.json() as Promise<{ connected?: unknown }>;
+      })
+      .then((connection) => {
+        if (active) handleTokenPayConnectionChange(connection.connected === true);
+      })
+      .catch(() => {
+        // 同步失败时保持 TokenPay 禁用，避免跨账号误用旧连接。
+      })
+      .finally(() => {
+        if (active) setTokenPaySyncedUserId(session.user.id);
+      });
+    return () => {
+      active = false;
+    };
+  }, [creditsLoading, handleTokenPayConnectionChange, session?.access_token, session?.user.id]);
+
   const handleStartGameFromLowCreditModal = async () => {
+    if (tokenPaySyncing) {
+      toast(t("tokenPay.syncing"));
+      return;
+    }
     const latestDemoConfig = await refreshDemoConfig(true);
     const hasUserKey = hasUserProvidedLlmKey();
     await startGameWithCreditGuard(latestDemoConfig.active || hasUserKey);
@@ -802,6 +885,7 @@ export function WelcomeScreen({
           onSignOut={signOut}
           onRedeemCode={redeemCode}
           onCustomKeyEnabledChange={setCustomKeyEnabled}
+          onTokenPayConnectionChange={handleTokenPayConnectionChange}
           onCreditsChange={fetchCredits}
           defaultTab={userProfileDefaultTab}
         />
@@ -811,6 +895,7 @@ export function WelcomeScreen({
           credits={credits ?? 0}
           onStartGame={handleStartGameFromLowCreditModal}
           onOpenPayAsYouGo={handleOpenPayAsYouGo}
+          onOpenTokenPay={handleOpenTokenPay}
         />
         <ResetPasswordModal
           open={isPasswordRecovery}
@@ -1048,7 +1133,7 @@ export function WelcomeScreen({
           {/* Sponsor card - TokenDance (右下) */}
           <SponsorCard
             sponsorId="tokendance"
-            href="https://tokendance.agent-universe.cn/"
+            href="https://tokendance.space/"
             className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom wc-sponsor-card--tokendance"
             rotate="-4deg"
             delay={0.6}
@@ -1120,7 +1205,9 @@ export function WelcomeScreen({
               >
                 <UserCircle size={16} />
                 <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
-                {isCustomKeyEnabled() ? (
+                {tokenPayConnected ? (
+                  <span className="opacity-70">{t("tokenPay.connectedShort")}</span>
+                ) : isCustomKeyEnabled() ? (
                   <span className="opacity-70">{t("customKey.title")}</span>
                 ) : (
                   <span className="opacity-70">
@@ -1237,7 +1324,7 @@ export function WelcomeScreen({
                 <span className="wc-paper-stamp__name">百炼</span>
               </a>
               <a
-                href="https://tokendance.agent-universe.cn/?ref=wolfcha"
+                href="https://tokendance.space/?ref=wolfcha"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="wc-paper-stamp wc-paper-stamp--tokendance"

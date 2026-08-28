@@ -32,6 +32,7 @@ import {
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
   getValidatedTokendanceKey,
+  hasTokendanceKey,
   setGeneratorModel,
   setMinimaxApiKey,
   setMinimaxGroupId,
@@ -50,6 +51,7 @@ import {
 import { getModelLogoPath } from "@/lib/model-logo";
 import { supabase } from "@/lib/supabase";
 import { REFERRAL_BONUS_ENABLED, SPRING_CAMPAIGN_ENABLED, REDEMPTION_CODE_ENABLED } from "@/lib/welfare-config";
+import { TokenPayPanel } from "@/components/game/TokenPayPanel";
 import {
   ALL_MODELS,
   AVAILABLE_MODELS,
@@ -82,6 +84,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     error?: string;
   }>;
   onCustomKeyEnabledChange?: (value: boolean) => void;
+  onTokenPayConnectionChange?: (connected: boolean) => void;
   onCreditsChange?: () => void;
   defaultTab?: string;
  }
@@ -99,6 +102,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
    onSignOut,
   onRedeemCode,
   onCustomKeyEnabledChange,
+  onTokenPayConnectionChange,
   onCreditsChange,
   defaultTab = "profile",
  }: UserProfileModalProps) {
@@ -189,7 +193,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
-  const tokendanceConfigured = Boolean(tokendanceKey.trim());
+  const tokendanceConfigured = hasTokendanceKey();
   const modelPool = useMemo(() => {
     return ALL_MODELS;
   }, []);
@@ -449,6 +453,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const handleClearKeys = () => {
     clearApiKeys();
+    const keepTokenPayEnabled = hasTokendanceKey();
+    setCustomKeyEnabled(keepTokenPayEnabled);
     setZenmuxKeyState("");
     setDashscopeKeyState("");
     setTokendanceKeyState("");
@@ -458,9 +464,9 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     setGeneratorModelState(getGeneratorModel());
     setSummaryModelState(getSummaryModel());
     setReviewModelState(getReviewModel());
-    setIsCustomKeyEnabled(false);
+    setIsCustomKeyEnabled(keepTokenPayEnabled);
     setValidatedKeys({ zenmux: "", dashscope: "", tokendance: "" });
-    onCustomKeyEnabledChange?.(false);
+    onCustomKeyEnabledChange?.(keepTokenPayEnabled);
     toast(t("customKey.toasts.cleared"));
   };
 
@@ -536,9 +542,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
         </DialogHeader>
 
         <Tabs defaultValue={defaultTab} key={defaultTab}>
-          <TabsList>
+          <TabsList className="gap-3 overflow-x-auto sm:gap-4">
             <TabsTrigger value="profile">{t("customKey.tabs.profile")}</TabsTrigger>
             <TabsTrigger value="payAsYouGo">{t("customKey.tabs.payAsYouGo")}</TabsTrigger>
+            <TabsTrigger value="tokenpay">{t("customKey.tabs.tokenPay")}</TabsTrigger>
             <TabsTrigger value="custom">{t("customKey.tabs.custom")}</TabsTrigger>
           </TabsList>
 
@@ -769,6 +776,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
             </div>
           </TabsContent>
 
+          <TabsContent value="tokenpay">
+            <TokenPayPanel onConnectionChange={onTokenPayConnectionChange} />
+          </TabsContent>
+
           <TabsContent value="custom">
             <div className="space-y-5">
               {/* 1. Enable custom key */}
@@ -839,7 +850,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                         </Button>
                       </div>
 
-                      <a href="https://tokendance.agent-universe.cn/?ref=wolfcha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
+                      <a href="https://tokendance.space/?ref=wolfcha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
                         <img src="/sponsor/tokendance-icon.svg" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.tokendance.get")}</span>

@@ -65,7 +65,7 @@ pnpm dev
 
 ![TokenDance](public/sponsor/tokendance.svg)
 
-- [TokenDance](https://tokendance.agent-universe.cn/) — 提供核心游戏流程、角色扮演和总结能力
+- [TokenDance](https://tokendance.space/) — 提供核心游戏流程、角色扮演和总结能力
 - [百炼 DashScope](https://bailian.console.aliyun.com/) — 提供 AI 能力支持
 - [观猹](https://watcha.cn/) — 提供 AI 能力与展示平台支持
 

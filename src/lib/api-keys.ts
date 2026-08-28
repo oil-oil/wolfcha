@@ -3,6 +3,7 @@ import { ALL_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/type
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
 const TOKENDANCE_API_KEY_STORAGE = "wolfcha_tokendance_api_key";
+const TOKENPAY_CONNECTED_STORAGE = "wolfcha_tokenpay_connected";
 const MINIMAX_API_KEY_STORAGE = "wolfcha_minimax_api_key";
 const MINIMAX_GROUP_ID_STORAGE = "wolfcha_minimax_group_id";
 const CUSTOM_KEY_ENABLED_STORAGE = "wolfcha_custom_key_enabled";
@@ -13,7 +14,7 @@ const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
 const VALIDATED_TOKENDANCE_KEY_STORAGE = "wolfcha_validated_tokendance_key";
-export const TOKENDANCE_BASE_URL = "https://tokendance.agent-universe.cn/gateway/v1";
+export const TOKENDANCE_BASE_URL = "https://tokendance.space/gateway/v1";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -71,6 +72,23 @@ export function setTokendanceApiKey(key: string) {
   writeStorage(TOKENDANCE_API_KEY_STORAGE, key);
 }
 
+export function isTokenPayConnected(): boolean {
+  return readStorage(TOKENPAY_CONNECTED_STORAGE) === "true";
+}
+
+export function setTokenPayConnected(connected: boolean) {
+  if (!canUseStorage()) return;
+  if (connected) {
+    window.localStorage.setItem(TOKENPAY_CONNECTED_STORAGE, "true");
+    setCustomKeyEnabled(true);
+    return;
+  }
+  window.localStorage.removeItem(TOKENPAY_CONNECTED_STORAGE);
+  if (!hasZenmuxKey() && !hasDashscopeKey() && !getTokendanceApiKey()) {
+    setCustomKeyEnabled(false);
+  }
+}
+
 export function setTokendanceBaseUrl() {
   // TokenDance gateway URL is fixed for custom-key gameplay.
 }
@@ -124,7 +142,7 @@ export function hasDashscopeKey(): boolean {
 }
 
 export function hasTokendanceKey(): boolean {
-  return Boolean(getTokendanceApiKey());
+  return Boolean(getTokendanceApiKey()) || isTokenPayConnected();
 }
 
 export function hasMinimaxKey(): boolean {
@@ -297,12 +315,31 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
   const zenmuxKey = getZenmuxApiKey();
   const dashscopeKey = getDashscopeApiKey();
   const tokendanceKey = getTokendanceApiKey();
+  const tokenPayConnected = isTokenPayConnected();
   const tokendanceBaseUrl = getTokendanceBaseUrl();
-  if (!zenmuxKey && !dashscopeKey && !tokendanceKey) {
+  if (!zenmuxKey && !dashscopeKey && !tokendanceKey && !tokenPayConnected) {
     return { valid: false, error: "未配置任何 API Key", errorCode: "no_key" };
   }
 
   try {
+    if (tokenPayConnected && !zenmuxKey && !dashscopeKey && !tokendanceKey) {
+      const { getAuthHeaders } = await import("@/lib/auth-headers");
+      const response = await fetch("/api/tokenpay/balance", {
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+      if (response.ok) return { valid: true };
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        recoveryAction?: string;
+      } | null;
+      return {
+        valid: false,
+        error: data?.error || "TokenPay 账户不可用",
+        errorCode: data?.recoveryAction || "tokenpay_unavailable",
+      };
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };

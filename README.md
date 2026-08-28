@@ -65,7 +65,7 @@ Open [http://localhost:3000](http://localhost:3000). Configure the providers you
 
 ![TokenDance](public/sponsor/tokendance.svg)
 
-- [TokenDance](https://tokendance.agent-universe.cn/) — core game flow, roleplay, and summaries
+- [TokenDance](https://tokendance.space/) — core game flow, roleplay, and summaries
 - [DashScope](https://bailian.console.aliyun.com/) — AI capability support
 - [Watcha](https://watcha.cn/) — AI capability and showcase platform support
 
