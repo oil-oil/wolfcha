@@ -1,11 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowClockwise, ArrowSquareOut, CheckCircle, CreditCard, LinkSimple, QrCode, Trash, WarningCircle } from "@phosphor-icons/react";
+import {
+  ArrowClockwise,
+  ArrowSquareOut,
+  CheckCircle,
+  CreditCard,
+  LinkSimple,
+  QrCode,
+  Ticket,
+  WarningCircle,
+} from "@phosphor-icons/react";
 import { QRCodeSVG } from "qrcode.react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toTokenPayTimestampMs, useTokenPay } from "@/hooks/useTokenPay";
@@ -15,13 +30,21 @@ interface TokenPayPanelProps {
 }
 
 function formatMicroCredits(value: number) {
-  return `¥${new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(value / 1_000_000)}`;
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  }).format(value / 1_000_000);
 }
 
 function formatDate(value: string | number) {
   const timestamp = toTokenPayTimestampMs(value);
   if (!Number.isFinite(timestamp)) return value;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(timestamp);
 }
 
 export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
@@ -30,6 +53,8 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
   const [amountError, setAmountError] = useState<string | null>(null);
   const [redemptionCode, setRedemptionCode] = useState("");
   const [redemptionSuccess, setRedemptionSuccess] = useState<number | null>(null);
+  const [rechargeOpen, setRechargeOpen] = useState(false);
+  const [redemptionOpen, setRedemptionOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
@@ -75,7 +100,10 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
       setExpiryTick(Date.now());
       return;
     }
-    const timeoutId = window.setTimeout(() => setExpiryTick(Date.now()), expiresAt - Date.now());
+    const timeoutId = window.setTimeout(
+      () => setExpiryTick(Date.now()),
+      expiresAt - Date.now(),
+    );
     return () => window.clearTimeout(timeoutId);
   }, [paymentSession]);
 
@@ -134,7 +162,6 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
       setAmountError(t("amountError"));
       return;
     }
-
     setAmountError(null);
     await createPaymentSession(amount);
   };
@@ -158,209 +185,324 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
 
   if (!connection || (!connection.connected && !reauthorizationRequired)) {
     return (
-      <div className="space-y-4">
-        <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <LinkSimple size={20} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
-            <div>
-              <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("disconnectedTitle")}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{t("disconnectedDescription")}</p>
-            </div>
+      <section className="space-y-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] p-5">
+        <div className="flex items-start gap-3">
+          <LinkSimple size={21} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
+          <div>
+            <h3 className="text-sm font-medium text-[var(--text-primary)]">
+              {t("disconnectedTitle")}
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+              {t("disconnectedDescription")}
+            </p>
           </div>
-          {(connectionError || oauthError) && <p className="text-xs text-[var(--color-danger)]">{t("connectionError")}</p>}
-          <div className="flex gap-2">
-            <Button type="button" onClick={() => void handleStartOAuth()} disabled={connectionRefreshing || oauthLoading} className="flex-1 gap-2">
-              <LinkSimple size={16} />
-              {connectionRefreshing || oauthLoading ? t("connecting") : t("connect")}
+        </div>
+        {(connectionError || oauthError) && (
+          <p className="text-xs text-[var(--color-danger)]">{t("connectionError")}</p>
+        )}
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={() => void handleStartOAuth()}
+            disabled={connectionRefreshing || oauthLoading}
+            className="flex-1"
+          >
+            {connectionRefreshing || oauthLoading ? t("connecting") : t("connect")}
+          </Button>
+          {connectionError && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => void handleRefreshConnection()}
+              disabled={connectionRefreshing || oauthLoading}
+              aria-label={t("refresh")}
+            >
+              <ArrowClockwise />
             </Button>
-            {connectionError && (
-              <Button type="button" variant="outline" onClick={() => void handleRefreshConnection()} disabled={connectionRefreshing || oauthLoading} aria-label={t("refresh")}>
-                <ArrowClockwise size={16} />
-              </Button>
-            )}
-          </div>
-        </section>
-      </div>
+          )}
+        </div>
+      </section>
     );
   }
 
   if (reauthorizationRequired) {
     return (
-      <section className="rounded-lg border border-[var(--color-accent)]/50 bg-[var(--bg-card)] p-4 space-y-3">
+      <section className="space-y-4 rounded-xl border border-[var(--color-accent)]/50 bg-[var(--bg-card)] p-5">
         <div className="flex items-start gap-3">
-          <WarningCircle size={20} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
+          <WarningCircle size={21} className="mt-0.5 shrink-0 text-[var(--color-accent)]" />
           <div>
-            <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("reauthorizeTitle")}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{t("reauthorizeDescription")}</p>
+            <h3 className="text-sm font-medium text-[var(--text-primary)]">
+              {t("reauthorizeTitle")}
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">
+              {t("reauthorizeDescription")}
+            </p>
           </div>
         </div>
-        <Button type="button" onClick={() => void handleStartOAuth()} disabled={oauthLoading} className="w-full gap-2">
-          <LinkSimple size={16} />
+        <Button
+          type="button"
+          onClick={() => void handleStartOAuth()}
+          disabled={oauthLoading}
+          className="w-full"
+        >
           {oauthLoading ? t("connecting") : t("reauthorize")}
         </Button>
-        {(connectionError || oauthError) && <p className="text-xs text-[var(--color-danger)]">{t("connectionError")}</p>}
+        {(connectionError || oauthError) && (
+          <p className="text-xs text-[var(--color-danger)]">{t("connectionError")}</p>
+        )}
       </section>
     );
   }
 
+  const overdrawn = Boolean(balance && balance.availableMicro < 0);
+
   return (
-    <div className="space-y-4">
-      <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <CheckCircle size={20} className="mt-0.5 shrink-0 text-[var(--color-success)]" />
-            <div>
-              <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("connectedTitle")}</h3>
-              <p className="mt-1 text-xs text-[var(--text-muted)]">
-                {connection.keyFingerprint ? t("keyFingerprint", { value: connection.keyFingerprint }) : t("connected")}
-              </p>
-            </div>
+    <>
+      <section className="overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+        <div className="flex items-center justify-between gap-3 px-5 pt-5">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+            <CheckCircle size={18} weight="fill" className="text-[var(--color-success)]" />
+            {t("connectedTitle")}
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setDisconnectOpen(true)} className="gap-1.5">
-            <Trash size={14} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setDisconnectOpen(true)}
+            className="text-[var(--text-muted)]"
+          >
             {t("disconnect")}
           </Button>
         </div>
 
-        {connection.connectedAt && <p className="text-xs text-[var(--text-muted)]">{t("connectedAt", { value: formatDate(connection.connectedAt) })}</p>}
-
-        <div className="rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3">
+        <div className="px-5 pb-5 pt-6">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-[var(--text-muted)]">{t("available")}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => void refreshBalance()} disabled={balanceLoading || balanceRefreshing} className="gap-1.5">
-              <ArrowClockwise size={14} />
-              {balanceRefreshing ? t("refreshing") : t("refresh")}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => void refreshBalance()}
+              disabled={balanceLoading || balanceRefreshing}
+              aria-label={t("refresh")}
+              className="h-8 w-8 text-[var(--text-muted)]"
+            >
+              <ArrowClockwise
+                className={balanceLoading || balanceRefreshing ? "animate-spin" : undefined}
+              />
             </Button>
           </div>
+
           {balanceLoading && !balance ? (
-            <p className="mt-2 text-2xl font-semibold text-[var(--color-accent)]">{t("loading")}</p>
+            <p className="mt-2 text-3xl font-semibold text-[var(--text-muted)]">—</p>
           ) : balance ? (
-            <>
-              <p className="mt-2 text-2xl font-semibold text-[var(--color-accent)]">{formatMicroCredits(balance.availableMicro)}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[var(--text-muted)]">
-                <span>{t("total")}: {formatMicroCredits(balance.creditsMicro)}</span>
-                <span>{t("used")}: {formatMicroCredits(balance.creditsUsedMicro)}</span>
-              </div>
-            </>
-          ) : null}
-          {balanceError && <p className="mt-2 text-xs text-[var(--color-danger)]">{t("balanceError")}</p>}
+            <p
+              className={`mt-2 text-3xl font-semibold tracking-tight ${
+                overdrawn ? "text-[var(--color-danger)]" : "text-[var(--color-accent)]"
+              }`}
+            >
+              {formatMicroCredits(balance.availableMicro)}
+            </p>
+          ) : (
+            <p className="mt-2 text-3xl font-semibold text-[var(--text-muted)]">—</p>
+          )}
+
+          {overdrawn && (
+            <p className="mt-2 text-xs text-[var(--color-danger)]">
+              {t("balanceOverdrawn")}
+            </p>
+          )}
+          {balanceError && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-[var(--bg-secondary)] px-3 py-2">
+              <p className="text-xs text-[var(--color-danger)]">{t("balanceError")}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void refreshBalance()}
+                disabled={balanceLoading || balanceRefreshing}
+              >
+                {t("refresh")}
+              </Button>
+            </div>
+          )}
+
+          <div className="mt-6 grid grid-cols-2 gap-2">
+            <Button type="button" onClick={() => setRechargeOpen(true)}>
+              <CreditCard />
+              {t("recharge")}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setRedemptionOpen(true)}>
+              <Ticket />
+              {t("redeemCode")}
+            </Button>
+          </div>
         </div>
       </section>
 
-      <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("paymentTitle")}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{t("paymentDescription")}</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tokenpay-amount" className="text-xs">{t("amountLabel")}</Label>
-          <div className="flex gap-2">
-            <Input
-              id="tokenpay-amount"
-              type="number"
-              min={1}
-              max={100000}
-              step={1}
-              inputMode="numeric"
-              value={amountInput}
-              onChange={(event) => {
-                setAmountInput(event.target.value);
-                setAmountError(null);
-              }}
-              placeholder={t("amountPlaceholder")}
-              disabled={paymentCreating}
-              className="flex-1"
-            />
-            <Button type="button" onClick={() => void handleCreatePayment()} disabled={paymentCreating} className="gap-2">
-              <CreditCard size={16} />
-              {paymentCreating ? t("creatingPayment") : t("createPayment")}
-            </Button>
-          </div>
-          <p className="text-xs text-[var(--text-muted)]">{t("amountHint")}</p>
-          {amountError && <p className="text-xs text-[var(--color-danger)]">{amountError}</p>}
-          {paymentError && <p className="text-xs text-[var(--color-danger)]">{t("paymentError")}</p>}
-        </div>
-
-        {paymentSession && (
-          <div className="border-t border-[var(--border-color)] pt-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
-                <QrCode size={17} />
-                {t("scanToPay")}
-              </div>
-              <span className="text-xs text-[var(--text-muted)]">{t("amount", { value: paymentSession.amount })}</span>
+      <Dialog open={rechargeOpen} onOpenChange={setRechargeOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("paymentTitle")}</DialogTitle>
+            <DialogDescription>{t("paymentDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="tokenpay-amount" className="text-xs">
+              {t("amountLabel")}
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="tokenpay-amount"
+                type="number"
+                min={1}
+                max={100000}
+                step={1}
+                inputMode="numeric"
+                value={amountInput}
+                onChange={(event) => {
+                  setAmountInput(event.target.value);
+                  setAmountError(null);
+                }}
+                placeholder={t("amountPlaceholder")}
+                disabled={paymentCreating}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                onClick={() => void handleCreatePayment()}
+                disabled={paymentCreating}
+              >
+                {paymentCreating ? t("creatingPayment") : t("createPayment")}
+              </Button>
             </div>
-            {paymentCanContinue && (
-              <>
-                <div className="flex justify-center rounded-md bg-white p-3">
-                  <QRCodeSVG value={paymentSession.paymentUrl} size={192} includeMargin />
+            {amountError && <p className="text-xs text-[var(--color-danger)]">{amountError}</p>}
+            {paymentError && (
+              <p className="text-xs text-[var(--color-danger)]">{t("paymentError")}</p>
+            )}
+          </div>
+
+          {paymentSession && (
+            <div className="space-y-3 border-t border-[var(--border-color)] pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+                  <QrCode />
+                  {t("scanToPay")}
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button asChild variant="outline" className="flex-1 gap-2">
+                <span className="text-xs text-[var(--text-muted)]">
+                  {t("amount", { value: paymentSession.amount })}
+                </span>
+              </div>
+              {paymentCanContinue && (
+                <>
+                  <div className="flex justify-center rounded-md bg-white p-3">
+                    <QRCodeSVG value={paymentSession.paymentUrl} size={192} includeMargin />
+                  </div>
+                  <Button asChild variant="outline" className="w-full">
                     <a href={paymentSession.paymentUrl} target="_blank" rel="noopener noreferrer">
-                      <ArrowSquareOut size={16} />
+                      <ArrowSquareOut />
                       {t("openPayment")}
                     </a>
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => void refreshPaymentSession(paymentSession.id)} disabled={paymentRefreshing} className="flex-1 gap-2">
-                    <ArrowClockwise size={16} />
+                </>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-[var(--text-muted)]">{paymentStatusMessage}</p>
+                {paymentCanContinue && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void refreshPaymentSession(paymentSession.id)}
+                    disabled={paymentRefreshing}
+                  >
                     {paymentRefreshing ? t("refreshing") : t("refreshPayment")}
                   </Button>
-                </div>
-              </>
-            )}
-            <p className="text-xs text-[var(--text-muted)]">{paymentStatusMessage}</p>
-            <p className="text-xs text-[var(--text-muted)]">{t("expiresAt", { value: formatDate(paymentSession.expiredAt) })}</p>
+                )}
+              </div>
+              {paymentCanContinue && (
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t("expiresAt", { value: formatDate(paymentSession.expiredAt) })}
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={redemptionOpen} onOpenChange={setRedemptionOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("redemptionTitle")}</DialogTitle>
+            <DialogDescription>{t("redemptionDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              value={redemptionCode}
+              onChange={(event) => {
+                setRedemptionCode(event.target.value);
+                setRedemptionSuccess(null);
+              }}
+              maxLength={256}
+              placeholder={t("redemptionPlaceholder")}
+              disabled={redemptionLoading}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              onClick={() => void handleRedeem()}
+              disabled={redemptionLoading || !redemptionCode.trim()}
+            >
+              {redemptionLoading ? t("redemptionLoading") : t("redemptionAction")}
+            </Button>
           </div>
-        )}
-      </section>
+          {redemptionError && (
+            <p className="text-xs text-[var(--color-danger)]">{t("redemptionError")}</p>
+          )}
+          {redemptionSuccess !== null && (
+            <p className="text-xs text-[var(--color-success)]">
+              {t("redemptionSuccess", { value: formatMicroCredits(redemptionSuccess) })}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
-      <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
-        <div>
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("redemptionTitle")}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{t("redemptionDescription")}</p>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            value={redemptionCode}
-            onChange={(event) => {
-              setRedemptionCode(event.target.value);
-              setRedemptionSuccess(null);
-            }}
-            maxLength={256}
-            placeholder={t("redemptionPlaceholder")}
-            disabled={redemptionLoading}
-            className="flex-1"
-          />
-          <Button type="button" variant="outline" onClick={() => void handleRedeem()} disabled={redemptionLoading || !redemptionCode.trim()}>
-            {redemptionLoading ? t("redemptionLoading") : t("redemptionAction")}
-          </Button>
-        </div>
-        {redemptionError && <p className="text-xs text-[var(--color-danger)]">{t("redemptionError")}</p>}
-        {redemptionSuccess !== null && (
-          <p className="text-xs text-[var(--color-success)]">
-            {t("redemptionSuccess", { value: formatMicroCredits(redemptionSuccess) })}
-          </p>
-        )}
-      </section>
-
-      <Dialog open={disconnectOpen} onOpenChange={(open) => { if (!disconnecting) setDisconnectOpen(open); }}>
+      <Dialog
+        open={disconnectOpen}
+        onOpenChange={(open) => {
+          if (!disconnecting) setDisconnectOpen(open);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("disconnectTitle")}</DialogTitle>
             <DialogDescription>{t("disconnectDescription")}</DialogDescription>
           </DialogHeader>
-          {disconnectError && <p className="text-sm text-[var(--color-danger)]">{t("disconnectError")}</p>}
+          {disconnectError && (
+            <p className="text-sm text-[var(--color-danger)]">{t("disconnectError")}</p>
+          )}
           <div className="flex gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setDisconnectOpen(false)} disabled={disconnecting} className="flex-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDisconnectOpen(false)}
+              disabled={disconnecting}
+              className="flex-1"
+            >
               {t("disconnectCancel")}
             </Button>
-            <Button type="button" variant="destructive" onClick={() => void handleDisconnect()} disabled={disconnecting} className="flex-1">
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleDisconnect()}
+              disabled={disconnecting}
+              className="flex-1"
+            >
               {disconnecting ? t("disconnecting") : t("disconnectConfirm")}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

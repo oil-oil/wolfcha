@@ -34,8 +34,12 @@ export type TokenPayRecoveryAction =
 export type TokenPayConnectionSummary = {
   connected: boolean;
   status: TokenPayConnectionStatus | null;
-  keyFingerprint?: string;
-  connectedAt?: string;
+};
+
+export type TokenPayBalance = {
+  creditsMicro: number;
+  creditsUsedMicro: number;
+  availableMicro: number;
 };
 
 export type TokenPayPaymentSession = {
@@ -61,6 +65,43 @@ type UpstreamPaymentSession = {
     paid_at?: unknown;
   };
 };
+
+type UpstreamBalance = {
+  balance?: {
+    credits?: unknown;
+    credits_used?: unknown;
+    balance?: unknown;
+  };
+};
+
+function asSafeInteger(value: unknown): number | null {
+  if (
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && !value.trim())
+  ) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export function normalizeTokenPayBalance(
+  payload: UpstreamBalance,
+): TokenPayBalance | null {
+  const creditsMicro = asSafeInteger(payload.balance?.credits);
+  const creditsUsedMicro = asSafeInteger(payload.balance?.credits_used);
+  const availableMicro = asSafeInteger(payload.balance?.balance);
+  if (
+    creditsMicro === null ||
+    creditsMicro < 0 ||
+    creditsUsedMicro === null ||
+    creditsUsedMicro < 0 ||
+    availableMicro === null
+  ) {
+    return null;
+  }
+  return { creditsMicro, creditsUsedMicro, availableMicro };
+}
 
 export function normalizeTokenPayPaymentSession(
   payload: UpstreamPaymentSession,
@@ -354,7 +395,7 @@ export async function getTokenPayConnection(
   ensureAdminClient();
   const { data, error } = await supabaseAdmin
     .from("tokenpay_connections")
-    .select("key_fingerprint, status, connected_at")
+    .select("status")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) {
@@ -365,8 +406,6 @@ export async function getTokenPayConnection(
   return {
     connected: data.status === "connected",
     status: data.status,
-    keyFingerprint: data.key_fingerprint,
-    connectedAt: data.connected_at,
   };
 }
 

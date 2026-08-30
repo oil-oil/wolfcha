@@ -1,21 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/api-auth";
-import { fetchTokenPayPortal, readTokenPayRecoveryAction } from "@/lib/tokenpay";
+import {
+  fetchTokenPayPortal,
+  normalizeTokenPayBalance,
+  readTokenPayRecoveryAction,
+} from "@/lib/tokenpay";
 
 export const dynamic = "force-dynamic";
-
-type UpstreamBalance = {
-  balance?: {
-    credits?: unknown;
-    credits_used?: unknown;
-    balance?: unknown;
-  };
-};
-
-function asSafeInteger(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request as unknown as Request);
@@ -23,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetchTokenPayPortal(auth.user.id, "/user/balance");
-    const payload = (await response.json().catch(() => null)) as UpstreamBalance | null;
+    const payload = await response.json().catch(() => null);
     if (!response.ok) {
       return NextResponse.json(
         {
@@ -34,16 +25,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const creditsMicro = asSafeInteger(payload?.balance?.credits);
-    const creditsUsedMicro = asSafeInteger(payload?.balance?.credits_used);
-    const availableMicro = asSafeInteger(payload?.balance?.balance);
-    if (creditsMicro === null || creditsUsedMicro === null || availableMicro === null) {
+    const balance = payload ? normalizeTokenPayBalance(payload) : null;
+    if (!balance) {
       return NextResponse.json({ error: "Invalid TokenPay balance response" }, { status: 502 });
     }
 
-    return NextResponse.json({
-      balance: { creditsMicro, creditsUsedMicro, availableMicro },
-    });
+    return NextResponse.json({ balance });
   } catch (error) {
     const unavailable = error instanceof Error && error.message.includes("not available");
     return NextResponse.json(

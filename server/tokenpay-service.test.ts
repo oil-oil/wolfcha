@@ -53,6 +53,32 @@ test("TokenPay payment session normalization accepts only official status URLs",
   );
 });
 
+test("TokenPay balance normalization accepts an overdrawn available balance", async () => {
+  const { normalizeTokenPayBalance } = await import("@/lib/tokenpay");
+
+  assert.deepEqual(
+    normalizeTokenPayBalance({
+      balance: {
+        credits: 58_000_000,
+        credits_used: 58_162_811,
+        balance: -162_811,
+      },
+    }),
+    {
+      creditsMicro: 58_000_000,
+      creditsUsedMicro: 58_162_811,
+      availableMicro: -162_811,
+    },
+  );
+
+  assert.equal(
+    normalizeTokenPayBalance({
+      balance: { credits: -1, credits_used: 0, balance: -1 },
+    }),
+    null,
+  );
+});
+
 test("TokenPay App URL is normalized consistently for every caller", async () => {
   const { getTokenPayAppUrl } = await import("@/lib/tokenpay-config");
   const original = process.env.TOKENPAY_APP_URL;

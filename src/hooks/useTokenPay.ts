@@ -26,8 +26,6 @@ export type TokenPayPaymentStatus =
 export interface TokenPayConnection {
   connected: boolean;
   status: TokenPayConnectionStatus | null;
-  keyFingerprint?: string;
-  connectedAt?: string;
 }
 
 export interface TokenPayBalance {
