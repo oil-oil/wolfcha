@@ -788,6 +788,7 @@ export async function* generateCompletionStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let totalOutputChars = 0;
+  let streamComplete = false;
 
   // <think> 块剥离状态机（用于 MiniMax 等把思考嵌在 content 里的模型）
   let thinkStripped = false;
@@ -802,7 +803,7 @@ export async function* generateCompletionStream(
     return sum;
   }, 0);
 
-  while (true) {
+  while (!streamComplete) {
     const { done, value } = await reader.read();
     if (done) break;
 
@@ -812,7 +813,11 @@ export async function* generateCompletionStream(
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed === "data: [DONE]") continue;
+      if (!trimmed) continue;
+      if (trimmed === "data: [DONE]") {
+        streamComplete = true;
+        break;
+      }
       if (!trimmed.startsWith("data: ")) continue;
 
       try {
@@ -849,6 +854,10 @@ export async function* generateCompletionStream(
       } catch {
         // Skip malformed JSON
       }
+    }
+
+    if (streamComplete) {
+      await reader.cancel().catch(() => undefined);
     }
   }
 
