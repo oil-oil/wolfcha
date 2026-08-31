@@ -1,4 +1,9 @@
-import { generateJSON, generateCompletionStream, stripMarkdownCodeFences } from "./llm";
+import {
+  generateCompletion,
+  generateCompletionStream,
+  generateJSON,
+  stripMarkdownCodeFences,
+} from "./llm";
 import {
   ALL_MODELS,
   GENERATOR_MODEL,
@@ -12,6 +17,7 @@ import {
 } from "@/types/game";
 import {
   getGeneratorModel,
+  getModelSource,
   getSelectedModels,
   hasDashscopeKey,
   hasTokendanceKey,
@@ -566,15 +572,20 @@ export async function generateCharacters(
     let accumulatedContent = "";
     
     // 完整角色生成需要 persona + playerMind，按更宽预算生成
-    const fullMaxTokens = Math.max(9000, count * 1250 + 1800);
-    
-    const stream = generateCompletionStream({
+    const fullMaxTokens = Math.max(3200, count * 1250 + 1800);
+    const completionOptions: Parameters<typeof generateCompletion>[0] = {
       model: getGeneratorModel(),
       messages: [{ role: "user", content: fullPrompt }],
       temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
       max_tokens: fullMaxTokens,
       reasoning: CHARACTER_GENERATOR_REASONING,
-    });
+    };
+    const stream = getModelSource() === "tokenpay" && count <= 2
+      ? (async function* bufferedCompletion() {
+          const result = await generateCompletion(completionOptions);
+          yield result.content;
+        })()
+      : generateCompletionStream(completionOptions);
 
     for await (const chunk of stream) {
       accumulatedContent += chunk;
