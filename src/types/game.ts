@@ -289,11 +289,10 @@ export const MODEL_IDS = {
   },
 } as const;
 
-const BUILTIN_GLM_5_3_FLASH_MODEL: ModelRef = {
+const BUILTIN_DEEPSEEK_V4_FLASH_MODEL: ModelRef = {
   provider: "tokendance",
-  model: MODEL_IDS.tokendance.glm53Flash,
-  temperature: 1,
-  reasoning: { enabled: true, effort: "low" },
+  model: MODEL_IDS.tokendance.deepseekV4Flash0731,
+  reasoning: { enabled: false },
 };
 
 export const DEFAULT_MODEL_CONFIG = {
@@ -316,13 +315,13 @@ export const DASHSCOPE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.dashsc
 export const TOKENDANCE_VALIDATION_MODEL = DEFAULT_MODEL_CONFIG.validation.tokendance;
 
 export const BUILTIN_PLAYER_MODELS: ModelRef[] = [
-  BUILTIN_GLM_5_3_FLASH_MODEL,
+  BUILTIN_DEEPSEEK_V4_FLASH_MODEL,
 ];
 
 // Default built-in models exposed to the app when custom key is not enabled.
 // This list includes system defaults plus the small built-in player pool.
 export const AVAILABLE_MODELS: ModelRef[] = [
-  BUILTIN_GLM_5_3_FLASH_MODEL,
+  BUILTIN_DEEPSEEK_V4_FLASH_MODEL,
 ];
 
 // Built-in project-key models that the server may call internally.
@@ -350,8 +349,8 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "zenmux", model: MODEL_IDS.zenmux.minimaxM21, temperature: 1, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Pro, reasoning: { enabled: false } },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Flash0731, reasoning: { enabled: false } },
-  BUILTIN_GLM_5_3_FLASH_MODEL,
+  BUILTIN_DEEPSEEK_V4_FLASH_MODEL,
+  { provider: "tokendance", model: MODEL_IDS.tokendance.glm53Flash, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25, temperature: 1, reasoning: { enabled: false } },

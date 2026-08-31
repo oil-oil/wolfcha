@@ -44,15 +44,13 @@ test("legacy key settings migrate to exactly one model source", () => {
   assert.equal(resolveModelSource({}), "project");
 });
 
-test("TokenPay default model uses GLM 5.3 Flash with required thinking enabled", () => {
+test("TokenPay default model uses DeepSeek V4 Flash", () => {
   const builtInModel = AVAILABLE_MODELS[0];
   const selectableModel = ALL_MODELS.find(
-    (model) => model.model === MODEL_IDS.tokendance.glm53Flash,
+    (model) => model.model === MODEL_IDS.tokendance.deepseekV4Flash0731,
   );
 
-  assert.equal(builtInModel.model, MODEL_IDS.tokendance.glm53Flash);
-  assert.equal(builtInModel.temperature, 1);
-  assert.deepEqual(builtInModel.reasoning, { enabled: true, effort: "low" });
-  assert.equal(selectableModel?.temperature, 1);
-  assert.deepEqual(selectableModel?.reasoning, { enabled: true, effort: "low" });
+  assert.equal(builtInModel.model, MODEL_IDS.tokendance.deepseekV4Flash0731);
+  assert.deepEqual(builtInModel.reasoning, { enabled: false });
+  assert.deepEqual(selectableModel?.reasoning, { enabled: false });
 });
