@@ -292,6 +292,7 @@ export const MODEL_IDS = {
 const BUILTIN_GLM_5_3_FLASH_MODEL: ModelRef = {
   provider: "tokendance",
   model: MODEL_IDS.tokendance.glm53Flash,
+  temperature: 1,
   reasoning: { enabled: true, effort: "low" },
 };
 

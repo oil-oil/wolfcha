@@ -29,6 +29,7 @@ import {
   hasDashscopeKey,
   hasTokendanceKey,
   hasZenmuxKey,
+  isTokenPayConnected,
   MODEL_SOURCE_CHANGE_EVENT,
   setModelSource,
   setTokenPayConnected as setTokenPayConnectionHint,
@@ -648,7 +649,7 @@ export function WelcomeScreen({
   const hasActiveExternalModelSource = () => (
     (getModelSource() === "custom" &&
       (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())) ||
-    (getModelSource() === "tokenpay" && tokenPayConnected)
+    (getModelSource() === "tokenpay" && (tokenPayConnected || isTokenPayConnected()))
   );
 
   const buildStartOptions = (gameSessionId?: string | null): StartGameOptions => {

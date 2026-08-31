@@ -51,6 +51,8 @@ test("TokenPay default model uses GLM 5.3 Flash with required thinking enabled",
   );
 
   assert.equal(builtInModel.model, MODEL_IDS.tokendance.glm53Flash);
+  assert.equal(builtInModel.temperature, 1);
   assert.deepEqual(builtInModel.reasoning, { enabled: true, effort: "low" });
+  assert.equal(selectableModel?.temperature, 1);
   assert.deepEqual(selectableModel?.reasoning, { enabled: true, effort: "low" });
 });
