@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { resolveModelSource } from "@/lib/api-keys";
+import { ALL_MODELS, AVAILABLE_MODELS, MODEL_IDS } from "@/types/game";
 
 test("model source keeps an explicit selection authoritative", () => {
   assert.equal(
@@ -41,4 +42,15 @@ test("legacy key settings migrate to exactly one model source", () => {
     "tokenpay",
   );
   assert.equal(resolveModelSource({}), "project");
+});
+
+test("TokenPay default model uses GLM 5.3 Flash with required thinking enabled", () => {
+  const builtInModel = AVAILABLE_MODELS[0];
+  const selectableModel = ALL_MODELS.find(
+    (model) => model.model === MODEL_IDS.tokendance.glm53Flash,
+  );
+
+  assert.equal(builtInModel.model, MODEL_IDS.tokendance.glm53Flash);
+  assert.deepEqual(builtInModel.reasoning, { enabled: true, effort: "low" });
+  assert.deepEqual(selectableModel?.reasoning, { enabled: true, effort: "low" });
 });

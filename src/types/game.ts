@@ -292,7 +292,7 @@ export const MODEL_IDS = {
 const BUILTIN_GLM_5_3_FLASH_MODEL: ModelRef = {
   provider: "tokendance",
   model: MODEL_IDS.tokendance.glm53Flash,
-  reasoning: { enabled: false },
+  reasoning: { enabled: true, effort: "low" },
 };
 
 export const DEFAULT_MODEL_CONFIG = {
@@ -350,7 +350,7 @@ export const ALL_MODELS: ModelRef[] = [
   { provider: "tokendance", model: MODEL_IDS.tokendance.minimaxM27, temperature: 1, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Pro, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.deepseekV4Flash0731, reasoning: { enabled: false } },
-  { provider: "tokendance", model: MODEL_IDS.tokendance.glm53Flash, reasoning: { enabled: false } },
+  BUILTIN_GLM_5_3_FLASH_MODEL,
   { provider: "tokendance", model: MODEL_IDS.tokendance.qwen3Max, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.glm5, temperature: 1, reasoning: { enabled: false } },
   { provider: "tokendance", model: MODEL_IDS.tokendance.kimiK25, temperature: 1, reasoning: { enabled: false } },
