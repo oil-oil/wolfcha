@@ -2255,6 +2255,8 @@
     "connect": "连接 TokenPay",
     "connecting": "正在连接...",
     "connectedTitle": "TokenPay 已连接",
+    "useForGames": "使用 TokenPay 对局",
+    "useForGamesDescription": "开启后，本局模型调用从 TokenPay 余额扣费。",
     "available": "可用余额",
     "refresh": "刷新",
     "refreshing": "刷新中...",

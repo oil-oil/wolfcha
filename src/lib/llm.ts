@@ -3,9 +3,10 @@ import {
   getTokendanceApiKey,
   getTokendanceBaseUrl,
   getZenmuxApiKey,
-  isTokenPayConnected,
+  getModelSource,
   isCustomKeyEnabled,
   setTokenPayConnected,
+  type ModelSource,
 } from "@/lib/api-keys";
 import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
@@ -34,11 +35,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 
 function getProviderForModel(model: string): Provider {
-   const modelRef =
-     ALL_MODELS.find((ref) => ref.model === model) ??
-     PROJECT_MODELS.find((ref) => ref.model === model);
-   return modelRef?.provider ?? "zenmux";
- }
+  const modelRef =
+    ALL_MODELS.find((ref) => ref.model === model) ??
+    PROJECT_MODELS.find((ref) => ref.model === model);
+  return modelRef?.provider ?? "zenmux";
+}
 
 // When using built-in keys (custom disabled), only project-key models are allowed.
 // Game state may contain modelRef from a custom-key game; map it back to a built-in
@@ -51,28 +52,35 @@ function resolveModelForBuiltin(model: string): string {
 }
 
 export function resolveApiKeySource(model: string): ApiKeySource {
-   const customEnabled = isCustomKeyEnabled();
-   if (!customEnabled) return "project";
+  const source = getModelSource();
+  if (source === "project") return "project";
+  if (source === "tokenpay") return "user";
 
-   const provider = getProviderForModel(model);
-   if (provider === "dashscope") {
-     return getDashscopeApiKey() ? "user" : "project";
-   }
-   if (provider === "tokendance") {
-     return (getTokendanceApiKey() && getTokendanceBaseUrl()) || isTokenPayConnected()
-       ? "user"
-       : "project";
-   }
-   return getZenmuxApiKey() ? "user" : "project";
- }
+  const provider = getProviderForModel(model);
+  if (provider === "dashscope") {
+    return getDashscopeApiKey() ? "user" : "project";
+  }
+  if (provider === "tokendance") {
+    return getTokendanceApiKey() && getTokendanceBaseUrl()
+      ? "user"
+      : "project";
+  }
+  return getZenmuxApiKey() ? "user" : "project";
+}
 
-function buildCustomKeyHeaders(customEnabled: boolean): Record<string, string> {
-  if (!customEnabled) return {};
+function resolveModelForSource(source: ModelSource, model: string): string {
+  if (source === "custom") return model;
+  if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? model;
+  return resolveModelForBuiltin(model);
+}
+
+function buildModelSourceHeaders(source: ModelSource): Record<string, string> {
+  if (source === "project") return {};
+  if (source === "tokenpay") return { "X-TokenPay-Mode": "true" };
 
   const zenmuxApiKey = getZenmuxApiKey();
   const dashscopeApiKey = getDashscopeApiKey();
   const tokendanceApiKey = getTokendanceApiKey();
-  const tokenPayConnected = isTokenPayConnected();
   const tokendanceBaseUrl = getTokendanceBaseUrl();
   return {
     ...(zenmuxApiKey ? { "X-Zenmux-Api-Key": zenmuxApiKey } : {}),
@@ -81,7 +89,6 @@ function buildCustomKeyHeaders(customEnabled: boolean): Record<string, string> {
     ...(tokendanceApiKey && tokendanceBaseUrl
       ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
       : {}),
-    ...(tokenPayConnected ? { "X-TokenPay-Mode": "true" } : {}),
   };
 }
 
@@ -563,20 +570,20 @@ export async function generateCompletion(
       ? Math.max(16, Math.floor(options.max_tokens))
       : undefined;
 
-  const customEnabled = isCustomKeyEnabled();
-  const modelToUse = customEnabled
-    ? options.model
-    : resolveModelForBuiltin(options.model);
+  const modelSource = getModelSource();
+  const customEnabled = modelSource === "custom" && isCustomKeyEnabled();
+  const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
+  const modelToUse = resolveModelForSource(effectiveSource, options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...buildCustomKeyHeaders(customEnabled),
+    ...buildModelSourceHeaders(effectiveSource),
   };
 
   Object.assign(headers, await getAuthHeaders());
   attachGameSessionHeader(headers);
 
   console.log("[LLM] generateCompletion:", {
-    customEnabled,
+    modelSource: effectiveSource,
     hasZenmuxKey: !!headers["X-Zenmux-Api-Key"],
     hasDashscopeKey: !!headers["X-Dashscope-Api-Key"],
     hasTokendanceKey: !!headers["X-Tokendance-Api-Key"],
@@ -659,13 +666,16 @@ export async function generateCompletionBatch(
 ): Promise<BatchCompletionResult[]> {
   if (!Array.isArray(requests) || requests.length === 0) return [];
 
-  const customEnabled = isCustomKeyEnabled();
-  const resolvedRequests = customEnabled
-    ? requests
-    : requests.map((r) => ({ ...r, model: resolveModelForBuiltin(r.model) }));
+  const modelSource = getModelSource();
+  const customEnabled = modelSource === "custom" && isCustomKeyEnabled();
+  const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
+  const resolvedRequests = requests.map((request) => ({
+    ...request,
+    model: resolveModelForSource(effectiveSource, request.model),
+  }));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...buildCustomKeyHeaders(customEnabled),
+    ...buildModelSourceHeaders(effectiveSource),
   };
 
   Object.assign(headers, await getAuthHeaders());
@@ -731,13 +741,13 @@ export async function* generateCompletionStream(
       ? Math.max(16, Math.floor(options.max_tokens))
       : undefined;
 
-  const customEnabled = isCustomKeyEnabled();
-  const modelToUse = customEnabled
-    ? options.model
-    : resolveModelForBuiltin(options.model);
+  const modelSource = getModelSource();
+  const customEnabled = modelSource === "custom" && isCustomKeyEnabled();
+  const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
+  const modelToUse = resolveModelForSource(effectiveSource, options.model);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...buildCustomKeyHeaders(customEnabled),
+    ...buildModelSourceHeaders(effectiveSource),
   };
 
   Object.assign(headers, await getAuthHeaders());

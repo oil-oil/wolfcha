@@ -12,8 +12,7 @@ import {
   getTokendanceApiKey,
   getTokendanceBaseUrl,
   getZenmuxApiKey,
-  isCustomKeyEnabled,
-  isTokenPayConnected,
+  getModelSource,
   setTokenPayConnected,
 } from "@/lib/api-keys";
 import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
@@ -111,14 +110,13 @@ export function useCredits() {
     if (!session) return { success: false };
 
     try {
-      // Multiplayer currently executes AI on the game server with the project key.
-      // Callers explicitly passing usedCustomKey=false must therefore buy a normal
-      // game session instead of bypassing credits with a browser-side key hint.
-      const customEnabled = options.usedCustomKey !== false && isCustomKeyEnabled();
+      const modelSource = getModelSource();
+      const customEnabled = modelSource === "custom";
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
       const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
-      const tokenPayConnected = customEnabled && isTokenPayConnected();
+      const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
+      const tokenPayRequested = modelSource === "tokenpay";
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
       const res = await fetch("/api/credits/consume", {
         method: "POST",
@@ -131,9 +129,12 @@ export function useCredits() {
           ...(tokendanceApiKey && tokendanceBaseUrl
             ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
             : {}),
-          ...(tokenPayConnected ? { "X-TokenPay-Mode": "true" } : {}),
+          ...(tokenPayRequested ? { "X-TokenPay-Mode": "true" } : {}),
         },
-        body: JSON.stringify(options),
+        body: JSON.stringify({
+          ...options,
+          usedCustomKey: tokenPayRequested || hasCustomKey,
+        }),
       });
 
       if (!res.ok) {

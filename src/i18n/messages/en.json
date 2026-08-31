@@ -2173,6 +2173,8 @@
     "connect": "Connect TokenPay",
     "connecting": "Connecting...",
     "connectedTitle": "TokenPay connected",
+    "useForGames": "Use TokenPay for games",
+    "useForGamesDescription": "When enabled, model usage is charged to your TokenPay balance.",
     "available": "Available balance",
     "refresh": "Refresh",
     "refreshing": "Refreshing...",

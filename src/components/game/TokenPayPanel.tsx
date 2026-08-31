@@ -23,9 +23,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toTokenPayTimestampMs, useTokenPay } from "@/hooks/useTokenPay";
 
 interface TokenPayPanelProps {
+  active?: boolean;
+  onActiveChange?: (active: boolean) => void;
   onConnectionChange?: (connected: boolean) => void;
 }
 
@@ -47,7 +50,11 @@ function formatDate(value: string | number) {
   }).format(timestamp);
 }
 
-export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
+export function TokenPayPanel({
+  active = false,
+  onActiveChange,
+  onConnectionChange,
+}: TokenPayPanelProps) {
   const t = useTranslations("tokenPay");
   const [amountInput, setAmountInput] = useState("10");
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -148,6 +155,7 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
     setDisconnecting(true);
     try {
       await disconnect();
+      onActiveChange?.(false);
       setDisconnectOpen(false);
     } catch (error) {
       setDisconnectError(error instanceof Error ? error.message : t("unknownError"));
@@ -277,6 +285,18 @@ export function TokenPayPanel({ onConnectionChange }: TokenPayPanelProps) {
         </div>
 
         <div className="px-5 pb-5 pt-6">
+          <div className="mb-5 flex items-center justify-between gap-4 rounded-lg bg-[var(--bg-secondary)] px-3 py-3">
+            <div>
+              <p className="text-sm font-medium text-[var(--text-primary)]">
+                {t("useForGames")}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                {t("useForGamesDescription")}
+              </p>
+            </div>
+            <Switch checked={active} onCheckedChange={onActiveChange} />
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-[var(--text-muted)]">{t("available")}</span>
             <Button

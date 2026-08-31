@@ -25,11 +25,14 @@ import { useCredits } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
 import {
   getGeneratorModel,
+  getModelSource,
   hasDashscopeKey,
   hasTokendanceKey,
   hasZenmuxKey,
-  isCustomKeyEnabled,
+  MODEL_SOURCE_CHANGE_EVENT,
+  setModelSource,
   setTokenPayConnected as setTokenPayConnectionHint,
+  type ModelSource,
 } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 import {
@@ -370,6 +373,9 @@ export function WelcomeScreen({
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     setUserProfileDefaultTab("tokenpay");
     setIsUserProfileOpen(true);
+    if (tokenPayResult === "connected") {
+      setModelSource("tokenpay");
+    }
     if (tokenPayErrorResults.has(tokenPayResult)) {
       toast.error(t("tokenPay.oauthError"));
     }
@@ -411,16 +417,24 @@ export function WelcomeScreen({
     }
   }, [customCharacters.characters, customCharacters.loading, selectedCharacterIds]);
 
-  const [customKeyEnabled, setCustomKeyEnabled] = useState(() => isCustomKeyEnabled());
+  const [modelSource, setModelSourceState] = useState<ModelSource>(() => getModelSource());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== "wolfcha_custom_key_enabled") return;
-      setCustomKeyEnabled(isCustomKeyEnabled());
+    const syncModelSource = () => setModelSourceState(getModelSource());
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key !== "wolfcha_model_source" &&
+        event.key !== "wolfcha_custom_key_enabled"
+      ) return;
+      syncModelSource();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(MODEL_SOURCE_CHANGE_EVENT, syncModelSource);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(MODEL_SOURCE_CHANGE_EVENT, syncModelSource);
+    };
   }, []);
 
   // 调试面板状态
@@ -631,8 +645,10 @@ export function WelcomeScreen({
     toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
   };
 
-  const hasUserProvidedLlmKey = () => (
-    isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())
+  const hasActiveExternalModelSource = () => (
+    (getModelSource() === "custom" &&
+      (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())) ||
+    (getModelSource() === "tokenpay" && tokenPayConnected)
   );
 
   const buildStartOptions = (gameSessionId?: string | null): StartGameOptions => {
@@ -696,7 +712,7 @@ export function WelcomeScreen({
           createSession: true,
           playerCount,
           difficulty,
-          usedCustomKey: false,
+          usedCustomKey: getModelSource() !== "project",
           modelUsed: getGeneratorModel(),
           userEmail: user?.email ?? null,
           region: getClientRegion(),
@@ -745,11 +761,11 @@ export function WelcomeScreen({
       return;
     }
 
-    const hasUserKey = hasUserProvidedLlmKey();
+    const hasExternalSource = hasActiveExternalModelSource();
 
     if (
       !demoModeActive &&
-      !hasUserKey &&
+      !hasExternalSource &&
       credits !== null &&
       credits <= LOW_CREDIT_THRESHOLD &&
       !hasSpringQuota &&
@@ -759,7 +775,7 @@ export function WelcomeScreen({
       return;
     }
 
-    await startGameWithCreditGuard(demoModeActive || hasUserKey);
+    await startGameWithCreditGuard(demoModeActive);
   };
 
   const handleOpenPayAsYouGo = () => {
@@ -775,7 +791,7 @@ export function WelcomeScreen({
   const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
     setTokenPayConnectionHint(connected);
     setTokenPayConnectedState(connected);
-    setCustomKeyEnabled(isCustomKeyEnabled());
+    setModelSourceState(getModelSource());
   }, []);
 
   useEffect(() => {
@@ -816,8 +832,7 @@ export function WelcomeScreen({
       return;
     }
     const latestDemoConfig = await refreshDemoConfig(true);
-    const hasUserKey = hasUserProvidedLlmKey();
-    await startGameWithCreditGuard(latestDemoConfig.active || hasUserKey);
+    await startGameWithCreditGuard(latestDemoConfig.active);
   };
 
   const handleOpenGroup = () => {
@@ -884,7 +899,7 @@ export function WelcomeScreen({
           onShareInvite={() => setIsShareOpen(true)}
           onSignOut={signOut}
           onRedeemCode={redeemCode}
-          onCustomKeyEnabledChange={setCustomKeyEnabled}
+          onModelSourceChange={setModelSourceState}
           onTokenPayConnectionChange={handleTokenPayConnectionChange}
           onCreditsChange={fetchCredits}
           defaultTab={userProfileDefaultTab}
@@ -1205,9 +1220,9 @@ export function WelcomeScreen({
               >
                 <UserCircle size={16} />
                 <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
-                {tokenPayConnected ? (
+                {modelSource === "tokenpay" && tokenPayConnected ? (
                   <span className="opacity-70">{t("tokenPay.connectedShort")}</span>
-                ) : isCustomKeyEnabled() ? (
+                ) : modelSource === "custom" ? (
                   <span className="opacity-70">{t("customKey.title")}</span>
                 ) : (
                   <span className="opacity-70">
