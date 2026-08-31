@@ -12,6 +12,11 @@ import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/t
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { getAuthHeaders } from "@/lib/auth-headers";
+import {
+  getTokenPayTopUpRetryIndexes,
+  requestTokenPayTopUp,
+  retryTokenPayRequestAfterTopUp,
+} from "@/lib/tokenpay-recovery";
 import { parseLLMJson } from "./llm-json";
 
 export type LLMContentPart =
@@ -336,6 +341,20 @@ async function fetchWithRetry(
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
+async function fetchWithTokenPayRecovery(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  maxAttempts: number,
+  modelSource: ModelSource,
+): Promise<Response> {
+  const response = await fetchWithRetry(input, init, maxAttempts);
+  if (response.ok || modelSource !== "tokenpay") return response;
+  return retryTokenPayRequestAfterTopUp(
+    response,
+    () => fetchWithRetry(input, init, maxAttempts),
+  );
+}
+
 /** 剥离 MiniMax 等模型在 content 中嵌入的 <think>...</think> 思考块 */
 const REASONING_TAG_NAMES = ["think", "thinking", "analysis", "reasoning", "thought"];
 const REASONING_TAG_PATTERN = REASONING_TAG_NAMES.join("|");
@@ -590,7 +609,7 @@ export async function generateCompletion(
     model: modelToUse,
   });
 
-  const response = await fetchWithRetry(
+  const response = await fetchWithTokenPayRecovery(
     "/api/chat",
     {
       method: "POST",
@@ -608,7 +627,8 @@ export async function generateCompletion(
         ...(options.response_format ? { response_format: options.response_format } : {}),
       }),
     },
-    4
+    4,
+    effectiveSource,
   );
 
   if (!response.ok) {
@@ -664,6 +684,13 @@ export async function generateCompletion(
 export async function generateCompletionBatch(
   requests: GenerateOptions[]
 ): Promise<BatchCompletionResult[]> {
+  return generateCompletionBatchInternal(requests, true);
+}
+
+async function generateCompletionBatchInternal(
+  requests: GenerateOptions[],
+  allowTopUpRecovery: boolean,
+): Promise<BatchCompletionResult[]> {
   if (!Array.isArray(requests) || requests.length === 0) return [];
 
   const modelSource = getModelSource();
@@ -699,7 +726,7 @@ export async function generateCompletionBatch(
   const data: unknown = await response.json();
   const results = isRecord(data) && Array.isArray(data.results) ? data.results : [];
 
-  return results.map((item): BatchCompletionResult => {
+  const parsedResults = results.map((item): BatchCompletionResult => {
     if (!isRecord(item) || item.ok !== true) {
       const recoveryAction = isRecord(item) ? item.recoveryAction : undefined;
       if (recoveryAction === "reauthorize_api_key") {
@@ -731,6 +758,22 @@ export async function generateCompletionBatch(
       raw,
     };
   });
+
+  if (allowTopUpRecovery && effectiveSource === "tokenpay") {
+    const retryIndexes = getTokenPayTopUpRetryIndexes(results);
+    if (retryIndexes.length > 0 && await requestTokenPayTopUp()) {
+      const retriedResults = await generateCompletionBatchInternal(
+        retryIndexes.map((index) => requests[index]),
+        false,
+      );
+      retryIndexes.forEach((originalIndex, retryIndex) => {
+        const retriedResult = retriedResults[retryIndex];
+        if (retriedResult) parsedResults[originalIndex] = retriedResult;
+      });
+    }
+  }
+
+  return parsedResults;
 }
 
 export async function* generateCompletionStream(
@@ -753,7 +796,7 @@ export async function* generateCompletionStream(
   Object.assign(headers, await getAuthHeaders());
   attachGameSessionHeader(headers);
 
-  const response = await fetchWithRetry(
+  const response = await fetchWithTokenPayRecovery(
     "/api/chat",
     {
       method: "POST",
@@ -772,7 +815,8 @@ export async function* generateCompletionStream(
         ...(options.response_format ? { response_format: options.response_format } : {}),
       }),
     },
-    4
+    4,
+    effectiveSource,
   );
 
   if (!response.ok) {

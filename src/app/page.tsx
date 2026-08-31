@@ -50,6 +50,7 @@ import { NightActionOverlay, type NightActionOverlayType } from "@/components/ga
 import { TutorialOverlay, type TutorialPayload } from "@/components/game/TutorialOverlay";
 import { DevConsole, DevModeButton } from "@/components/DevTools";
 import { SettingsModal } from "@/components/game/SettingsModal";
+import { TokenPayRecoveryHost } from "@/components/game/TokenPayRecoveryHost";
 
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
@@ -1254,6 +1255,7 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-transparent">
+      <TokenPayRecoveryHost />
       <GameBackground isNight={visualIsNight} isBlinking={!!dayNightBlinkPhase} />
 
       <motion.div
