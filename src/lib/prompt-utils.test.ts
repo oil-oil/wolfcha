@@ -158,6 +158,12 @@ test("发言顺序上下文只陈述本轮客观记录，不加入策略建议",
   assert.match(statusSection, /已有公开发言记录：8号、9号/);
   assert.match(statusSection, /尚未轮到且没有公开发言记录：3号/);
   assert.doesNotMatch(statusSection, /可以|建议|应该|先抛|回应/);
+
+  const fullPrompt = `${prompt.system}\n${prompt.user}`;
+  assert.doesNotMatch(
+    fullPrompt,
+    /更想看谁|能不能带队|哪里站不住|想争取的东西|想达到什么效果|你可以坦诚|带节奏/
+  );
 });
 
 test("与玩家有关的公开信息只陈述事实，不引导如何发言", async () => {

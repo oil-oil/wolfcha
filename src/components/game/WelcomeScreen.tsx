@@ -32,7 +32,7 @@ import {
   isTokenPayConnected,
   MODEL_SOURCE_CHANGE_EVENT,
   setModelSource,
-  setTokenPayConnected as setTokenPayConnectionHint,
+  syncTokenPayConnectionState,
   type ModelSource,
 } from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
@@ -422,11 +422,15 @@ export function WelcomeScreen({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const syncModelSource = () => setModelSourceState(getModelSource());
+    const syncModelSource = () => {
+      setModelSourceState(getModelSource());
+      setTokenPayConnectedState(isTokenPayConnected());
+    };
     const onStorage = (event: StorageEvent) => {
       if (
         event.key !== "wolfcha_model_source" &&
-        event.key !== "wolfcha_custom_key_enabled"
+        event.key !== "wolfcha_custom_key_enabled" &&
+        event.key !== "wolfcha_tokenpay_connected"
       ) return;
       syncModelSource();
     };
@@ -635,7 +639,7 @@ export function WelcomeScreen({
   };
 
   const openTokenPayConnection = (reauthorize: boolean) => {
-    setTokenPayConnectionHint(false);
+    syncTokenPayConnectionState(false);
     setTokenPayConnectedState(false);
     setUserProfileDefaultTab("tokenpay");
     setIsUserProfileOpen(true);
@@ -825,9 +829,9 @@ export function WelcomeScreen({
   };
 
   const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
-    setTokenPayConnectionHint(connected);
+    const nextSource = syncTokenPayConnectionState(connected);
     setTokenPayConnectedState(connected);
-    setModelSourceState(getModelSource());
+    setModelSourceState(nextSource);
   }, []);
 
   useEffect(() => {

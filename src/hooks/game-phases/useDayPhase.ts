@@ -19,6 +19,7 @@ import { type FlowToken } from "@/lib/game-flow-controller";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
 import { getLocale } from "@/i18n/locale-store";
+import { isGameSessionExpiredMessage } from "@/lib/llm";
 
 export interface DayPhaseCallbacks {
   setDialogue: (speaker: string, text: string, isStreaming?: boolean) => void;
@@ -349,13 +350,17 @@ export function useDayPhase(
           // 标记流式生成完成，并传递下一个发言者信息
           finalizeSpeechQueue({ nextSpeakerIsAI });
         },
-        onError: () => {
+        onError: (error) => {
           // 如果已超时，忽略错误回调
           if (isTimedOut) return;
 
           // 如果没有收到任何段落，显示中断消息
           if (!hasReceivedFirstSegment) {
-            appendToSpeechQueue(t("dayPhase.interrupted"));
+            appendToSpeechQueue(t(
+              isGameSessionExpiredMessage(error)
+                ? "dayPhase.sessionExpired"
+                : "dayPhase.interrupted",
+            ));
             finalizeSpeechQueue();
           }
         },
@@ -371,10 +376,18 @@ export function useDayPhase(
         appendToSpeechQueue(t("dayPhase.timeout"));
         finalizeSpeechQueue();
       }
-    } catch {
+    } catch (error) {
       // 如果流式生成失败且没有收到任何段落
       if (!hasReceivedFirstSegment && !isTimedOut) {
-        initSpeechQueue([t("dayPhase.interrupted")], player, options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined);
+        initSpeechQueue(
+          [t(
+            isGameSessionExpiredMessage(String(error))
+              ? "dayPhase.sessionExpired"
+              : "dayPhase.interrupted",
+          )],
+          player,
+          options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined,
+        );
       }
     } finally {
       currentSpeakingPlayerRef.current = null;
