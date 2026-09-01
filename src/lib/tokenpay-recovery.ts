@@ -1,5 +1,6 @@
 export const TOKENPAY_TOP_UP_REQUEST_EVENT = "wolfcha:tokenpay-top-up-request";
 export const TOKENPAY_TOP_UP_RESULT_EVENT = "wolfcha:tokenpay-top-up-result";
+const TOP_UP_RECOVERY_MAX_WAIT_MS = 20 * 60 * 1000;
 
 export type TokenPayTopUpRequestDetail = {
   requestId: string;
@@ -71,15 +72,34 @@ export function requestTokenPayTopUp(): Promise<boolean> {
 
   const requestId = createRequestId();
   const promise = new Promise<boolean>((resolve) => {
+    let settled = false;
+    const timeoutState: { id?: ReturnType<typeof setTimeout> } = {};
+
+    const cleanup = () => {
+      window.removeEventListener(TOKENPAY_TOP_UP_RESULT_EVENT, handleResult);
+      window.removeEventListener("pagehide", handlePageHide);
+      if (timeoutState.id !== undefined) clearTimeout(timeoutState.id);
+    };
+
+    const finish = (paid: boolean) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(paid);
+    };
+
     const handleResult = (event: Event) => {
       const detail = (event as CustomEvent<TokenPayTopUpResultDetail>).detail;
       if (!detail || detail.requestId !== requestId) return;
-      window.removeEventListener(TOKENPAY_TOP_UP_RESULT_EVENT, handleResult);
-      resolve(detail.paid);
+      finish(detail.paid);
     };
+    const handlePageHide = () => finish(false);
 
     window.addEventListener(TOKENPAY_TOP_UP_RESULT_EVENT, handleResult);
+    window.addEventListener("pagehide", handlePageHide, { once: true });
+    timeoutState.id = setTimeout(() => finish(false), TOP_UP_RECOVERY_MAX_WAIT_MS);
     queueMicrotask(() => {
+      if (settled) return;
       window.dispatchEvent(
         new CustomEvent<TokenPayTopUpRequestDetail>(TOKENPAY_TOP_UP_REQUEST_EVENT, {
           detail: { requestId },

@@ -109,3 +109,17 @@ test("a successful recharge retries the interrupted request exactly once", async
     restore();
   }
 });
+
+test("leaving the page settles an unfinished recharge flow", async () => {
+  await Promise.resolve();
+  const { eventTarget, restore } = installEventTargetWindow();
+
+  try {
+    const recovery = requestTokenPayTopUp();
+    await Promise.resolve();
+    eventTarget.dispatchEvent(new Event("pagehide"));
+    assert.equal(await recovery, false);
+  } finally {
+    restore();
+  }
+});

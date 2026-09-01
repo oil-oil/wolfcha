@@ -21,7 +21,7 @@ import { LowCreditModal, LOW_CREDIT_THRESHOLD } from "@/components/game/LowCredi
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
-import { useCredits } from "@/hooks/useCredits";
+import { useCredits, type ConsumeCreditResult } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
 import {
   getGeneratorModel,
@@ -634,9 +634,34 @@ export function WelcomeScreen({
     }
   };
 
-  const handleCreditFailure = () => {
+  const openTokenPayConnection = (reauthorize: boolean) => {
+    setTokenPayConnectionHint(false);
+    setTokenPayConnectedState(false);
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+    toast.error(
+      t(reauthorize ? "tokenPay.reauthorizeTitle" : "tokenPay.disconnectedTitle"),
+      {
+        description: t(
+          reauthorize
+            ? "tokenPay.reauthorizeDescription"
+            : "tokenPay.disconnectedDescription",
+        ),
+      },
+    );
+  };
+
+  const handleCreditFailure = (result?: ConsumeCreditResult) => {
     setIsTransitioning(false);
     onAbort?.();
+    if (
+      getModelSource() === "tokenpay" &&
+      (result?.recoveryAction === "reauthorize_api_key" ||
+        result?.code === "tokenpay_connection_unavailable")
+    ) {
+      openTokenPayConnection(true);
+      return;
+    }
     if (REFERRAL_BONUS_ENABLED) {
       setIsShareOpen(true);
     } else {
@@ -706,6 +731,7 @@ export function WelcomeScreen({
 
     setIsTransitioning(true);
 
+    let creditAuthorized = skipCredit;
     try {
       let gameSessionId: string | null = null;
       if (!skipCredit) {
@@ -719,9 +745,10 @@ export function WelcomeScreen({
           region: getClientRegion(),
         });
         if (!result.success) {
-          handleCreditFailure();
+          handleCreditFailure(result);
           return;
         }
+        creditAuthorized = true;
         gameSessionId = result.sessionId ?? null;
       }
 
@@ -729,7 +756,7 @@ export function WelcomeScreen({
       await onStart(buildStartOptions(gameSessionId));
     } catch (error) {
       console.error("[welcome] failed to start game", error);
-      if (!skipCredit) {
+      if (!creditAuthorized) {
         handleCreditFailure();
       } else {
         setIsTransitioning(false);
@@ -759,6 +786,14 @@ export function WelcomeScreen({
     if (!user && !demoModeActive) {
       setIsAuthOpen(true);
       toast(t("welcome.toast.signInFirst"));
+      return;
+    }
+
+    if (
+      getModelSource() === "tokenpay" &&
+      !(tokenPayConnected || isTokenPayConnected())
+    ) {
+      openTokenPayConnection(false);
       return;
     }
 
@@ -835,6 +870,14 @@ export function WelcomeScreen({
   const handleStartGameFromLowCreditModal = async () => {
     if (tokenPaySyncing) {
       toast(t("tokenPay.syncing"));
+      return;
+    }
+    if (
+      getModelSource() === "tokenpay" &&
+      !(tokenPayConnected || isTokenPayConnected())
+    ) {
+      setIsLowCreditOpen(false);
+      openTokenPayConnection(false);
       return;
     }
     const latestDemoConfig = await refreshDemoConfig(true);

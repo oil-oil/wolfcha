@@ -71,6 +71,12 @@ function TokenPayRecoveryDialog({
     onComplete();
   }, [onComplete, paymentSession?.status, requestId, t]);
 
+  useEffect(() => () => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    settleTokenPayTopUp(requestId, false);
+  }, [requestId]);
+
   const paymentExpired = useMemo(() => {
     if (!paymentSession) return false;
     const expiresAt = toTokenPayTimestampMs(paymentSession.expiredAt);

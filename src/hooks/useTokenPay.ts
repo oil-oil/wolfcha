@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchWithTimeout, withTimeout } from "@/lib/request-timeout";
 
 const CONNECTION_ENDPOINT = "/api/tokenpay/connection";
 const BALANCE_ENDPOINT = "/api/tokenpay/balance";
@@ -67,18 +68,6 @@ function getApiError(payload: ApiErrorPayload, fallback: string) {
   return fallback;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("request_timeout")), timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
-  }
-}
-
 async function getAccessToken() {
   const { data: { session } } = await withTimeout(
     supabase.auth.getSession(),
@@ -92,22 +81,12 @@ async function getAccessToken() {
 
 async function tokenPayFetch(input: string, init: RequestInit = {}) {
   const token = await getAccessToken();
-  const controller = new AbortController();
-  const abortFromCaller = () => controller.abort(init.signal?.reason);
-  if (init.signal?.aborted) abortFromCaller();
-  else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", JSON_CONTENT_TYPE);
   }
-  try {
-    return await fetch(input, { ...init, headers, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-    init.signal?.removeEventListener("abort", abortFromCaller);
-  }
+  return fetchWithTimeout(input, { ...init, headers }, REQUEST_TIMEOUT_MS);
 }
 
 async function readJson<T>(response: Response): Promise<T> {

@@ -24,12 +24,14 @@ import {
 } from "@/lib/welfare-config";
 import { readReferralFromStorage, removeReferralFromStorage } from "@/lib/referral";
 import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
+import { fetchWithTimeout } from "@/lib/request-timeout";
 
 const REFERRAL_ENDPOINT = "/api/credits/referral";
 const REDEEM_ENDPOINT = "/api/credits/redeem";
 const SPRING_CAMPAIGN_ENDPOINT = "/api/credits/spring-login-bonus";
 const JSON_CONTENT_TYPE = "application/json";
 const DEMO_CONFIG_REFRESH_INTERVAL_MS = 60_000;
+const CONSUME_CREDIT_TIMEOUT_MS = 15_000;
 const AUTH_EVENT = {
   INITIAL_SESSION: "INITIAL_SESSION",
   PASSWORD_RECOVERY: "PASSWORD_RECOVERY",
@@ -51,6 +53,10 @@ export type ConsumeCreditResult = {
   success: boolean;
   credits?: number;
   sessionId?: string | null;
+  error?: string;
+  code?: string;
+  recoveryAction?: string;
+  status?: number;
 };
 
 export function useCredits() {
@@ -107,7 +113,7 @@ export function useCredits() {
 
   const consumeCredit = useCallback(async (options: ConsumeCreditOptions = {}): Promise<ConsumeCreditResult> => {
     if (isDemoMode) return { success: true };
-    if (!session) return { success: false };
+    if (!session) return { success: false, error: "unauthorized", status: 401 };
 
     try {
       const modelSource = getModelSource();
@@ -118,7 +124,7 @@ export function useCredits() {
       const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
       const tokenPayRequested = modelSource === "tokenpay";
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
-      const res = await fetch("/api/credits/consume", {
+      const res = await fetchWithTimeout("/api/credits/consume", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -135,18 +141,31 @@ export function useCredits() {
           ...options,
           usedCustomKey: tokenPayRequested || hasCustomKey,
         }),
-      });
+      }, CONSUME_CREDIT_TIMEOUT_MS);
 
       if (!res.ok) {
+        let payload: {
+          campaign?: SpringCampaignSnapshot;
+          error?: unknown;
+          code?: unknown;
+          recoveryAction?: unknown;
+        } = {};
         try {
-          const payload = (await res.json()) as { campaign?: SpringCampaignSnapshot };
+          payload = await res.json() as typeof payload;
           if (payload.campaign) {
             setSpringCampaign(payload.campaign);
           }
         } catch {
           // no-op
         }
-        return { success: false };
+        return {
+          success: false,
+          status: res.status,
+          error: typeof payload.error === "string" ? payload.error : `request_failed_${res.status}`,
+          code: typeof payload.code === "string" ? payload.code : undefined,
+          recoveryAction:
+            typeof payload.recoveryAction === "string" ? payload.recoveryAction : undefined,
+        };
       }
 
       const payload = (await res.json()) as {
@@ -159,8 +178,11 @@ export function useCredits() {
         setSpringCampaign(payload.campaign);
       }
       return { success: true, credits: payload.credits, sessionId: payload.sessionId ?? null };
-    } catch {
-      return { success: false };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "network_error",
+      };
     }
   }, [isDemoMode, session]);
 

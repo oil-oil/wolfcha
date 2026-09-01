@@ -12,6 +12,7 @@ import {
 } from "@/types/game";
 import {
   getGeneratorModel,
+  getModelSource,
   getSelectedModels,
   hasDashscopeKey,
   hasTokendanceKey,
@@ -534,29 +535,35 @@ export async function generateCharacters(
   }
 ): Promise<GeneratedCharacter[]> {
   const usedScenario = scenario ?? getRandomScenario();
+  let cachedBaseProfiles: BaseProfile[] | null = null;
   const runOnce = async () => {
     const startTime = Date.now();
-    const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
+    let baseProfiles = cachedBaseProfiles;
 
-    // 动态计算 max_tokens：每个角色约需 300-400 tokens，加上 JSON 结构开销
-    const baseMaxTokens = Math.max(2400, count * 350 + 600);
+    if (!baseProfiles) {
+      const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
 
-    const baseResult = await generateJSON<unknown>({
-      model: getGeneratorModel(),
-      messages: [{ role: "user", content: basePrompt }],
-      temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-      max_tokens: baseMaxTokens,
-      reasoning: CHARACTER_GENERATOR_REASONING,
-    });
+      // 动态计算 max_tokens：每个角色约需 300-400 tokens，加上 JSON 结构开销
+      const baseMaxTokens = Math.max(2400, count * 350 + 600);
 
-    const normalizedBase = normalizeBaseProfiles(baseResult);
-    const baseProfiles = normalizedBase.profiles;
+      const baseResult = await generateJSON<unknown>({
+        model: getGeneratorModel(),
+        messages: [{ role: "user", content: basePrompt }],
+        temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
+        max_tokens: baseMaxTokens,
+        reasoning: CHARACTER_GENERATOR_REASONING,
+      });
 
-    if (!isValidBaseProfiles(baseProfiles, count)) {
-      throw new Error("Base profile generation returned invalid schema");
+      const normalizedBase = normalizeBaseProfiles(baseResult);
+      baseProfiles = normalizedBase.profiles;
+
+      if (!isValidBaseProfiles(baseProfiles, count)) {
+        throw new Error("Base profile generation returned invalid schema");
+      }
+
+      cachedBaseProfiles = baseProfiles;
+      options?.onBaseProfiles?.(baseProfiles);
     }
-
-    options?.onBaseProfiles?.(baseProfiles);
 
     const fullPrompt = buildFullPersonasPrompt(usedScenario, baseProfiles);
     
@@ -714,7 +721,7 @@ export async function generateCharacters(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       console.log(
-        `[character-gen] Attempt ${attempt + 1}/2, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
+        `[character-gen] Attempt ${attempt + 1}/2, modelSource: ${getModelSource()}, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
       );
       return await runOnce();
     } catch (error) {
@@ -727,8 +734,8 @@ export async function generateCharacters(
                           errorMsg.includes("insufficient") ||
                           errorMsg.includes("余额");
       
-      if (isCustomKeyEnabled() && isQuotaError) {
-        console.error("[character-gen] Custom key quota exhausted, aborting retry");
+      if (isQuotaError) {
+        console.error("[character-gen] Quota exhausted, aborting retry");
         throw error;
       }
       

@@ -18,6 +18,7 @@ import {
   retryTokenPayRequestAfterTopUp,
 } from "@/lib/tokenpay-recovery";
 import { parseLLMJson } from "./llm-json";
+import { withTimeout } from "@/lib/request-timeout";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -221,6 +222,8 @@ export type BatchCompletionResult =
   | { ok: false; error: string; status?: number };
 
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const TOKENPAY_RETRYABLE_STATUS = new Set([429]);
+const STREAM_IDLE_TIMEOUT_MS = 45_000;
 
 function parseRetryAfterMs(response: Response): number | null {
   const raw = response.headers.get("retry-after");
@@ -297,6 +300,42 @@ export function isQuotaExhaustedMessage(message: string): boolean {
   return message.includes(QUOTA_EXHAUSTED_MARKER);
 }
 
+export function readStreamProtocolError(payload: unknown): string | null {
+  if (!isRecord(payload) || !("error" in payload)) return null;
+  const rawError = payload.error;
+  if (rawError == null) return null;
+  const error = isRecord(rawError) ? rawError : payload;
+  const code = typeof error.code === "string" ? error.code : "";
+  const message = typeof error.message === "string"
+    ? error.message
+    : typeof rawError === "string"
+      ? rawError
+      : "模型流式响应失败";
+  const recoveryAction = typeof payload.recoveryAction === "string"
+    ? payload.recoveryAction
+    : "";
+  const quotaText = `${code} ${message} ${recoveryAction}`.toLowerCase();
+
+  if (
+    recoveryAction === "top_up_balance" ||
+    recoveryAction === "api_key_quota" ||
+    quotaText.includes("insufficient") ||
+    quotaText.includes("quota") ||
+    quotaText.includes("balance") ||
+    quotaText.includes("余额")
+  ) {
+    return `${QUOTA_EXHAUSTED_MARKER} ${message}`;
+  }
+  if (
+    recoveryAction === "reauthorize_api_key" ||
+    code === "unauthorized"
+  ) {
+    setTokenPayConnected(false);
+    return "TokenPay 授权已失效，请到账户中心重新授权";
+  }
+  return message;
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -304,7 +343,8 @@ async function sleep(ms: number): Promise<void> {
 async function fetchWithRetry(
   input: RequestInfo | URL,
   init: RequestInit,
-  maxAttempts: number
+  maxAttempts: number,
+  modelSource: ModelSource,
 ): Promise<Response> {
   let lastResponse: Response | null = null;
   let lastError: unknown = null;
@@ -316,7 +356,10 @@ async function fetchWithRetry(
 
       if (response.ok) return response;
 
-      if (!RETRYABLE_STATUS.has(response.status) || attempt === maxAttempts) {
+      const retryableStatuses = modelSource === "tokenpay"
+        ? TOKENPAY_RETRYABLE_STATUS
+        : RETRYABLE_STATUS;
+      if (!retryableStatuses.has(response.status) || attempt === maxAttempts) {
         return response;
       }
 
@@ -329,7 +372,9 @@ async function fetchWithRetry(
       await sleep(backoffMs);
     } catch (err) {
       lastError = err;
-      if (attempt === maxAttempts) break;
+      // TokenPay 没有请求幂等键。网络断开时无法确认上游是否已经计费，
+      // 因此只允许对明确未执行的 429 重试，不自动重放模糊失败。
+      if (modelSource === "tokenpay" || attempt === maxAttempts) break;
       const base = 400;
       const jitter = Math.floor(Math.random() * 200);
       const backoffMs = base * 2 ** (attempt - 1) + jitter;
@@ -347,11 +392,11 @@ async function fetchWithTokenPayRecovery(
   maxAttempts: number,
   modelSource: ModelSource,
 ): Promise<Response> {
-  const response = await fetchWithRetry(input, init, maxAttempts);
+  const response = await fetchWithRetry(input, init, maxAttempts, modelSource);
   if (response.ok || modelSource !== "tokenpay") return response;
   return retryTokenPayRequestAfterTopUp(
     response,
-    () => fetchWithRetry(input, init, maxAttempts),
+    () => fetchWithRetry(input, init, maxAttempts, modelSource),
   );
 }
 
@@ -715,7 +760,8 @@ async function generateCompletionBatchInternal(
       headers,
       body: JSON.stringify({ requests: resolvedRequests }),
     },
-    3
+    3,
+    effectiveSource,
   );
 
   if (!response.ok) {
@@ -847,26 +893,46 @@ export async function* generateCompletionStream(
     return sum;
   }, 0);
 
-  while (!streamComplete) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (!streamComplete) {
+      const { done, value } = await withTimeout(
+        reader.read(),
+        STREAM_IDLE_TIMEOUT_MS,
+      );
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      if (trimmed === "data: [DONE]") {
-        streamComplete = true;
-        break;
-      }
-      if (!trimmed.startsWith("data: ")) continue;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed === "data: [DONE]") {
+          streamComplete = true;
+          break;
+        }
+        if (!trimmed.startsWith("data: ")) continue;
 
-      try {
-        const json = JSON.parse(trimmed.slice(6));
-        const delta = json.choices?.[0]?.delta?.content;
+        let json: unknown;
+        try {
+          json = JSON.parse(trimmed.slice(6));
+        } catch {
+          // Skip malformed JSON
+          continue;
+        }
+
+        const protocolError = readStreamProtocolError(json);
+        if (protocolError) throw new Error(protocolError);
+        if (!isRecord(json)) continue;
+        const choices = Array.isArray(json.choices) ? json.choices : [];
+        const firstChoice = isRecord(choices[0]) ? choices[0] : null;
+        const deltaPayload = firstChoice && isRecord(firstChoice.delta)
+          ? firstChoice.delta
+          : null;
+        const delta = typeof deltaPayload?.content === "string"
+          ? deltaPayload.content
+          : "";
         if (delta) {
           if (thinkStripped) {
             const cleaned = stripReasoningArtifactsPreserveWhitespace(delta);
@@ -895,14 +961,11 @@ export async function* generateCompletionStream(
             // 否则继续缓冲，等待 </think> 或确认非 think 块
           }
         }
-      } catch {
-        // Skip malformed JSON
       }
     }
-
-    if (streamComplete) {
-      await reader.cancel().catch(() => undefined);
-    }
+  } finally {
+    // 消费方提前退出、对局重置或流超时都必须取消上游读取，避免继续消耗余额。
+    await reader.cancel().catch(() => undefined);
   }
 
   // 流式结束后统计 AI 调用

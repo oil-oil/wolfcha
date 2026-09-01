@@ -1,10 +1,16 @@
 import { supabase } from "@/lib/supabase";
 import { readGuestIdFromStorage, getGuestId } from "@/lib/demo-mode";
 import { fetchDemoModeConfigClient } from "@/lib/demo-config";
+import { withTimeout } from "@/lib/request-timeout";
+
+const AUTH_SESSION_TIMEOUT_MS = 10_000;
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   try {
-    const { data } = await supabase.auth.getSession();
+    const { data } = await withTimeout(
+      supabase.auth.getSession(),
+      AUTH_SESSION_TIMEOUT_MS,
+    );
     const token = data?.session?.access_token;
     if (token) return { Authorization: `Bearer ${token}` };
   } catch {}
