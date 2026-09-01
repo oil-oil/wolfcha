@@ -17,6 +17,11 @@ import {
 } from "@/lib/tokenpay";
 import { Agent, setGlobalDispatcher } from "undici";
 
+// 9 人完整角色画像的正常流式输出实测可超过 80 秒。未启用 Fluid
+// Compute 的 Vercel 项目默认上限可能只有 60 秒，必须显式放宽；这只延长
+// HTTP 流的承载时间，不改变模型提示、输出内容或游戏逻辑。
+export const maxDuration = 300;
+
 // 将 undici 底层 TCP 连接超时从默认 10s 调高到 60s
 // 避免访问国内 API 网关（如 tokendance）时因建连慢而提前失败
 setGlobalDispatcher(new Agent({ connectTimeout: 60_000 }));
