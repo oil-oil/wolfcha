@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, hasAuthorizedActiveGameSession } from "@/lib/api-auth";
+import {
+  GAME_SESSION_EXPIRED_CODE,
+  GAME_SESSION_EXPIRED_MESSAGE,
+} from "@/lib/game-session-policy";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
 import {
   getConnectedTokenPayApiKey,
@@ -635,7 +639,13 @@ export async function POST(request: NextRequest) {
     const sessionId = request.headers.get("x-game-session-id")?.trim() || null;
     const hasAuthorizedSession = await hasAuthorizedActiveGameSession(auth.user.id, sessionId);
     if (!hasAuthorizedSession) {
-      return NextResponse.json({ error: "Insufficient credits" }, { status: 403 });
+      return NextResponse.json(
+        {
+          error: GAME_SESSION_EXPIRED_MESSAGE,
+          code: GAME_SESSION_EXPIRED_CODE,
+        },
+        { status: 409 },
+      );
     }
   }
 

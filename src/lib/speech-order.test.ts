@@ -131,6 +131,29 @@ test("同一天再次进入 PK 时不会把上一轮 PK 发言算进当前轮", 
   assert.equal(getNextSpeechSeat(state), 5);
 });
 
+test("旧存档缺少轮次索引时仍以最后一条 PK 开始消息切断上一轮", () => {
+  const messages = [
+    makeMessage(0, "DAY_PK_SPEECH", "第一轮PK开始", true),
+    makeMessage(2, "DAY_PK_SPEECH", "3号第一轮发言"),
+    makeMessage(5, "DAY_PK_SPEECH", "6号第一轮发言"),
+    makeMessage(0, "DAY_PK_SPEECH", "第二轮PK开始", true),
+    makeMessage(2, "DAY_PK_SPEECH", "3号第二轮发言"),
+  ];
+  const state = makeState({
+    phase: "DAY_PK_SPEECH",
+    messages,
+    speechRoundStartMessageIndex: undefined,
+    pkTargets: [2, 5],
+    daySpeechStartSeat: 2,
+    currentSpeakerSeat: 2,
+  });
+
+  const status = getSpeechRoundStatus(state, 2);
+  assert.deepEqual(status.spokenSeats, [2]);
+  assert.deepEqual(status.yetToSpeakSeats, [5]);
+  assert.equal(getNextSpeechSeat(state), 5);
+});
+
 test("顺序已过但没有消息记录的座位会单独标记为过麦，不会伪装成已发言", () => {
   const state = makeState({
     currentSpeakerSeat: 2,

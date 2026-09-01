@@ -124,7 +124,32 @@ export function getCurrentSpeechRoundMessages(state: GameState): ChatMessage[] {
       );
   }
 
-  // 兼容旧存档：取当前阶段在当天最后一个连续消息块，避免混入更早的 PK 轮次。
+  // 兼容旧存档：每轮发言开始时都会先写入一条同 phase 的系统消息。
+  // 从最后一条系统消息之后取记录，才能真正切断同一天更早的 PK 轮次。
+  let lastRoundStartIndex = -1;
+  for (let index = state.messages.length - 1; index >= 0; index--) {
+    const message = state.messages[index];
+    if (
+      message.isSystem &&
+      message.day === state.day &&
+      message.phase === state.phase
+    ) {
+      lastRoundStartIndex = index;
+      break;
+    }
+  }
+  if (lastRoundStartIndex >= 0) {
+    return state.messages
+      .slice(lastRoundStartIndex + 1)
+      .filter(
+        (message) =>
+          !message.isSystem &&
+          message.day === state.day &&
+          message.phase === state.phase
+      );
+  }
+
+  // 极旧存档没有轮次系统消息时，退回当前阶段在当天最后一个连续消息块。
   let lastMatchingIndex = -1;
   for (let index = state.messages.length - 1; index >= 0; index--) {
     const message = state.messages[index];

@@ -1,4 +1,10 @@
-import { getMinimaxApiKey, getMinimaxGroupId, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getMinimaxApiKey,
+  getMinimaxGroupId,
+  getModelSource,
+  hasMinimaxKey,
+  resolveAiVoiceAvailability,
+} from "@/lib/api-keys";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 
@@ -34,13 +40,14 @@ class AudioManager {
 
   private async buildTtsHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const modelSource = getModelSource();
     const authHeaders = await getAuthHeaders();
     Object.assign(headers, authHeaders);
     const sessionId = gameSessionTracker.getSessionId();
     if (sessionId) {
       headers["X-Game-Session-Id"] = sessionId;
     }
-    if (isCustomKeyEnabled()) {
+    if (modelSource !== "project" && hasMinimaxKey()) {
       const apiKey = getMinimaxApiKey();
       const groupId = getMinimaxGroupId();
       if (apiKey) headers["X-Minimax-Api-Key"] = apiKey;
@@ -77,7 +84,7 @@ class AudioManager {
   }
 
   isEnabled(): boolean {
-    return this.enabled;
+    return this.enabled && resolveAiVoiceAvailability(getModelSource(), hasMinimaxKey());
   }
 
   /**
@@ -85,7 +92,7 @@ class AudioManager {
    * Returns a promise that resolves when audio is cached.
    */
   async ensureReady(task: AudioTask): Promise<void> {
-    if (!this.enabled) return;
+    if (!this.isEnabled()) return;
     if (this.cache.has(task.id)) return;
 
     const existing = this.inFlight.get(task.id);
@@ -99,7 +106,7 @@ class AudioManager {
   }
 
   async prefetchTasks(tasks: AudioTask[], options?: { concurrency?: number }) {
-    if (!this.enabled) return;
+    if (!this.isEnabled()) return;
     const concurrency = Math.max(1, options?.concurrency ?? 3);
     const queue = [...tasks];
     const workers = Array.from({ length: concurrency }, async () => {
@@ -162,7 +169,7 @@ class AudioManager {
 
   // 添加任务到队列
   addToQueue(task: AudioTask) {
-    if (!this.enabled) return;
+    if (!this.isEnabled()) return;
     // 简单的去重：如果队列里已经有这个ID，就不加了
     if (this.queue.some(t => t.id === task.id) || this.currentTask?.id === task.id) {
       return;
@@ -198,7 +205,7 @@ class AudioManager {
   }
 
   private async processQueue() {
-    if (!this.enabled) return;
+    if (!this.isEnabled()) return;
     if (this.state !== "idle") return;
     if (this.queue.length === 0) return;
     const task = this.queue.shift();

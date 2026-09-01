@@ -121,3 +121,19 @@ test("stream protocol quota errors are surfaced instead of silently retried", as
   });
   assert.match(error ?? "", /\[QUOTA_EXHAUSTED\]/);
 });
+
+test("expired game sessions are not mislabeled as exhausted balances", async () => {
+  const {
+    isGameSessionExpiredMessage,
+    isQuotaExhaustedMessage,
+    readStreamProtocolError,
+  } = await import("@/lib/llm");
+  const error = readStreamProtocolError({
+    error: {
+      code: "game_session_expired",
+      message: "Game session authorization expired",
+    },
+  });
+  assert.equal(isGameSessionExpiredMessage(error ?? ""), true);
+  assert.equal(isQuotaExhaustedMessage(error ?? ""), false);
+});

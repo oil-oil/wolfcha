@@ -9,14 +9,13 @@ import type { GameState, Phase, Player, Role } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import type { GameAnalysisData } from "@/types/analysis";
 import { createInitialGameState } from "@/lib/game-master";
+import { GAME_SESSION_RESUME_WINDOW_MS } from "@/lib/game-session-policy";
 import { getI18n } from "@/i18n/translator";
 
 // ============ 游戏状态持久化配置 ============
 
 const GAME_STATE_STORAGE_KEY = "wolfcha.game_state";
 const GAME_STATE_VERSION = 1;
-// 24 hours in milliseconds - states older than this won't be restored
-const GAME_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 interface PersistedGameState {
   version: number;
@@ -329,7 +328,7 @@ function loadPersistedGameState(): GameState {
     
     // Check if the saved state is too old
     const age = Date.now() - parsed.savedAt;
-    if (age > GAME_STATE_MAX_AGE_MS) {
+    if (age > GAME_SESSION_RESUME_WINDOW_MS) {
       console.info("[wolfcha] Saved game state expired, starting fresh");
       localStorage.removeItem(GAME_STATE_STORAGE_KEY);
       return initial;

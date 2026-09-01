@@ -11,6 +11,7 @@ const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
 const TOKENDANCE_API_KEY_STORAGE = "wolfcha_tokendance_api_key";
 const TOKENPAY_CONNECTED_STORAGE = "wolfcha_tokenpay_connected";
 const MODEL_SOURCE_STORAGE = "wolfcha_model_source";
+const MODEL_SOURCE_EXPLICIT_STORAGE = "wolfcha_model_source_explicit_v1";
 const MINIMAX_API_KEY_STORAGE = "wolfcha_minimax_api_key";
 const MINIMAX_GROUP_ID_STORAGE = "wolfcha_minimax_group_id";
 const CUSTOM_KEY_ENABLED_STORAGE = "wolfcha_custom_key_enabled";
@@ -25,6 +26,13 @@ export const TOKENDANCE_BASE_URL = "https://tokendance.space/gateway/v1";
 export const MODEL_SOURCE_CHANGE_EVENT = "wolfcha:model-source-change";
 
 export type ModelSource = "project" | "tokenpay" | "custom";
+
+export function resolveAiVoiceAvailability(
+  source: ModelSource,
+  hasCustomTtsKey: boolean,
+): boolean {
+  return source === "project" || hasCustomTtsKey;
+}
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -90,9 +98,12 @@ export function setTokenPayConnected(connected: boolean) {
   if (!canUseStorage()) return;
   if (connected) {
     window.localStorage.setItem(TOKENPAY_CONNECTED_STORAGE, "true");
-    return;
+  } else {
+    window.localStorage.removeItem(TOKENPAY_CONNECTED_STORAGE);
   }
-  window.localStorage.removeItem(TOKENPAY_CONNECTED_STORAGE);
+  window.dispatchEvent(
+    new CustomEvent(MODEL_SOURCE_CHANGE_EVENT, { detail: getModelSource() }),
+  );
 }
 
 export function setTokendanceBaseUrl() {
@@ -161,19 +172,24 @@ function hasLocalLlmKey(): boolean {
 
 export function resolveModelSource(options: {
   storedSource?: string | null;
+  storedSourceExplicit?: boolean;
   legacyCustomEnabled?: boolean;
   hasLocalKey?: boolean;
   tokenPayConnected?: boolean;
 }): ModelSource {
-  if (
+  const storedSource = (
     options.storedSource === "project" ||
     options.storedSource === "tokenpay" ||
     options.storedSource === "custom"
-  ) {
-    return options.storedSource;
-  }
+  ) ? options.storedSource : null;
+
+  // 只有用户主动切换过来源，持久化值才具有最高优先级。旧版本会在
+  // TokenPay 连接状态返回前自动写入 project，不能把它误当成用户选择。
+  if (storedSource && options.storedSourceExplicit) return storedSource;
   if (options.legacyCustomEnabled && options.hasLocalKey) return "custom";
   if (options.tokenPayConnected) return "tokenpay";
+  if (storedSource === "custom" && options.hasLocalKey) return "custom";
+  if (storedSource === "tokenpay") return "tokenpay";
   return "project";
 }
 
@@ -181,25 +197,30 @@ export function getModelSource(): ModelSource {
   if (!canUseStorage()) return "project";
   const source = resolveModelSource({
     storedSource: window.localStorage.getItem(MODEL_SOURCE_STORAGE),
+    storedSourceExplicit:
+      window.localStorage.getItem(MODEL_SOURCE_EXPLICIT_STORAGE) === "true",
     legacyCustomEnabled:
       window.localStorage.getItem(CUSTOM_KEY_ENABLED_STORAGE) === "true",
     hasLocalKey: hasLocalLlmKey(),
     tokenPayConnected: isTokenPayConnected(),
   });
-  if (!window.localStorage.getItem(MODEL_SOURCE_STORAGE)) {
-    window.localStorage.setItem(MODEL_SOURCE_STORAGE, source);
-  }
   return source;
 }
 
 export function setModelSource(source: ModelSource) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(MODEL_SOURCE_STORAGE, source);
+  window.localStorage.setItem(MODEL_SOURCE_EXPLICIT_STORAGE, "true");
   window.localStorage.setItem(
     CUSTOM_KEY_ENABLED_STORAGE,
     source === "custom" ? "true" : "false",
   );
   window.dispatchEvent(new CustomEvent(MODEL_SOURCE_CHANGE_EVENT, { detail: source }));
+}
+
+export function syncTokenPayConnectionState(connected: boolean): ModelSource {
+  setTokenPayConnected(connected);
+  return getModelSource();
 }
 
 export function isTokenPayActive(): boolean {

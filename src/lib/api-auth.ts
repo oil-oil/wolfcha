@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ensureAdminClient, supabaseAdmin } from "@/lib/supabase-admin";
 import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import { isGuestUser } from "@/lib/demo-mode";
+import { GAME_SESSION_RESUME_WINDOW_MS } from "@/lib/game-session-policy";
 
 export async function authenticateRequest(request: Request): Promise<
   | { user: { id: string } }
@@ -62,14 +63,12 @@ export async function requireCredits(userId: string): Promise<boolean> {
   }
 }
 
-const AUTHORIZED_SESSION_WINDOW_MS = 4 * 60 * 60 * 1000;
-
 export async function hasAuthorizedActiveGameSession(userId: string, sessionId?: string | null): Promise<boolean> {
   if (await isDemoModeActiveServer()) return true;
   if (!sessionId) return false;
 
   try {
-    const since = new Date(Date.now() - AUTHORIZED_SESSION_WINDOW_MS).toISOString();
+    const since = new Date(Date.now() - GAME_SESSION_RESUME_WINDOW_MS).toISOString();
     const { data, error } = await supabaseAdmin
       .from("game_sessions")
       .select("id")

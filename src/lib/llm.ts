@@ -17,6 +17,7 @@ import {
   requestTokenPayTopUp,
   retryTokenPayRequestAfterTopUp,
 } from "@/lib/tokenpay-recovery";
+import { GAME_SESSION_EXPIRED_CODE } from "@/lib/game-session-policy";
 import { parseLLMJson } from "./llm-json";
 import { withTimeout } from "@/lib/request-timeout";
 
@@ -254,6 +255,7 @@ function parseRetryAfterMs(response: Response): number | null {
 }
 
 const QUOTA_EXHAUSTED_MARKER = "[QUOTA_EXHAUSTED]";
+const GAME_SESSION_EXPIRED_MARKER = "[GAME_SESSION_EXPIRED]";
 
 function isQuotaExhaustedError(status: number, errorText: string): boolean {
   if (status === 402) return true;
@@ -271,12 +273,16 @@ function isQuotaExhaustedError(status: number, errorText: string): boolean {
 
 function formatApiError(status: number, errorText: string): string {
   let msg = `API error: ${status}`;
+  let code = "";
   let recoveryAction = "";
   try {
     const errorJson: unknown = JSON.parse(errorText);
     if (isRecord(errorJson)) {
       if (typeof errorJson.error === "string" && errorJson.error.trim()) {
         msg = errorJson.error.trim();
+      }
+      if (typeof errorJson.code === "string") {
+        code = errorJson.code;
       }
       if (typeof errorJson.recoveryAction === "string") {
         recoveryAction = errorJson.recoveryAction;
@@ -293,6 +299,10 @@ function formatApiError(status: number, errorText: string): string {
   } catch {
     const trimmed = (errorText || "").trim();
     msg = trimmed ? `${msg} - ${trimmed.slice(0, 600)}` : msg;
+  }
+
+  if (code === GAME_SESSION_EXPIRED_CODE) {
+    return `${GAME_SESSION_EXPIRED_MARKER} 当前对局授权已过期，请重新开始一局`;
   }
 
   if (recoveryAction === "top_up_balance") {
@@ -316,6 +326,10 @@ export function isQuotaExhaustedMessage(message: string): boolean {
   return message.includes(QUOTA_EXHAUSTED_MARKER);
 }
 
+export function isGameSessionExpiredMessage(message: string): boolean {
+  return message.includes(GAME_SESSION_EXPIRED_MARKER);
+}
+
 export function readStreamProtocolError(payload: unknown): string | null {
   if (!isRecord(payload) || !("error" in payload)) return null;
   const rawError = payload.error;
@@ -331,6 +345,10 @@ export function readStreamProtocolError(payload: unknown): string | null {
     ? payload.recoveryAction
     : "";
   const quotaText = `${code} ${message} ${recoveryAction}`.toLowerCase();
+
+  if (code === GAME_SESSION_EXPIRED_CODE) {
+    return `${GAME_SESSION_EXPIRED_MARKER} 当前对局授权已过期，请重新开始一局`;
+  }
 
   if (
     recoveryAction === "top_up_balance" ||
