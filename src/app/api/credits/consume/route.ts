@@ -9,6 +9,7 @@ import {
   getSpringQuotaExpiresAtIso,
   isSpringCampaignActive,
 } from "@/lib/spring-campaign";
+import { hasConnectedTokenPay, TOKENPAY_MODE_HEADER } from "@/lib/tokenpay";
 
 export const dynamic = "force-dynamic";
 
@@ -179,7 +180,23 @@ export async function POST(request: Request) {
   const headerZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
   const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
-  const hasExternalKey = Boolean(headerZenmuxKey || headerDashscopeKey || headerTokendanceKey);
+  const tokenPayRequested = request.headers.get(TOKENPAY_MODE_HEADER) === "true";
+  const tokenPayConnected = tokenPayRequested
+    ? await hasConnectedTokenPay(user.id)
+    : false;
+  if (tokenPayRequested && !tokenPayConnected) {
+    return NextResponse.json(
+      {
+        error: "TokenPay connection is not available",
+        code: "tokenpay_connection_unavailable",
+        recoveryAction: "reauthorize_api_key",
+      },
+      { status: 409 },
+    );
+  }
+  const hasExternalKey = Boolean(
+    headerZenmuxKey || headerDashscopeKey || headerTokendanceKey || tokenPayConnected,
+  );
   const now = new Date();
   const springCampaignBase = buildSpringCampaignBase(now);
   const springCampaignActive = isSpringCampaignActive(now);

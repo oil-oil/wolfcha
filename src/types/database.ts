@@ -288,6 +288,144 @@ export interface Database {
         };
         Relationships: [];
       };
+      custom_characters: {
+        Row: {
+          id: string;
+          user_id: string;
+          display_name: string;
+          gender: string;
+          age: number;
+          mbti: string;
+          basic_info: string | null;
+          style_label: string | null;
+          avatar_seed: string | null;
+          is_deleted: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          display_name: string;
+          gender: string;
+          age: number;
+          mbti: string;
+          basic_info?: string | null;
+          style_label?: string | null;
+          avatar_seed?: string | null;
+          is_deleted?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          display_name?: string;
+          gender?: string;
+          age?: number;
+          mbti?: string;
+          basic_info?: string | null;
+          style_label?: string | null;
+          avatar_seed?: string | null;
+          is_deleted?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_session_id: string;
+          stripe_payment_intent_id: string | null;
+          amount_cents: number;
+          currency: string;
+          quantity: number;
+          credits_added: number;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_session_id: string;
+          stripe_payment_intent_id?: string | null;
+          amount_cents: number;
+          currency: string;
+          quantity: number;
+          credits_added: number;
+          status: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_session_id?: string;
+          stripe_payment_intent_id?: string | null;
+          amount_cents?: number;
+          currency?: string;
+          quantity?: number;
+          credits_added?: number;
+          status?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      tokenpay_connections: {
+        Row: {
+          user_id: string;
+          encrypted_api_key: string;
+          key_fingerprint: string;
+          status: "connected" | "reauthorize_required";
+          connected_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          encrypted_api_key: string;
+          key_fingerprint: string;
+          status?: "connected" | "reauthorize_required";
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          encrypted_api_key?: string;
+          key_fingerprint?: string;
+          status?: "connected" | "reauthorize_required";
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      tokenpay_oauth_flows: {
+        Row: {
+          state_hash: string;
+          user_id: string;
+          encrypted_code_verifier: string;
+          expires_at: string;
+          consumed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          state_hash: string;
+          user_id: string;
+          encrypted_code_verifier: string;
+          expires_at: string;
+          consumed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          state_hash?: string;
+          user_id?: string;
+          encrypted_code_verifier?: string;
+          expires_at?: string;
+          consumed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       sponsor_click_stats: {
@@ -297,6 +435,7 @@ export interface Database {
           active_days: number;
           last_click_at: string | null;
         };
+        Relationships: [];
       };
     };
     Functions: Record<string, never>;

@@ -10,6 +10,7 @@
     "audit:single-player-context": "tsx scripts/single-player-context-audit.ts",
     "audit:single-player-context:live": "node --env-file=.env.local --import tsx scripts/live-single-player-context-audit.ts",
     "lint": "eslint",
+    "test:tokenpay": "NODE_OPTIONS=--conditions=react-server tsx --test server/tokenpay-*.test.ts",
     "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
   },
   "dependencies": {
@@ -45,6 +46,7 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.7",
     "streamdown": "^1.6.10",
     "stripe": "^20.2.0",

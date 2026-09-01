@@ -22,7 +22,7 @@ import { useTranslations } from "next-intl";
 
 import { ALL_MODELS, PLAYER_MODELS, PROJECT_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition, clearPersistedGameState, isGameInProgress } from "@/store/game-machine";
-import { getGeneratorModel } from "@/lib/api-keys";
+import { getGeneratorModel, getModelSource } from "@/lib/api-keys";
 import {
   createInitialGameState,
   setupPlayers,
@@ -51,7 +51,6 @@ import { PhaseManager } from "@/game/core/PhaseManager";
 import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
-import { isCustomKeyEnabled } from "@/lib/api-keys";
 import { isQuotaExhaustedMessage } from "@/lib/llm";
 import { aiLogger } from "@/lib/ai-logger";
 
@@ -1382,14 +1381,14 @@ export function useGameLogic() {
       const statsConfig = {
         playerCount,
         difficulty,
-        usedCustomKey: isCustomKeyEnabled(),
+        usedCustomKey: getModelSource() !== "project",
       };
       gameStatsTracker.start(statsConfig);
 
       const sessionId = await gameSessionTracker.start({
         playerCount,
         difficulty,
-        usedCustomKey: isCustomKeyEnabled(),
+        usedCustomKey: getModelSource() !== "project",
         modelUsed: getGeneratorModel(),
         sessionId: gameSessionId,
       }).catch((err) => {

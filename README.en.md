@@ -14,7 +14,7 @@
 
 Current sponsors:
 
-*   [TokenDance](https://tokendance.agent-universe.cn/) - Powers the core game flow, roleplay, and summary features
+*   [TokenDance](https://tokendance.space/) - Powers the core game flow, roleplay, and summary features
 *   [Dashscope](https://bailian.console.aliyun.com/) - Provides AI capability support
 *   [Watcha](https://watcha.cn/) - Provides AI capability and showcase platform support
 
@@ -75,7 +75,7 @@ Built with modern web technologies:
 *   **Editor**: [Tiptap](https://tiptap.dev/) (For rich text interactions)
 *   **Animations**: [Framer Motion](https://www.framer.com/motion/)
 *   **Avatar Generation**: [DiceBear](https://www.dicebear.com/) (Notionists style)
-*   **AI Integration**: [TokenDance](https://tokendance.agent-universe.cn/) (Unified interface for LLMs)
+*   **AI Integration**: [TokenDance](https://tokendance.space/) (Unified interface for LLMs)
 
 ## 🚀 Local Development
 

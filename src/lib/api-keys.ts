@@ -1,8 +1,16 @@
-import { ALL_MODELS, GENERATOR_MODEL, SUMMARY_MODEL, REVIEW_MODEL } from "@/types/game";
+import {
+  ALL_MODELS,
+  AVAILABLE_MODELS,
+  GENERATOR_MODEL,
+  SUMMARY_MODEL,
+  REVIEW_MODEL,
+} from "@/types/game";
 
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
 const TOKENDANCE_API_KEY_STORAGE = "wolfcha_tokendance_api_key";
+const TOKENPAY_CONNECTED_STORAGE = "wolfcha_tokenpay_connected";
+const MODEL_SOURCE_STORAGE = "wolfcha_model_source";
 const MINIMAX_API_KEY_STORAGE = "wolfcha_minimax_api_key";
 const MINIMAX_GROUP_ID_STORAGE = "wolfcha_minimax_group_id";
 const CUSTOM_KEY_ENABLED_STORAGE = "wolfcha_custom_key_enabled";
@@ -13,7 +21,10 @@ const REVIEW_MODEL_STORAGE = "wolfcha_review_model";
 const VALIDATED_ZENMUX_KEY_STORAGE = "wolfcha_validated_zenmux_key";
 const VALIDATED_DASHSCOPE_KEY_STORAGE = "wolfcha_validated_dashscope_key";
 const VALIDATED_TOKENDANCE_KEY_STORAGE = "wolfcha_validated_tokendance_key";
-export const TOKENDANCE_BASE_URL = "https://tokendance.agent-universe.cn/gateway/v1";
+export const TOKENDANCE_BASE_URL = "https://tokendance.space/gateway/v1";
+export const MODEL_SOURCE_CHANGE_EVENT = "wolfcha:model-source-change";
+
+export type ModelSource = "project" | "tokenpay" | "custom";
 
 function canUseStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -69,6 +80,19 @@ export function setDashscopeApiKey(key: string) {
 
 export function setTokendanceApiKey(key: string) {
   writeStorage(TOKENDANCE_API_KEY_STORAGE, key);
+}
+
+export function isTokenPayConnected(): boolean {
+  return readStorage(TOKENPAY_CONNECTED_STORAGE) === "true";
+}
+
+export function setTokenPayConnected(connected: boolean) {
+  if (!canUseStorage()) return;
+  if (connected) {
+    window.localStorage.setItem(TOKENPAY_CONNECTED_STORAGE, "true");
+    return;
+  }
+  window.localStorage.removeItem(TOKENPAY_CONNECTED_STORAGE);
 }
 
 export function setTokendanceBaseUrl() {
@@ -131,6 +155,57 @@ export function hasMinimaxKey(): boolean {
   return Boolean(getMinimaxApiKey()) && Boolean(getMinimaxGroupId());
 }
 
+function hasLocalLlmKey(): boolean {
+  return hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey();
+}
+
+export function resolveModelSource(options: {
+  storedSource?: string | null;
+  legacyCustomEnabled?: boolean;
+  hasLocalKey?: boolean;
+  tokenPayConnected?: boolean;
+}): ModelSource {
+  if (
+    options.storedSource === "project" ||
+    options.storedSource === "tokenpay" ||
+    options.storedSource === "custom"
+  ) {
+    return options.storedSource;
+  }
+  if (options.legacyCustomEnabled && options.hasLocalKey) return "custom";
+  if (options.tokenPayConnected) return "tokenpay";
+  return "project";
+}
+
+export function getModelSource(): ModelSource {
+  if (!canUseStorage()) return "project";
+  const source = resolveModelSource({
+    storedSource: window.localStorage.getItem(MODEL_SOURCE_STORAGE),
+    legacyCustomEnabled:
+      window.localStorage.getItem(CUSTOM_KEY_ENABLED_STORAGE) === "true",
+    hasLocalKey: hasLocalLlmKey(),
+    tokenPayConnected: isTokenPayConnected(),
+  });
+  if (!window.localStorage.getItem(MODEL_SOURCE_STORAGE)) {
+    window.localStorage.setItem(MODEL_SOURCE_STORAGE, source);
+  }
+  return source;
+}
+
+export function setModelSource(source: ModelSource) {
+  if (!canUseStorage()) return;
+  window.localStorage.setItem(MODEL_SOURCE_STORAGE, source);
+  window.localStorage.setItem(
+    CUSTOM_KEY_ENABLED_STORAGE,
+    source === "custom" ? "true" : "false",
+  );
+  window.dispatchEvent(new CustomEvent(MODEL_SOURCE_CHANGE_EVENT, { detail: source }));
+}
+
+export function isTokenPayActive(): boolean {
+  return getModelSource() === "tokenpay" && isTokenPayConnected();
+}
+
 // When custom key is enabled, keep model within providers that have keys.
 function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: string): string {
   const allowedProviders = new Set<(typeof ALL_MODELS)[number]["provider"]>();
@@ -163,24 +238,11 @@ function resolveModelForCurrentKeyState(
 }
 
 export function isCustomKeyEnabled(): boolean {
-  if (!canUseStorage()) return false;
-  const flagEnabled = window.localStorage.getItem(CUSTOM_KEY_ENABLED_STORAGE) === "true";
-  if (!flagEnabled) return false;
-  // 额外安全检查：即使标志位为 true，如果没有任何有效的 LLM API key，也返回 false
-  // 这可以防止用户开启了开关但没有正确配置 key 的情况
-  const hasAnyLLMKey = hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey();
-  return hasAnyLLMKey;
+  return getModelSource() === "custom" && hasLocalLlmKey();
 }
 
 export function setCustomKeyEnabled(value: boolean) {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(CUSTOM_KEY_ENABLED_STORAGE, value ? "true" : "false");
-  if (!value) {
-    window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
-    window.localStorage.removeItem(GENERATOR_MODEL_STORAGE);
-    window.localStorage.removeItem(SUMMARY_MODEL_STORAGE);
-    window.localStorage.removeItem(REVIEW_MODEL_STORAGE);
-  }
+  setModelSource(value ? "custom" : isTokenPayConnected() ? "tokenpay" : "project");
 }
 
 export function getSelectedModels(): string[] {
@@ -212,11 +274,9 @@ export function setSelectedModels(models: string[]) {
 }
 
 export function getGeneratorModel(): string {
-  // When custom key is disabled, always use GENERATOR_MODEL directly
-  // (independent of AI player models in AVAILABLE_MODELS)
-  if (!isCustomKeyEnabled()) {
-    return GENERATOR_MODEL;
-  }
+  const source = getModelSource();
+  if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? GENERATOR_MODEL;
+  if (source !== "custom") return GENERATOR_MODEL;
   const stored = readStorage(GENERATOR_MODEL_STORAGE);
   return resolveModelForCurrentKeyState(stored, GENERATOR_MODEL, GENERATOR_MODEL_STORAGE);
 }
@@ -230,11 +290,9 @@ export function setGeneratorModel(model: string) {
 }
 
 export function getSummaryModel(): string {
-  // When custom key is disabled, always use SUMMARY_MODEL directly
-  // (independent of AI player models in AVAILABLE_MODELS)
-  if (!isCustomKeyEnabled()) {
-    return SUMMARY_MODEL;
-  }
+  const source = getModelSource();
+  if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? SUMMARY_MODEL;
+  if (source !== "custom") return SUMMARY_MODEL;
   const stored = readStorage(SUMMARY_MODEL_STORAGE);
   return resolveModelForCurrentKeyState(stored, SUMMARY_MODEL, SUMMARY_MODEL_STORAGE);
 }
@@ -248,10 +306,9 @@ export function setSummaryModel(model: string) {
 }
 
 export function getReviewModel(): string {
-  // When custom key is disabled, always use REVIEW_MODEL directly
-  if (!isCustomKeyEnabled()) {
-    return REVIEW_MODEL;
-  }
+  const source = getModelSource();
+  if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? REVIEW_MODEL;
+  if (source !== "custom") return REVIEW_MODEL;
   const stored = readStorage(REVIEW_MODEL_STORAGE);
   return resolveModelForCurrentKeyState(stored, REVIEW_MODEL, REVIEW_MODEL_STORAGE);
 }
@@ -271,7 +328,6 @@ export function clearApiKeys() {
   window.localStorage.removeItem(TOKENDANCE_API_KEY_STORAGE);
   window.localStorage.removeItem(MINIMAX_API_KEY_STORAGE);
   window.localStorage.removeItem(MINIMAX_GROUP_ID_STORAGE);
-  window.localStorage.removeItem(CUSTOM_KEY_ENABLED_STORAGE);
   window.localStorage.removeItem(SELECTED_MODELS_STORAGE);
   window.localStorage.removeItem(GENERATOR_MODEL_STORAGE);
   window.localStorage.removeItem(SUMMARY_MODEL_STORAGE);
@@ -281,6 +337,7 @@ export function clearApiKeys() {
   window.localStorage.removeItem(VALIDATED_TOKENDANCE_KEY_STORAGE);
   window.localStorage.removeItem("wolfcha_tokendance_base_url");
   window.localStorage.removeItem("wolfcha_validated_tokendance_base_url");
+  setModelSource(isTokenPayConnected() ? "tokenpay" : "project");
 }
 
 export interface KeyValidationResult {
@@ -290,8 +347,35 @@ export interface KeyValidationResult {
 }
 
 export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
-  if (!isCustomKeyEnabled()) {
+  const source = getModelSource();
+  if (source === "project") {
     return { valid: true };
+  }
+
+  if (source === "tokenpay") {
+    try {
+      const { getAuthHeaders } = await import("@/lib/auth-headers");
+      const response = await fetch("/api/tokenpay/balance", {
+        headers: await getAuthHeaders(),
+        cache: "no-store",
+      });
+      if (response.ok) return { valid: true };
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        recoveryAction?: string;
+      } | null;
+      return {
+        valid: false,
+        error: data?.error || "TokenPay 账户不可用",
+        errorCode: data?.recoveryAction || "tokenpay_unavailable",
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: `验证请求失败: ${String(error)}`,
+        errorCode: "network_error",
+      };
+    }
   }
 
   const zenmuxKey = getZenmuxApiKey();

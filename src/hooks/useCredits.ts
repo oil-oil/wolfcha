@@ -12,7 +12,8 @@ import {
   getTokendanceApiKey,
   getTokendanceBaseUrl,
   getZenmuxApiKey,
-  isCustomKeyEnabled,
+  getModelSource,
+  setTokenPayConnected,
 } from "@/lib/api-keys";
 import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
 import { supabase } from "@/lib/supabase";
@@ -23,16 +24,19 @@ import {
 } from "@/lib/welfare-config";
 import { readReferralFromStorage, removeReferralFromStorage } from "@/lib/referral";
 import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
+import { fetchWithTimeout } from "@/lib/request-timeout";
 
 const REFERRAL_ENDPOINT = "/api/credits/referral";
 const REDEEM_ENDPOINT = "/api/credits/redeem";
 const SPRING_CAMPAIGN_ENDPOINT = "/api/credits/spring-login-bonus";
 const JSON_CONTENT_TYPE = "application/json";
 const DEMO_CONFIG_REFRESH_INTERVAL_MS = 60_000;
+const CONSUME_CREDIT_TIMEOUT_MS = 15_000;
 const AUTH_EVENT = {
   INITIAL_SESSION: "INITIAL_SESSION",
   PASSWORD_RECOVERY: "PASSWORD_RECOVERY",
   SIGNED_IN: "SIGNED_IN",
+  SIGNED_OUT: "SIGNED_OUT",
 } as const;
 
 export type ConsumeCreditOptions = {
@@ -49,6 +53,10 @@ export type ConsumeCreditResult = {
   success: boolean;
   credits?: number;
   sessionId?: string | null;
+  error?: string;
+  code?: string;
+  recoveryAction?: string;
+  status?: number;
 };
 
 export function useCredits() {
@@ -105,15 +113,18 @@ export function useCredits() {
 
   const consumeCredit = useCallback(async (options: ConsumeCreditOptions = {}): Promise<ConsumeCreditResult> => {
     if (isDemoMode) return { success: true };
-    if (!session) return { success: false };
+    if (!session) return { success: false, error: "unauthorized", status: 401 };
 
     try {
-      const customEnabled = isCustomKeyEnabled();
+      const modelSource = getModelSource();
+      const customEnabled = modelSource === "custom";
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
       const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
+      const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
+      const tokenPayRequested = modelSource === "tokenpay";
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
-      const res = await fetch("/api/credits/consume", {
+      const res = await fetchWithTimeout("/api/credits/consume", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -121,21 +132,40 @@ export function useCredits() {
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
           ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
-          ...(tokendanceBaseUrl ? { "X-Tokendance-Base-Url": tokendanceBaseUrl } : {}),
+          ...(tokendanceApiKey && tokendanceBaseUrl
+            ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
+            : {}),
+          ...(tokenPayRequested ? { "X-TokenPay-Mode": "true" } : {}),
         },
-        body: JSON.stringify(options),
-      });
+        body: JSON.stringify({
+          ...options,
+          usedCustomKey: tokenPayRequested || hasCustomKey,
+        }),
+      }, CONSUME_CREDIT_TIMEOUT_MS);
 
       if (!res.ok) {
+        let payload: {
+          campaign?: SpringCampaignSnapshot;
+          error?: unknown;
+          code?: unknown;
+          recoveryAction?: unknown;
+        } = {};
         try {
-          const payload = (await res.json()) as { campaign?: SpringCampaignSnapshot };
+          payload = await res.json() as typeof payload;
           if (payload.campaign) {
             setSpringCampaign(payload.campaign);
           }
         } catch {
           // no-op
         }
-        return { success: false };
+        return {
+          success: false,
+          status: res.status,
+          error: typeof payload.error === "string" ? payload.error : `request_failed_${res.status}`,
+          code: typeof payload.code === "string" ? payload.code : undefined,
+          recoveryAction:
+            typeof payload.recoveryAction === "string" ? payload.recoveryAction : undefined,
+        };
       }
 
       const payload = (await res.json()) as {
@@ -148,8 +178,11 @@ export function useCredits() {
         setSpringCampaign(payload.campaign);
       }
       return { success: true, credits: payload.credits, sessionId: payload.sessionId ?? null };
-    } catch {
-      return { success: false };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "network_error",
+      };
     }
   }, [isDemoMode, session]);
 
@@ -328,16 +361,46 @@ export function useCredits() {
   }, [refreshDemoConfig]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session) {
-        void handleAuthenticatedSession(session);
-      }
-    });
+    let active = true;
+    const deferredAuthTasks = new Set<number>();
+
+    const deferAuthTask = (task: () => Promise<void>) => {
+      const timeoutId = window.setTimeout(() => {
+        deferredAuthTasks.delete(timeoutId);
+        if (!active) return;
+        void task().catch((error) => {
+          console.error("[auth] deferred session task failed", error);
+          if (active) setDemoConfigLoading(false);
+        });
+      }, 0);
+      deferredAuthTasks.add(timeoutId);
+    };
+
+    setTokenPayConnected(false);
+    void supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session) {
+          void handleAuthenticatedSession(session);
+        }
+      })
+      .catch((error) => {
+        console.error("[auth] failed to load initial session", error);
+        if (!active) return;
+        setSession(null);
+        setUser(null);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (
+          event === AUTH_EVENT.SIGNED_IN ||
+          event === AUTH_EVENT.SIGNED_OUT
+        ) {
+          setTokenPayConnected(false);
+        }
         setSession(session);
         setUser(session?.user ?? null);
 
@@ -349,28 +412,40 @@ export function useCredits() {
           session
           && (event === AUTH_EVENT.SIGNED_IN || event === AUTH_EVENT.INITIAL_SESSION)
         ) {
-          const latestDemoConfig = await fetchDemoModeConfigClient(true);
-          setDemoConfig(latestDemoConfig);
-          setIsDemoMode(latestDemoConfig.active);
-          setGuestId(latestDemoConfig.active ? getGuestId() : null);
-          setDemoConfigLoading(false);
+          // Supabase auth listeners must return synchronously. Awaiting network
+          // work here can hold the auth lock and make later getSession() calls
+          // (including TokenPay) wait forever.
+          deferAuthTask(async () => {
+            const latestDemoConfig = await fetchDemoModeConfigClient(true);
+            if (!active) return;
+            setDemoConfig(latestDemoConfig);
+            setIsDemoMode(latestDemoConfig.active);
+            setGuestId(latestDemoConfig.active ? getGuestId() : null);
+            setDemoConfigLoading(false);
 
-          if (latestDemoConfig.active) {
-            const previousGuestId = readGuestIdFromStorage();
-            if (previousGuestId && session.user) {
-              void migrateGuestSessions(previousGuestId, session.access_token).then(() => {
-                clearGuestId();
-                setGuestId(null);
-              });
+            if (latestDemoConfig.active) {
+              const previousGuestId = readGuestIdFromStorage();
+              if (previousGuestId && session.user) {
+                void migrateGuestSessions(previousGuestId, session.access_token).then(() => {
+                  if (!active) return;
+                  clearGuestId();
+                  setGuestId(null);
+                });
+              }
             }
-          }
 
-          await handleAuthenticatedSession(session);
+            await handleAuthenticatedSession(session);
+          });
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      deferredAuthTasks.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      deferredAuthTasks.clear();
+      subscription.unsubscribe();
+    };
   }, [handleAuthenticatedSession]);
 
   useEffect(() => {

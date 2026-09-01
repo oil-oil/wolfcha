@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, hasAuthorizedActiveGameSession } from "@/lib/api-auth";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
-import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
+import {
+  getConnectedTokenPayApiKey,
+  getTokenPayAppUrl,
+  getTokenPayGatewayUrl,
+  markTokenPayConnectionForReauthorization,
+  readTokenPayRecoveryAction,
+  TOKENPAY_MODE_HEADER,
+  TOKENPAY_RECOVERY_HEADER,
+  type TokenPayRecoveryAction,
+} from "@/lib/tokenpay";
 import { Agent, setGlobalDispatcher } from "undici";
 
 // 将 undici 底层 TCP 连接超时从默认 10s 调高到 60s
@@ -296,7 +305,16 @@ async function runBatchItem(
   headerDashscopeKey: string | null,
   headerTokendanceKey: string | null,
   headerTokendanceBaseUrl: string | null
-): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string; details?: unknown }> {
+): Promise<
+  | { ok: true; data: unknown }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      details?: unknown;
+      recoveryAction?: TokenPayRecoveryAction;
+    }
+> {
   const {
     model,
     messages,
@@ -436,7 +454,7 @@ async function runBatchItem(
       return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 TokenDance Key（已拒绝回退到系统 Key）" };
     }
     const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-    const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL || TOKENDANCE_BASE_URL;
+    const tokendanceBaseUrl = headerTokendanceBaseUrl || getTokenPayGatewayUrl();
     if (!tokendanceApiKey || !tokendanceBaseUrl) {
       return { ok: false, status: 500, error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" };
     }
@@ -479,8 +497,7 @@ async function runBatchItem(
         headers: {
           Authorization: `Bearer ${tokendanceApiKey}`,
           "Content-Type": "application/json",
-          "X-App-Name": "Wolfcha",
-          "X-Site-URL": "https://wolf-cha.com",
+          "X-App-URL": getTokenPayAppUrl(),
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
@@ -491,6 +508,7 @@ async function runBatchItem(
 
     if (!response.ok) {
       const errorText = await response.text();
+      const recoveryAction = readTokenPayRecoveryAction(response);
       let parsed: unknown = undefined;
       try {
         parsed = JSON.parse(errorText);
@@ -502,6 +520,7 @@ async function runBatchItem(
         status: response.status,
         error: `TokenDance error: ${response.status}`,
         details: parsed ?? errorText,
+        ...(recoveryAction ? { recoveryAction } : {}),
       };
     }
 
@@ -577,9 +596,35 @@ export async function POST(request: NextRequest) {
   const auth = await authenticateRequest(request as unknown as Request);
   if ("error" in auth) return auth.error;
 
+  const tokenPayRequested = ["true", "1"].includes(
+    request.headers.get(TOKENPAY_MODE_HEADER)?.trim().toLowerCase() ?? "",
+  );
+  let tokenPayApiKey: string | null = null;
+  if (tokenPayRequested) {
+    try {
+      tokenPayApiKey = await getConnectedTokenPayApiKey(auth.user.id);
+    } catch (error) {
+      console.error("[TokenPay] Failed to resolve API key", error);
+      return NextResponse.json(
+        { error: "Failed to resolve TokenPay connection" },
+        { status: 500 },
+      );
+    }
+    if (!tokenPayApiKey) {
+      return NextResponse.json(
+        {
+          error: "TokenPay connection is not available",
+          code: "tokenpay_connection_unavailable",
+          recoveryAction: "reauthorize_api_key",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const earlyZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const earlyDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
-  const earlyTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
+  const earlyTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim();
   const hasCustomKeys = Boolean(
     (earlyZenmuxKey ?? "") ||
     (earlyDashscopeKey ?? "") ||
@@ -599,8 +644,10 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(body?.requests)) {
       const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim() || null;
       const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
-      const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim() || null;
-      const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || null;
+      const headerTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim() || null;
+      const headerTokendanceBaseUrl = tokenPayRequested
+        ? getTokenPayGatewayUrl()
+        : request.headers.get("x-tokendance-base-url")?.trim() || null;
       const requests = body.requests as ChatRequestPayload[];
       if (requests.length > MAX_BATCH_REQUESTS) {
         return NextResponse.json(
@@ -611,6 +658,14 @@ export async function POST(request: NextRequest) {
       const results = await Promise.all(
         requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerTokendanceKey, headerTokendanceBaseUrl))
       );
+      if (
+        tokenPayRequested &&
+        results.some(
+          (result) => !result.ok && result.recoveryAction === "reauthorize_api_key",
+        )
+      ) {
+        await markTokenPayConnectionForReauthorization(auth.user.id);
+      }
       return NextResponse.json({ results });
     }
     const {
@@ -635,8 +690,10 @@ export async function POST(request: NextRequest) {
     }
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
-    const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
-    const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
+    const headerTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim();
+    const headerTokendanceBaseUrl = tokenPayRequested
+      ? getTokenPayGatewayUrl()
+      : request.headers.get("x-tokendance-base-url")?.trim();
     const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim());
     const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
 
@@ -796,7 +853,7 @@ export async function POST(request: NextRequest) {
       }
 
       const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-      const tokendanceBaseUrl = headerTokendanceBaseUrl || process.env.TOKENDANCE_BASE_URL || TOKENDANCE_BASE_URL;
+      const tokendanceBaseUrl = headerTokendanceBaseUrl || getTokenPayGatewayUrl();
       if (!tokendanceApiKey || !tokendanceBaseUrl) {
         return NextResponse.json(
           { error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" },
@@ -849,8 +906,7 @@ export async function POST(request: NextRequest) {
           headers: {
             Authorization: `Bearer ${tokendanceApiKey}`,
             "Content-Type": "application/json",
-            "X-App-Name": "Wolfcha",
-            "X-Site-URL": "https://wolf-cha.com",
+            "X-App-URL": getTokenPayAppUrl(),
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
@@ -861,19 +917,28 @@ export async function POST(request: NextRequest) {
 
       if (!response.ok) {
         const errorText = await response.text();
+        const recoveryAction = readTokenPayRecoveryAction(response);
+        if (tokenPayRequested && recoveryAction === "reauthorize_api_key") {
+          await markTokenPayConnectionForReauthorization(auth.user.id);
+        }
         let parsed: unknown = undefined;
         try {
           parsed = JSON.parse(errorText);
         } catch {
           // ignore
         }
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           {
             error: `TokenDance error: ${response.status}`,
             details: parsed ?? errorText,
+            recoveryAction,
           },
           { status: response.status }
         );
+        if (recoveryAction) {
+          errorResponse.headers.set(TOKENPAY_RECOVERY_HEADER, recoveryAction);
+        }
+        return errorResponse;
       }
 
       if (stream) {
