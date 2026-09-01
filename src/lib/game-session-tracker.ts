@@ -8,6 +8,7 @@
 import { supabase } from "@/lib/supabase";
 import { fetchDemoModeConfigClient } from "@/lib/demo-config";
 import { getGuestId } from "@/lib/demo-mode";
+import { fetchWithTimeout, withTimeout } from "@/lib/request-timeout";
 
 export interface GameSessionConfig {
   playerCount: number;
@@ -49,6 +50,9 @@ let state: SessionState = createInitialState();
 
 // 防抖：避免短时间内重复同步
 const SYNC_DEBOUNCE_MS = 5000;
+const SESSION_READ_TIMEOUT_MS = 10_000;
+const SESSION_API_TIMEOUT_MS = 15_000;
+const AUTHORIZED_SESSION_ACTOR_ID = "authorized_session";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -78,9 +82,16 @@ async function parseJsonObject(response: Response): Promise<Record<string, unkno
 }
 
 async function getAccessToken(): Promise<string | null> {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) return null;
-  return data.session?.access_token ?? null;
+  try {
+    const { data, error } = await withTimeout(
+      supabase.auth.getSession(),
+      SESSION_READ_TIMEOUT_MS,
+    );
+    if (error) return null;
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function createSessionViaApi(payload: {
@@ -106,11 +117,11 @@ async function createSessionViaApi(payload: {
   }
 
   try {
-    const res = await fetch("/api/game-sessions", {
+    const res = await fetchWithTimeout("/api/game-sessions", {
       method: "POST",
       headers,
       body: JSON.stringify({ action: "create", ...payload }),
-    });
+    }, SESSION_API_TIMEOUT_MS);
     const json = await parseJsonObject(res);
     const sessionId = typeof json.sessionId === "string" ? json.sessionId : null;
     if (!res.ok || !sessionId) {
@@ -149,11 +160,11 @@ async function updateSessionViaApi(payload: {
   }
 
   try {
-    const res = await fetch("/api/game-sessions", {
+    const res = await fetchWithTimeout("/api/game-sessions", {
       method: "POST",
       headers,
       body: JSON.stringify({ action: "update", ...payload }),
-    });
+    }, SESSION_API_TIMEOUT_MS);
     const json = await parseJsonObject(res);
     if (!res.ok || json.success !== true) {
       return { ok: false, status: res.status, error: json };
@@ -170,8 +181,35 @@ export const gameSessionTracker = {
    * 在游戏开始时调用，创建数据库记录
    */
   async start(config: GameSessionConfig): Promise<string | null> {
-    // 获取当前用户
-    const { data: { user } } = await supabase.auth.getUser();
+    if (config.sessionId) {
+      state = {
+        ...createInitialState(),
+        startTime: Date.now(),
+        config,
+        sessionId: config.sessionId,
+        // 该 session 已由 /api/credits/consume 鉴权并创建，先允许追踪继续；
+        // 本地用户 ID 随后补齐，不让一次 Auth 网络请求阻塞开局。
+        userId: AUTHORIZED_SESSION_ACTOR_ID,
+        lastSyncTime: Date.now(),
+      };
+      const authorizedSessionId = config.sessionId;
+      void withTimeout(supabase.auth.getSession(), SESSION_READ_TIMEOUT_MS)
+        .then(({ data }) => {
+          if (state.sessionId === authorizedSessionId && data.session?.user.id) {
+            state.userId = data.session.user.id;
+          }
+        })
+        .catch(() => undefined);
+      console.log("[game-session] Reusing authorized session:", config.sessionId);
+      return config.sessionId;
+    }
+
+    // 仅从本地 session 获取身份；服务端 API 仍负责真正鉴权。
+    const sessionResult = await withTimeout(
+      supabase.auth.getSession(),
+      SESSION_READ_TIMEOUT_MS,
+    ).catch(() => null);
+    const user = sessionResult?.data.session?.user ?? null;
     const demoConfig = await fetchDemoModeConfigClient();
     const demoActive = demoConfig.active;
 
@@ -190,13 +228,6 @@ export const gameSessionTracker = {
       config,
       userId: effectiveUserId,
     };
-
-    if (config.sessionId) {
-      state.sessionId = config.sessionId;
-      state.lastSyncTime = Date.now();
-      console.log("[game-session] Reusing authorized session:", config.sessionId);
-      return config.sessionId;
-    }
 
     // 获取用户地区信息（基于浏览器语言和时区）
     const region = typeof navigator !== "undefined" 

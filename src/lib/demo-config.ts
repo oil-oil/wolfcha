@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "@/lib/request-timeout";
+
 export type DemoModePublicConfigSnapshot = {
   source: "database";
   enabled: boolean;
@@ -8,6 +10,7 @@ export type DemoModePublicConfigSnapshot = {
 };
 
 const DEMO_CONFIG_ENDPOINT = "/api/demo-config";
+const DEMO_CONFIG_TIMEOUT_MS = 10_000;
 
 let cachedDemoModeConfig: DemoModePublicConfigSnapshot | null = null;
 let inFlightDemoModeConfigRequest: Promise<DemoModePublicConfigSnapshot> | null = null;
@@ -44,10 +47,10 @@ export async function fetchDemoModeConfigClient(forceRefresh = false): Promise<D
     return inFlightDemoModeConfigRequest;
   }
 
-  const request = fetch(DEMO_CONFIG_ENDPOINT, {
+  const request = fetchWithTimeout(DEMO_CONFIG_ENDPOINT, {
     method: "GET",
     cache: "no-store",
-  })
+  }, DEMO_CONFIG_TIMEOUT_MS)
     .then(async (response) => {
       if (!response.ok) {
         throw new Error(`Failed to fetch demo config: ${response.status}`);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DASHSCOPE_VALIDATION_MODEL, TOKENDANCE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
 import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
+import { getTokenPayAppUrl } from "@/lib/tokenpay";
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -26,6 +27,7 @@ async function validateZenmuxKey(apiKey: string): Promise<ValidationResult> {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "X-App-URL": getTokenPayAppUrl(),
       },
       body: JSON.stringify({
         model: ZENMUX_VALIDATION_MODEL,

@@ -22,7 +22,7 @@ import { useTranslations } from "next-intl";
 
 import { ALL_MODELS, PLAYER_MODELS, PROJECT_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition, clearPersistedGameState, isGameInProgress } from "@/store/game-machine";
-import { getGeneratorModel } from "@/lib/api-keys";
+import { getGeneratorModel, getModelSource } from "@/lib/api-keys";
 import {
   createInitialGameState,
   setupPlayers,
@@ -32,7 +32,7 @@ import {
   checkWinCondition,
   killPlayer,
   generateDailySummary,
-  getNextAliveSeat,
+  getRandomHumanSeat,
   generateWhiteWolfKingBoomDecision,
 } from "@/lib/game-master";
 import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs, type GeneratedCharacter } from "@/lib/character-generator";
@@ -51,7 +51,6 @@ import { PhaseManager } from "@/game/core/PhaseManager";
 import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
-import { isCustomKeyEnabled } from "@/lib/api-keys";
 import { isQuotaExhaustedMessage } from "@/lib/llm";
 import { aiLogger } from "@/lib/ai-logger";
 
@@ -1382,14 +1381,14 @@ export function useGameLogic() {
       const statsConfig = {
         playerCount,
         difficulty,
-        usedCustomKey: isCustomKeyEnabled(),
+        usedCustomKey: getModelSource() !== "project",
       };
       gameStatsTracker.start(statsConfig);
 
       const sessionId = await gameSessionTracker.start({
         playerCount,
         difficulty,
-        usedCustomKey: isCustomKeyEnabled(),
+        usedCustomKey: getModelSource() !== "project",
         modelUsed: getGeneratorModel(),
         sessionId: gameSessionId,
       }).catch((err) => {
@@ -1404,8 +1403,9 @@ export function useGameLogic() {
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();
 
-      // In spectator mode, there's no human player - all seats are AI
-      const humanSeat = isSpectatorMode ? -1 : 0;
+      // 普通模式每局只随机一次人类座位；之后 UI、阶段推进和 Prompt 都读取同一个 seat。
+      // 观战模式没有人类玩家。
+      const humanSeat = isSpectatorMode ? -1 : getRandomHumanSeat(totalPlayers);
 
       const aiSeats = Array.from({ length: totalPlayers }, (_, seat) => seat).filter(
         (seat) => seat !== humanSeat
@@ -1475,7 +1475,7 @@ export function useGameLogic() {
         if (customList.length === 0) return;
         const seatMap = new Map<number, { character: GeneratedCharacter; index: number }>();
         customList.forEach((character, index) => {
-          const seat = aiSeatOrder[index] ?? index + 1;
+          const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
           if (Number.isFinite(seat)) {
             seatMap.set(seat, { character, index });
           }
@@ -1517,7 +1517,7 @@ export function useGameLogic() {
         // Custom characters appear immediately (no delay), generated ones animate in
         const customCount = customGeneratedCharacters.length;
         characters.forEach((character, index) => {
-          const seat = aiSeatOrder[index] ?? index + 1;
+          const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
           const isCustom = index < customCount;
           const delay = isCustom ? 0 : 200 + (index - customCount) * 180;
           
@@ -1547,7 +1547,7 @@ export function useGameLogic() {
         
         // 为 Genshin 模式添加逐个出现的动画效果
         characters.forEach((character, index) => {
-          const seat = aiSeatOrder[index] ?? index + 1;
+          const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
           window.setTimeout(() => {
             setGameState((prev) => {
               const nextPlayers = prev.players.map((pl) => {
@@ -1572,7 +1572,7 @@ export function useGameLogic() {
         characters = await generateCharacters(numAiPlayers, scenario, {
           onBaseProfiles: (profiles) => {
             profiles.forEach((p, i) => {
-              const seat = aiSeatOrder[i] ?? i + 1;
+              const seat = aiSeatOrder[i] ?? aiSeats[i] ?? i;
               window.setTimeout(() => {
                 setGameState((prev) => {
                   const nextPlayers = prev.players.map((pl) => {
@@ -1585,7 +1585,7 @@ export function useGameLogic() {
             });
           },
           onCharacter: (index, character) => {
-            const seat = aiSeatOrder[index] ?? index + 1;
+            const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
             window.setTimeout(() => {
               setGameState((prev) => {
                 const nextPlayers = prev.players.map((pl) => {

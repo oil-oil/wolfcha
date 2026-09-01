@@ -3,9 +3,8 @@
 import { useTranslations } from "next-intl";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Key, CreditCard, Play } from "@phosphor-icons/react";
+import { LinkSimple, CreditCard, Play } from "@phosphor-icons/react";
 
-const ZENMUX_URL = "https://zenmux.ai/aboutus?ref=wolfcha";
 const LOW_CREDIT_THRESHOLD = 3;
 
 interface LowCreditModalProps {
@@ -14,6 +13,7 @@ interface LowCreditModalProps {
   credits: number;
   onStartGame: () => void;
   onOpenPayAsYouGo: () => void;
+  onOpenTokenPay: () => void;
 }
 
 export function LowCreditModal({
@@ -22,16 +22,18 @@ export function LowCreditModal({
   credits,
   onStartGame,
   onOpenPayAsYouGo,
+  onOpenTokenPay,
 }: LowCreditModalProps) {
   const t = useTranslations("lowCreditModal");
-
-  const handleBuyApiKey = () => {
-    window.open(ZENMUX_URL, "_blank", "noopener,noreferrer");
-  };
 
   const handleRecharge = () => {
     onOpenChange(false);
     onOpenPayAsYouGo();
+  };
+
+  const handleTokenPay = () => {
+    onOpenChange(false);
+    onOpenTokenPay();
   };
 
   const handleStartGame = () => {
@@ -77,11 +79,11 @@ export function LowCreditModal({
           <div className="space-y-3 pt-1">
             <Button
               type="button"
-              onClick={handleBuyApiKey}
+              onClick={handleTokenPay}
               className="w-full h-11 gap-2 bg-[var(--color-gold)] text-[var(--bg-primary)] hover:brightness-110 hover:scale-[1.01] active:scale-[0.99] transition-all duration-150 font-medium shadow-lg shadow-[var(--color-gold)]/20"
             >
-              <Key size={18} weight="duotone" />
-              {t("buyApiKey")}
+              <LinkSimple size={18} weight="duotone" />
+              {t("useTokenPay")}
             </Button>
 
             <Button

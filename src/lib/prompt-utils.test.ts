@@ -135,3 +135,40 @@ test("行动者自己的发言仍保留在正式 Prompt 的原始时间位置", 
   assert.ok(prompt.user.indexOf("我要验尚未发言的3号") < prompt.user.indexOf("3号之后才发言"));
   assert.match(prompt.user, /你的发言已作为1号保留在上方完整时间线的实际位置/);
 });
+
+test("发言顺序上下文只陈述本轮客观记录，不加入策略建议", async () => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||= "http://127.0.0.1:54321";
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||= "prompt-utils-test-key";
+  await import("@/lib/game-master");
+  const { DaySpeechPhase } = await import("@/game/phases/DaySpeechPhase");
+  const state = makeState([
+    message(7, "8号先发言"),
+    message(8, "9号随后发言"),
+  ]);
+  state.phase = "DAY_BADGE_SPEECH";
+  state.currentSpeakerSeat = 0;
+  state.daySpeechStartSeat = 7;
+  state.speechRoundStartMessageIndex = 0;
+  const prompt = new DaySpeechPhase().getPrompt({ state }, state.players[0]);
+  const statusSection = prompt.user.match(/【发言顺序】\n([\s\S]*?)\n\n轮到你发言/)?.[1];
+
+  assert.ok(statusSection);
+  assert.match(statusSection, /本轮发言顺序：8号、9号、1号、3号/);
+  assert.match(statusSection, /当前轮到：1号（第3\/4位）/);
+  assert.match(statusSection, /已有公开发言记录：8号、9号/);
+  assert.match(statusSection, /尚未轮到且没有公开发言记录：3号/);
+  assert.doesNotMatch(statusSection, /可以|建议|应该|先抛|回应/);
+});
+
+test("与玩家有关的公开信息只陈述事实，不引导如何发言", async () => {
+  const { buildPublicFactsForPlayer } = await import("./prompt-utils");
+  const state = makeState([
+    message(1, "我点名1号说一下"),
+  ]);
+  state.phase = "DAY_SPEECH";
+  const facts = buildPublicFactsForPlayer(state, state.players[0]);
+
+  assert.match(facts, /【与你有关的公开事实】/);
+  assert.match(facts, /2号点名提到过你/);
+  assert.doesNotMatch(facts, /可以|建议|应该|先抛|回应|想想|角度/);
+});

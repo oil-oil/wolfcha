@@ -21,9 +21,20 @@ import { LowCreditModal, LOW_CREDIT_THRESHOLD } from "@/components/game/LowCredi
 import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
-import { useCredits } from "@/hooks/useCredits";
+import { useCredits, type ConsumeCreditResult } from "@/hooks/useCredits";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
-import { getGeneratorModel, hasDashscopeKey, hasTokendanceKey, hasZenmuxKey, isCustomKeyEnabled } from "@/lib/api-keys";
+import {
+  getGeneratorModel,
+  getModelSource,
+  hasDashscopeKey,
+  hasTokendanceKey,
+  hasZenmuxKey,
+  isTokenPayConnected,
+  MODEL_SOURCE_CHANGE_EVENT,
+  setModelSource,
+  setTokenPayConnected as setTokenPayConnectionHint,
+  type ModelSource,
+} from "@/lib/api-keys";
 import { useAppLocale } from "@/i18n/useAppLocale";
 import {
   SPRING_CAMPAIGN_CODE,
@@ -256,6 +267,7 @@ export function WelcomeScreen({
 
   const {
     user,
+    session,
     credits,
     referralCode,
     totalReferrals,
@@ -286,6 +298,12 @@ export function WelcomeScreen({
   const [isCustomCharacterOpen, setIsCustomCharacterOpen] = useState(false);
   const [isLowCreditOpen, setIsLowCreditOpen] = useState(false);
   const [userProfileDefaultTab, setUserProfileDefaultTab] = useState<string | undefined>(undefined);
+  const [tokenPayConnected, setTokenPayConnectedState] = useState(false);
+  const [tokenPaySyncedUserId, setTokenPaySyncedUserId] = useState<string | null>(null);
+  const tokenPaySyncing = Boolean(
+    session?.user.id && tokenPaySyncedUserId !== session.user.id,
+  );
+  const tokenPayQueryHandledRef = useRef(false);
   const selectionStorageKey = useMemo(() => {
     return user?.id
       ? `${CUSTOM_CHARACTER_SELECTION_STORAGE_KEY}:${user.id}`
@@ -344,6 +362,27 @@ export function WelcomeScreen({
   }, [springCampaign?.active, springCampaign?.justClaimed, t]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || tokenPayQueryHandledRef.current) return;
+    const url = new URL(window.location.href);
+    const tokenPayResult = url.searchParams.get("tokenpay");
+    if (!tokenPayResult) return;
+    const tokenPayErrorResults = new Set(["error", "denied", "invalid_callback", "failed"]);
+    if (tokenPayResult !== "connected" && !tokenPayErrorResults.has(tokenPayResult)) return;
+
+    tokenPayQueryHandledRef.current = true;
+    url.searchParams.delete("tokenpay");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+    if (tokenPayResult === "connected") {
+      setModelSource("tokenpay");
+    }
+    if (tokenPayErrorResults.has(tokenPayResult)) {
+      toast.error(t("tokenPay.oauthError"));
+    }
+  }, [t]);
+
+  useEffect(() => {
     if (!springCampaignActiveNow) return;
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -379,16 +418,24 @@ export function WelcomeScreen({
     }
   }, [customCharacters.characters, customCharacters.loading, selectedCharacterIds]);
 
-  const [customKeyEnabled, setCustomKeyEnabled] = useState(() => isCustomKeyEnabled());
+  const [modelSource, setModelSourceState] = useState<ModelSource>(() => getModelSource());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== "wolfcha_custom_key_enabled") return;
-      setCustomKeyEnabled(isCustomKeyEnabled());
+    const syncModelSource = () => setModelSourceState(getModelSource());
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key !== "wolfcha_model_source" &&
+        event.key !== "wolfcha_custom_key_enabled"
+      ) return;
+      syncModelSource();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(MODEL_SOURCE_CHANGE_EVENT, syncModelSource);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(MODEL_SOURCE_CHANGE_EVENT, syncModelSource);
+    };
   }, []);
 
   // 调试面板状态
@@ -587,9 +634,34 @@ export function WelcomeScreen({
     }
   };
 
-  const handleCreditFailure = () => {
+  const openTokenPayConnection = (reauthorize: boolean) => {
+    setTokenPayConnectionHint(false);
+    setTokenPayConnectedState(false);
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+    toast.error(
+      t(reauthorize ? "tokenPay.reauthorizeTitle" : "tokenPay.disconnectedTitle"),
+      {
+        description: t(
+          reauthorize
+            ? "tokenPay.reauthorizeDescription"
+            : "tokenPay.disconnectedDescription",
+        ),
+      },
+    );
+  };
+
+  const handleCreditFailure = (result?: ConsumeCreditResult) => {
     setIsTransitioning(false);
     onAbort?.();
+    if (
+      getModelSource() === "tokenpay" &&
+      (result?.recoveryAction === "reauthorize_api_key" ||
+        result?.code === "tokenpay_connection_unavailable")
+    ) {
+      openTokenPayConnection(true);
+      return;
+    }
     if (REFERRAL_BONUS_ENABLED) {
       setIsShareOpen(true);
     } else {
@@ -599,8 +671,10 @@ export function WelcomeScreen({
     toast.error(t("welcome.toast.creditFail.title"), { description: t("welcome.toast.creditFail.description") });
   };
 
-  const hasUserProvidedLlmKey = () => (
-    isCustomKeyEnabled() && (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())
+  const hasActiveExternalModelSource = () => (
+    (getModelSource() === "custom" &&
+      (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())) ||
+    (getModelSource() === "tokenpay" && (tokenPayConnected || isTokenPayConnected()))
   );
 
   const buildStartOptions = (gameSessionId?: string | null): StartGameOptions => {
@@ -657,6 +731,7 @@ export function WelcomeScreen({
 
     setIsTransitioning(true);
 
+    let creditAuthorized = skipCredit;
     try {
       let gameSessionId: string | null = null;
       if (!skipCredit) {
@@ -664,15 +739,16 @@ export function WelcomeScreen({
           createSession: true,
           playerCount,
           difficulty,
-          usedCustomKey: false,
+          usedCustomKey: getModelSource() !== "project",
           modelUsed: getGeneratorModel(),
           userEmail: user?.email ?? null,
           region: getClientRegion(),
         });
         if (!result.success) {
-          handleCreditFailure();
+          handleCreditFailure(result);
           return;
         }
+        creditAuthorized = true;
         gameSessionId = result.sessionId ?? null;
       }
 
@@ -680,7 +756,7 @@ export function WelcomeScreen({
       await onStart(buildStartOptions(gameSessionId));
     } catch (error) {
       console.error("[welcome] failed to start game", error);
-      if (!skipCredit) {
+      if (!creditAuthorized) {
         handleCreditFailure();
       } else {
         setIsTransitioning(false);
@@ -698,6 +774,10 @@ export function WelcomeScreen({
     if (isStartingRef.current) {
       return;
     }
+    if (tokenPaySyncing) {
+      toast(t("tokenPay.syncing"));
+      return;
+    }
 
     const latestDemoConfig = await refreshDemoConfig(true);
     const demoModeActive = latestDemoConfig.active;
@@ -709,11 +789,19 @@ export function WelcomeScreen({
       return;
     }
 
-    const hasUserKey = hasUserProvidedLlmKey();
+    if (
+      getModelSource() === "tokenpay" &&
+      !(tokenPayConnected || isTokenPayConnected())
+    ) {
+      openTokenPayConnection(false);
+      return;
+    }
+
+    const hasExternalSource = hasActiveExternalModelSource();
 
     if (
       !demoModeActive &&
-      !hasUserKey &&
+      !hasExternalSource &&
       credits !== null &&
       credits <= LOW_CREDIT_THRESHOLD &&
       !hasSpringQuota &&
@@ -723,7 +811,7 @@ export function WelcomeScreen({
       return;
     }
 
-    await startGameWithCreditGuard(demoModeActive || hasUserKey);
+    await startGameWithCreditGuard(demoModeActive);
   };
 
   const handleOpenPayAsYouGo = () => {
@@ -731,10 +819,69 @@ export function WelcomeScreen({
     setIsUserProfileOpen(true);
   };
 
+  const handleOpenTokenPay = () => {
+    setUserProfileDefaultTab("tokenpay");
+    setIsUserProfileOpen(true);
+  };
+
+  const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
+    setTokenPayConnectionHint(connected);
+    setTokenPayConnectedState(connected);
+    setModelSourceState(getModelSource());
+  }, []);
+
+  useEffect(() => {
+    if (!session?.access_token) {
+      handleTokenPayConnectionChange(false);
+      setTokenPaySyncedUserId(null);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
+    handleTokenPayConnectionChange(false);
+    void fetch("/api/tokenpay/connection", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`tokenpay_connection_${response.status}`);
+        return response.json() as Promise<{ connected?: unknown }>;
+      })
+      .then((connection) => {
+        if (active) handleTokenPayConnectionChange(connection.connected === true);
+      })
+      .catch(() => {
+        // 同步失败时保持 TokenPay 禁用，避免跨账号误用旧连接。
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        if (active) setTokenPaySyncedUserId(session.user.id);
+      });
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [handleTokenPayConnectionChange, session?.access_token, session?.user.id]);
+
   const handleStartGameFromLowCreditModal = async () => {
+    if (tokenPaySyncing) {
+      toast(t("tokenPay.syncing"));
+      return;
+    }
+    if (
+      getModelSource() === "tokenpay" &&
+      !(tokenPayConnected || isTokenPayConnected())
+    ) {
+      setIsLowCreditOpen(false);
+      openTokenPayConnection(false);
+      return;
+    }
     const latestDemoConfig = await refreshDemoConfig(true);
-    const hasUserKey = hasUserProvidedLlmKey();
-    await startGameWithCreditGuard(latestDemoConfig.active || hasUserKey);
+    await startGameWithCreditGuard(latestDemoConfig.active);
   };
 
   const handleOpenGroup = () => {
@@ -801,7 +948,8 @@ export function WelcomeScreen({
           onShareInvite={() => setIsShareOpen(true)}
           onSignOut={signOut}
           onRedeemCode={redeemCode}
-          onCustomKeyEnabledChange={setCustomKeyEnabled}
+          onModelSourceChange={setModelSourceState}
+          onTokenPayConnectionChange={handleTokenPayConnectionChange}
           onCreditsChange={fetchCredits}
           defaultTab={userProfileDefaultTab}
         />
@@ -811,6 +959,7 @@ export function WelcomeScreen({
           credits={credits ?? 0}
           onStartGame={handleStartGameFromLowCreditModal}
           onOpenPayAsYouGo={handleOpenPayAsYouGo}
+          onOpenTokenPay={handleOpenTokenPay}
         />
         <ResetPasswordModal
           open={isPasswordRecovery}
@@ -1048,7 +1197,7 @@ export function WelcomeScreen({
           {/* Sponsor card - TokenDance (右下) */}
           <SponsorCard
             sponsorId="tokendance"
-            href="https://tokendance.agent-universe.cn/"
+            href="https://tokendance.space/"
             className="wc-sponsor-card wc-sponsor-card--with-logo wc-sponsor-card--right-bottom wc-sponsor-card--tokendance"
             rotate="-4deg"
             delay={0.6}
@@ -1120,7 +1269,9 @@ export function WelcomeScreen({
               >
                 <UserCircle size={16} />
                 <span className="truncate max-w-[160px]">{user.email ?? t("userProfile.loggedIn")}</span>
-                {isCustomKeyEnabled() ? (
+                {modelSource === "tokenpay" && tokenPayConnected ? (
+                  <span className="opacity-70">{t("tokenPay.connectedShort")}</span>
+                ) : modelSource === "custom" ? (
                   <span className="opacity-70">{t("customKey.title")}</span>
                 ) : (
                   <span className="opacity-70">
@@ -1237,7 +1388,7 @@ export function WelcomeScreen({
                 <span className="wc-paper-stamp__name">百炼</span>
               </a>
               <a
-                href="https://tokendance.agent-universe.cn/?ref=wolfcha"
+                href="https://tokendance.space/?ref=wolfcha"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="wc-paper-stamp wc-paper-stamp--tokendance"

@@ -12,8 +12,8 @@ import {
   addPlayerMessage,
   killPlayer,
   generateAISpeechSegmentsStream,
-  getNextAliveSeat,
 } from "@/lib/game-master";
+import { getNextSpeechSeat } from "@/lib/speech-order";
 import { PHASE_CATEGORIES } from "@/lib/game-constants";
 import { type FlowToken } from "@/lib/game-flow-controller";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
@@ -93,61 +93,11 @@ export function useDayPhase(
   const streamingSegmentsRef = useRef<string[]>([]);
 
   const resolveNextSpeaker = useCallback((state: GameState) => {
-    let nextSpeakerIsAI = false;
-    const sheriffSeat = state.badge.holderSeat;
-    const isSheriffAlive = sheriffSeat !== null && state.players.some((p) => p.seat === sheriffSeat && p.alive);
-    const isDaySpeech = state.phase === "DAY_SPEECH";
-    const direction = state.speechDirection ?? "clockwise";
-
-    let nextSeat: number | null = null;
-    if (state.phase === "DAY_PK_SPEECH") {
-      const pkTargets = state.pkTargets || [];
-      const currentSeat = state.currentSpeakerSeat ?? -1;
-      const currentIndex = pkTargets.indexOf(currentSeat);
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < pkTargets.length) {
-        nextSeat = pkTargets[nextIndex];
-      }
-    } else if (state.phase === "DAY_BADGE_SPEECH") {
-      const candidates = state.badge.candidates || [];
-      const aliveCandidateSeats = candidates.filter((seat) =>
-        state.players.some((p) => p.seat === seat && p.alive)
-      );
-      const total = state.players.length;
-      let cursor = (state.currentSpeakerSeat ?? -1) + 1;
-      for (let step = 0; step < total; step++) {
-        const seat = ((cursor + step) % total + total) % total;
-        if (aliveCandidateSeats.includes(seat)) {
-          nextSeat = seat;
-          break;
-        }
-      }
-    } else if (isDaySpeech && isSheriffAlive) {
-      nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
-      const sheriffIsStartSpeaker = state.daySpeechStartSeat === sheriffSeat;
-      if (sheriffIsStartSpeaker) {
-        // When sheriff started, check if we've looped back to the first non-sheriff speaker
-        const nonSheriffAliveSeats = state.players
-          .filter((p) => p.alive && p.seat !== sheriffSeat)
-          .map((p) => p.seat)
-          .sort((a, b) => a - b);
-        const firstNonSheriffSeat = nonSheriffAliveSeats[0];
-        if (nextSeat !== null && nextSeat === firstNonSheriffSeat && state.currentSpeakerSeat !== sheriffSeat) {
-          nextSeat = sheriffSeat;
-        }
-      } else {
-        if (nextSeat === null && state.currentSpeakerSeat !== sheriffSeat) {
-          nextSeat = sheriffSeat;
-        }
-      }
-    } else {
-      nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
-    }
-
-    if (nextSeat !== null) {
-      const nextPlayer = state.players.find((p) => p.seat === nextSeat);
-      nextSpeakerIsAI = nextPlayer ? !nextPlayer.isHuman && nextPlayer.alive : false;
-    }
+    const nextSeat = getNextSpeechSeat(state);
+    const nextPlayer = nextSeat === null
+      ? null
+      : state.players.find((player) => player.seat === nextSeat) ?? null;
+    const nextSpeakerIsAI = !!nextPlayer && !nextPlayer.isHuman && nextPlayer.alive;
 
     return { nextSeat, nextSpeakerIsAI };
   }, []);

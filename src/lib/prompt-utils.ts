@@ -97,25 +97,16 @@ ${t("promptUtils.gameContext.publicRoleConfigurationCheckRule")}
 };
 
 /**
- * Build a light public-info angle based on current game state.
+ * 汇总与当前玩家直接相关的公开事实。这里只陈述已发生的记录，不给出回应或发言建议。
  */
-export const buildFocusAngle = (state: GameState, player: Player): string => {
-  return buildPerspectiveHint(state, player);
-};
-
-/**
- * Generate a unique "perspective hint" for a player based on public game information.
- * Each player gets a different analytical angle to think from, producing natural diversity
- * in AI speeches without prescriptive output formatting.
- */
-function buildPerspectiveHint(state: GameState, player: Player): string {
-  // Only generate perspective hints during day speech phases (not night actions)
+export const buildPublicFactsForPlayer = (state: GameState, player: Player): string => {
+  // 只在白天阶段附带这些公开事实。
   const isDaySpeech = state.phase.startsWith("DAY_");
   if (!isDaySpeech) return "";
 
-  const hints: string[] = [];
+  const facts: string[] = [];
 
-  // --- 1. Mentioned by others: if other players named you, react to it ---
+  // --- 1. 当天其他玩家公开点名当前玩家 ---
   const dayStartIndex = getDayStartIndex(state);
   const mentionedBy: number[] = [];
   const seatStr = `${player.seat + 1}号`;
@@ -131,10 +122,10 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
   }
   if (mentionedBy.length > 0) {
     const who = [...new Set(mentionedBy)].map(s => `${s + 1}号`).join("、");
-    hints.push(`你被${who}点名提到了，可以考虑是否回应`);
+    facts.push(`今天已有公开发言中，${who}点名提到过你`);
   }
 
-  // --- 2. Adjacent to a dead player: you have a spatial observation ---
+  // --- 2. 当前玩家与本日已公布出局玩家相邻 ---
   // 必须只取"当天"出局者，而非全程累计死者：否则到第 3、4 天后几乎人人都"与出局者相邻"，
   // 这条空间观察会被永久误触发，并把跨天旧死者当成可聊的相邻死亡。
   // 另外：警长竞选(报名/发言/投票/警徽PK)发生在夜间死亡公布之前，此时不得据"当晚死者"给相邻提示，否则提前泄露死讯。
@@ -157,18 +148,18 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
   }
   const deadToday = state.players.filter((p) => deadTodaySeats.has(p.seat));
   const totalSeats = state.players.length;
-  const isAdjacentToDead = deadToday.some(d => {
+  const adjacentDeadSeats = deadToday.filter(d => {
     const diff = Math.abs(d.seat - player.seat);
     return diff === 1 || diff === totalSeats - 1;
-  });
-  if (isAdjacentToDead && deadToday.length > 0) {
-    hints.push("你和出局的玩家座位相邻，可以从这个角度聊一句");
+  }).map((deadPlayer) => deadPlayer.seat);
+  if (adjacentDeadSeats.length > 0) {
+    facts.push(`本日已公布出局的${adjacentDeadSeats.map((seat) => `${seat + 1}号`).join("、")}与你座位相邻`);
   }
 
   // 立场类提示（警长支持/质疑）已移除：与对局事实无关的方向性暗示会推动同一玩家前后立场漂移。
   // 只保留基于真实对局状态的事实类提示。
 
-  // --- 3. Voting pattern awareness (day 2+): who voted together yesterday? ---
+  // --- 3. 昨日公开票型中与当前玩家同票的人 ---
   if (state.day >= 2 && state.voteHistory) {
     const yesterdayVotes = state.voteHistory[state.day - 1];
     if (yesterdayVotes) {
@@ -181,41 +172,15 @@ function buildPerspectiveHint(state: GameState, player: Player): string {
           .filter((p): p is Player => !!p && p.alive);
         if (sameVoters.length > 0) {
           const names = sameVoters.slice(0, 2).map(p => `${p.seat + 1}号`).join("、");
-          hints.push(`昨天${names}和你投了同一个目标，可以想想这件事要不要提`);
+          facts.push(`昨天你与${names}都投给了${myVote + 1}号`);
         }
       }
     }
   }
 
-  // --- 4. First speaker vs late speaker: different information burden ---
-  // Count how many have already spoken today
-  const todaySpeakers = new Set<string>();
-  for (let i = dayStartIndex; i < state.messages.length; i++) {
-    const m = state.messages[i];
-    if (!m.isSystem && m.playerId && m.playerId !== player.playerId) {
-      todaySpeakers.add(m.playerId);
-    }
-  }
-  const aliveCount = state.players.filter(p => p.alive).length;
-  const spokenRatio = todaySpeakers.size / Math.max(1, aliveCount - 1);
+  if (facts.length === 0) return "";
 
-  if (spokenRatio === 0) {
-    // First speaker
-    hints.push("你是第一个发言，没有人可以参考，可以先抛出一个起手判断");
-  } else if (spokenRatio >= 0.7) {
-    // Late speaker
-    hints.push("你已经听了大部分人的发言，可以挑你最在意的一点回应");
-  }
-
-  if (hints.length === 0) return "";
-
-  // Pick at most 2 hints to keep it focused (use seat + day as deterministic selector)
-  const selected = hints.length <= 2 ? hints : [
-    hints[(player.seat + state.day) % hints.length],
-    hints[(player.seat + state.day + 1) % hints.length],
-  ].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
-
-  return `<focus_angle>\n【你的视角】\n${selected.map(h => `- ${h}`).join("\n")}\n</focus_angle>`;
+  return `<public_facts_for_player>\n【与你有关的公开事实】\n${facts.map((fact) => `- ${fact}`).join("\n")}\n</public_facts_for_player>`;
 }
 
 const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string): string => {

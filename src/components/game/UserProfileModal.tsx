@@ -24,6 +24,7 @@ import {
   getGeneratorModel,
   getMinimaxApiKey,
   getMinimaxGroupId,
+  getModelSource,
   getSelectedModels,
   getSummaryModel,
   getTokendanceApiKey,
@@ -32,6 +33,10 @@ import {
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
   getValidatedTokendanceKey,
+  hasDashscopeKey,
+  hasTokendanceKey,
+  hasZenmuxKey,
+  isTokenPayConnected,
   setGeneratorModel,
   setMinimaxApiKey,
   setMinimaxGroupId,
@@ -41,15 +46,16 @@ import {
   setTokendanceApiKey,
   setZenmuxApiKey,
   setDashscopeApiKey,
-  setCustomKeyEnabled,
+  setModelSource,
   setValidatedZenmuxKey,
   setValidatedDashscopeKey,
   setValidatedTokendanceKey,
-  isCustomKeyEnabled as getCustomKeyEnabled,
+  type ModelSource,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
 import { supabase } from "@/lib/supabase";
 import { REFERRAL_BONUS_ENABLED, SPRING_CAMPAIGN_ENABLED, REDEMPTION_CODE_ENABLED } from "@/lib/welfare-config";
+import { TokenPayPanel } from "@/components/game/TokenPayPanel";
 import {
   ALL_MODELS,
   AVAILABLE_MODELS,
@@ -81,7 +87,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     creditsGranted?: number;
     error?: string;
   }>;
-  onCustomKeyEnabledChange?: (value: boolean) => void;
+  onModelSourceChange?: (source: ModelSource) => void;
+  onTokenPayConnectionChange?: (connected: boolean) => void;
   onCreditsChange?: () => void;
   defaultTab?: string;
  }
@@ -98,7 +105,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
    onShareInvite,
    onSignOut,
   onRedeemCode,
-  onCustomKeyEnabledChange,
+  onModelSourceChange,
+  onTokenPayConnectionChange,
   onCreditsChange,
   defaultTab = "profile",
  }: UserProfileModalProps) {
@@ -113,7 +121,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const [showTokendanceKey, setShowTokendanceKey] = useState(false);
   const [showMinimaxKey, setShowMinimaxKey] = useState(false);
   const [showMinimaxGroupId, setShowMinimaxGroupId] = useState(false);
-  const [isCustomKeyEnabled, setIsCustomKeyEnabled] = useState(false);
+  const [modelSource, setModelSourceState] = useState<ModelSource>("project");
+  const [isCustomKeySetupOpen, setIsCustomKeySetupOpen] = useState(false);
+  const isCustomKeyEnabled = modelSource === "custom";
+  const showCustomKeySettings = isCustomKeyEnabled || isCustomKeySetupOpen;
   const [selectedModels, setSelectedModelsState] = useState<string[]>([]);
   const [generatorModel, setGeneratorModelState] = useState("");
   const [summaryModel, setSummaryModelState] = useState("");
@@ -144,6 +155,12 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     return t("customKey.dashscope.short");
   };
 
+  const changeModelSource = (source: ModelSource) => {
+    setModelSource(source);
+    setModelSourceState(source);
+    onModelSourceChange?.(source);
+  };
+
    const displayCredits = useMemo(() => {
     if (credits === null || credits === undefined) return t("userProfile.empty");
      return `${credits}`;
@@ -161,7 +178,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const nextGeneratorModel = getGeneratorModel();
     const nextSummaryModel = getSummaryModel();
     const nextReviewModel = getReviewModel();
-    const storedCustomEnabled = getCustomKeyEnabled();
+    const storedModelSource = getModelSource();
     if (mounted) {
       setZenmuxKeyState(nextZenmuxKey);
       setDashscopeKeyState(nextDashscopeKey);
@@ -172,7 +189,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setGeneratorModelState(nextGeneratorModel);
       setSummaryModelState(nextSummaryModel);
       setReviewModelState(nextReviewModel);
-      setIsCustomKeyEnabled(storedCustomEnabled);
+      setModelSourceState(storedModelSource);
+      setIsCustomKeySetupOpen(false);
       const z = nextZenmuxKey;
       const d = nextDashscopeKey;
       const td = nextTokendanceKey;
@@ -189,7 +207,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
-  const tokendanceConfigured = Boolean(tokendanceKey.trim());
+  const tokendanceConfigured = hasTokendanceKey();
   const modelPool = useMemo(() => {
     return ALL_MODELS;
   }, []);
@@ -220,7 +238,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   }, [defaultAvailableModels]);
 
   useEffect(() => {
-    if (!isCustomKeyEnabled) return;
+    if (!showCustomKeySettings) return;
     const availableSet = new Set(availableModelPool.map((ref) => ref.model));
     const playerSet = new Set(playerModelPool.map((ref) => ref.model));
     setSelectedModelsState((prev) => {
@@ -243,7 +261,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       if (availableSet.has(REVIEW_MODEL)) return REVIEW_MODEL;
       return availableModelPool[0]?.model ?? "";
     });
-  }, [availableModelPool, defaultPlayerModels, isCustomKeyEnabled, playerModelPool]);
+  }, [availableModelPool, defaultPlayerModels, playerModelPool, showCustomKeySettings]);
 
   const selectedModelSummary = useMemo(() => {
     if (selectedModels.length === 0) return t("customKey.selectModel");
@@ -278,7 +296,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   };
 
   const handleSaveKeys = () => {
-    if (isCustomKeyEnabled) {
+    if (showCustomKeySettings) {
       const zenmuxOk = !zenmuxKey.trim() || validatedKeys.zenmux === zenmuxKey.trim();
       const dashscopeOk = !dashscopeKey.trim() || validatedKeys.dashscope === dashscopeKey.trim();
       const tokendanceOk = !tokendanceKey.trim() || validatedKeys.tokendance === tokendanceKey.trim();
@@ -289,7 +307,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     }
     const availableSet = new Set(availableModelPool.map((ref) => ref.model));
     const playerAvailableSet = new Set(playerModelPool.map((ref) => ref.model));
-    if (isCustomKeyEnabled && availableSet.size === 0) {
+    if (showCustomKeySettings && availableSet.size === 0) {
       // Prevent saving an unusable custom-key state with no LLM keys.
       toast(t("customKey.toasts.needLlmKey"), { description: t("customKey.toasts.needLlmKeyDesc") });
       return;
@@ -313,7 +331,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const reviewAdjusted = Boolean(reviewModel) && !availableSet.has(reviewModel);
 
     if (
-      isCustomKeyEnabled &&
+      showCustomKeySettings &&
       (availableSet.size === 0 || removedSelected.length > 0 || generatorAdjusted || summaryAdjusted || reviewAdjusted)
     ) {
       toast(t("customKey.toasts.modelsAdjusted"), {
@@ -325,6 +343,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     setTokendanceApiKey(tokendanceKey);
     setMinimaxApiKey(minimaxKey);
     setMinimaxGroupId(minimaxGroupId);
+    if (showCustomKeySettings) {
+      changeModelSource("custom");
+      setIsCustomKeySetupOpen(false);
+    }
     setSelectedModels(nextSelectedModels);
     setGeneratorModel(nextGeneratorModel);
     setSummaryModel(nextSummaryModel);
@@ -449,6 +471,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
   const handleClearKeys = () => {
     clearApiKeys();
+    const nextSource: ModelSource = isTokenPayConnected() ? "tokenpay" : "project";
     setZenmuxKeyState("");
     setDashscopeKeyState("");
     setTokendanceKeyState("");
@@ -458,9 +481,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     setGeneratorModelState(getGeneratorModel());
     setSummaryModelState(getSummaryModel());
     setReviewModelState(getReviewModel());
-    setIsCustomKeyEnabled(false);
+    setModelSourceState(nextSource);
+    setIsCustomKeySetupOpen(false);
     setValidatedKeys({ zenmux: "", dashscope: "", tokendance: "" });
-    onCustomKeyEnabledChange?.(false);
+    onModelSourceChange?.(nextSource);
     toast(t("customKey.toasts.cleared"));
   };
 
@@ -536,9 +560,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
         </DialogHeader>
 
         <Tabs defaultValue={defaultTab} key={defaultTab}>
-          <TabsList>
+          <TabsList className="gap-3 overflow-x-auto sm:gap-4">
             <TabsTrigger value="profile">{t("customKey.tabs.profile")}</TabsTrigger>
             <TabsTrigger value="payAsYouGo">{t("customKey.tabs.payAsYouGo")}</TabsTrigger>
+            <TabsTrigger value="tokenpay">{t("customKey.tabs.tokenPay")}</TabsTrigger>
             <TabsTrigger value="custom">{t("customKey.tabs.custom")}</TabsTrigger>
           </TabsList>
 
@@ -769,6 +794,16 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
             </div>
           </TabsContent>
 
+          <TabsContent value="tokenpay">
+            <TokenPayPanel
+              active={modelSource === "tokenpay"}
+              onActiveChange={(active) => {
+                changeModelSource(active ? "tokenpay" : "project");
+              }}
+              onConnectionChange={onTokenPayConnectionChange}
+            />
+          </TabsContent>
+
           <TabsContent value="custom">
             <div className="space-y-5">
               {/* 1. Enable custom key */}
@@ -779,17 +814,25 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                     <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.description")}</p>
                   </div>
                   <Switch
-                    checked={isCustomKeyEnabled}
+                    checked={showCustomKeySettings}
                     onCheckedChange={(value) => {
-                      setIsCustomKeyEnabled(value);
-                      setCustomKeyEnabled(value);
-                      onCustomKeyEnabledChange?.(value);
+                      if (value) {
+                        if (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey()) {
+                          changeModelSource("custom");
+                        } else {
+                          changeModelSource("project");
+                          setIsCustomKeySetupOpen(true);
+                        }
+                        return;
+                      }
+                      setIsCustomKeySetupOpen(false);
+                      changeModelSource(isTokenPayConnected() ? "tokenpay" : "project");
                     }}
                   />
                 </div>
               </section>
 
-              {isCustomKeyEnabled && (
+              {showCustomKeySettings && (
                 <>
                   {/* 2. LLM Keys — at least one required */}
                   <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
@@ -839,7 +882,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                         </Button>
                       </div>
 
-                      <a href="https://tokendance.agent-universe.cn/?ref=wolfcha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
+                      <a href="https://tokendance.space/?ref=wolfcha" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-2.5 py-2 transition-colors hover:bg-[var(--bg-hover)]">
                         <img src="/sponsor/tokendance-icon.svg" alt="" className="h-6 w-6 shrink-0 rounded object-contain" />
                         <div className="min-w-0 flex-1">
                           <span className="text-xs font-medium text-[var(--text-primary)]">{t("customKey.tokendance.get")}</span>
