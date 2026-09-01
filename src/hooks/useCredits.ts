@@ -25,6 +25,14 @@ import {
 import { readReferralFromStorage, removeReferralFromStorage } from "@/lib/referral";
 import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 import { fetchWithTimeout } from "@/lib/request-timeout";
+import {
+  buildGameStartIntentFingerprint,
+  completeGameStartRequest as clearPendingGameStartRequest,
+  getOrCreateGameStartRequest,
+  hasPendingGameStartRequest as readPendingGameStartRequest,
+  runGameStartRequestWithRetry,
+  shouldRetryGameStartRequest,
+} from "@/lib/game-start-idempotency";
 
 const REFERRAL_ENDPOINT = "/api/credits/referral";
 const REDEEM_ENDPOINT = "/api/credits/redeem";
@@ -53,11 +61,27 @@ export type ConsumeCreditResult = {
   success: boolean;
   credits?: number;
   sessionId?: string | null;
+  startRequestId?: string;
+  idempotentReplay?: boolean;
   error?: string;
   code?: string;
   recoveryAction?: string;
   status?: number;
 };
+
+function buildStartIntentFingerprint(
+  options: ConsumeCreditOptions,
+  modelSource: ReturnType<typeof getModelSource>,
+): string {
+  return buildGameStartIntentFingerprint({
+    createSession: options.createSession === true,
+    difficulty: options.difficulty ?? null,
+    modelSource,
+    modelUsed: options.modelUsed ?? null,
+    playerCount: options.playerCount ?? null,
+    usedCustomKey: modelSource !== "project",
+  });
+}
 
 export function useCredits() {
   const [user, setUser] = useState<User | null>(null);
@@ -115,8 +139,14 @@ export function useCredits() {
     if (isDemoMode) return { success: true };
     if (!session) return { success: false, error: "unauthorized", status: 401 };
 
+    const modelSource = getModelSource();
+    const startIntentFingerprint = buildStartIntentFingerprint(options, modelSource);
+    const startRequestId = getOrCreateGameStartRequest(
+      session.user.id,
+      startIntentFingerprint,
+    );
+
     try {
-      const modelSource = getModelSource();
       const customEnabled = modelSource === "custom";
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
@@ -124,11 +154,12 @@ export function useCredits() {
       const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
       const tokenPayRequested = modelSource === "tokenpay";
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
-      const res = await fetchWithTimeout("/api/credits/consume", {
+      const requestInit: RequestInit = {
         method: "POST",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           "Content-Type": JSON_CONTENT_TYPE,
+          "Idempotency-Key": startRequestId,
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
           ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
@@ -141,7 +172,13 @@ export function useCredits() {
           ...options,
           usedCustomKey: tokenPayRequested || hasCustomKey,
         }),
-      }, CONSUME_CREDIT_TIMEOUT_MS);
+      };
+
+      const res = await runGameStartRequestWithRetry(
+        () =>
+          fetchWithTimeout("/api/credits/consume", requestInit, CONSUME_CREDIT_TIMEOUT_MS),
+        2,
+      );
 
       if (!res.ok) {
         let payload: {
@@ -158,8 +195,12 @@ export function useCredits() {
         } catch {
           // no-op
         }
+        if (!shouldRetryGameStartRequest(res.status)) {
+          clearPendingGameStartRequest(session.user.id, startRequestId);
+        }
         return {
           success: false,
+          startRequestId,
           status: res.status,
           error: typeof payload.error === "string" ? payload.error : `request_failed_${res.status}`,
           code: typeof payload.code === "string" ? payload.code : undefined,
@@ -172,19 +213,48 @@ export function useCredits() {
         credits: number;
         campaign?: SpringCampaignSnapshot;
         sessionId?: string | null;
+        idempotentReplay?: boolean;
       };
+      if (options.createSession && !payload.sessionId) {
+        return {
+          success: false,
+          startRequestId,
+          error: "missing_game_session",
+          status: 502,
+        };
+      }
       setCredits(payload.credits);
       if (payload.campaign) {
         setSpringCampaign(payload.campaign);
       }
-      return { success: true, credits: payload.credits, sessionId: payload.sessionId ?? null };
+      return {
+        success: true,
+        credits: payload.credits,
+        sessionId: payload.sessionId ?? null,
+        startRequestId,
+        idempotentReplay: payload.idempotentReplay === true,
+      };
     } catch (error) {
       return {
         success: false,
+        startRequestId,
         error: error instanceof Error ? error.message : "network_error",
       };
     }
   }, [isDemoMode, session]);
+
+  const completeGameStartRequest = useCallback((requestId: string | undefined) => {
+    if (!requestId || !session?.user.id) return;
+    clearPendingGameStartRequest(session.user.id, requestId);
+  }, [session]);
+
+  const hasPendingGameStartRequest = useCallback((options: ConsumeCreditOptions) => {
+    if (!session?.user.id) return false;
+    return readPendingGameStartRequest(
+      session.user.id,
+      buildStartIntentFingerprint(options, getModelSource()),
+    );
+  }, [session]);
 
   const redeemCode = useCallback(async (code: string): Promise<{
     success: boolean;
@@ -478,6 +548,8 @@ export function useCredits() {
     loading: loading || demoConfigLoading,
     fetchCredits,
     consumeCredit,
+    completeGameStartRequest,
+    hasPendingGameStartRequest,
     redeemCode,
     signOut,
     isPasswordRecovery,
