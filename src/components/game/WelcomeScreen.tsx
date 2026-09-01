@@ -273,6 +273,8 @@ export function WelcomeScreen({
     totalReferrals,
     loading: creditsLoading,
     consumeCredit,
+    completeGameStartRequest,
+    hasPendingGameStartRequest,
     redeemCode,
     signOut,
     isPasswordRecovery,
@@ -666,6 +668,15 @@ export function WelcomeScreen({
       openTokenPayConnection(true);
       return;
     }
+    const insufficientCredits =
+      result?.status === 400 &&
+      result.error?.toLowerCase().includes("insufficient") === true;
+    if (!insufficientCredits) {
+      toast.error(t("welcome.toast.startFail.title"), {
+        description: t("welcome.toast.startFail.description"),
+      });
+      return;
+    }
     if (REFERRAL_BONUS_ENABLED) {
       setIsShareOpen(true);
     } else {
@@ -714,6 +725,16 @@ export function WelcomeScreen({
     return `${navigator.language || "unknown"}|${timeZone}`;
   };
 
+  const buildCreditConsumeOptions = () => ({
+    createSession: true,
+    playerCount,
+    difficulty,
+    usedCustomKey: getModelSource() !== "project",
+    modelUsed: getGeneratorModel(),
+    userEmail: user?.email ?? null,
+    region: getClientRegion(),
+  });
+
   const waitForStartAnimation = async (startedAt: number) => {
     const remaining = Math.max(0, 800 - (Date.now() - startedAt));
     if (remaining <= 0) return;
@@ -736,28 +757,23 @@ export function WelcomeScreen({
     setIsTransitioning(true);
 
     let creditAuthorized = skipCredit;
+    let startRequestId: string | undefined;
     try {
       let gameSessionId: string | null = null;
       if (!skipCredit) {
-        const result = await consumeCredit({
-          createSession: true,
-          playerCount,
-          difficulty,
-          usedCustomKey: getModelSource() !== "project",
-          modelUsed: getGeneratorModel(),
-          userEmail: user?.email ?? null,
-          region: getClientRegion(),
-        });
+        const result = await consumeCredit(buildCreditConsumeOptions());
         if (!result.success) {
           handleCreditFailure(result);
           return;
         }
         creditAuthorized = true;
+        startRequestId = result.startRequestId;
         gameSessionId = result.sessionId ?? null;
       }
 
       await waitForStartAnimation(animationStartedAt);
       await onStart(buildStartOptions(gameSessionId));
+      completeGameStartRequest(startRequestId);
     } catch (error) {
       console.error("[welcome] failed to start game", error);
       if (!creditAuthorized) {
@@ -806,6 +822,7 @@ export function WelcomeScreen({
     if (
       !demoModeActive &&
       !hasExternalSource &&
+      !hasPendingGameStartRequest(buildCreditConsumeOptions()) &&
       credits !== null &&
       credits <= LOW_CREDIT_THRESHOLD &&
       !hasSpringQuota &&

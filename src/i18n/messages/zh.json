@@ -149,6 +149,10 @@
         "title": "扣除额度失败",
         "description": "请稍后重试或前往充值额度。"
       },
+      "startFail": {
+        "title": "开局请求未完成",
+        "description": "系统会复用本次请求，重新开始不会重复扣除额度。"
+      },
       "keyExhausted": {
         "title": "API Key 余额已耗尽",
         "description": "请前往对应平台（zenmux.ai 或阿里云百炼）充值后再开始游戏。"

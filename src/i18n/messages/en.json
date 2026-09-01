@@ -149,6 +149,10 @@
         "title": "Failed to deduct credits",
         "description": "Please try again or recharge your credits."
       },
+      "startFail": {
+        "title": "Game start did not complete",
+        "description": "Retrying will reuse this request and will not deduct credits again."
+      },
       "keyExhausted": {
         "title": "API Key balance exhausted",
         "description": "Please top up at the respective platform (zenmux.ai or Alibaba Cloud Dashscope) before starting the game."
