@@ -129,10 +129,13 @@ export class VotePhase extends GamePhase {
         (!eligibleSeats || eligibleSeats.has(p.seat))
     );
 
-    const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
-    const selfSpeech = buildPlayerTodaySpeech(state, player);
-
     const { t } = getI18n();
+    const todayTranscript = buildTodayTranscript(state);
+    const selfSpeech = buildPlayerTodaySpeech(state, player);
+    const selfSpeechContext = selfSpeech
+      ? t("promptUtils.gameContext.selfSpeechIncludedInTimeline", { seat: player.seat + 1 })
+      : "";
+
     const cacheableContent = t("prompts.vote.base", {
       seat: player.seat + 1,
       name: player.displayName,
@@ -151,7 +154,7 @@ export class VotePhase extends GamePhase {
     const user = t("prompts.vote.user", {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
-      selfSpeech: selfSpeech || t("prompts.vote.userNoSelfSpeech"),
+      selfSpeech: selfSpeechContext || t("prompts.vote.userNoSelfSpeech"),
       voteJsonFormat: JSON.stringify({ seat: 3, reason: t("prompts.vote.reasonExample") }),
     });
 

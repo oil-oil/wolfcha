@@ -1,9 +1,11 @@
-import type { GameState, Persona, Player } from "@/types/game";
+import type { ChatMessage, GameState, Persona, Phase, Player, Role } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import type { SystemPromptPart } from "@/game/core/types";
 import type { LLMMessage } from "./llm";
 import { getSystemMessages, getSystemPatterns } from "./game-texts";
 import { getI18n } from "@/i18n/translator";
+import { getRoleName } from "./game-constants";
+import { getRoleConfiguration } from "./role-configuration";
 
 /**
  * Prompt helper utilities used by Phase prompts.
@@ -51,6 +53,47 @@ export const getWinCondition = (role: string) => {
     default:
       return t("promptUtils.winCondition.villager");
   }
+};
+
+const PUBLIC_ROLE_ORDER: Role[] = [
+  "Werewolf",
+  "WhiteWolfKing",
+  "Seer",
+  "Witch",
+  "Hunter",
+  "Guard",
+  "Idiot",
+  "Villager",
+];
+
+/**
+ * Build the role composition shown publicly before the game starts.
+ * This deliberately reads the public player-count configuration instead of
+ * state.players, so no seat-to-role or alive-role information can leak.
+ */
+export const buildPublicRoleConfiguration = (playerCount: number): string => {
+  const { t } = getI18n();
+  const counts = new Map<Role, number>();
+  getRoleConfiguration(playerCount).forEach((role) => {
+    counts.set(role, (counts.get(role) ?? 0) + 1);
+  });
+
+  const items = PUBLIC_ROLE_ORDER
+    .map((role) => ({ role, count: counts.get(role) ?? 0 }))
+    .filter(({ count }) => count > 0)
+    .map(({ role, count }) =>
+      t("promptUtils.gameContext.publicRoleConfigurationItem", {
+        role: getRoleName(role),
+        count,
+      })
+    );
+
+  return `<public_role_configuration>
+${t("promptUtils.gameContext.publicRoleConfigurationTitle")}
+${items.join("\n")}
+${t("promptUtils.gameContext.publicRoleConfigurationScope")}
+${t("promptUtils.gameContext.publicRoleConfigurationCheckRule")}
+</public_role_configuration>`;
 };
 
 /**
@@ -464,48 +507,64 @@ export const getVoteStartIndex = (state: GameState): number => {
   return state.messages.length;
 };
 
+const getTranscriptPhaseLabel = (phase: Phase | undefined): string | null => {
+  if (!phase) return null;
+  const { t } = getI18n();
+  switch (phase) {
+    case "DAY_BADGE_SPEECH":
+      return t("promptUtils.gameContext.transcriptPhaseBadgeSpeech");
+    case "DAY_PK_SPEECH":
+      return t("promptUtils.gameContext.transcriptPhasePkSpeech");
+    case "DAY_SPEECH":
+      return t("promptUtils.gameContext.transcriptPhaseDaySpeech");
+    case "DAY_LAST_WORDS":
+      return t("promptUtils.gameContext.transcriptPhaseLastWords");
+    default:
+      return null;
+  }
+};
 
-export const buildTodayTranscript = (
+const formatTranscriptMessages = (
   state: GameState,
-  options?: { includeDeadSpeech?: boolean; excludePlayerId?: string }
+  messages: ChatMessage[]
 ): string => {
   const { t } = getI18n();
-  const slice = state.messages.filter((m) => m.day === state.day);
-
-  // Build a map of playerId -> alive status for quick lookup
   const playerAliveMap = new Map<string, boolean>();
-  state.players.forEach((p) => {
-    playerAliveMap.set(p.playerId, p.alive);
-  });
-  const includeDeadSpeech = options?.includeDeadSpeech === true;
+  state.players.forEach((p) => playerAliveMap.set(p.playerId, p.alive));
 
-  // Separate last words from regular speech for priority handling
-  const regularMessages = slice.filter((m) => {
-    if (m.isSystem || m.isLastWords) return false;
-    if (options?.excludePlayerId && m.playerId === options.excludePlayerId) return false;
-    const isAlive = playerAliveMap.get(m.playerId) ?? true;
-    return includeDeadSpeech || isAlive;
-  });
-  const lastWordsMessages = slice.filter((m) => {
-    if (options?.excludePlayerId && m.playerId === options.excludePlayerId) return false;
-    return !m.isSystem && m.isLastWords;
-  });
+  const lines: string[] = [];
+  let previousPhase: Phase | undefined;
 
-  const formatMessage = (m: typeof slice[0]) => {
+  messages.forEach((m) => {
+    if (m.phase !== previousPhase) {
+      const phaseLabel = getTranscriptPhaseLabel(m.phase);
+      if (phaseLabel) {
+        lines.push(t("promptUtils.gameContext.transcriptPhaseHeader", { phase: phaseLabel }));
+      }
+      previousPhase = m.phase;
+    }
+
     const player = state.players.find((p) => p.playerId === m.playerId);
-    // Only use seat number for prompt, no player name (to anonymize for model)
     const speaker = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : m.playerName;
     const isAlive = playerAliveMap.get(m.playerId) ?? true;
     const statusLabel = isAlive ? "" : t("promptUtils.gameContext.eliminated");
     const lastWordsLabel = m.isLastWords ? t("promptUtils.gameContext.lastWordsLabel") : "";
-    return `${lastWordsLabel}${speaker}${statusLabel}: ${m.content}`;
-  };
+    lines.push(`${lastWordsLabel}${speaker}${statusLabel}: ${m.content}`);
+  });
 
-  // Last words are always preserved (they're important)
-  const lastWordsText = lastWordsMessages.map(formatMessage).join("\n");
-  const regularText = regularMessages.map(formatMessage).join("\n");
+  return lines.join("\n");
+};
 
-  const transcript = [lastWordsText, regularText].filter(Boolean).join("\n");
+
+export const buildTodayTranscript = (
+  state: GameState,
+  options?: { excludePlayerId?: string }
+): string => {
+  const messages = state.messages.filter((m) => {
+    if (m.day !== state.day || m.isSystem) return false;
+    return !options?.excludePlayerId || m.playerId !== options.excludePlayerId;
+  });
+  const transcript = formatTranscriptMessages(state, messages);
 
   if (!transcript) return "";
   return transcript;
@@ -799,6 +858,10 @@ dead: [${deadInfo.join(", ")}]
 sheriff: ${sheriffInfo}
 alive_count: ${alivePlayers.length}
 </game_state>`;
+
+  // Public setup information only: aggregate role counts and public rules.
+  // Never derive this section from seat assignments in state.players.
+  context += `\n\n${buildPublicRoleConfiguration(totalSeats)}`;
 
   // Add alive players list for reference
   const playerList = alivePlayers

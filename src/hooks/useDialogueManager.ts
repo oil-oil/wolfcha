@@ -39,6 +39,18 @@ export interface PrefetchCriteria {
   messageCount: number;
 }
 
+export const isPrefetchCompatible = (
+  prefetch: PrefetchedSpeech,
+  criteria: PrefetchCriteria
+): boolean =>
+  prefetch.playerId === criteria.playerId &&
+  prefetch.phase === criteria.phase &&
+  prefetch.day === criteria.day &&
+  // Any additional public message makes the prefetched prompt stale.
+  // Requiring an exact count prevents an AI speech generated before that
+  // message from being reused after the table context has changed.
+  criteria.messageCount === prefetch.messageCount;
+
 /**
  * 对话管理 Hook
  * 负责管理游戏中的对话显示、AI发言队列等
@@ -233,11 +245,7 @@ export function useDialogueManager() {
     const prefetch = prefetchedSpeechRef.current;
     if (!prefetch) return null;
 
-    const matches =
-      prefetch.playerId === criteria.playerId &&
-      prefetch.phase === criteria.phase &&
-      prefetch.day === criteria.day &&
-      criteria.messageCount >= prefetch.messageCount;
+    const matches = isPrefetchCompatible(prefetch, criteria);
 
     if (!matches) {
       prefetchedSpeechRef.current = null;

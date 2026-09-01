@@ -472,9 +472,13 @@ export class NightPhase extends GamePhase {
   }
 
   private buildNightEnhancements(state: GameContext["state"], player: Player) {
-    const todayTranscript = buildTodayTranscript(state, { includeDeadSpeech: true, excludePlayerId: player.playerId });
+    const { t } = getI18n();
+    const todayTranscript = buildTodayTranscript(state);
     const selfSpeech = buildPlayerTodaySpeech(state, player);
-    return { todayTranscript, selfSpeech };
+    const selfSpeechContext = selfSpeech
+      ? t("promptUtils.gameContext.selfSpeechIncludedInTimeline", { seat: player.seat + 1 })
+      : "";
+    return { todayTranscript, selfSpeech: selfSpeechContext };
   }
 
   private buildContextWithDay(

@@ -86,8 +86,11 @@ export class DaySpeechPhase extends GamePhase {
     const isGenshinMode = !!state.isGenshinMode;
     const persona = buildPersonaSection(player, isGenshinMode);
 
-    const todayTranscript = buildTodayTranscript(state, { excludePlayerId: player.playerId });
+    const todayTranscript = buildTodayTranscript(state);
     const selfSpeech = buildPlayerTodaySpeech(state, player);
+    const selfSpeechContext = selfSpeech
+      ? t("promptUtils.gameContext.selfSpeechIncludedInTimeline", { seat: player.seat + 1 })
+      : "";
 
     const todaySpeakers = new Set<string>();
     const dayStartIndex = getDayStartIndex(state);
@@ -225,7 +228,7 @@ export class DaySpeechPhase extends GamePhase {
     const user = t("prompts.daySpeech.user", {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.daySpeech.userNoTranscript", { speakOrder }),
-      selfSpeech: selfSpeech || t("prompts.daySpeech.userNoSelfSpeech"),
+      selfSpeech: selfSpeechContext || t("prompts.daySpeech.userNoSelfSpeech"),
       phaseHintSection,
       speakOrderHint,
     });
