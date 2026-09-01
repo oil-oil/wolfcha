@@ -984,10 +984,7 @@
   "prompts": {
     "daySpeech": {
       "speakOrder": {
-        "first": "You speak first. No one has spoken yet.",
-        "last": "You are the last speaker ({speakOrder}/{totalSpeakers}). Everyone has spoken. Don't say things like \"let's see what Seat X says\".",
-        "middle": "You are speaker {speakOrder}/{totalSpeakers}. Already spoken: {spokenList}. Yet to speak: {unspokenList}.",
-        "skipped": "{seat}(skipped)"
+        "status": "Speech order for this round: {orderList}\nCurrent speaker: {currentSeat} (position {speakOrder}/{totalSpeakers})\nSeats with a public speech record: {spokenList}\nTurn already passed without a public speech record: {passedList}\nNot reached yet and without a public speech record: {unspokenList}\nThese are objective records for the current round only. The current speaker is not counted as having spoken until this speech is complete."
       },
       "campaign": {
         "badge": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death. In campaign speech, naturally explain why you want the badge, who you care about right now, and whether you can lead.",

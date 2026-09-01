@@ -176,6 +176,8 @@ export interface GameState {
   currentSpeakerSeat: number | null;
   nextSpeakerSeatOverride?: number | null;
   daySpeechStartSeat: number | null;
+  /** 当前发言轮次开始时的 messages 长度；用于隔离同一天重复进入的 PK/竞选发言。 */
+  speechRoundStartMessageIndex?: number | null;
   speechDirection?: SpeechDirection;
   pkTargets?: number[];
   pkSource?: "badge" | "vote";

@@ -80,6 +80,22 @@ function resolveModelForSource(source: ModelSource, model: string): string {
   return resolveModelForBuiltin(model);
 }
 
+export function resolveRequestModelForSource(
+  source: ModelSource,
+  model: string,
+  provider?: Provider,
+): { model: string; provider: Provider } {
+  const resolvedModel = resolveModelForSource(source, model);
+  return {
+    model: resolvedModel,
+    // 自定义 Key 必须尊重用户显式选择；项目 Key 与 TokenPay 的模型发生
+    // 归一化时，Provider 也必须跟随最终模型，不能沿用旧存档里的来源。
+    provider: source === "custom"
+      ? provider ?? getProviderForModel(resolvedModel)
+      : getProviderForModel(resolvedModel),
+  };
+}
+
 function buildModelSourceHeaders(source: ModelSource): Record<string, string> {
   if (source === "project") return {};
   if (source === "tokenpay") return { "X-TokenPay-Mode": "true" };
@@ -637,7 +653,11 @@ export async function generateCompletion(
   const modelSource = getModelSource();
   const customEnabled = modelSource === "custom" && isCustomKeyEnabled();
   const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
-  const modelToUse = resolveModelForSource(effectiveSource, options.model);
+  const resolvedModel = resolveRequestModelForSource(
+    effectiveSource,
+    options.model,
+    options.provider,
+  );
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...buildModelSourceHeaders(effectiveSource),
@@ -651,7 +671,7 @@ export async function generateCompletion(
     hasZenmuxKey: !!headers["X-Zenmux-Api-Key"],
     hasDashscopeKey: !!headers["X-Dashscope-Api-Key"],
     hasTokendanceKey: !!headers["X-Tokendance-Api-Key"],
-    model: modelToUse,
+    model: resolvedModel.model,
   });
 
   const response = await fetchWithTokenPayRecovery(
@@ -662,8 +682,8 @@ export async function generateCompletion(
         ...headers,
       },
       body: JSON.stringify({
-        model: modelToUse,
-        ...(options.provider ? { provider: options.provider } : {}),
+        model: resolvedModel.model,
+        provider: resolvedModel.provider,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -743,7 +763,11 @@ async function generateCompletionBatchInternal(
   const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
   const resolvedRequests = requests.map((request) => ({
     ...request,
-    model: resolveModelForSource(effectiveSource, request.model),
+    ...resolveRequestModelForSource(
+      effectiveSource,
+      request.model,
+      request.provider,
+    ),
   }));
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -833,7 +857,11 @@ export async function* generateCompletionStream(
   const modelSource = getModelSource();
   const customEnabled = modelSource === "custom" && isCustomKeyEnabled();
   const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
-  const modelToUse = resolveModelForSource(effectiveSource, options.model);
+  const resolvedModel = resolveRequestModelForSource(
+    effectiveSource,
+    options.model,
+    options.provider,
+  );
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...buildModelSourceHeaders(effectiveSource),
@@ -850,8 +878,8 @@ export async function* generateCompletionStream(
         ...headers,
       },
       body: JSON.stringify({
-        model: modelToUse,
-        ...(options.provider ? { provider: options.provider } : {}),
+        model: resolvedModel.model,
+        provider: resolvedModel.provider,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,

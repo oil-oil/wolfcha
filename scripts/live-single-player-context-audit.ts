@@ -502,9 +502,16 @@ async function runLiveAudit() {
 
   addCheck(
     checks,
-    "每个行为样本都处于合法的末置发言位",
-    speechAppText.length === 8 && speechAppText.every((text) => text.includes("最后一个发言")),
-    "每个角色的状态都将该角色设为警长，并从其下一座开始发言，确保完整听完其余玩家"
+    "每个行为样本都收到客观且准确的末置发言状态",
+    speechAppText.length === samples.length && samples.every((actor, index) => {
+      const statusSection = speechAppText[index]?.match(/【发言顺序】\n([\s\S]*?)\n\n轮到你发言/)?.[1] ?? "";
+      return statusSection.includes(
+        `当前轮到：${actor.seat + 1}号（第${state.players.length}/${state.players.length}位）`
+      ) &&
+        statusSection.includes("尚未轮到且没有公开发言记录：无") &&
+        !/可以|建议|应该|先抛|回应|想想|角度/.test(statusSection);
+    }),
+    "每个角色均为警长末置位；Prompt 只记录当前座位、位置和真实发言记录，不提供发言策略"
   );
 
   addCheck(

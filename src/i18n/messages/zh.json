@@ -990,10 +990,7 @@
   "prompts": {
     "daySpeech": {
       "speakOrder": {
-        "first": "你是第1个发言，其他人都还没发言。",
-        "last": "你是最后一个发言（第{speakOrder}/{totalSpeakers}个），所有人都已经发言完毕，不要说\"等X号发言\"或\"看X号接下来怎么说\"这类话。",
-        "middle": "你是第{speakOrder}/{totalSpeakers}个发言。已发言: {spokenList}；未发言: {unspokenList}。",
-        "skipped": "{seat}(过麦)"
+        "status": "本轮发言顺序：{orderList}\n当前轮到：{currentSeat}（第{speakOrder}/{totalSpeakers}位）\n已有公开发言记录：{spokenList}\n顺序已过但没有公开发言记录：{passedList}\n尚未轮到且没有公开发言记录：{unspokenList}\n以上仅陈述当前轮次的客观记录；当前发言者在本次发言完成前不计入‘已有公开发言记录’。"
       },
       "campaign": {
         "badge": "【警徽作用】\n警长拥有 1.5 票投票权，死亡时可移交警徽。竞选发言时，你可以自然说明为什么想拿警徽、你此刻更想看谁、以及你能不能带队。",

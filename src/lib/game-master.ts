@@ -28,6 +28,7 @@ import { getI18n } from "@/i18n/translator";
 import { getRoleConfiguration } from "@/lib/role-configuration";
 
 export { getRoleConfiguration } from "@/lib/role-configuration";
+export { getSpeakingOrder } from "@/lib/speech-order";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -36,6 +37,18 @@ function shuffleArray<T>(array: T[]): T[] {
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   return shuffled;
+}
+
+export function getRandomHumanSeat(
+  playerCount: number,
+  random: () => number = Math.random
+): number {
+  const safePlayerCount = Math.max(1, Math.floor(playerCount));
+  const randomValue = random();
+  const normalized = Number.isFinite(randomValue)
+    ? Math.min(Math.max(randomValue, 0), 1 - Number.EPSILON)
+    : 0;
+  return Math.floor(normalized * safePlayerCount);
 }
 
 function getRandomModelRef(): ModelRef {
@@ -156,6 +169,7 @@ export function createInitialGameState(): GameState {
     currentSpeakerSeat: null,
     nextSpeakerSeatOverride: null,
     daySpeechStartSeat: null,
+    speechRoundStartMessageIndex: null,
     speechDirection: "clockwise",
     pkTargets: undefined,
     pkSource: undefined,
@@ -374,11 +388,17 @@ export function transitionPhase(state: GameState, newPhase: Phase): GameState {
   // Clear currentSpeakerSeat when transitioning to night phases
   const isNightPhase = newPhase.startsWith("NIGHT_");
   const shouldClearSpeaker = isNightPhase || newPhase === "DAY_VOTE" || newPhase === "DAY_RESOLVE";
+  const isSpeechPhase =
+    newPhase === "DAY_BADGE_SPEECH" ||
+    newPhase === "DAY_PK_SPEECH" ||
+    newPhase === "DAY_SPEECH" ||
+    newPhase === "DAY_LAST_WORDS";
 
   return {
     ...state,
     phase: newPhase,
     ...(shouldClearSpeaker && { currentSpeakerSeat: null }),
+    speechRoundStartMessageIndex: isSpeechPhase ? state.messages.length : null,
   };
 }
 
@@ -433,45 +453,6 @@ export function getNextAliveSeat(
 
   const nextSeat = sortedSeats.find((s) => s > currentSeat);
   return nextSeat ?? sortedSeats[0];
-}
-
-/**
- * 计算完整的发言顺序列表
- * @param state 游戏状态
- * @param startSeat 起始座位号（从该座位开始发言）
- * @param sheriffLast 警长是否最后发言（默认 true）
- * @returns 按发言顺序排列的座位号数组
- */
-export function getSpeakingOrder(
-  state: GameState,
-  startSeat: number,
-  sheriffLast = true
-): number[] {
-  const sheriffSeat = state.badge.holderSeat;
-  const alivePlayers = state.players.filter((p) => p.alive);
-  const aliveSeats = alivePlayers.map((p) => p.seat).sort((a, b) => a - b);
-
-  if (aliveSeats.length === 0) return [];
-
-  // 找到起始座位在排序列表中的索引
-  const startIndex = aliveSeats.indexOf(startSeat);
-  if (startIndex === -1) return aliveSeats;
-
-  // 从起始座位开始，按顺时针顺序排列
-  const order: number[] = [];
-  for (let i = 0; i < aliveSeats.length; i++) {
-    const seat = aliveSeats[(startIndex + i) % aliveSeats.length];
-    // 如果警长最后发言，先跳过警长
-    if (sheriffLast && seat === sheriffSeat) continue;
-    order.push(seat);
-  }
-
-  // 如果警长最后发言且警长存活，将警长添加到最后
-  if (sheriffLast && sheriffSeat !== null && aliveSeats.includes(sheriffSeat)) {
-    order.push(sheriffSeat);
-  }
-
-  return order;
 }
 
 /**

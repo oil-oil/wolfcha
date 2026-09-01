@@ -9,18 +9,17 @@ import {
   getRoleText,
   getWinCondition,
   buildSystemTextFromParts,
-  getDayStartIndex,
-  buildFocusAngle,
+  buildPublicFactsForPlayer,
 } from "@/lib/prompt-utils";
 import type { FlowToken } from "@/lib/game-flow-controller";
 import {
   addSystemMessage,
   checkWinCondition,
   getNextAliveSeat,
-  getSpeakingOrder,
   killPlayer,
   transitionPhase,
 } from "@/lib/game-master";
+import { getNextSpeechSeat, getSpeechRoundStatus } from "@/lib/speech-order";
 import { getSystemMessages, getUiText } from "@/lib/game-texts";
 import { getI18n } from "@/i18n/translator";
 import { DELAY_CONFIG } from "@/lib/game-constants";
@@ -46,24 +45,6 @@ type DaySpeechRuntime = {
 
 export class DaySpeechPhase extends GamePhase {
   private isMovingToNextSpeaker = false;
-
-  private resolveSpeechDirection(state: GameState, startSeat: number | null): "clockwise" | "counterclockwise" {
-    if (startSeat === null) return "clockwise";
-    const sheriffSeat = state.badge.holderSeat;
-    if (sheriffSeat === null) return "clockwise";
-
-    const aliveSeats = state.players.filter((p) => p.alive).map((p) => p.seat).sort((a, b) => a - b);
-    if (!aliveSeats.includes(startSeat) || !aliveSeats.includes(sheriffSeat)) return "clockwise";
-
-    const total = aliveSeats.length;
-    const startIndex = aliveSeats.indexOf(startSeat);
-    const sheriffIndex = aliveSeats.indexOf(sheriffSeat);
-    if (startIndex === sheriffIndex) return "clockwise";
-
-    const clockwiseSteps = (sheriffIndex - startIndex + total) % total;
-    const counterSteps = (startIndex - sheriffIndex + total) % total;
-    return clockwiseSteps >= counterSteps ? "clockwise" : "counterclockwise";
-  }
 
   async onEnter(): Promise<void> {
     return;
@@ -92,17 +73,6 @@ export class DaySpeechPhase extends GamePhase {
       ? t("promptUtils.gameContext.selfSpeechIncludedInTimeline", { seat: player.seat + 1 })
       : "";
 
-    const todaySpeakers = new Set<string>();
-    const dayStartIndex = getDayStartIndex(state);
-    const speakOrderPhase = state.phase;
-
-    for (let i = dayStartIndex; i < state.messages.length; i++) {
-      const m = state.messages[i];
-      if (!m.isSystem && m.phase === speakOrderPhase && m.playerId && m.playerId !== player.playerId) {
-        todaySpeakers.add(m.playerId);
-      }
-    }
-
     const isLastWords = state.phase === "DAY_LAST_WORDS";
     const isBadgeSpeech = state.phase === "DAY_BADGE_SPEECH";
     const isPkSpeech = state.phase === "DAY_PK_SPEECH";
@@ -111,65 +81,27 @@ export class DaySpeechPhase extends GamePhase {
     // Define valid speakers for this phase (campaign-only speakers)
     const candidates =
       isBadgeSpeech && Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
-    const pkTargets = isPkSpeech && Array.isArray(state.pkTargets) ? state.pkTargets : [];
 
     const hasCandidateList = isBadgeSpeech && candidates.length > 0;
 
-    const validSpeakers = state.players.filter(p => {
-        if (!p.alive) return false;
-        // If candidates list is unexpectedly empty, fallback to alive players to avoid division by zero.
-        if (isBadgeSpeech) return hasCandidateList ? candidates.includes(p.seat) : true;
-        if (isPkSpeech) return pkTargets.includes(p.seat);
-        return true;
+    const speechRound = getSpeechRoundStatus(state, player.seat);
+    const formatSeatList = (seats: number[]) =>
+      seats
+        .map((seat) => t("ui.seatNumber", { seat: seat + 1 }))
+        .join(t("common.listSeparator")) || t("common.none");
+    const speakOrder = speechRound.currentPosition;
+    const totalSpeakers = speechRound.totalSpeakers;
+    const speakOrderHint = t("prompts.daySpeech.speakOrder.status", {
+      orderList: formatSeatList(speechRound.orderedSeats),
+      currentSeat: t("ui.seatNumber", { seat: player.seat + 1 }),
+      speakOrder,
+      totalSpeakers,
+      spokenList: formatSeatList(
+        speechRound.spokenSeats.filter((seat) => seat !== player.seat)
+      ),
+      passedList: formatSeatList(speechRound.passedWithoutSpeechSeats),
+      unspokenList: formatSeatList(speechRound.yetToSpeakSeats),
     });
-
-    const totalSpeakers = validSpeakers.length;
-    
-    // 获取完整的发言顺序（从起始座位开始，警长最后）
-    const startSeat = state.daySpeechStartSeat ?? 0;
-    const sheriffSeat = state.badge.holderSeat;
-    const isSheriffAlive = sheriffSeat !== null && 
-      state.players.some((p) => p.seat === sheriffSeat && p.alive);
-    const fullSpeakingOrder = getSpeakingOrder(state, startSeat, isSheriffAlive);
-    
-    // 根据发言顺序，找出当前玩家在顺序中的位置
-    const playerIndex = fullSpeakingOrder.indexOf(player.seat);
-    
-    // 已发言玩家：在当前玩家之前的所有玩家（按发言顺序）
-    const spokenSeats = playerIndex > 0 ? fullSpeakingOrder.slice(0, playerIndex) : [];
-    // 未发言玩家：在当前玩家之后的所有玩家（按发言顺序）
-    const unspokenSeats = playerIndex >= 0 ? fullSpeakingOrder.slice(playerIndex + 1) : [];
-    
-    // 过滤出有效的发言者（针对竞选/PK阶段）
-    const validSpeakerSeats = new Set(validSpeakers.map(p => p.seat));
-    const spokenPlayers = spokenSeats
-      .filter(seat => validSpeakerSeats.has(seat))
-      .map(seat => state.players.find(p => p.seat === seat)!)
-      .filter(Boolean);
-    const unspokenPlayers = unspokenSeats
-      .filter(seat => validSpeakerSeats.has(seat))
-      .map(seat => state.players.find(p => p.seat === seat)!)
-      .filter(Boolean);
-
-    const speakOrder = spokenPlayers.length + 1;
-    const isFirstSpeaker = speakOrder === 1;
-    const isLastSpeaker = speakOrder === totalSpeakers;
-
-    let speakOrderHint = "";
-    if (isFirstSpeaker) {
-      speakOrderHint = t("prompts.daySpeech.speakOrder.first");
-    } else if (isLastSpeaker) {
-      speakOrderHint = t("prompts.daySpeech.speakOrder.last", { speakOrder, totalSpeakers });
-    } else {
-      // 标记已过麦的玩家（在顺序中应该已发言但实际没有发言记录）
-      const spokenList = spokenPlayers.map((p) => {
-        const hasSpoken = todaySpeakers.has(p.playerId);
-        const seatLabel = t("ui.seatNumber", { seat: p.seat + 1 });
-        return hasSpoken ? seatLabel : t("prompts.daySpeech.speakOrder.skipped", { seat: seatLabel });
-      }).join(t("common.listSeparator"));
-      const unspokenList = unspokenPlayers.map((p) => t("ui.seatNumber", { seat: p.seat + 1 })).join(t("common.listSeparator"));
-      speakOrderHint = t("prompts.daySpeech.speakOrder.middle", { speakOrder, totalSpeakers, spokenList: spokenList || t("common.none"), unspokenList: unspokenList || t("common.none") });
-    }
 
     const nonCandidateList = state.players
       .filter((p) => p.alive && !candidates.includes(p.seat))
@@ -183,7 +115,7 @@ export class DaySpeechPhase extends GamePhase {
         ? t("prompts.daySpeech.campaign.pk")
         : "";
 
-    const focusAngle = buildFocusAngle(state, player);
+    const publicFactsForPlayer = buildPublicFactsForPlayer(state, player);
 
     const baseCacheable = t("prompts.daySpeech.base", {
       seat: player.seat + 1,
@@ -213,7 +145,7 @@ export class DaySpeechPhase extends GamePhase {
     const systemParts: SystemPromptPart[] = [
       { text: baseCacheable, cacheable: true, ttl: "1h" },
       { text: taskSection },
-      ...(focusAngle ? [{ text: focusAngle }] : []),
+      ...(publicFactsForPlayer ? [{ text: publicFactsForPlayer }] : []),
       { text: guidelinesSection, cacheable: true, ttl: "1h" },
     ];
     const system = buildSystemTextFromParts(systemParts);
@@ -519,96 +451,8 @@ export class DaySpeechPhase extends GamePhase {
         }
       }
 
-      const getNextPkSeat = (): number | null => {
-        const pkTargets = state.pkTargets || [];
-        if (pkTargets.length === 0) return null;
-        const currentSeat = state.currentSpeakerSeat ?? -1;
-        const currentIndex = pkTargets.indexOf(currentSeat);
-        const nextIndex = currentIndex + 1;
-        if (currentIndex === -1) return pkTargets[0] ?? null;
-        if (nextIndex >= pkTargets.length) return null;
-        return pkTargets[nextIndex];
-      };
-
-      const getNextCandidateSeat = (): number | null => {
-        const candidates = state.badge.candidates || [];
-        const aliveCandidateSeats = candidates.filter((seat) =>
-          state.players.some((p) => p.seat === seat && p.alive)
-        );
-        if (aliveCandidateSeats.length === 0) return null;
-
-        const total = state.players.length;
-        const cursor = (state.currentSpeakerSeat ?? -1) + 1;
-        for (let step = 0; step < total; step++) {
-          const seat = ((cursor + step) % total + total) % total;
-          if (aliveCandidateSeats.includes(seat)) return seat;
-        }
-        return null;
-      };
-
-      const isDaySpeech = state.phase === "DAY_SPEECH";
-      const sheriffSeat = state.badge.holderSeat;
-      const isSheriffAlive = typeof sheriffSeat === "number" && state.players.some((p) => p.seat === sheriffSeat && p.alive);
-
-      // Check if sheriff has spoken as the final speaker
-      // Only transition to vote if sheriff spoke AND is not the starting speaker (meaning everyone else already spoke)
-      const sheriffIsStartSpeaker = state.daySpeechStartSeat === sheriffSeat;
-      if (isDaySpeech && isSheriffAlive && state.currentSpeakerSeat === sheriffSeat && !sheriffIsStartSpeaker) {
-        await runtime.onStartVote(state, runtime.token);
-        return;
-      }
-
-      // Build a set of players who have already spoken in DAY_SPEECH only
-      // (avoid relying on system message text and exclude badge/PK/last words)
-      const getTodaySpeakers = (): Set<number> => {
-        const spokenSeats = new Set<number>();
-        for (const m of state.messages) {
-          if (m.isSystem) continue;
-          if (m.day !== state.day) continue;
-          if (m.phase !== "DAY_SPEECH") continue;
-          if (!m.playerId) continue;
-          const player = state.players.find((p) => p.playerId === m.playerId);
-          if (player) spokenSeats.add(player.seat);
-        }
-        return spokenSeats;
-      };
-
-      let nextSeat: number | null;
-      if (state.phase === "DAY_PK_SPEECH") {
-        nextSeat = getNextPkSeat();
-      } else if (state.phase === "DAY_BADGE_SPEECH") {
-        nextSeat = getNextCandidateSeat();
-      } else {
-        const direction = state.speechDirection ?? "clockwise";
-
-        if (isDaySpeech && isSheriffAlive) {
-          nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, true, direction);
-          // If we're about to loop back to the start, schedule sheriff as the final speaker.
-          // When sheriff is the starting speaker, check if nextSeat would loop back to a position
-          // that would mean all non-sheriff players have spoken.
-          if (sheriffIsStartSpeaker) {
-            // When sheriff started, check if we've looped back to the first non-sheriff speaker
-            const nonSheriffAliveSeats = state.players
-              .filter((p) => p.alive && p.seat !== sheriffSeat)
-              .map((p) => p.seat)
-              .sort((a, b) => a - b);
-            const firstNonSheriffSeat = nonSheriffAliveSeats[0];
-            if (nextSeat !== null && nextSeat === firstNonSheriffSeat && state.currentSpeakerSeat !== sheriffSeat) {
-              // All non-sheriff players have spoken, now it's sheriff's turn as final speaker
-              nextSeat = sheriffSeat;
-            }
-          } else {
-            // Normal case: sheriff is not the starting speaker
-            if (nextSeat !== null && nextSeat === state.daySpeechStartSeat && state.currentSpeakerSeat !== sheriffSeat) {
-              nextSeat = sheriffSeat;
-            }
-          }
-        } else {
-          nextSeat = getNextAliveSeat(state, state.currentSpeakerSeat ?? -1, false, direction);
-        }
-      }
-
-      const startSeat = state.daySpeechStartSeat;
+      // 实际推进与 Prompt 共用同一个本轮顺序和发言记录来源。
+      const nextSeat = getNextSpeechSeat(state);
 
       if (nextSeat === null) {
         if (state.phase === "DAY_PK_SPEECH") {
@@ -621,56 +465,6 @@ export class DaySpeechPhase extends GamePhase {
         }
         await runtime.onStartVote(state, runtime.token);
         return;
-      }
-
-      // Check if we've completed a full round of speeches
-      const shouldTransitionToVote = (isDaySpeech && isSheriffAlive && sheriffIsStartSpeaker)
-        ? (nextSeat === sheriffSeat && state.currentSpeakerSeat === sheriffSeat) // Sheriff spoke last after being first
-        : (startSeat !== null && nextSeat === startSeat); // Normal loop detection
-
-      if (shouldTransitionToVote) {
-        if (state.phase === "DAY_PK_SPEECH") {
-          await runtime.onPkSpeechEnd(state);
-          return;
-        }
-        if (state.phase === "DAY_BADGE_SPEECH") {
-          await runtime.onBadgeSpeechEnd(state);
-          return;
-        }
-        await runtime.onStartVote(state, runtime.token);
-        return;
-      }
-
-      // Prevent duplicate speeches - skip already-spoken seats instead of jumping to vote
-      if (isDaySpeech) {
-        const todaySpeakers = getTodaySpeakers();
-        if (todaySpeakers.has(nextSeat)) {
-          const direction = state.speechDirection ?? "clockwise";
-          const excludeSheriff = isSheriffAlive;
-          let candidate = nextSeat;
-          let attempts = 0;
-          while (attempts < state.players.length) {
-            const nextCandidate = getNextAliveSeat(state, candidate, excludeSheriff, direction);
-            if (nextCandidate === null) break;
-            // If we're about to loop back to the start, schedule sheriff as the final speaker.
-            if (
-              isSheriffAlive &&
-              nextCandidate === state.daySpeechStartSeat &&
-              candidate !== sheriffSeat
-            ) {
-              candidate = sheriffSeat;
-            } else {
-              candidate = nextCandidate;
-            }
-            if (!todaySpeakers.has(candidate)) break;
-            attempts += 1;
-          }
-          nextSeat = candidate;
-          if (todaySpeakers.has(nextSeat)) {
-            await runtime.onStartVote(state, runtime.token);
-            return;
-          }
-        }
       }
 
       const currentState = { ...state, currentSpeakerSeat: nextSeat };
