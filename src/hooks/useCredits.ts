@@ -339,17 +339,40 @@ export function useCredits() {
   }, [refreshDemoConfig]);
 
   useEffect(() => {
+    let active = true;
+    const deferredAuthTasks = new Set<number>();
+
+    const deferAuthTask = (task: () => Promise<void>) => {
+      const timeoutId = window.setTimeout(() => {
+        deferredAuthTasks.delete(timeoutId);
+        if (!active) return;
+        void task().catch((error) => {
+          console.error("[auth] deferred session task failed", error);
+          if (active) setDemoConfigLoading(false);
+        });
+      }, 0);
+      deferredAuthTasks.add(timeoutId);
+    };
+
     setTokenPayConnected(false);
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session) {
-        void handleAuthenticatedSession(session);
-      }
-    });
+    void supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session) {
+          void handleAuthenticatedSession(session);
+        }
+      })
+      .catch((error) => {
+        console.error("[auth] failed to load initial session", error);
+        if (!active) return;
+        setSession(null);
+        setUser(null);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (
           event === AUTH_EVENT.SIGNED_IN ||
           event === AUTH_EVENT.SIGNED_OUT
@@ -367,28 +390,40 @@ export function useCredits() {
           session
           && (event === AUTH_EVENT.SIGNED_IN || event === AUTH_EVENT.INITIAL_SESSION)
         ) {
-          const latestDemoConfig = await fetchDemoModeConfigClient(true);
-          setDemoConfig(latestDemoConfig);
-          setIsDemoMode(latestDemoConfig.active);
-          setGuestId(latestDemoConfig.active ? getGuestId() : null);
-          setDemoConfigLoading(false);
+          // Supabase auth listeners must return synchronously. Awaiting network
+          // work here can hold the auth lock and make later getSession() calls
+          // (including TokenPay) wait forever.
+          deferAuthTask(async () => {
+            const latestDemoConfig = await fetchDemoModeConfigClient(true);
+            if (!active) return;
+            setDemoConfig(latestDemoConfig);
+            setIsDemoMode(latestDemoConfig.active);
+            setGuestId(latestDemoConfig.active ? getGuestId() : null);
+            setDemoConfigLoading(false);
 
-          if (latestDemoConfig.active) {
-            const previousGuestId = readGuestIdFromStorage();
-            if (previousGuestId && session.user) {
-              void migrateGuestSessions(previousGuestId, session.access_token).then(() => {
-                clearGuestId();
-                setGuestId(null);
-              });
+            if (latestDemoConfig.active) {
+              const previousGuestId = readGuestIdFromStorage();
+              if (previousGuestId && session.user) {
+                void migrateGuestSessions(previousGuestId, session.access_token).then(() => {
+                  if (!active) return;
+                  clearGuestId();
+                  setGuestId(null);
+                });
+              }
             }
-          }
 
-          await handleAuthenticatedSession(session);
+            await handleAuthenticatedSession(session);
+          });
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      deferredAuthTasks.forEach((timeoutId) => window.clearTimeout(timeoutId));
+      deferredAuthTasks.clear();
+      subscription.unsubscribe();
+    };
   }, [handleAuthenticatedSession]);
 
   useEffect(() => {

@@ -11,6 +11,8 @@ const REDEMPTION_ENDPOINT = "/api/tokenpay/redemption";
 const JSON_CONTENT_TYPE = "application/json";
 const PAYMENT_POLL_INTERVAL_MS = 3000;
 const PAYMENT_POLL_MAX_INTERVAL_MS = 30000;
+const SESSION_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export type TokenPayConnectionStatus =
   | "connected"
@@ -65,8 +67,23 @@ function getApiError(payload: ApiErrorPayload, fallback: string) {
   return fallback;
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("request_timeout")), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
 async function getAccessToken() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await withTimeout(
+    supabase.auth.getSession(),
+    SESSION_TIMEOUT_MS,
+  );
   if (!session?.access_token) {
     throw new Error("unauthorized");
   }
@@ -75,12 +92,22 @@ async function getAccessToken() {
 
 async function tokenPayFetch(input: string, init: RequestInit = {}) {
   const token = await getAccessToken();
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) abortFromCaller();
+  else init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${token}`);
   if (init.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", JSON_CONTENT_TYPE);
   }
-  return fetch(input, { ...init, headers });
+  try {
+    return await fetch(input, { ...init, headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+    init.signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 async function readJson<T>(response: Response): Promise<T> {

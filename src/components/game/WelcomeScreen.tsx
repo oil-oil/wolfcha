@@ -796,7 +796,6 @@ export function WelcomeScreen({
   }, []);
 
   useEffect(() => {
-    if (creditsLoading) return;
     if (!session?.access_token) {
       handleTokenPayConnectionChange(false);
       setTokenPaySyncedUserId(null);
@@ -804,10 +803,13 @@ export function WelcomeScreen({
     }
 
     let active = true;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
     handleTokenPayConnectionChange(false);
     void fetch("/api/tokenpay/connection", {
       headers: { Authorization: `Bearer ${session.access_token}` },
       cache: "no-store",
+      signal: controller.signal,
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`tokenpay_connection_${response.status}`);
@@ -820,12 +822,15 @@ export function WelcomeScreen({
         // 同步失败时保持 TokenPay 禁用，避免跨账号误用旧连接。
       })
       .finally(() => {
+        window.clearTimeout(timeoutId);
         if (active) setTokenPaySyncedUserId(session.user.id);
       });
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
-  }, [creditsLoading, handleTokenPayConnectionChange, session?.access_token, session?.user.id]);
+  }, [handleTokenPayConnectionChange, session?.access_token, session?.user.id]);
 
   const handleStartGameFromLowCreditModal = async () => {
     if (tokenPaySyncing) {
