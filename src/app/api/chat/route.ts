@@ -5,6 +5,7 @@ import {
   GAME_SESSION_EXPIRED_MESSAGE,
 } from "@/lib/game-session-policy";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
+import { randomUUID } from "node:crypto";
 import {
   getConnectedTokenPayApiKey,
   getTokenPayAppUrl,
@@ -20,6 +21,8 @@ import {
   applyDeepSeekPromptScope,
   type PromptScope,
 } from "@/lib/deepseek-prompt-scope";
+import { recordGameSessionAiAttempt } from "@/lib/server-game-observability";
+import { trackSseAttempt } from "@/lib/sse-attempt-tracker";
 
 // 9 人完整角色画像的正常流式输出实测可超过 80 秒。未启用 Fluid
 // Compute 的 Vercel 项目默认上限可能只有 60 秒，必须显式放宽；这只延长
@@ -38,7 +41,137 @@ const DASHSCOPE_CHAT_COMPLETIONS_URL = `${DASHSCOPE_API_BASE_URL}/chat/completio
 const API_TIMEOUT_MS = 60000;
 const MAX_BATCH_REQUESTS = 12;
 
+const REQUEST_ID_HEADER = "X-Request-ID";
+const ATTEMPT_ID_HEADER = "X-Attempt-ID";
+const ATTEMPT_HEADER = "X-Attempt";
+
 type Provider = "zenmux" | "dashscope" | "tokendance";
+
+type AttemptContext = {
+  userId: string;
+  sessionId: string | null;
+  eventId: string;
+  requestId: string;
+  attempt: number;
+  provider: Provider;
+  model: string;
+  promptScope: PromptScope;
+  mode: "completion" | "batch" | "stream";
+  startedAt: number;
+  inputChars: number;
+};
+
+type AttemptOutcome = "success" | "http_error" | "network_error" | "cancelled" | "interrupted" | "error";
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function stableId(value: unknown): string {
+  return isUuid(value) ? value : randomUUID();
+}
+
+function positiveAttempt(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function countMessageChars(messages: unknown): number {
+  if (!Array.isArray(messages)) return 0;
+  return messages.reduce((sum, message) => {
+    if (!message || typeof message !== "object") return sum;
+    const content = (message as { content?: unknown }).content;
+    if (typeof content === "string") return sum + content.length;
+    if (!Array.isArray(content)) return sum;
+    return sum + content.reduce((partSum, part) => {
+      if (!part || typeof part !== "object") return partSum;
+      const text = (part as { text?: unknown }).text;
+      return partSum + (typeof text === "string" ? text.length : 0);
+    }, 0);
+  }, 0);
+}
+
+function responseUsage(data: unknown): { outputChars?: number; promptTokens?: number; completionTokens?: number } {
+  if (!data || typeof data !== "object") return {};
+  const response = data as { choices?: unknown; usage?: unknown };
+  const usage = response.usage && typeof response.usage === "object"
+    ? response.usage as { prompt_tokens?: unknown; completion_tokens?: unknown }
+    : undefined;
+  const choice = Array.isArray(response.choices) ? response.choices[0] : undefined;
+  const message = choice && typeof choice === "object" ? (choice as { message?: unknown }).message : undefined;
+  const content = message && typeof message === "object" ? (message as { content?: unknown }).content : undefined;
+  return {
+    outputChars: typeof content === "string" ? content.length : undefined,
+    promptTokens: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
+    completionTokens: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : undefined,
+  };
+}
+
+async function recordAttempt(context: AttemptContext, outcome: AttemptOutcome, extra: {
+  httpStatus?: number;
+  outputChars?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  errorCode?: string;
+} = {}): Promise<void> {
+  // 自定义 Key 可在没有项目会话时用于通用调用；这类调用不属于对局统计。
+  if (!context.sessionId) return;
+  try {
+    await recordGameSessionAiAttempt({
+      userId: context.userId,
+      sessionId: context.sessionId,
+      eventId: context.eventId,
+      requestId: context.requestId,
+      attempt: context.attempt,
+      provider: context.provider,
+      model: context.model,
+      promptScope: context.promptScope,
+      mode: context.mode,
+      outcome,
+      httpStatus: extra.httpStatus,
+      durationMs: Math.max(0, Date.now() - context.startedAt),
+      inputChars: context.inputChars,
+      outputChars: extra.outputChars ?? 0,
+      promptTokens: extra.promptTokens ?? 0,
+      completionTokens: extra.completionTokens ?? 0,
+      errorCode: extra.errorCode,
+    });
+  } catch (error) {
+    console.error("[api/chat] Failed to record AI attempt", error);
+  }
+}
+
+async function fetchProvider(url: string, init: RequestInit, context: AttemptContext): Promise<Response> {
+  try {
+    const response = await fetch(url, init);
+    if (!response.ok) {
+      await recordAttempt(context, "http_error", {
+        httpStatus: response.status,
+        errorCode: `http_${response.status}`,
+      });
+    }
+    return response;
+  } catch (error) {
+    await recordAttempt(context, "network_error", {
+      errorCode: error instanceof DOMException && error.name === "AbortError" ? "aborted" : "network_error",
+    });
+    throw error;
+  }
+}
+
+async function trackedStreamResponse(response: Response, context: AttemptContext): Promise<Response> {
+  if (!response.body) {
+    await recordAttempt(context, "error", { errorCode: "missing_response_body" });
+    return new Response(null, { status: response.status, headers: response.headers });
+  }
+  return trackSseAttempt(response, ({ outcome, outputChars, errorCode }) =>
+    recordAttempt(context, outcome, { outputChars, errorCode })
+  );
+}
+
+function normalizePromptScope(value: unknown): PromptScope {
+  return value === "gameplay" ? "gameplay" : "utility";
+}
 
 function getProviderForModel(model: string): Provider | null {
   const modelRef =
@@ -270,6 +403,7 @@ function toTokendanceThinking(
 type ChatRequestPayload = {
   model: string;
   messages: unknown[];
+  request_id?: unknown;
   prompt_scope?: PromptScope;
   temperature?: number;
   max_tokens?: number;
@@ -280,12 +414,20 @@ type ChatRequestPayload = {
   provider?: Provider;
 };
 
+type RequestMeta = {
+  userId: string;
+  sessionId: string | null;
+  attempt: number;
+  requestId?: unknown;
+};
+
 async function runBatchItem(
   payload: ChatRequestPayload,
   headerApiKey: string | null,
   headerDashscopeKey: string | null,
   headerTokendanceKey: string | null,
-  headerTokendanceBaseUrl: string | null
+  headerTokendanceBaseUrl: string | null,
+  meta: RequestMeta,
 ): Promise<
   | { ok: true; data: unknown }
   | {
@@ -318,6 +460,23 @@ async function runBatchItem(
   if (!modelProvider) {
     return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
   }
+  if (typeof model !== "string" || model.length === 0 || model.length > 256 || !Array.isArray(messages)) {
+    return { ok: false, status: 400, error: "Invalid chat request" };
+  }
+
+  const context: AttemptContext = {
+    userId: meta.userId,
+    sessionId: meta.sessionId,
+    eventId: randomUUID(),
+    requestId: stableId(payload.request_id ?? meta.requestId),
+    attempt: meta.attempt,
+    provider: modelProvider,
+    model,
+    promptScope: normalizePromptScope(payload.prompt_scope),
+    mode: "batch",
+    startedAt: Date.now(),
+    inputChars: countMessageChars(messages),
+  };
 
   const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
   if (!isDefaultModel) {
@@ -402,7 +561,7 @@ async function runBatchItem(
 
     let response: Response;
     try {
-      response = await fetch(DASHSCOPE_CHAT_COMPLETIONS_URL, {
+      response = await fetchProvider(DASHSCOPE_CHAT_COMPLETIONS_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${dashscopeApiKey}`,
@@ -410,7 +569,7 @@ async function runBatchItem(
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      });
+      }, context);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -431,8 +590,14 @@ async function runBatchItem(
       };
     }
 
-    const result = await response.json();
-    return { ok: true, data: result };
+    try {
+      const result = await response.json();
+      await recordAttempt(context, "success", responseUsage(result));
+      return { ok: true, data: result };
+    } catch (error) {
+      await recordAttempt(context, "error", { errorCode: "invalid_response" });
+      throw error;
+    }
   }
 
   if (modelProvider === "tokendance") {
@@ -478,7 +643,7 @@ async function runBatchItem(
 
     let response: Response;
     try {
-      response = await fetch(tokendanceUrl, {
+      response = await fetchProvider(tokendanceUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokendanceApiKey}`,
@@ -487,7 +652,7 @@ async function runBatchItem(
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      });
+      }, context);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -510,8 +675,14 @@ async function runBatchItem(
       };
     }
 
-    const result = await response.json();
-    return { ok: true, data: result };
+    try {
+      const result = await response.json();
+      await recordAttempt(context, "success", responseUsage(result));
+      return { ok: true, data: result };
+    } catch (error) {
+      await recordAttempt(context, "error", { errorCode: "invalid_response" });
+      throw error;
+    }
   }
 
   if (hasAnyCustomKeyHeader && !headerApiKey) {
@@ -552,7 +723,7 @@ async function runBatchItem(
 
   let response: Response;
   try {
-    response = await fetch(ZENMUX_API_URL, {
+    response = await fetchProvider(ZENMUX_API_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -560,7 +731,7 @@ async function runBatchItem(
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
-    });
+    }, context);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -574,8 +745,14 @@ async function runBatchItem(
     };
   }
 
-  const result = await response.json();
-  return { ok: true, data: result };
+  try {
+    const result = await response.json();
+    await recordAttempt(context, "success", responseUsage(result));
+    return { ok: true, data: result };
+  } catch (error) {
+    await recordAttempt(context, "error", { errorCode: "invalid_response" });
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -633,6 +810,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    const rawSessionId = request.headers.get("x-game-session-id")?.trim() || null;
+    const sessionId = isUuid(rawSessionId) ? rawSessionId : null;
+    const requestAttempt = positiveAttempt(request.headers.get(ATTEMPT_HEADER));
     if (Array.isArray(body?.requests)) {
       const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim() || null;
       const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
@@ -648,7 +828,25 @@ export async function POST(request: NextRequest) {
         );
       }
       const results = await Promise.all(
-        requests.map((req) => runBatchItem(req, headerApiKey, headerDashscopeKey, headerTokendanceKey, headerTokendanceBaseUrl))
+        requests.map((req) => runBatchItem(
+          req,
+          headerApiKey,
+          headerDashscopeKey,
+          headerTokendanceKey,
+          headerTokendanceBaseUrl,
+          {
+            userId: auth.user.id,
+            sessionId,
+            attempt: requestAttempt,
+            requestId: request.headers.get(REQUEST_ID_HEADER),
+          },
+        ).catch(() => ({
+          ok: false as const,
+          status: 502,
+          error: "Upstream request failed",
+          details: undefined,
+          recoveryAction: undefined,
+        })))
       );
       if (
         tokenPayRequested &&
@@ -663,6 +861,7 @@ export async function POST(request: NextRequest) {
     const {
       model,
       messages,
+      request_id,
       prompt_scope,
       temperature,
       max_tokens,
@@ -680,6 +879,9 @@ export async function POST(request: NextRequest) {
         { error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` },
         { status: 400 }
       );
+    }
+    if (typeof model !== "string" || model.length === 0 || model.length > 256 || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Invalid chat request" }, { status: 400 });
     }
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
@@ -708,6 +910,19 @@ export async function POST(request: NextRequest) {
       return Math.max(0, normalizedTemperature);
     })();
     const effectiveReasoning = modelRefOverride?.reasoning !== undefined ? modelRefOverride.reasoning : reasoning;
+    const attemptContext: AttemptContext = {
+      userId: auth.user.id,
+      sessionId,
+      eventId: stableId(request.headers.get(ATTEMPT_ID_HEADER)),
+      requestId: stableId(request_id ?? request.headers.get(REQUEST_ID_HEADER)),
+      attempt: requestAttempt,
+      provider: modelProvider,
+      model,
+      promptScope: normalizePromptScope(prompt_scope),
+      mode: stream ? "stream" : "completion",
+      startedAt: Date.now(),
+      inputChars: countMessageChars(messages),
+    };
 
     // Process messages based on model capabilities
     let processedMessages = messages;
@@ -797,7 +1012,7 @@ export async function POST(request: NextRequest) {
 
       let response: Response;
       try {
-        response = await fetch(dashscopeApiUrl, {
+        response = await fetchProvider(dashscopeApiUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${dashscopeApiKey}`,
@@ -805,7 +1020,7 @@ export async function POST(request: NextRequest) {
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
-        });
+        }, attemptContext);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -834,11 +1049,17 @@ export async function POST(request: NextRequest) {
         headers.set("Cache-Control", "no-cache");
         headers.set("Connection", "keep-alive");
 
-        return new Response(response.body, { headers });
+        return trackedStreamResponse(new Response(response.body, { headers }), attemptContext);
       }
 
-      const result = await response.json();
-      return NextResponse.json(result);
+      try {
+        const result = await response.json();
+        await recordAttempt(attemptContext, "success", responseUsage(result));
+        return NextResponse.json(result);
+      } catch (error) {
+        await recordAttempt(attemptContext, "error", { errorCode: "invalid_response" });
+        throw error;
+      }
     }
 
     if (modelProvider === "tokendance") {
@@ -898,7 +1119,7 @@ export async function POST(request: NextRequest) {
 
       let response: Response;
       try {
-        response = await fetch(tokendanceUrl, {
+        response = await fetchProvider(tokendanceUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${tokendanceApiKey}`,
@@ -907,7 +1128,7 @@ export async function POST(request: NextRequest) {
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
-        });
+        }, attemptContext);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -944,11 +1165,17 @@ export async function POST(request: NextRequest) {
         headers.set("Cache-Control", "no-cache");
         headers.set("Connection", "keep-alive");
 
-        return new Response(response.body, { headers });
+        return trackedStreamResponse(new Response(response.body, { headers }), attemptContext);
       }
 
-      const result = await response.json();
-      return NextResponse.json(result);
+      try {
+        const result = await response.json();
+        await recordAttempt(attemptContext, "success", responseUsage(result));
+        return NextResponse.json(result);
+      } catch (error) {
+        await recordAttempt(attemptContext, "error", { errorCode: "invalid_response" });
+        throw error;
+      }
     }
 
     if (hasAnyCustomKeyHeader && !headerApiKey) {
@@ -1000,7 +1227,7 @@ export async function POST(request: NextRequest) {
 
     let response: Response;
     try {
-      response = await fetch(ZENMUX_API_URL, {
+      response = await fetchProvider(ZENMUX_API_URL, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -1008,7 +1235,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
-      });
+      }, attemptContext);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -1028,11 +1255,17 @@ export async function POST(request: NextRequest) {
       headers.set("Cache-Control", "no-cache");
       headers.set("Connection", "keep-alive");
 
-      return new Response(response.body, { headers });
+      return trackedStreamResponse(new Response(response.body, { headers }), attemptContext);
     }
 
-    const result = await response.json();
-    return NextResponse.json(result);
+    try {
+      const result = await response.json();
+      await recordAttempt(attemptContext, "success", responseUsage(result));
+      return NextResponse.json(result);
+    } catch (error) {
+      await recordAttempt(attemptContext, "error", { errorCode: "invalid_response" });
+      throw error;
+    }
   } catch (error) {
     console.error("[api/chat] Error:", error);
     return NextResponse.json(

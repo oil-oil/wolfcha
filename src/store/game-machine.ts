@@ -15,7 +15,7 @@ import { getI18n } from "@/i18n/translator";
 // ============ 游戏状态持久化配置 ============
 
 const GAME_STATE_STORAGE_KEY = "wolfcha.game_state";
-const GAME_STATE_VERSION = 1;
+export const GAME_STATE_VERSION = 2;
 
 interface PersistedGameState {
   version: number;
@@ -51,6 +51,15 @@ const IN_PROGRESS_PHASES: Phase[] = [
 export function isGameInProgress(state: GameState | null | undefined): boolean {
   if (!state) return false;
   return IN_PROGRESS_PHASES.includes(state.phase);
+}
+
+/** 只有带数据库会话身份的进行中状态才允许恢复。 */
+export function hasGameSessionId(state: GameState | null | undefined): state is GameState & { gameSessionId: string } {
+  return typeof state?.gameSessionId === "string" && state.gameSessionId.length > 0;
+}
+
+export function isRestorableGameState(state: GameState | null | undefined): boolean {
+  return isGameInProgress(state) && hasGameSessionId(state);
 }
 
 /**
@@ -278,6 +287,7 @@ function normalizeGameState(state: GameState): GameState {
     ...state,
     // Ensure required fields have valid values
     gameId: state.gameId || initial.gameId,
+    gameSessionId: hasGameSessionId(state) ? state.gameSessionId : null,
     phase: state.phase || initial.phase,
     day: typeof state.day === "number" && Number.isFinite(state.day) ? state.day : initial.day,
     difficulty: state.difficulty || initial.difficulty,
@@ -341,8 +351,9 @@ function loadPersistedGameState(): GameState {
       return initial;
     }
     
-    // Only restore if game is in progress
-    if (!isGameInProgress(parsed.state)) {
+    // Only restore if game is in progress and has an explicit database identity.
+    // A pre-sessionId checkpoint must never be resumed into a new/unknown session.
+    if (!isRestorableGameState(parsed.state)) {
       console.info("[wolfcha] Saved game not in progress, starting fresh");
       localStorage.removeItem(GAME_STATE_STORAGE_KEY);
       return initial;
@@ -410,7 +421,7 @@ function saveGameState(state: GameState): void {
   if (typeof window === "undefined") return;
   
   // Clear saved state when game ends or returns to lobby
-  if (!isGameInProgress(state)) {
+  if (!isRestorableGameState(state)) {
     // Clear any pending throttled save
     if (pendingSpeechSaveTimer !== null) {
       clearTimeout(pendingSpeechSaveTimer);
@@ -466,7 +477,7 @@ function saveGameState(state: GameState): void {
 function doSaveGameState(state: GameState): void {
   // Double-check: don't save if game is no longer in progress
   // This handles the case where a throttled timer fires after the user exits the game
-  if (!isGameInProgress(state)) {
+  if (!isRestorableGameState(state)) {
     return;
   }
   

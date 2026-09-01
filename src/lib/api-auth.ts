@@ -74,6 +74,7 @@ export async function hasAuthorizedActiveGameSession(userId: string, sessionId?:
       .select("id")
       .eq("user_id", userId)
       .eq("completed", false)
+      .in("lifecycle_status", ["starting", "running"])
       .eq("used_custom_key", false)
       .eq("credit_authorized", true)
       .gte("last_activity_at", since)

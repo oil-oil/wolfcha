@@ -160,6 +160,8 @@ export interface ChatMessage {
 
 export interface GameState {
   gameId: string;
+  /** 数据库单人游戏会话的唯一身份；进行中的可恢复状态必须存在。 */
+  gameSessionId?: string | null;
   phase: Phase;
   day: number;
   startTime?: number;

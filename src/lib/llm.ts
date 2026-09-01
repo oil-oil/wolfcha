@@ -19,6 +19,7 @@ import {
 } from "@/lib/tokenpay-recovery";
 import { GAME_SESSION_EXPIRED_CODE } from "@/lib/game-session-policy";
 import { parseLLMJson } from "./llm-json";
+import { generateUUID } from "./utils";
 import { withTimeout } from "@/lib/request-timeout";
 import type { PromptScope } from "@/lib/deepseek-prompt-scope";
 
@@ -381,13 +382,20 @@ async function fetchWithRetry(
   init: RequestInit,
   maxAttempts: number,
   modelSource: ModelSource,
+  logicalRequestId: string,
+  attemptSequence: { current: number } = { current: 0 },
 ): Promise<Response> {
   let lastResponse: Response | null = null;
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const attemptNumber = ++attemptSequence.current;
     try {
-      const response = await fetch(input, init);
+      const headers = new Headers(init.headers);
+      headers.set("X-Request-ID", logicalRequestId);
+      headers.set("X-Attempt-ID", generateUUID());
+      headers.set("X-Attempt", String(attemptNumber));
+      const response = await fetch(input, { ...init, headers });
       lastResponse = response;
 
       if (response.ok) return response;
@@ -427,12 +435,28 @@ async function fetchWithTokenPayRecovery(
   init: RequestInit,
   maxAttempts: number,
   modelSource: ModelSource,
+  logicalRequestId: string,
 ): Promise<Response> {
-  const response = await fetchWithRetry(input, init, maxAttempts, modelSource);
+  const attemptSequence = { current: 0 };
+  const response = await fetchWithRetry(
+    input,
+    init,
+    maxAttempts,
+    modelSource,
+    logicalRequestId,
+    attemptSequence,
+  );
   if (response.ok || modelSource !== "tokenpay") return response;
   return retryTokenPayRequestAfterTopUp(
     response,
-    () => fetchWithRetry(input, init, maxAttempts, modelSource),
+    () => fetchWithRetry(
+      input,
+      init,
+      maxAttempts,
+      modelSource,
+      logicalRequestId,
+      attemptSequence,
+    ),
   );
 }
 
@@ -685,6 +709,7 @@ export async function generateCompletion(
 
   Object.assign(headers, await getAuthHeaders());
   attachGameSessionHeader(headers);
+  const logicalRequestId = generateUUID();
 
   console.log("[LLM] generateCompletion:", {
     modelSource: effectiveSource,
@@ -705,6 +730,7 @@ export async function generateCompletion(
         model: resolvedModel.model,
         provider: resolvedModel.provider,
         prompt_scope: options.promptScope ?? "utility",
+        request_id: logicalRequestId,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -715,6 +741,7 @@ export async function generateCompletion(
     },
     4,
     effectiveSource,
+    logicalRequestId,
   );
 
   if (!response.ok) {
@@ -748,12 +775,6 @@ export async function generateCompletion(
     return sum;
   }, 0);
   gameStatsTracker.addAiCall({
-    inputChars,
-    outputChars: assistantMessage.content.length,
-    promptTokens: result.usage?.prompt_tokens,
-    completionTokens: result.usage?.completion_tokens,
-  });
-  gameSessionTracker.addAiCall({
     inputChars,
     outputChars: assistantMessage.content.length,
     promptTokens: result.usage?.prompt_tokens,
@@ -798,16 +819,22 @@ async function generateCompletionBatchInternal(
 
   Object.assign(headers, await getAuthHeaders());
   attachGameSessionHeader(headers);
+  const logicalRequestId = generateUUID();
 
+  const requestsWithIds = resolvedRequests.map((request) => ({
+    ...request,
+    request_id: generateUUID(),
+  }));
   const response = await fetchWithRetry(
     "/api/chat",
     {
       method: "POST",
       headers,
-      body: JSON.stringify({ requests: resolvedRequests }),
+      body: JSON.stringify({ requests: requestsWithIds }),
     },
     3,
     effectiveSource,
+    logicalRequestId,
   );
 
   if (!response.ok) {
@@ -891,6 +918,7 @@ export async function* generateCompletionStream(
 
   Object.assign(headers, await getAuthHeaders());
   attachGameSessionHeader(headers);
+  const logicalRequestId = generateUUID();
 
   const response = await fetchWithTokenPayRecovery(
     "/api/chat",
@@ -903,6 +931,7 @@ export async function* generateCompletionStream(
         model: resolvedModel.model,
         provider: resolvedModel.provider,
         prompt_scope: options.promptScope ?? "utility",
+        request_id: logicalRequestId,
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -914,6 +943,7 @@ export async function* generateCompletionStream(
     },
     4,
     effectiveSource,
+    logicalRequestId,
   );
 
   if (!response.ok) {
@@ -1039,10 +1069,6 @@ export async function* generateCompletionStream(
 
   // 流式结束后统计 AI 调用
   gameStatsTracker.addAiCall({
-    inputChars,
-    outputChars: totalOutputChars,
-  });
-  gameSessionTracker.addAiCall({
     inputChars,
     outputChars: totalOutputChars,
   });

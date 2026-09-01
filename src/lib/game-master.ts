@@ -159,6 +159,7 @@ function buildMessagesForPrompt(
 export function createInitialGameState(): GameState {
   return {
     gameId: uuidv4(),
+    gameSessionId: null,
     phase: "LOBBY",
     day: 0,
     startTime: Date.now(),

@@ -28,6 +28,7 @@ import { fetchWithTimeout } from "@/lib/request-timeout";
 import {
   buildGameStartIntentFingerprint,
   completeGameStartRequest as clearPendingGameStartRequest,
+  GameStartPersistenceError,
   getOrCreateGameStartRequest,
   hasPendingGameStartRequest as readPendingGameStartRequest,
   runGameStartRequestWithRetry,
@@ -139,12 +140,28 @@ export function useCredits() {
     if (isDemoMode) return { success: true };
     if (!session) return { success: false, error: "unauthorized", status: 401 };
 
-    const modelSource = getModelSource();
-    const startIntentFingerprint = buildStartIntentFingerprint(options, modelSource);
-    const startRequestId = getOrCreateGameStartRequest(
-      session.user.id,
-      startIntentFingerprint,
-    );
+    let modelSource: ReturnType<typeof getModelSource>;
+    let startIntentFingerprint: string;
+    let startRequestId: string;
+    try {
+      // 开局扣费前必须成功写入持久幂等键；不能用内存状态代替跨刷新保护。
+      modelSource = getModelSource();
+      startIntentFingerprint = buildStartIntentFingerprint(options, modelSource);
+      startRequestId = getOrCreateGameStartRequest(
+        session.user.id,
+        startIntentFingerprint,
+      );
+    } catch (error) {
+      if (error instanceof GameStartPersistenceError) {
+        return {
+          success: false,
+          error: "Game start idempotency storage is unavailable",
+          code: error.code,
+          status: 503,
+        };
+      }
+      return { success: false, error: "idempotency_storage_unavailable", status: 503 };
+    }
 
     try {
       const customEnabled = modelSource === "custom";
@@ -244,16 +261,26 @@ export function useCredits() {
   }, [isDemoMode, session]);
 
   const completeGameStartRequest = useCallback((requestId: string | undefined) => {
-    if (!requestId || !session?.user.id) return;
-    clearPendingGameStartRequest(session.user.id, requestId);
+    if (!requestId || !session?.user.id) return true;
+    const cleared = clearPendingGameStartRequest(session.user.id, requestId);
+    if (!cleared) {
+      console.warn("[credits] Failed to clear completed game-start idempotency key");
+    }
+    return cleared;
   }, [session]);
 
   const hasPendingGameStartRequest = useCallback((options: ConsumeCreditOptions) => {
     if (!session?.user.id) return false;
-    return readPendingGameStartRequest(
-      session.user.id,
-      buildStartIntentFingerprint(options, getModelSource()),
-    );
+    try {
+      return readPendingGameStartRequest(
+        session.user.id,
+        buildStartIntentFingerprint(options, getModelSource()),
+      );
+    } catch {
+      // 这里只用于是否展示低余额弹窗；按“可能存在待恢复请求”处理，
+      // 真正扣费前仍会严格检查持久化存储并 fail closed。
+      return true;
+    }
   }, [session]);
 
   const redeemCode = useCallback(async (code: string): Promise<{

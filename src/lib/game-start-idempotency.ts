@@ -6,6 +6,17 @@ const STORAGE_KEY_PREFIX = "wolfcha_pending_game_starts_v1";
 // 同一开局意图在 24 小时内始终复用原扣费会话。
 const REQUEST_TTL_MS = GAME_SESSION_RESUME_WINDOW_MS;
 
+export const GAME_START_PERSISTENCE_ERROR_CODE = "idempotency_storage_unavailable";
+
+export class GameStartPersistenceError extends Error {
+  readonly code = GAME_START_PERSISTENCE_ERROR_CODE;
+
+  constructor() {
+    super("Game start idempotency storage is unavailable");
+    this.name = "GameStartPersistenceError";
+  }
+}
+
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 type PendingGameStartRequest = {
@@ -14,11 +25,6 @@ type PendingGameStartRequest = {
   createdAt: number;
 };
 
-const memoryPendingByUser = new Map<string, PendingGameStartRequest[]>();
-// 一旦浏览器拒绝写入 localStorage，本页后续必须以内存为准，否则旧存储会
-// 在下一次读取时覆盖刚生成的幂等键。
-const memoryOnlyUsers = new Set<string>();
-
 function getStorage(): StorageLike | null {
   if (typeof window === "undefined") return null;
   try {
@@ -26,6 +32,11 @@ function getStorage(): StorageLike | null {
   } catch {
     return null;
   }
+}
+
+function requireStorage(storage: StorageLike | null): StorageLike {
+  if (!storage) throw new GameStartPersistenceError();
+  return storage;
 }
 
 function getStorageKey(userId: string): string {
@@ -37,8 +48,11 @@ function isPendingRequest(value: unknown): value is PendingGameStartRequest {
   const request = value as Partial<PendingGameStartRequest>;
   return (
     typeof request.requestId === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.requestId) &&
     typeof request.fingerprint === "string" &&
-    typeof request.createdAt === "number"
+    request.fingerprint.length > 0 &&
+    typeof request.createdAt === "number" &&
+    Number.isFinite(request.createdAt)
   );
 }
 
@@ -47,22 +61,30 @@ function readPendingRequests(
   now: number,
   storage: StorageLike | null,
 ): PendingGameStartRequest[] {
-  const memoryRequests = memoryPendingByUser.get(userId) ?? [];
-  let storageRequests: PendingGameStartRequest[] = [];
-  if (storage && !memoryOnlyUsers.has(userId)) {
-    try {
-      const raw = storage.getItem(getStorageKey(userId));
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(parsed)) {
-        storageRequests = parsed.filter(isPendingRequest);
-      }
-    } catch {
-      // Keep the in-memory copy when browser storage is unavailable or corrupted.
-    }
+  const persistentStorage = requireStorage(storage);
+  let raw: string | null;
+  try {
+    raw = persistentStorage.getItem(getStorageKey(userId));
+  } catch {
+    throw new GameStartPersistenceError();
   }
 
+  let parsed: unknown;
+  try {
+    parsed = raw ? JSON.parse(raw) : [];
+  } catch {
+    // 内容损坏不等于存储不可用；能成功覆盖时可安全自愈。
+    writePendingRequests(userId, [], persistentStorage);
+    return [];
+  }
+  if (!Array.isArray(parsed) || parsed.some((request) => !isPendingRequest(request))) {
+    writePendingRequests(userId, [], persistentStorage);
+    return [];
+  }
+  const storageRequests = parsed as PendingGameStartRequest[];
+
   const latestByFingerprint = new Map<string, PendingGameStartRequest>();
-  for (const request of [...storageRequests, ...memoryRequests]) {
+  for (const request of storageRequests) {
     if (now - request.createdAt > REQUEST_TTL_MS) continue;
     const previous = latestByFingerprint.get(request.fingerprint);
     if (!previous || request.createdAt >= previous.createdAt) {
@@ -72,7 +94,6 @@ function readPendingRequests(
   const fresh = [...latestByFingerprint.values()].sort(
     (left, right) => left.createdAt - right.createdAt,
   );
-  memoryPendingByUser.set(userId, fresh);
   return fresh;
 }
 
@@ -81,20 +102,15 @@ function writePendingRequests(
   requests: PendingGameStartRequest[],
   storage: StorageLike | null,
 ) {
-  const normalized = requests;
-  memoryPendingByUser.set(userId, normalized);
-  if (!storage) return;
-
+  const persistentStorage = requireStorage(storage);
   try {
-    if (normalized.length === 0) {
-      storage.removeItem(getStorageKey(userId));
+    if (requests.length === 0) {
+      persistentStorage.removeItem(getStorageKey(userId));
     } else {
-      storage.setItem(getStorageKey(userId), JSON.stringify(normalized));
+      persistentStorage.setItem(getStorageKey(userId), JSON.stringify(requests));
     }
-    memoryOnlyUsers.delete(userId);
   } catch {
-    // The in-memory copy still protects retries in the active page.
-    memoryOnlyUsers.add(userId);
+    throw new GameStartPersistenceError();
   }
 }
 
@@ -149,15 +165,21 @@ export function completeGameStartRequest(
   userId: string,
   requestId: string,
   options: { now?: number; storage?: StorageLike | null } = {},
-) {
-  const now = options.now ?? Date.now();
-  const storage = options.storage === undefined ? getStorage() : options.storage;
-  const requests = readPendingRequests(userId, now, storage);
-  writePendingRequests(
-    userId,
-    requests.filter((request) => request.requestId !== requestId),
-    storage,
-  );
+): boolean {
+  try {
+    const now = options.now ?? Date.now();
+    const storage = options.storage === undefined ? getStorage() : options.storage;
+    const requests = readPendingRequests(userId, now, storage);
+    writePendingRequests(
+      userId,
+      requests.filter((request) => request.requestId !== requestId),
+      storage,
+    );
+    return true;
+  } catch {
+    // 扣费与开局已经成功时，清理失败不能反向中止正在运行的游戏。
+    return false;
+  }
 }
 
 export function shouldRetryGameStartRequest(status: number): boolean {

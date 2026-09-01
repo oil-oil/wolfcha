@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { supabaseAdmin, ensureAdminClient } from "@/lib/supabase-admin";
 import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import {
@@ -11,6 +11,7 @@ import {
   isSpringCampaignActive,
 } from "@/lib/spring-campaign";
 import { hasConnectedTokenPay, TOKENPAY_MODE_HEADER } from "@/lib/tokenpay";
+import { recordGameSessionCreditEvent } from "@/lib/server-game-observability";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,11 @@ type StartRequestSource = "demo" | "external" | "spring_quota" | "project_credit
 
 type ExistingGameStart = {
   id: string;
+  start_request_id: string;
   start_request_fingerprint: string;
   start_request_source: StartRequestSource;
+  lifecycle_status: "starting" | "running" | "failed" | "abandoned" | "completed";
+  completed: boolean;
 };
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
@@ -50,6 +54,37 @@ class IdempotencyConflictError extends Error {
   constructor() {
     super("idempotency_conflict");
     this.name = "IdempotencyConflictError";
+  }
+}
+
+class TerminalGameStartError extends Error {
+  constructor() {
+    super("terminal_game_start");
+    this.name = "TerminalGameStartError";
+  }
+}
+
+type ConsumeEventOutcome = "success" | "replay" | "reject";
+
+async function recordConsumeEvent(
+  userId: string,
+  sessionId: string | null | undefined,
+  requestId: string,
+  outcome: ConsumeEventOutcome,
+  errorCode?: string,
+): Promise<void> {
+  try {
+    await recordGameSessionCreditEvent({
+      eventId: randomUUID(),
+      sessionId,
+      userId,
+      requestId,
+      outcome,
+      errorCode,
+    });
+  } catch {
+    // 可观测性写入不能改变扣费结果，也不能把底层错误内容返回给客户端。
+    console.error("[credits/consume] failed to record structured event");
   }
 }
 
@@ -97,7 +132,7 @@ async function findExistingGameStart(
 ): Promise<ExistingGameStart | null> {
   const { data, error } = await supabaseAdmin
     .from("game_sessions")
-    .select("id, start_request_fingerprint, start_request_source")
+    .select("id, start_request_id, start_request_fingerprint, start_request_source, lifecycle_status, completed")
     .eq("user_id", userId)
     .eq("start_request_id", requestId)
     .maybeSingle();
@@ -121,7 +156,29 @@ async function buildExistingGameStartResponse(
   existing: ExistingGameStart,
 ) {
   assertMatchingGameStart(existing, payload);
+  if (existing.completed || existing.lifecycle_status === "completed" || existing.lifecycle_status === "abandoned") {
+    throw new TerminalGameStartError();
+  }
+  if (existing.lifecycle_status === "failed") {
+    const nowIso = new Date().toISOString();
+    const { data: reactivated, error } = await supabaseAdmin
+      .from("game_sessions")
+      .update({
+        lifecycle_status: "starting",
+        completed: false,
+        ended_at: null,
+        last_activity_at: nowIso,
+      } as never)
+      .eq("id", existing.id)
+      .eq("user_id", user.id)
+      .eq("lifecycle_status", "failed")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error("Failed to reactivate game start request");
+    if (!reactivated) throw new TerminalGameStartError();
+  }
   const credits = await readCurrentCredits(user.id);
+  await recordConsumeEvent(user.id, existing.id, existing.start_request_id, "replay");
   return NextResponse.json({
     success: true,
     credits,
@@ -137,8 +194,9 @@ async function buildIdempotencyConflictResponse(
   payload: ConsumeCreditPayload,
   requestId: string,
 ) {
+  let existing: ExistingGameStart | null = null;
   try {
-    const existing = await findExistingGameStart(user.id, requestId);
+    existing = await findExistingGameStart(user.id, requestId);
     if (existing) {
       try {
         return await buildExistingGameStartResponse(user, payload, existing);
@@ -147,6 +205,13 @@ async function buildIdempotencyConflictResponse(
       }
     }
   } catch (error) {
+    if (error instanceof TerminalGameStartError) {
+      await recordConsumeEvent(user.id, existing?.id, requestId, "reject", "game_start_request_ended");
+      return NextResponse.json(
+        { error: "This game start request has already ended", code: "game_start_request_ended" },
+        { status: 409 },
+      );
+    }
     console.error("[credits/consume] failed to recover idempotency conflict", error);
     return NextResponse.json(
       { error: "Failed to recover game start request" },
@@ -154,6 +219,7 @@ async function buildIdempotencyConflictResponse(
     );
   }
 
+  await recordConsumeEvent(user.id, existing?.id, requestId, "reject", "idempotency_conflict");
   return NextResponse.json(
     { error: "Idempotency key conflicts with another game start", code: "idempotency_conflict" },
     { status: 409 },
@@ -335,13 +401,25 @@ export async function POST(request: Request) {
       return await buildExistingGameStartResponse(user, payload, existing);
     }
   } catch (error) {
+    if (error instanceof TerminalGameStartError) {
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "game_start_request_ended");
+      return NextResponse.json(
+        {
+          error: "This game start request has already ended",
+          code: "game_start_request_ended",
+        },
+        { status: 409 },
+      );
+    }
     if (error instanceof IdempotencyConflictError) {
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "idempotency_conflict");
       return NextResponse.json(
         { error: "Idempotency key conflicts with another game start", code: "idempotency_conflict" },
         { status: 409 },
       );
     }
     console.error("[credits/consume] failed to recover game start request", error);
+    await recordConsumeEvent(user.id, null, startRequestId, "reject", "request_lookup_failed");
     return NextResponse.json({ error: "Failed to recover game start request" }, { status: 500 });
   }
 
@@ -368,8 +446,10 @@ export async function POST(request: Request) {
         return buildIdempotencyConflictResponse(user, payload, startRequestId);
       }
       console.error("[credits/consume] demo session creation failed", error);
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "session_create_failed");
       return NextResponse.json({ error: "Failed to create game session" }, { status: 500 });
     }
+    await recordConsumeEvent(user.id, session.sessionId, startRequestId, session.replayed ? "replay" : "success");
     return NextResponse.json({
       success: true,
       credits: creditsRow?.credits ?? 0,
@@ -385,10 +465,23 @@ export async function POST(request: Request) {
   const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
   const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
   const tokenPayRequested = request.headers.get(TOKENPAY_MODE_HEADER) === "true";
-  const tokenPayConnected = tokenPayRequested
-    ? await hasConnectedTokenPay(user.id)
-    : false;
+  let tokenPayConnected = false;
+  if (tokenPayRequested) {
+    try {
+      tokenPayConnected = await hasConnectedTokenPay(user.id);
+    } catch {
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "tokenpay_lookup_failed");
+      return NextResponse.json(
+        {
+          error: "TokenPay connection is temporarily unavailable",
+          code: "tokenpay_connection_unavailable",
+        },
+        { status: 503 },
+      );
+    }
+  }
   if (tokenPayRequested && !tokenPayConnected) {
+    await recordConsumeEvent(user.id, null, startRequestId, "reject", "tokenpay_connection_unavailable");
     return NextResponse.json(
       {
         error: "TokenPay connection is not available",
@@ -416,7 +509,15 @@ export async function POST(request: Request) {
       .eq("quota_date", quotaDate)
       .maybeSingle();
 
-    if (!campaignError && campaignData) {
+    if (campaignError) {
+      console.error("[credits/consume] campaign quota read failed");
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "campaign_quota_unavailable");
+      return NextResponse.json(
+        { error: "Campaign quota is temporarily unavailable", code: "campaign_quota_unavailable" },
+        { status: 503 },
+      );
+    }
+    if (campaignData) {
       campaignRow = campaignData as CampaignQuotaRow;
     }
   }
@@ -460,8 +561,10 @@ export async function POST(request: Request) {
         return buildIdempotencyConflictResponse(user, payload, startRequestId);
       }
       console.error("[credits/consume] external session creation failed", error);
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "session_create_failed");
       return NextResponse.json({ error: "Failed to create game session" }, { status: 500 });
     }
+    await recordConsumeEvent(user.id, session.sessionId, startRequestId, session.replayed ? "replay" : "success");
     return NextResponse.json({
       success: true,
       credits: creditsRow?.credits ?? 0,
@@ -492,14 +595,29 @@ export async function POST(request: Request) {
     if (!insertCampaignError && insertedCampaignData) {
       campaignRow = insertedCampaignData as CampaignQuotaRow;
     } else if (insertCampaignError?.code === "23505") {
-      const { data: retriedCampaignData } = await supabaseAdmin
+      const { data: retriedCampaignData, error: retryCampaignError } = await supabaseAdmin
         .from("campaign_daily_quota")
         .select("granted_quota, consumed_quota, expires_at")
         .eq("user_id", user.id)
         .eq("campaign_code", SPRING_CAMPAIGN_CODE)
         .eq("quota_date", quotaDate)
         .maybeSingle();
-      campaignRow = (retriedCampaignData as CampaignQuotaRow | null) ?? null;
+      if (retryCampaignError || !retriedCampaignData) {
+        console.error("[credits/consume] campaign quota conflict recovery failed");
+        await recordConsumeEvent(user.id, null, startRequestId, "reject", "campaign_quota_unavailable");
+        return NextResponse.json(
+          { error: "Campaign quota is temporarily unavailable", code: "campaign_quota_unavailable" },
+          { status: 503 },
+        );
+      }
+      campaignRow = retriedCampaignData as CampaignQuotaRow;
+    } else {
+      console.error("[credits/consume] campaign quota claim failed");
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "campaign_quota_unavailable");
+      return NextResponse.json(
+        { error: "Campaign quota is temporarily unavailable", code: "campaign_quota_unavailable" },
+        { status: 503 },
+      );
     }
   }
 
@@ -530,20 +648,36 @@ export async function POST(request: Request) {
         replayed: boolean;
       }>)[0];
       if (!row) {
-        return NextResponse.json({ error: "Failed to consume temporary quota" }, { status: 500 });
+        await recordConsumeEvent(user.id, null, startRequestId, "reject", "campaign_quota_unavailable");
+        return NextResponse.json(
+          { error: "Failed to consume temporary quota", code: "campaign_quota_unavailable" },
+          { status: 503 },
+        );
       }
       const updatedCampaignRow: CampaignQuotaRow = {
         granted_quota: row.granted_quota,
         consumed_quota: row.consumed_quota,
         expires_at: row.expires_at,
       };
+      const replayed = row.replayed === true;
+      let currentCredits: number;
+      try {
+        currentCredits = await readCurrentCredits(user.id);
+      } catch {
+        await recordConsumeEvent(user.id, row.session_id, startRequestId, "reject", "credits_unavailable");
+        return NextResponse.json(
+          { error: "Failed to read credits", code: "credits_unavailable" },
+          { status: 503 },
+        );
+      }
+      await recordConsumeEvent(user.id, row.session_id, startRequestId, replayed ? "replay" : "success");
       return NextResponse.json({
         success: true,
-        credits: await readCurrentCredits(user.id),
+        credits: currentCredits,
         usedTemporaryQuota: true,
         campaign: buildCampaignPayload(updatedCampaignRow),
         sessionId: row.session_id,
-        idempotentReplay: row.replayed === true,
+        idempotentReplay: replayed,
       });
     }
 
@@ -556,7 +690,11 @@ export async function POST(request: Request) {
       error.message.includes("spring_quota_expired");
     if (!quotaUnavailable) {
       console.error("[credits/consume] spring quota rpc failed", error);
-      return NextResponse.json({ error: "Failed to consume temporary quota" }, { status: 500 });
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "campaign_quota_unavailable");
+      return NextResponse.json(
+        { error: "Campaign quota is temporarily unavailable", code: "campaign_quota_unavailable" },
+        { status: 503 },
+      );
     }
   }
 
@@ -568,6 +706,7 @@ export async function POST(request: Request) {
       startRequestId,
       buildStartRequestFingerprint(requestSource, payload),
     );
+    await recordConsumeEvent(user.id, result.sessionId, startRequestId, result.replayed ? "replay" : "success");
     return NextResponse.json({
       success: true,
       credits: result.credits,
@@ -581,6 +720,7 @@ export async function POST(request: Request) {
       return buildIdempotencyConflictResponse(user, payload, startRequestId);
     }
     if (String(error).includes("Insufficient credits")) {
+      await recordConsumeEvent(user.id, null, startRequestId, "reject", "insufficient_credits");
       return NextResponse.json(
         {
           error: "Insufficient credits",
@@ -590,6 +730,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await recordConsumeEvent(user.id, null, startRequestId, "reject", "credit_consume_failed");
     return NextResponse.json({ error: "Failed to consume credit" }, { status: 500 });
   }
 }

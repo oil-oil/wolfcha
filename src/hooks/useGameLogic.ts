@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
 import { ALL_MODELS, PLAYER_MODELS, PROJECT_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
-import { gameStateAtom, isValidTransition, clearPersistedGameState, isGameInProgress } from "@/store/game-machine";
+import { gameStateAtom, isValidTransition, clearPersistedGameState, isRestorableGameState } from "@/store/game-machine";
 import { getGeneratorModel, getModelSource } from "@/lib/api-keys";
 import {
   createInitialGameState,
@@ -103,7 +103,7 @@ export function useGameLogic() {
   const hasRestoredRef = useRef(false);
   // If the FIRST render is already "in progress", it's almost certainly restored from localStorage
   const restoredInProgressOnMountRef = useRef(
-    isGameInProgress(gameState) && gameState.players.length > 0
+    isRestorableGameState(gameState) && gameState.players.length > 0
   );
   const hasResumedFromCheckpointRef = useRef(false);
 
@@ -113,8 +113,12 @@ export function useGameLogic() {
     hasRestoredRef.current = true;
     
     // Check if the current gameState is from a restored game in progress
-    if (isGameInProgress(gameState) && gameState.players.length > 0) {
+    if (isRestorableGameState(gameState) && gameState.players.length > 0 && gameState.gameSessionId) {
       console.info("[wolfcha] Restoring game session from previous state");
+      gameSessionTracker.rehydrate(gameState.gameSessionId, gameState.startTime ?? Date.now());
+      void gameSessionTracker.syncProgressImmediate().catch((error) => {
+        console.error("[game-session] Failed to sync restored session:", error);
+      });
       setGameStarted(true);
       setShowTable(true);
     }
@@ -155,6 +159,31 @@ export function useGameLogic() {
   const hasContinuedAfterRevealRef = useRef(false);
   const isAwaitingRoleRevealRef = useRef(false);
   const showTableTimeoutRef = useRef<number | null>(null);
+  const cancellableTimeoutsRef = useRef<number[]>([]);
+  const cancellableTimeoutGenerationRef = useRef(0);
+
+  const clearCancellableTimeouts = useCallback(() => {
+    cancellableTimeoutGenerationRef.current += 1;
+    cancellableTimeoutsRef.current.forEach((timer) => window.clearTimeout(timer));
+    cancellableTimeoutsRef.current = [];
+  }, []);
+
+  const scheduleCancellableTimeout = useCallback(
+    (generation: number, callback: () => void, delayMs: number) => {
+      if (generation !== cancellableTimeoutGenerationRef.current) return;
+      let timer = 0;
+      timer = window.setTimeout(() => {
+        cancellableTimeoutsRef.current = cancellableTimeoutsRef.current.filter(
+          (activeTimer) => activeTimer !== timer,
+        );
+        if (generation === cancellableTimeoutGenerationRef.current) callback();
+      }, delayMs);
+      cancellableTimeoutsRef.current.push(timer);
+    },
+    [],
+  );
+
+  useEffect(() => () => clearCancellableTimeouts(), [clearCancellableTimeouts]);
 
   // 回调 refs（用于人类操作后继续流程）
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
@@ -495,13 +524,9 @@ export function useGameLogic() {
         accessToken,
         winner: null,
         completed: false,
+        lifecycleStatus: "running",
         roundsPlayed: summary.roundsPlayed,
         durationSeconds: summary.durationSeconds,
-        aiCallsCount: summary.aiCallsCount,
-        aiInputChars: summary.aiInputChars,
-        aiOutputChars: summary.aiOutputChars,
-        aiPromptTokens: summary.aiPromptTokens,
-        aiCompletionTokens: summary.aiCompletionTokens,
       });
       navigator.sendBeacon?.(
         "/api/game-sessions",
@@ -812,7 +837,7 @@ export function useGameLogic() {
     if (hasResumedFromCheckpointRef.current) return;
 
     const s = gameStateRef.current;
-    if (!isGameInProgress(s) || s.players.length === 0) return;
+    if (!isRestorableGameState(s) || !s.gameSessionId || s.players.length === 0) return;
 
     hasResumedFromCheckpointRef.current = true;
     const token = getToken();
@@ -1363,6 +1388,8 @@ export function useGameLogic() {
 
     const totalPlayers = playerCount;
 
+    clearCancellableTimeouts();
+    const characterAnimationGeneration = cancellableTimeoutGenerationRef.current;
     resetDialogueState();
     setInputText("");
     setShowTable(false);
@@ -1376,6 +1403,7 @@ export function useGameLogic() {
     }
 
     setIsLoading(true);
+    let sessionId: string | null = null;
     try {
       // 初始化游戏统计追踪器
       const statsConfig = {
@@ -1385,7 +1413,7 @@ export function useGameLogic() {
       };
       gameStatsTracker.start(statsConfig);
 
-      const sessionId = await gameSessionTracker.start({
+      sessionId = await gameSessionTracker.start({
         playerCount,
         difficulty,
         usedCustomKey: getModelSource() !== "project",
@@ -1439,6 +1467,7 @@ export function useGameLogic() {
 
       setGameState({
         ...createInitialGameState(),
+        gameSessionId: sessionId,
         scenario,
         players: initialPlayers,
         phase: "LOBBY",
@@ -1521,7 +1550,7 @@ export function useGameLogic() {
           const isCustom = index < customCount;
           const delay = isCustom ? 0 : 200 + (index - customCount) * 180;
           
-          window.setTimeout(() => {
+          scheduleCancellableTimeout(characterAnimationGeneration, () => {
             setGameState((prev) => {
               const nextPlayers = prev.players.map((pl) => {
                 if (pl.seat !== seat) return pl;
@@ -1548,7 +1577,7 @@ export function useGameLogic() {
         // 为 Genshin 模式添加逐个出现的动画效果
         characters.forEach((character, index) => {
           const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
-          window.setTimeout(() => {
+          scheduleCancellableTimeout(characterAnimationGeneration, () => {
             setGameState((prev) => {
               const nextPlayers = prev.players.map((pl) => {
                 if (pl.seat !== seat) return pl;
@@ -1573,7 +1602,7 @@ export function useGameLogic() {
           onBaseProfiles: (profiles) => {
             profiles.forEach((p, i) => {
               const seat = aiSeatOrder[i] ?? aiSeats[i] ?? i;
-              window.setTimeout(() => {
+              scheduleCancellableTimeout(characterAnimationGeneration, () => {
                 setGameState((prev) => {
                   const nextPlayers = prev.players.map((pl) => {
                     if (pl.seat === seat) return { ...pl, displayName: p.displayName };
@@ -1586,7 +1615,7 @@ export function useGameLogic() {
           },
           onCharacter: (index, character) => {
             const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
-            window.setTimeout(() => {
+            scheduleCancellableTimeout(characterAnimationGeneration, () => {
               setGameState((prev) => {
                 const nextPlayers = prev.players.map((pl) => {
                   if (pl.seat !== seat) return pl;
@@ -1609,6 +1638,12 @@ export function useGameLogic() {
         });
       }
 
+      if (sessionId) {
+        await gameSessionTracker.markRunning().catch((error) => {
+          console.error("[game-session] Failed to mark session running:", error);
+        });
+      }
+
       const players = setupPlayers(
         characters,
         humanSeat,
@@ -1623,6 +1658,7 @@ export function useGameLogic() {
 
       let newState: GameState = {
         ...createInitialGameState(),
+        gameSessionId: sessionId,
         scenario,
         players,
         phase: "NIGHT_START",
@@ -1688,7 +1724,7 @@ export function useGameLogic() {
         isAwaitingRoleRevealRef.current = false;
         
         // Start the night phase directly after state is set
-        setTimeout(async () => {
+        scheduleCancellableTimeout(characterAnimationGeneration, async () => {
           const token = getToken();
           if (isTokenValid(token)) {
             const systemMessages = getSystemMessages();
@@ -1703,6 +1739,12 @@ export function useGameLogic() {
         isAwaitingRoleRevealRef.current = true;
       }
     } catch (error) {
+      clearCancellableTimeouts();
+      if (sessionId) {
+        await gameSessionTracker.markFailed().catch((statusError) => {
+          console.error("[game-session] Failed to mark session failed:", statusError);
+        });
+      }
       const msg = String(error);
       if (isQuotaExhaustedMessage(msg)) {
         toast.error(t("gameLogicMessages.quotaExhausted.title"), {
@@ -1721,7 +1763,7 @@ export function useGameLogic() {
     } finally {
       setIsLoading(false);
     }
-  }, [humanName, resetDialogueState, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable, t]);
+  }, [clearCancellableTimeouts, getToken, humanName, isTokenValid, resetDialogueState, runNightPhaseAction, scheduleCancellableTimeout, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable, speakerHost, t]);
 
   /** 角色揭示后继续 */
   const continueAfterRoleReveal = useCallback(async () => {
@@ -1752,6 +1794,11 @@ export function useGameLogic() {
   /** 重新开始 */
   const restartGame = useCallback(() => {
     flowController.current.interrupt();
+    void gameSessionTracker.abandon().catch((error) => {
+      console.error("[game-session] Failed to abandon session:", error);
+    });
+    gameSessionTracker.reset();
+    clearCancellableTimeouts();
 
     // Clear persisted game state from localStorage
     clearPersistedGameState();
@@ -1770,7 +1817,7 @@ export function useGameLogic() {
       window.clearTimeout(showTableTimeoutRef.current);
       showTableTimeoutRef.current = null;
     }
-  }, [setGameState, resetDialogueState]);
+  }, [clearCancellableTimeouts, resetDialogueState, setGameState]);
 
   /** 人类发言 */
   const handleHumanSpeech = useCallback(async () => {
