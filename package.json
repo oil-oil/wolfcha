@@ -6,6 +6,9 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
+    "test:single-player-context": "tsx --test src/lib/ai-logger.test.ts src/lib/game-master.badge-signup.test.ts src/lib/game-master.stream-logging.test.ts scripts/single-player-context-audit.test.ts src/lib/prompt-utils.test.ts src/hooks/useDialogueManager.test.ts",
+    "audit:single-player-context": "tsx scripts/single-player-context-audit.ts",
+    "audit:single-player-context:live": "node --env-file=.env.local --import tsx scripts/live-single-player-context-audit.ts",
     "lint": "eslint",
     "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
   },
@@ -58,6 +61,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }

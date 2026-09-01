@@ -51,6 +51,8 @@ export interface AILogEntry {
   error?: string;
 }
 
+export type AILogListener = (entry: AILogEntry) => void | Promise<void>;
+
 function parseCacheUsageFromRawResponse(rawResponse: string | undefined): PromptCacheUsage | undefined {
   if (!rawResponse) return undefined;
   try {
@@ -64,9 +66,18 @@ function parseCacheUsageFromRawResponse(rawResponse: string | undefined): Prompt
 
 class AILogger {
   private localCache: AILogEntry[] | null = null;
+  private readonly listeners = new Set<AILogListener>();
+
+  subscribe(listener: AILogListener): () => void {
+    this.listeners.add(listener);
+
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
 
   private shouldPrint(): boolean {
-    return process.env.NODE_ENV !== "production";
+    return typeof window !== "undefined" && process.env.NODE_ENV !== "production";
   }
 
   private loadLocalLogs(): AILogEntry[] {
@@ -127,8 +138,21 @@ class AILogger {
 
     this.printToConsole(fullEntry);
     this.appendLocal(fullEntry);
+    this.notify(fullEntry);
 
     return fullEntry;
+  }
+
+  private notify(entry: AILogEntry) {
+    for (const listener of [...this.listeners]) {
+      try {
+        void Promise.resolve(listener(entry)).catch(() => {
+          // ignore listener failures
+        });
+      } catch {
+        // ignore listener failures
+      }
+    }
   }
 
   private printToConsole(entry: AILogEntry) {
