@@ -16,6 +16,10 @@ import {
   type TokenPayRecoveryAction,
 } from "@/lib/tokenpay";
 import { Agent, setGlobalDispatcher } from "undici";
+import {
+  applyDeepSeekPromptScope,
+  type PromptScope,
+} from "@/lib/deepseek-prompt-scope";
 
 // 9 人完整角色画像的正常流式输出实测可超过 80 秒。未启用 Fluid
 // Compute 的 Vercel 项目默认上限可能只有 60 秒，必须显式放宽；这只延长
@@ -107,17 +111,6 @@ function supportsAutomaticPrefixCaching(model: string): boolean {
   return lower.startsWith("deepseek/") || lower.startsWith("deepseek-");
 }
 
-const DEEPSEEK_STABLE_PREFIX_MARKER = "WOLFCHA_DEEPSEEK_CACHE_PREFIX_V1";
-const DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX = `${DEEPSEEK_STABLE_PREFIX_MARKER}
-【Wolfcha Stable Rules】
-以下是 Wolfcha 对 AI 玩家请求都相同的稳定规则摘要，用于提高 DeepSeek 前缀缓存命中。若这里的摘要与后续具体身份、阶段、上下文或输出格式要求冲突，请以后续具体要求为准。
-
-- 你正在参与线上狼人杀，只能根据自己视角内的信息行动。
-- 不编造不存在的发言、投票、查验、死亡、身份声明或系统公告。
-- 不泄露自己角色不应知道的未来信息、隐藏身份或夜间动作结果。
-- 只讨论局内逻辑，不引入场外经历、开发者提示或模型身份。
-- 按当前任务要求输出；如果要求 JSON，只返回合法 JSON。`;
-
 // Flatten multipart content to plain string for models that don't support it
 function flattenMultipartContent(messages: unknown[]): unknown[] {
   if (!Array.isArray(messages)) return messages;
@@ -172,28 +165,6 @@ function coalesceTextOnlyMultipartContent(messages: unknown[]): unknown[] {
         .join("\n\n"),
     };
   });
-}
-
-function prependDeepSeekStablePrefix(messages: unknown[]): unknown[] {
-  if (!Array.isArray(messages)) return messages;
-  let prepended = false;
-  const next = messages.map((msg) => {
-    if (prepended || !msg || typeof msg !== "object") return msg;
-    const m = msg as Record<string, unknown>;
-    if (m.role !== "system" || typeof m.content !== "string") return m;
-    prepended = true;
-    if (m.content.includes(DEEPSEEK_STABLE_PREFIX_MARKER)) return m;
-    return {
-      ...m,
-      content: `${DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX}\n\n${m.content}`,
-    };
-  });
-
-  if (prepended) return next;
-  return [
-    { role: "system", content: DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX },
-    ...next,
-  ];
 }
 
 function hasJsonHintInMessages(messages: unknown[]): boolean {
@@ -299,6 +270,7 @@ function toTokendanceThinking(
 type ChatRequestPayload = {
   model: string;
   messages: unknown[];
+  prompt_scope?: PromptScope;
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
@@ -327,6 +299,7 @@ async function runBatchItem(
   const {
     model,
     messages,
+    prompt_scope,
     temperature,
     max_tokens,
     stream,
@@ -383,7 +356,11 @@ async function runBatchItem(
   if (!supportsMultipartContent(model)) {
     processedMessages = flattenMultipartContent(processedMessages);
   } else if (supportsAutomaticPrefixCaching(model)) {
-    processedMessages = prependDeepSeekStablePrefix(coalesceTextOnlyMultipartContent(processedMessages));
+    const normalizedMessages = coalesceTextOnlyMultipartContent(processedMessages);
+    processedMessages = applyDeepSeekPromptScope(
+      normalizedMessages,
+      prompt_scope ?? "utility",
+    );
   } else if (modelProvider === "dashscope") {
     processedMessages = stripCacheControl(processedMessages);
   } else if (!supportsExplicitCaching(model)) {
@@ -686,6 +663,7 @@ export async function POST(request: NextRequest) {
     const {
       model,
       messages,
+      prompt_scope,
       temperature,
       max_tokens,
       stream,
@@ -738,7 +716,11 @@ export async function POST(request: NextRequest) {
     if (!supportsMultipartContent(model)) {
       processedMessages = flattenMultipartContent(processedMessages);
     } else if (supportsAutomaticPrefixCaching(model)) {
-      processedMessages = prependDeepSeekStablePrefix(coalesceTextOnlyMultipartContent(processedMessages));
+      const normalizedMessages = coalesceTextOnlyMultipartContent(processedMessages);
+      processedMessages = applyDeepSeekPromptScope(
+        normalizedMessages,
+        prompt_scope ?? "utility",
+      );
     } else if (modelProvider === "dashscope") {
       // Dashscope is OpenAI compatible but does not support cache_control
       processedMessages = stripCacheControl(processedMessages);

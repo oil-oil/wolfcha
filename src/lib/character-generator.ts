@@ -51,6 +51,8 @@ const MODEL_DISPLAY_NAME_MAP: Array<{ match: RegExp; label: string }> = [
 ];
 
 const CHARACTER_GENERATOR_REASONING = { enabled: false } as const;
+const CHARACTER_PERSONA_BATCH_SIZE = 3;
+const CHARACTER_PERSONA_BATCH_MAX_TOKENS = 4200;
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -200,10 +202,6 @@ export interface BaseProfile {
   age: number;
   mbti: string;
   basicInfo: string;
-}
-
-interface BaseProfilesResponse {
-  profiles: BaseProfile[];
 }
 
 const normalizeBaseProfiles = (result: unknown): { profiles: BaseProfile[]; raw: unknown } => {
@@ -501,27 +499,34 @@ const alignCharactersToProfiles = (
   return ordered;
 };
 
-const buildFullPersonasPrompt = (scenario: GameScenario, allProfiles: BaseProfile[]) => {
-  const { t } = getI18n();
+const buildFullPersonasPrompt = (
+  scenario: GameScenario,
+  allProfiles: BaseProfile[],
+  outputProfiles: BaseProfile[] = allProfiles,
+) => {
+  const { t, locale } = getI18n();
+  const outputNames = new Set(outputProfiles.map((profile) => profile.displayName));
   const roster = allProfiles
     .map((p, i) =>
-      t("characterGenerator.rosterLine", {
-        index: i + 1,
-        name: p.displayName,
-        gender: p.gender,
-        age: p.age,
-        basicInfo: p.basicInfo,
-      })
+      `${t("characterGenerator.rosterLine", {
+          index: i + 1,
+          name: p.displayName,
+          gender: p.gender,
+          age: p.age,
+          basicInfo: p.basicInfo,
+        })} ${outputNames.has(p.displayName)
+          ? locale === "zh" ? "[本批输出]" : "[OUTPUT IN THIS BATCH]"
+          : locale === "zh" ? "[仅作全局去重参考]" : "[CONTEXT ONLY FOR GLOBAL DIVERSITY]"}`
     )
     .join("\n");
 
-  const schema = allProfiles.map(buildCharacterSchemaLine).join(",\n");
+  const schema = outputProfiles.map(buildCharacterSchemaLine).join(",\n");
 
   return t("characterGenerator.fullPersonasPrompt", {
     title: scenario.title,
     description: scenario.description,
     roster,
-    count: allProfiles.length,
+    count: outputProfiles.length,
     schema,
   });
 };
@@ -536,8 +541,11 @@ export async function generateCharacters(
 ): Promise<GeneratedCharacter[]> {
   const usedScenario = scenario ?? getRandomScenario();
   let cachedBaseProfiles: BaseProfile[] | null = null;
-  const runOnce = async () => {
-    const startTime = Date.now();
+  const cachedPersonaBatches = new Map<number, GeneratedCharacter[]>();
+  const lastEmittedCharacters = new Map<number, GeneratedCharacter>();
+  const modelSource = getModelSource();
+  const maxAttempts = modelSource === "tokenpay" ? 1 : 2;
+  const runOnce = async (attempt: number) => {
     let baseProfiles = cachedBaseProfiles;
 
     if (!baseProfiles) {
@@ -565,165 +573,209 @@ export async function generateCharacters(
       options?.onBaseProfiles?.(baseProfiles);
     }
 
-    const fullPrompt = buildFullPersonasPrompt(usedScenario, baseProfiles);
-    
-    // 使用流式生成，每解析出一个角色就立即调用回调
     const finalizedCharacters: GeneratedCharacter[] = [];
-    const emittedIndices = new Set<number>();
-    let accumulatedContent = "";
-    
-    // 完整角色生成需要 persona + playerMind，按更宽预算生成
-    const fullMaxTokens = Math.max(9000, count * 1250 + 1800);
+    const emitCharacter = (index: number, character: GeneratedCharacter) => {
+      finalizedCharacters[index] = character;
+      // 成功批次重试时会复用同一对象，不重复通知；失败批次重新生成的是
+      // 新对象，必须覆盖通知，避免界面残留上一次不完整流里的旧画像。
+      if (lastEmittedCharacters.get(index) === character) return;
+      lastEmittedCharacters.set(index, character);
+      options?.onCharacter?.(index, character);
+      console.log(`[character-gen] emitted character ${index}: ${character.displayName}`);
+    };
 
-    const stream = generateCompletionStream({
-      model: getGeneratorModel(),
-      messages: [{ role: "user", content: fullPrompt }],
-      temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-      max_tokens: fullMaxTokens,
-      reasoning: CHARACTER_GENERATOR_REASONING,
-    });
+    const generatePersonaBatch = async (
+      batchProfiles: BaseProfile[],
+      batchStartIndex: number,
+    ): Promise<GeneratedCharacter[]> => {
+      const cached = cachedPersonaBatches.get(batchStartIndex);
+      if (cached) {
+        cached.forEach((character, localIndex) => {
+          emitCharacter(batchStartIndex + localIndex, character);
+        });
+        return cached;
+      }
 
-    for await (const chunk of stream) {
-      accumulatedContent += chunk;
-      
-      // 使用正则提取完整的角色对象
-      // 匹配 {"displayName": "...", "persona": {...}, "playerMind": {...}} 结构
-      const cleaned = stripMarkdownCodeFences(accumulatedContent);
-      
-      // 找到所有可能完整的角色对象
-      // 通过匹配 displayName 后跟 persona 和 playerMind 对象的闭合 } 来识别完整角色
-      const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
-      const matches = cleaned.match(characterPattern);
-      
-      if (matches) {
-        for (const match of matches) {
-          try {
-            const c = parseLLMJson<GeneratedCharacter>(match);
-            if (!c) continue;
-            if (!c.displayName) continue;
-            
-            // 找到对应的 profile index
-            const profileIndex = baseProfiles.findIndex(p => 
-              p.displayName === c.displayName && !emittedIndices.has(baseProfiles.indexOf(p))
+      const batchStartedAt = Date.now();
+      const batchModel = getGeneratorModel();
+      const fullPrompt = buildFullPersonasPrompt(
+        usedScenario,
+        baseProfiles,
+        batchProfiles,
+      );
+      const batchCharacters: GeneratedCharacter[] = [];
+      const emittedLocalIndices = new Set<number>();
+      let accumulatedContent = "";
+
+      try {
+        // 大模型一次生成九个完整画像时实测会产生超过一万 token，并在正常
+        // stop 时留下损坏 JSON。三人分批后单批上限固定为 4200，九人总上限
+        // 12600，不高于旧版单请求的 13050。
+        const stream = generateCompletionStream({
+          model: batchModel,
+          messages: [{ role: "user", content: fullPrompt }],
+          temperature: GAME_TEMPERATURE.CHARACTER_PERSONA,
+          max_tokens: CHARACTER_PERSONA_BATCH_MAX_TOKENS,
+          reasoning: CHARACTER_GENERATOR_REASONING,
+        });
+
+        for await (const chunk of stream) {
+          accumulatedContent += chunk;
+          const cleaned = stripMarkdownCodeFences(accumulatedContent);
+          const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
+          const matches = cleaned.match(characterPattern);
+
+          for (const match of matches ?? []) {
+            const rawCharacter = parseLLMJson<GeneratedCharacter>(match);
+            if (!rawCharacter?.displayName) continue;
+            const localIndex = batchProfiles.findIndex(
+              (profile, index) =>
+                profile.displayName === rawCharacter.displayName &&
+                !emittedLocalIndices.has(index),
             );
-            
-            if (profileIndex === -1) continue;
-            
-            const profile = baseProfiles[profileIndex];
-            const normalizedCharacter = normalizeGeneratedCharacterForProfile(c, profile);
+            if (localIndex === -1) continue;
 
-            if (normalizedCharacter && isValidPersonaForProfile(normalizedCharacter.persona, profile) && isValidPlayerMind(normalizedCharacter.playerMind)) {
-              emittedIndices.add(profileIndex);
-
-              const voiceId = resolveVoiceId(
-                normalizedCharacter.persona.voiceId,
-                normalizedCharacter.persona.gender,
-                normalizedCharacter.persona.age,
-                "zh" as AppLocale
-              );
-
-              const character: GeneratedCharacter = {
-                displayName: profile.displayName,
-                persona: {
-                  ...normalizedCharacter.persona,
-                  basicInfo: profile.basicInfo,
-                  voiceId,
-                  relationships: undefined,
-                },
-                playerMind: normalizedCharacter.playerMind,
-              };
-
-              finalizedCharacters[profileIndex] = character;
-              options?.onCharacter?.(profileIndex, character);
-              console.log(`[character-gen] emitted character ${profileIndex}: ${character.displayName}`);
+            const profile = batchProfiles[localIndex];
+            const normalized = normalizeGeneratedCharacterForProfile(rawCharacter, profile);
+            if (
+              !normalized ||
+              !isValidPersonaForProfile(normalized.persona, profile) ||
+              !isValidPlayerMind(normalized.playerMind)
+            ) {
+              continue;
             }
-          } catch {
-            // 解析失败是正常的
+
+            const voiceId = resolveVoiceId(
+              normalized.persona.voiceId,
+              normalized.persona.gender,
+              normalized.persona.age,
+              "zh" as AppLocale,
+            );
+            const character: GeneratedCharacter = {
+              displayName: profile.displayName,
+              persona: {
+                ...normalized.persona,
+                basicInfo: profile.basicInfo,
+                voiceId,
+                relationships: undefined,
+              },
+              playerMind: normalized.playerMind,
+            };
+            emittedLocalIndices.add(localIndex);
+            batchCharacters[localIndex] = character;
+            emitCharacter(batchStartIndex + localIndex, character);
           }
         }
-      }
-    }
 
-    // 流式结束后，检查是否所有角色都已生成
-    if (finalizedCharacters.filter(Boolean).length < baseProfiles.length) {
-      // 回退到完整解析
-      const cleaned = stripMarkdownCodeFences(accumulatedContent);
-      const fullResult = parseLLMJson<unknown>(cleaned);
-      if (!fullResult) {
-        throw new Error("Character generation returned invalid JSON");
-      }
-      
-      const normalized = normalizeGeneratedCharacters(fullResult);
-      const alignedCharacters = alignCharactersToProfiles(normalized.characters, baseProfiles);
+        if (batchCharacters.filter(Boolean).length < batchProfiles.length) {
+          const fullResult = parseLLMJson<unknown>(stripMarkdownCodeFences(accumulatedContent));
+          if (!fullResult) {
+            throw new Error(`Character batch ${batchStartIndex} returned invalid JSON`);
+          }
+          const normalized = normalizeGeneratedCharacters(fullResult);
+          const aligned = alignCharactersToProfiles(normalized.characters, batchProfiles);
+          if (!aligned) {
+            throw new Error(`Character batch ${batchStartIndex} returned invalid schema`);
+          }
 
-      if (!alignedCharacters) {
-        throw new Error("Character generation returned invalid schema");
-      }
+          aligned.forEach((character, localIndex) => {
+            if (batchCharacters[localIndex]) return;
+            const profile = batchProfiles[localIndex];
+            const voiceId = resolveVoiceId(
+              character.persona.voiceId,
+              character.persona.gender,
+              character.persona.age,
+              "zh" as AppLocale,
+            );
+            const completed: GeneratedCharacter = {
+              displayName: profile.displayName,
+              persona: {
+                ...character.persona,
+                basicInfo: profile.basicInfo,
+                voiceId,
+                relationships: undefined,
+              },
+              playerMind: character.playerMind,
+            };
+            batchCharacters[localIndex] = completed;
+            emitCharacter(batchStartIndex + localIndex, completed);
+          });
+        }
 
-      // 补充未生成的角色
-      for (let i = 0; i < alignedCharacters.length; i++) {
-        if (finalizedCharacters[i]) continue;
-        
-        const c = alignedCharacters[i];
-        const profile = baseProfiles[i];
-        const voiceId = resolveVoiceId(
-          c.persona.voiceId,
-          c.persona.gender,
-          c.persona.age,
-          "zh" as AppLocale
-        );
-
-        const character: GeneratedCharacter = {
-          displayName: profile.displayName,
-          persona: {
-            ...c.persona,
-            basicInfo: profile.basicInfo, // Carry over basicInfo from BaseProfile
-            voiceId,
-            relationships: undefined,
+        cachedPersonaBatches.set(batchStartIndex, batchCharacters);
+        await aiLogger.log({
+          type: "character_generation",
+          request: {
+            model: batchModel,
+            messages: [{ role: "user", content: fullPrompt }],
           },
-          playerMind: c.playerMind,
-        };
-
-        finalizedCharacters[i] = character;
-        options?.onCharacter?.(i, character);
-      }
-    }
-
-    await aiLogger.log({
-      type: "character_generation",
-      request: { 
-        model: getGeneratorModel(),
-        messages: [{ role: "user", content: fullPrompt }],
-      },
-      response: { 
-        content: JSON.stringify(finalizedCharacters.map((c) => ({
-          displayName: c.displayName,
-          hiddenCommunicationProfile: {
-            werewolfExperience: c.persona.werewolfExperience,
-            vocabularyStyle: c.persona.vocabularyStyle,
-            reasoningStyle: c.persona.reasoningStyle,
-            speechLengthHabit: c.persona.speechLengthHabit,
-            pressureStyle: c.persona.pressureStyle,
-            uncertaintyStyle: c.persona.uncertaintyStyle,
-            mistakePattern: c.persona.mistakePattern,
-            wolfDeceptionStyle: c.persona.wolfDeceptionStyle,
+          response: {
+            content: JSON.stringify(batchCharacters.map((c) => ({
+              displayName: c.displayName,
+              hiddenCommunicationProfile: {
+                werewolfExperience: c.persona.werewolfExperience,
+                vocabularyStyle: c.persona.vocabularyStyle,
+                reasoningStyle: c.persona.reasoningStyle,
+                speechLengthHabit: c.persona.speechLengthHabit,
+                pressureStyle: c.persona.pressureStyle,
+                uncertaintyStyle: c.persona.uncertaintyStyle,
+                mistakePattern: c.persona.mistakePattern,
+                wolfDeceptionStyle: c.persona.wolfDeceptionStyle,
+              },
+              playerMind: c.playerMind,
+            }))),
+            duration: Date.now() - batchStartedAt,
+            rawResponse: JSON.stringify({ batchStartIndex, attempt: attempt + 1 }),
           },
-          playerMind: c.playerMind,
-        }))),
-        duration: Date.now() - startTime 
-      },
-    });
+        });
+        return batchCharacters;
+      } catch (error) {
+        await aiLogger.log({
+          type: "character_generation",
+          request: {
+            model: batchModel,
+            messages: [{ role: "user", content: fullPrompt }],
+          },
+          response: {
+            content: accumulatedContent,
+            duration: Date.now() - batchStartedAt,
+            raw: accumulatedContent,
+            rawResponse: JSON.stringify({ batchStartIndex, attempt: attempt + 1 }),
+          },
+          error: String(error),
+        });
+        throw error;
+      }
+    };
+
+    const batchTasks: Promise<GeneratedCharacter[]>[] = [];
+    for (let start = 0; start < baseProfiles.length; start += CHARACTER_PERSONA_BATCH_SIZE) {
+      batchTasks.push(
+        generatePersonaBatch(
+          baseProfiles.slice(start, start + CHARACTER_PERSONA_BATCH_SIZE),
+          start,
+        ),
+      );
+    }
+    const batchResults = await Promise.allSettled(batchTasks);
+    const failedBatch = batchResults.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    if (failedBatch) throw failedBatch.reason;
+    if (finalizedCharacters.filter(Boolean).length !== baseProfiles.length) {
+      throw new Error("Character generation returned incomplete batches");
+    }
 
     return finalizedCharacters;
   };
 
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       console.log(
-        `[character-gen] Attempt ${attempt + 1}/2, modelSource: ${getModelSource()}, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
+        `[character-gen] Attempt ${attempt + 1}/${maxAttempts}, modelSource: ${modelSource}, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
       );
-      return await runOnce();
+      return await runOnce(attempt);
     } catch (error) {
       lastError = error;
       console.error(`[character-gen] Attempt ${attempt + 1} failed:`, error);
@@ -734,24 +786,15 @@ export async function generateCharacters(
                           errorMsg.includes("insufficient") ||
                           errorMsg.includes("余额");
       
-      if (isQuotaError) {
-        console.error("[character-gen] Quota exhausted, aborting retry");
+      if (isQuotaError || modelSource === "tokenpay") {
+        console.error("[character-gen] Non-retryable generation failure, aborting retry");
         throw error;
       }
       
-      if (attempt === 0) {
+      if (attempt + 1 < maxAttempts) {
         continue;
       }
       console.error("Character generation failed:", error);
-      await aiLogger.log({
-        type: "character_generation",
-        request: { 
-          model: GENERATOR_MODEL,
-          messages: [{ role: "user", content: "(two-stage generation)" }],
-        },
-        response: { content: "[]", duration: 0 },
-        error: String(error),
-      });
     }
   }
 

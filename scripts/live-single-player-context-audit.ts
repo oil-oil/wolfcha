@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AILogEntry } from "@/lib/ai-logger";
 import type { LLMMessage } from "@/lib/llm";
+import { applyDeepSeekPromptScope } from "@/lib/deepseek-prompt-scope";
 import {
   createSinglePlayerContextAuditState,
   redactAuditArtifact,
@@ -12,16 +13,6 @@ import type { ChatMessage, GameState, Player, Role } from "@/types/game";
 const LIVE_MODEL = "deepseek-v4-flash-0731";
 const MAX_PROVIDER_CALLS = 12;
 const LIVE_OUTPUT_PATH = path.resolve("dry-runs/single-player-context-live-audit.json");
-const DEEPSEEK_STABLE_PREFIX_MARKER = "WOLFCHA_DEEPSEEK_CACHE_PREFIX_V1";
-const DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX = `${DEEPSEEK_STABLE_PREFIX_MARKER}
-【Wolfcha Stable Rules】
-以下是 Wolfcha 对 AI 玩家请求都相同的稳定规则摘要，用于提高 DeepSeek 前缀缓存命中。若这里的摘要与后续具体身份、阶段、上下文或输出格式要求冲突，请以后续具体要求为准。
-
-- 你正在参与线上狼人杀，只能根据自己视角内的信息行动。
-- 不编造不存在的发言、投票、查验、死亡、身份声明或系统公告。
-- 不泄露自己角色不应知道的未来信息、隐藏身份或夜间动作结果。
-- 只讨论局内逻辑，不引入场外经历、开发者提示或模型身份。
-- 按当前任务要求输出；如果要求 JSON，只返回合法 JSON。`;
 
 type ChatPayload = {
   model: string;
@@ -276,31 +267,6 @@ const addCheck = (checks: AuditCheck[], name: string, passed: boolean, detail: s
   checks.push({ name, passed, detail });
 };
 
-const prepareDeepSeekMessages = (messages: LLMMessage[]): Array<Record<string, unknown>> => {
-  let prepended = false;
-  const normalized = messages.map((message) => {
-    const content = typeof message.content === "string"
-      ? message.content
-      : message.content
-          .flatMap((part) => (part.type === "text" ? [part.text.trim()] : []))
-          .filter(Boolean)
-          .join("\n\n");
-    if (!prepended && message.role === "system") {
-      prepended = true;
-      return {
-        ...message,
-        content: content.includes(DEEPSEEK_STABLE_PREFIX_MARKER)
-          ? content
-          : `${DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX}\n\n${content}`,
-      };
-    }
-    return { ...message, content };
-  });
-  return prepended
-    ? normalized
-    : [{ role: "system", content: DEEPSEEK_STABLE_PROMPT_CACHE_PREFIX }, ...normalized];
-};
-
 async function runLiveAudit() {
   if (!process.env.TOKENDANCE_API_KEY || !process.env.TOKENDANCE_BASE_URL) {
     throw new Error("缺少 TOKENDANCE_API_KEY 或 TOKENDANCE_BASE_URL，无法运行付费 live 审计");
@@ -329,7 +295,7 @@ async function runLiveAudit() {
     if (providerCallId > MAX_PROVIDER_CALLS) {
       throw new Error(`live 审计最多允许 ${MAX_PROVIDER_CALLS} 次付费 Provider 调用`);
     }
-    const messages = prepareDeepSeekMessages(payload.messages);
+    const messages = applyDeepSeekPromptScope(payload.messages, "gameplay");
     const requestBody: Record<string, unknown> = {
       model: payload.model,
       messages,

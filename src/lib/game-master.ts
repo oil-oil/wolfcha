@@ -679,6 +679,7 @@ export async function* generateAISpeechStream(
     for await (const chunk of generateCompletionStream(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
       model: player.agentProfile!.modelRef.model,
       messages,
+      promptScope: "gameplay",
       temperature: GAME_TEMPERATURE.SPEECH,
     }))) {
       fullResponse += chunk;
@@ -820,6 +821,7 @@ export async function generateAISpeechSegments(
     const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
       model: player.agentProfile!.modelRef.model,
       messages,
+      promptScope: "gameplay",
       temperature: GAME_TEMPERATURE.SPEECH,
     }));
 
@@ -963,6 +965,7 @@ export async function generateAISpeechSegmentsStream(
     const stream = generateCompletionStream(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
       model: player.agentProfile!.modelRef.model,
       messages,
+      promptScope: "gameplay",
       temperature: GAME_TEMPERATURE.SPEECH,
     }));
 
@@ -1165,6 +1168,7 @@ export async function generateAIVote(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1360,6 +1364,7 @@ export async function generateAIBadgeSignupBatch(
       request: {
         model,
         messages,
+        promptScope: "gameplay" as const,
         temperature: GAME_TEMPERATURE.BADGE_SIGNUP,
       },
     };
@@ -1467,6 +1472,7 @@ export async function generateAIBadgeVote(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1544,6 +1550,7 @@ export async function generateBadgeTransfer(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1628,6 +1635,7 @@ export async function generateSeerAction(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1693,6 +1701,7 @@ export async function generateWolfAction(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1769,6 +1778,7 @@ export async function generateWitchAction(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1865,6 +1875,7 @@ export async function generateGuardAction(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -1933,6 +1944,7 @@ export async function generateHunterShoot(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),
@@ -2019,6 +2031,7 @@ export async function generateWhiteWolfKingBoomDecision(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
+        promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
         response_format: { type: "json_object" },
       }),

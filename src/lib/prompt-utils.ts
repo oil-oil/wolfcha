@@ -715,7 +715,7 @@ ${checks.join("\n")}
   
   if (isWolfRole(player.role)) {
     const teammates = state.players.filter(
-      (p) => isWolfRole(p.role) && p.alive && p.playerId !== player.playerId
+      (p) => isWolfRole(p.role) && p.playerId !== player.playerId
     );
     const allWolves = state.players.filter((p) => isWolfRole(p.role));
     const aliveWolves = allWolves.filter((p) => p.alive);

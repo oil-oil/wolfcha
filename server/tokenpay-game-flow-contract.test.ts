@@ -22,8 +22,24 @@ test("a disconnected TokenPay selection cannot start a game", () => {
 test("character generation reuses the paid base-profile stage", () => {
   assert.match(characterSource, /let cachedBaseProfiles: BaseProfile\[\] \| null = null/);
   assert.match(characterSource, /cachedBaseProfiles = baseProfiles/);
-  assert.match(characterSource, /if \(isQuotaError\)[\s\S]*throw error/);
+  assert.match(characterSource, /if \(isQuotaError \|\| modelSource === "tokenpay"\)[\s\S]*throw error/);
   assert.doesNotMatch(characterSource, /isCustomKeyEnabled\(\) && isQuotaError/);
+});
+
+test("character personas are generated as bounded JSON batches", () => {
+  assert.match(characterSource, /CHARACTER_PERSONA_BATCH_SIZE = 3/);
+  assert.match(characterSource, /CHARACTER_PERSONA_BATCH_MAX_TOKENS = 4200/);
+  assert.match(characterSource, /Promise\.allSettled\(batchTasks\)/);
+  assert.match(characterSource, /temperature: GAME_TEMPERATURE\.CHARACTER_PERSONA/);
+  assert.match(characterSource, /cachedPersonaBatches/);
+  assert.match(characterSource, /仅作全局去重参考/);
+});
+
+test("TokenPay character generation never replays an ambiguous paid stream", () => {
+  assert.match(characterSource, /const maxAttempts = modelSource === "tokenpay" \? 1 : 2/);
+  assert.match(characterSource, /isQuotaError \|\| modelSource === "tokenpay"/);
+  assert.match(characterSource, /lastEmittedCharacters\.get\(index\) === character/);
+  assert.doesNotMatch(characterSource, /\(two-stage generation\)/);
 });
 
 test("TokenPay avoids ambiguous automatic request replay", () => {
