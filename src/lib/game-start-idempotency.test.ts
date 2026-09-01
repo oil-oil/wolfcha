@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildGameStartIntentFingerprint,
   completeGameStartRequest,
+  GAME_START_PERSISTENCE_ERROR_CODE,
   GAME_START_REQUEST_TTL_MS,
+  GameStartPersistenceError,
   getOrCreateGameStartRequest,
   hasPendingGameStartRequest,
   runGameStartRequestWithRetry,
@@ -33,6 +35,18 @@ class WriteFailingStorage extends MemoryStorage {
 
   override removeItem() {
     throw new Error("quota_exceeded");
+  }
+}
+
+class ReadFailingStorage extends MemoryStorage {
+  override getItem(): string | null {
+    throw new Error("storage_unavailable");
+  }
+}
+
+class RemoveFailingStorage extends MemoryStorage {
+  override removeItem() {
+    throw new Error("storage_unavailable");
   }
 }
 
@@ -104,19 +118,61 @@ test("24 小时内不会因未完成意图超过八个而丢失最早请求 ID",
   );
 });
 
-test("localStorage 写失败后，同页重试仍以内存中的请求 ID 为准", () => {
+test("localStorage 写失败时直接 fail closed，不返回可发起网络请求的 ID", () => {
   const storage = new WriteFailingStorage();
   const fingerprint = buildGameStartIntentFingerprint({ playerCount: 10, source: "project" });
-  const first = getOrCreateGameStartRequest("user-write-fail", fingerprint, {
-    now: 1_000,
-    storage,
-  });
-  const second = getOrCreateGameStartRequest("user-write-fail", fingerprint, {
-    now: 2_000,
-    storage,
-  });
 
-  assert.equal(second, first);
+  assert.throws(
+    () => getOrCreateGameStartRequest("user-write-fail", fingerprint, {
+      now: 1_000,
+      storage,
+    }),
+    (error: unknown) =>
+      error instanceof GameStartPersistenceError
+      && error.code === GAME_START_PERSISTENCE_ERROR_CODE,
+  );
+});
+
+test("持久存储不可用时 fail closed", () => {
+  const fingerprint = buildGameStartIntentFingerprint({ playerCount: 10, source: "project" });
+
+  assert.throws(
+    () => getOrCreateGameStartRequest("user-no-storage", fingerprint, { storage: null }),
+    (error: unknown) =>
+      error instanceof GameStartPersistenceError
+      && error.code === GAME_START_PERSISTENCE_ERROR_CODE,
+  );
+});
+
+test("localStorage 读取失败时 fail closed", () => {
+  const fingerprint = buildGameStartIntentFingerprint({ playerCount: 10, source: "project" });
+
+  assert.throws(
+    () => getOrCreateGameStartRequest("user-read-fail", fingerprint, {
+      storage: new ReadFailingStorage(),
+    }),
+    (error: unknown) =>
+      error instanceof GameStartPersistenceError
+      && error.code === GAME_START_PERSISTENCE_ERROR_CODE,
+  );
+});
+
+test("损坏的持久化内容可覆盖时会自愈并生成新请求 ID", () => {
+  const storage = new MemoryStorage();
+  storage.setItem("wolfcha_pending_game_starts_v1:user-corrupt", "{broken");
+  const fingerprint = buildGameStartIntentFingerprint({ playerCount: 10 });
+
+  const requestId = getOrCreateGameStartRequest("user-corrupt", fingerprint, { storage });
+  assert.match(requestId, /^[0-9a-f-]{36}$/i);
+  assert.equal(hasPendingGameStartRequest("user-corrupt", fingerprint, { storage }), true);
+});
+
+test("开局成功后的清理失败不会反向抛错或中止游戏", () => {
+  const storage = new RemoveFailingStorage();
+  const fingerprint = buildGameStartIntentFingerprint({ playerCount: 10 });
+  const requestId = getOrCreateGameStartRequest("user-cleanup", fingerprint, { storage });
+
+  assert.equal(completeGameStartRequest("user-cleanup", requestId, { storage }), false);
 });
 
 test("意图指纹不受对象字段顺序影响", () => {

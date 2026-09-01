@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import { isGuestUser } from "@/lib/demo-mode";
+import {
+  type GameSessionLifecycleStatus,
+} from "@/lib/server-game-observability";
 import { ensureAdminClient, supabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -19,18 +22,36 @@ interface UpdateSessionPayload {
   action: "update";
   sessionId: string;
   accessToken?: string;
+  lifecycleStatus: GameSessionLifecycleStatus;
   winner?: "wolf" | "villager" | null;
   completed: boolean;
   roundsPlayed: number;
   durationSeconds: number;
-  aiCallsCount: number;
-  aiInputChars: number;
-  aiOutputChars: number;
-  aiPromptTokens: number;
-  aiCompletionTokens: number;
 }
 
 type GameSessionPayload = CreateSessionPayload | UpdateSessionPayload;
+
+const LIFECYCLE_STATUSES: GameSessionLifecycleStatus[] = [
+  "starting",
+  "running",
+  "failed",
+  "abandoned",
+  "completed",
+];
+
+function isLifecycleStatus(value: unknown): value is GameSessionLifecycleStatus {
+  return LIFECYCLE_STATUSES.includes(value as GameSessionLifecycleStatus);
+}
+
+function canTransitionLifecycle(
+  current: GameSessionLifecycleStatus,
+  next: GameSessionLifecycleStatus,
+): boolean {
+  if (current === next) return true;
+  if (current === "starting") return next === "running" || next === "failed" || next === "abandoned";
+  if (current === "running") return next === "failed" || next === "abandoned" || next === "completed";
+  return false;
+}
 
 function isGuestUserIdSchemaError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -96,6 +117,8 @@ export async function POST(request: Request) {
       player_count: payload.playerCount,
       difficulty: payload.difficulty || null,
       completed: false,
+      lifecycle_status: "starting",
+      started_at: nowIso,
       used_custom_key: payload.usedCustomKey,
       credit_authorized: false,
       model_used: payload.modelUsed || null,
@@ -128,19 +151,44 @@ export async function POST(request: Request) {
   }
 
   if (payload.action === "update") {
+    if (!isLifecycleStatus(payload.lifecycleStatus)) {
+      return NextResponse.json({ error: "Invalid lifecycle status" }, { status: 400 });
+    }
     const nowIso = new Date().toISOString();
+    const isCompleted = payload.lifecycleStatus === "completed";
+    const isTerminal = ["failed", "abandoned", "completed"].includes(payload.lifecycleStatus);
+    const { data: currentSession, error: currentSessionError } = await supabaseAdmin
+      .from("game_sessions")
+      .select("lifecycle_status")
+      .eq("id", payload.sessionId)
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+
+    if (currentSessionError) {
+      console.error("[game-sessions] Read error:", currentSessionError);
+      return NextResponse.json({ error: "Failed to read game session" }, { status: 500 });
+    }
+    if (!currentSession) {
+      return NextResponse.json({ error: "Game session not found" }, { status: 404 });
+    }
+    const currentStatus = (currentSession as {
+      lifecycle_status: GameSessionLifecycleStatus;
+    }).lifecycle_status;
+    if (!canTransitionLifecycle(currentStatus, payload.lifecycleStatus)) {
+      return NextResponse.json(
+        { error: "Invalid lifecycle transition" },
+        { status: 409 },
+      );
+    }
+
     const updateData = {
-      winner: payload.winner,
-      completed: payload.completed,
+      winner: isCompleted ? payload.winner ?? null : null,
+      completed: isCompleted,
+      lifecycle_status: payload.lifecycleStatus,
       rounds_played: payload.roundsPlayed,
       duration_seconds: payload.durationSeconds,
-      ai_calls_count: payload.aiCallsCount,
-      ai_input_chars: payload.aiInputChars,
-      ai_output_chars: payload.aiOutputChars,
-      ai_prompt_tokens: payload.aiPromptTokens,
-      ai_completion_tokens: payload.aiCompletionTokens,
       last_activity_at: nowIso,
-      ...(payload.completed ? { ended_at: nowIso } : {}),
+      ended_at: isTerminal ? nowIso : null,
     };
 
     const { data: updatedSession, error: updateError } = await supabaseAdmin
@@ -148,6 +196,7 @@ export async function POST(request: Request) {
       .update(updateData as never)
       .eq("id", payload.sessionId)
       .eq("user_id", effectiveUserId)
+      .eq("lifecycle_status", currentStatus)
       .select("id")
       .maybeSingle();
 
@@ -156,7 +205,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to update game session" }, { status: 500 });
     }
     if (!updatedSession) {
-      return NextResponse.json({ error: "Game session not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Game session changed concurrently" },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({ success: true });

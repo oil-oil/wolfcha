@@ -224,6 +224,8 @@ export interface Database {
           difficulty: string | null;
           winner: "wolf" | "villager" | null;
           completed: boolean;
+          lifecycle_status: "starting" | "running" | "failed" | "abandoned" | "completed";
+          started_at: string;
           rounds_played: number;
           duration_seconds: number | null;
           ai_calls_count: number;
@@ -250,6 +252,8 @@ export interface Database {
           difficulty?: string | null;
           winner?: "wolf" | "villager" | null;
           completed?: boolean;
+          lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed";
+          started_at?: string;
           rounds_played?: number;
           duration_seconds?: number | null;
           ai_calls_count?: number;
@@ -276,6 +280,8 @@ export interface Database {
           difficulty?: string | null;
           winner?: "wolf" | "villager" | null;
           completed?: boolean;
+          lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed";
+          started_at?: string;
           rounds_played?: number;
           duration_seconds?: number | null;
           ai_calls_count?: number;
@@ -294,6 +300,75 @@ export interface Database {
           last_activity_at?: string;
           created_at?: string;
           ended_at?: string | null;
+        };
+        Relationships: [];
+      };
+      game_session_events: {
+        Row: {
+          event_id: string;
+          session_id: string | null;
+          user_id: string;
+          event_type: "lifecycle" | "credit_consume" | "ai_attempt";
+          lifecycle_status: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
+          request_id: string | null;
+          attempt: number;
+          provider: "zenmux" | "dashscope" | "tokendance" | null;
+          prompt_scope: "gameplay" | "utility" | null;
+          mode: "completion" | "batch" | "stream" | null;
+          outcome: string | null;
+          http_status: number | null;
+          duration_ms: number;
+          error_code: string | null;
+          model: string | null;
+          input_chars: number;
+          output_chars: number;
+          prompt_tokens: number;
+          completion_tokens: number;
+          created_at: string;
+        };
+        Insert: {
+          event_id?: string;
+          session_id?: string | null;
+          user_id: string;
+          event_type: "lifecycle" | "credit_consume" | "ai_attempt";
+          lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
+          request_id?: string | null;
+          attempt?: number;
+          provider?: "zenmux" | "dashscope" | "tokendance" | null;
+          prompt_scope?: "gameplay" | "utility" | null;
+          mode?: "completion" | "batch" | "stream" | null;
+          outcome?: string | null;
+          http_status?: number | null;
+          duration_ms?: number;
+          error_code?: string | null;
+          model?: string | null;
+          input_chars?: number;
+          output_chars?: number;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          created_at?: string;
+        };
+        Update: {
+          event_id?: string;
+          session_id?: string | null;
+          user_id?: string;
+          event_type?: "lifecycle" | "credit_consume" | "ai_attempt";
+          lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
+          request_id?: string | null;
+          attempt?: number;
+          provider?: "zenmux" | "dashscope" | "tokendance" | null;
+          prompt_scope?: "gameplay" | "utility" | null;
+          mode?: "completion" | "batch" | "stream" | null;
+          outcome?: string | null;
+          http_status?: number | null;
+          duration_ms?: number;
+          error_code?: string | null;
+          model?: string | null;
+          input_chars?: number;
+          output_chars?: number;
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -447,7 +522,33 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      record_game_session_ai_attempt: {
+        Args: {
+          p_event_id: string;
+          p_session_id: string;
+          p_user_id: string;
+          p_request_id: string;
+          p_attempt: number;
+          p_provider: "zenmux" | "dashscope" | "tokendance";
+          p_prompt_scope: "gameplay" | "utility";
+          p_mode: "completion" | "batch" | "stream";
+          p_outcome: "success" | "http_error" | "network_error" | "cancelled" | "interrupted" | "error";
+          p_http_status: number | null;
+          p_duration_ms: number;
+          p_error_code: string | null;
+          p_model: string;
+          p_input_chars: number;
+          p_output_chars: number;
+          p_prompt_tokens: number;
+          p_completion_tokens: number;
+        };
+        Returns: {
+          event_id: string;
+          replayed: boolean;
+        }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

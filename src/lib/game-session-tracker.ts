@@ -18,17 +18,19 @@ export interface GameSessionConfig {
   sessionId?: string | null;
 }
 
+export type GameSessionStatus =
+  | "starting"
+  | "running"
+  | "failed"
+  | "abandoned"
+  | "completed";
+
 interface SessionState {
   sessionId: string | null;
   userId: string | null;
   startTime: number;
   config: GameSessionConfig | null;
   roundsPlayed: number;
-  aiCallsCount: number;
-  aiInputChars: number;
-  aiOutputChars: number;
-  aiPromptTokens: number;
-  aiCompletionTokens: number;
   lastSyncTime: number;
 }
 
@@ -38,11 +40,6 @@ const createInitialState = (): SessionState => ({
   startTime: 0,
   config: null,
   roundsPlayed: 0,
-  aiCallsCount: 0,
-  aiInputChars: 0,
-  aiOutputChars: 0,
-  aiPromptTokens: 0,
-  aiCompletionTokens: 0,
   lastSyncTime: 0,
 });
 
@@ -136,15 +133,11 @@ async function createSessionViaApi(payload: {
 async function updateSessionViaApi(payload: {
   sessionId: string;
   guestId?: string;
+  lifecycleStatus: GameSessionStatus;
   winner?: "wolf" | "villager" | null;
   completed: boolean;
   roundsPlayed: number;
   durationSeconds: number;
-  aiCallsCount: number;
-  aiInputChars: number;
-  aiOutputChars: number;
-  aiPromptTokens: number;
-  aiCompletionTokens: number;
 }): Promise<{ ok: true } | { ok: false; error: unknown; status?: number }> {
   const token = await getAccessToken();
   const demoConfig = await fetchDemoModeConfigClient();
@@ -276,20 +269,19 @@ export const gameSessionTracker = {
     return state.sessionId;
   },
 
-  /**
-   * 记录 AI 调用统计
-   */
-  addAiCall(stats: {
-    inputChars: number;
-    outputChars: number;
-    promptTokens?: number;
-    completionTokens?: number;
-  }) {
-    state.aiCallsCount += 1;
-    state.aiInputChars += stats.inputChars;
-    state.aiOutputChars += stats.outputChars;
-    if (stats.promptTokens) state.aiPromptTokens += stats.promptTokens;
-    if (stats.completionTokens) state.aiCompletionTokens += stats.completionTokens;
+  /** 将已创建的会话标记为运行中。 */
+  async markRunning(): Promise<void> {
+    await updateSessionStatus("running");
+  },
+
+  /** 将角色生成或开局失败的会话标记为失败。 */
+  async markFailed(): Promise<void> {
+    await updateSessionStatus("failed", null, true);
+  },
+
+  /** 用户主动重新开始时，结束上一条会话。 */
+  async abandon(): Promise<void> {
+    await updateSessionStatus("abandoned", null, true);
   },
 
   /**
@@ -306,7 +298,7 @@ export const gameSessionTracker = {
    * 调用时机：天亮、发言开始等
    */
   async syncProgress(): Promise<void> {
-    if (!state.sessionId || !state.userId) return;
+    if (!state.sessionId) return;
 
     // 防抖检查
     const now = Date.now();
@@ -321,21 +313,18 @@ export const gameSessionTracker = {
    * 立即同步数据到数据库（无防抖）
    */
   async syncProgressImmediate(): Promise<void> {
-    if (!state.sessionId || !state.userId) return;
+    const sessionId = state.sessionId;
+    if (!sessionId) return;
 
     const isGuestSync = state.userId?.startsWith("guest_") ?? false;
     const durationSeconds = Math.round((Date.now() - state.startTime) / 1000);
     const apiUpdate = await updateSessionViaApi({
-      sessionId: state.sessionId,
+      sessionId,
       guestId: isGuestSync ? state.userId ?? undefined : undefined,
+      lifecycleStatus: "running",
       completed: false,
       roundsPlayed: state.roundsPlayed,
       durationSeconds,
-      aiCallsCount: state.aiCallsCount,
-      aiInputChars: state.aiInputChars,
-      aiOutputChars: state.aiOutputChars,
-      aiPromptTokens: state.aiPromptTokens,
-      aiCompletionTokens: state.aiCompletionTokens,
     });
 
     if (!apiUpdate.ok) {
@@ -355,35 +344,30 @@ export const gameSessionTracker = {
    * 在游戏结束时调用，更新最终数据
    */
   async end(winner: "wolf" | "villager" | null, completed: boolean): Promise<void> {
-    if (!state.sessionId || !state.userId) return;
-
-    const durationSeconds = Math.round((Date.now() - state.startTime) / 1000);
-
-    const isGuestEnd = state.userId?.startsWith("guest_") ?? false;
-
-    const apiUpdate = await updateSessionViaApi({
-      sessionId: state.sessionId,
-      guestId: isGuestEnd ? state.userId ?? undefined : undefined,
-      winner,
-      completed,
-      roundsPlayed: state.roundsPlayed,
-      durationSeconds,
-      aiCallsCount: state.aiCallsCount,
-      aiInputChars: state.aiInputChars,
-      aiOutputChars: state.aiOutputChars,
-      aiPromptTokens: state.aiPromptTokens,
-      aiCompletionTokens: state.aiCompletionTokens,
-    });
-
-    if (!apiUpdate.ok) {
-      console.error("[game-session] Failed to end session via API:", {
-        apiError: toErrorDebugObject(apiUpdate.error),
-        apiStatus: apiUpdate.status,
-      });
-      return;
+    if (completed) {
+      await updateSessionStatus("completed", winner, true);
+    } else {
+      await updateSessionStatus("abandoned", null, true);
     }
+  },
 
-    console.log("[game-session] Session ended:", state.sessionId, { winner, completed, durationSeconds });
+  /** 从持久化游戏状态恢复 tracker，保证刷新后继续使用同一 session。 */
+  rehydrate(sessionId: string, startedAt: number): void {
+    if (!sessionId) return;
+    state = {
+      ...createInitialState(),
+      sessionId,
+      userId: AUTHORIZED_SESSION_ACTOR_ID,
+      startTime: startedAt,
+      lastSyncTime: 0,
+    };
+    void withTimeout(supabase.auth.getSession(), SESSION_READ_TIMEOUT_MS)
+      .then(({ data }) => {
+        if (state.sessionId === sessionId && data.session?.user.id) {
+          state.userId = data.session.user.id;
+        }
+      })
+      .catch(() => undefined);
   },
 
   /**
@@ -400,22 +384,53 @@ export const gameSessionTracker = {
     sessionId: string;
     roundsPlayed: number;
     durationSeconds: number;
-    aiCallsCount: number;
-    aiInputChars: number;
-    aiOutputChars: number;
-    aiPromptTokens: number;
-    aiCompletionTokens: number;
+    lifecycleStatus: "running";
   } | null {
     if (!state.sessionId) return null;
     return {
       sessionId: state.sessionId,
       roundsPlayed: state.roundsPlayed,
       durationSeconds: Math.round((Date.now() - state.startTime) / 1000),
-      aiCallsCount: state.aiCallsCount,
-      aiInputChars: state.aiInputChars,
-      aiOutputChars: state.aiOutputChars,
-      aiPromptTokens: state.aiPromptTokens,
-      aiCompletionTokens: state.aiCompletionTokens,
+      lifecycleStatus: "running",
     };
   },
 };
+
+async function updateSessionStatus(
+  lifecycleStatus: GameSessionStatus,
+  winner: "wolf" | "villager" | null = null,
+  clearAfterUpdate = false,
+): Promise<void> {
+  const sessionId = state.sessionId;
+  if (!sessionId) return;
+
+  const sessionState = state;
+
+  const isGuest = sessionState.userId?.startsWith("guest_") ?? false;
+  const durationSeconds = Math.round((Date.now() - sessionState.startTime) / 1000);
+  const apiUpdate = await updateSessionViaApi({
+    sessionId,
+    guestId: isGuest ? sessionState.userId ?? undefined : undefined,
+    lifecycleStatus,
+    winner,
+    completed: lifecycleStatus === "completed",
+    roundsPlayed: sessionState.roundsPlayed,
+    durationSeconds,
+  });
+
+  if (!apiUpdate.ok) {
+    // 保留 session，允许调用方在网络失败后重试终态写入。
+    console.error("[game-session] Failed to update lifecycle status via API:", {
+      sessionId,
+      lifecycleStatus,
+      apiError: toErrorDebugObject(apiUpdate.error),
+      apiStatus: apiUpdate.status,
+    });
+    throw new Error("Failed to update game session lifecycle");
+  }
+
+  if (clearAfterUpdate && state.sessionId === sessionId) {
+    state = createInitialState();
+  }
+  console.log("[game-session] Session lifecycle updated:", sessionId, lifecycleStatus);
+}

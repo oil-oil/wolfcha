@@ -12,7 +12,9 @@ const LOCAL_LOGS_STORAGE_KEY = "wolfcha_ai_logs";
 const AI_LOGGER_PAGE_LOAD_CLEAR_FLAG = "__wolfcha_ai_logger_page_load_cleared__";
 
 function canUseStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  return process.env.NODE_ENV !== "production" &&
+    typeof window !== "undefined" &&
+    typeof window.localStorage !== "undefined";
 }
 
 export interface AILogEntry {
