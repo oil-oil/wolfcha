@@ -3,6 +3,7 @@ import test from "node:test";
 import { setLocale } from "@/i18n/locale-store";
 import type { ChatMessage, GameState, Player, Role } from "@/types/game";
 import {
+  buildGameContext,
   buildPublicRoleConfiguration,
   buildTodayTranscript,
 } from "./prompt-utils";
@@ -94,6 +95,20 @@ test("公开角色配置只包含人数板子，不包含座位身份", () => {
   assert.doesNotMatch(config, /白狼王/);
   assert.doesNotMatch(config, /\d+号/);
   assert.doesNotMatch(config, /玩家\d+/);
+});
+
+test("狼人私密队友区块包含已死亡狼队友，但不包含村民", () => {
+  const state = makeState();
+  state.players[2] = { ...state.players[2], displayName: "村民玩家" };
+  state.players[3] = { ...state.players[3], displayName: "死亡狼人", alive: false };
+
+  const context = buildGameContext(state, state.players[1]);
+  const wolfTeam = context.match(/<your_wolf_team>[\s\S]*?<\/your_wolf_team>/)?.[0];
+
+  assert.ok(wolfTeam);
+  assert.match(wolfTeam, /【狼队友】/);
+  assert.match(wolfTeam, /4号死亡狼人/);
+  assert.doesNotMatch(wolfTeam, /3号村民玩家/);
 });
 
 test("当天玩家死亡后仍保留其已发生的发言，并保持遗言的真实顺序", () => {

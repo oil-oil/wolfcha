@@ -27,8 +27,11 @@ export const AI_TEMPERATURE = {
 
 // 针对特定游戏行为的推荐配置
 export const GAME_TEMPERATURE = {
-  // 角色生成
+  // 基础角色档案需要多样性。
   CHARACTER_GENERATION: AI_TEMPERATURE.WILD,
+
+  // 完整 persona 必须保持 JSON 结构稳定；人物差异已由基础档案和字段约束提供。
+  CHARACTER_PERSONA: AI_TEMPERATURE.BALANCED,
 
   // 游戏总结
   SUMMARY: AI_TEMPERATURE.STRICT,

@@ -20,6 +20,7 @@ import {
 import { GAME_SESSION_EXPIRED_CODE } from "@/lib/game-session-policy";
 import { parseLLMJson } from "./llm-json";
 import { withTimeout } from "@/lib/request-timeout";
+import type { PromptScope } from "@/lib/deepseek-prompt-scope";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -213,6 +214,7 @@ export interface ReasoningOptions {
 export interface GenerateOptions {
   model: string;
   provider?: Provider;
+  promptScope?: PromptScope;
   messages: LLMMessage[];
   temperature?: number;
   max_tokens?: number;
@@ -702,6 +704,7 @@ export async function generateCompletion(
       body: JSON.stringify({
         model: resolvedModel.model,
         provider: resolvedModel.provider,
+        prompt_scope: options.promptScope ?? "utility",
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -781,6 +784,7 @@ async function generateCompletionBatchInternal(
   const effectiveSource = customEnabled ? modelSource : modelSource === "custom" ? "project" : modelSource;
   const resolvedRequests = requests.map((request) => ({
     ...request,
+    prompt_scope: request.promptScope ?? "utility",
     ...resolveRequestModelForSource(
       effectiveSource,
       request.model,
@@ -898,6 +902,7 @@ export async function* generateCompletionStream(
       body: JSON.stringify({
         model: resolvedModel.model,
         provider: resolvedModel.provider,
+        prompt_scope: options.promptScope ?? "utility",
         messages: options.messages,
         temperature: options.temperature ?? 0.7,
         max_tokens: maxTokens,
@@ -939,75 +944,93 @@ export async function* generateCompletionStream(
     return sum;
   }, 0);
 
+  const parseLine = (line: string): { done: boolean; content: string } => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return { done: false, content: "" };
+    if (!trimmed.startsWith("data:")) return { done: false, content: "" };
+
+    const data = trimmed.slice(5).trimStart();
+    if (data === "[DONE]") return { done: true, content: "" };
+
+    let json: unknown;
+    try {
+      json = JSON.parse(data);
+    } catch {
+      throw new Error("模型流式响应包含无法解析的 SSE 数据帧");
+    }
+
+    const protocolError = readStreamProtocolError(json);
+    if (protocolError) throw new Error(protocolError);
+    if (!isRecord(json)) return { done: false, content: "" };
+    const choices = Array.isArray(json.choices) ? json.choices : [];
+    const firstChoice = isRecord(choices[0]) ? choices[0] : null;
+    const deltaPayload = firstChoice && isRecord(firstChoice.delta)
+      ? firstChoice.delta
+      : null;
+    return {
+      done: false,
+      content: typeof deltaPayload?.content === "string" ? deltaPayload.content : "",
+    };
+  };
+
+  const cleanDelta = (delta: string): string => {
+    if (!delta) return "";
+    if (thinkStripped) return stripReasoningArtifactsPreserveWhitespace(delta);
+
+    thinkBuffer += delta;
+    const reasoningEnd = findReasoningEnd(thinkBuffer);
+    if (reasoningEnd) {
+      const after = stripReasoningArtifactsPreserveWhitespace(
+        thinkBuffer.slice(reasoningEnd.end).replace(/^\n+/, ""),
+      );
+      thinkStripped = true;
+      thinkBuffer = "";
+      return after;
+    }
+    if (!couldBeReasoningStart(thinkBuffer) && thinkBuffer.length >= 1) {
+      thinkStripped = true;
+      const cleaned = stripReasoningArtifactsPreserveWhitespace(thinkBuffer);
+      thinkBuffer = "";
+      return cleaned;
+    }
+    return "";
+  };
+
   try {
     while (!streamComplete) {
       const { done, value } = await withTimeout(
         reader.read(),
         STREAM_IDLE_TIMEOUT_MS,
       );
-      if (done) break;
+      if (done) {
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          const parsed = parseLine(buffer);
+          streamComplete = parsed.done;
+          const cleaned = cleanDelta(parsed.content);
+          totalOutputChars += cleaned.length;
+          if (cleaned) yield cleaned;
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        if (trimmed === "data: [DONE]") {
+        const parsed = parseLine(line);
+        if (parsed.done) {
           streamComplete = true;
           break;
         }
-        if (!trimmed.startsWith("data: ")) continue;
-
-        let json: unknown;
-        try {
-          json = JSON.parse(trimmed.slice(6));
-        } catch {
-          // Skip malformed JSON
-          continue;
-        }
-
-        const protocolError = readStreamProtocolError(json);
-        if (protocolError) throw new Error(protocolError);
-        if (!isRecord(json)) continue;
-        const choices = Array.isArray(json.choices) ? json.choices : [];
-        const firstChoice = isRecord(choices[0]) ? choices[0] : null;
-        const deltaPayload = firstChoice && isRecord(firstChoice.delta)
-          ? firstChoice.delta
-          : null;
-        const delta = typeof deltaPayload?.content === "string"
-          ? deltaPayload.content
-          : "";
-        if (delta) {
-          if (thinkStripped) {
-            const cleaned = stripReasoningArtifactsPreserveWhitespace(delta);
-            totalOutputChars += cleaned.length;
-            if (cleaned) yield cleaned;
-          } else {
-            thinkBuffer += delta;
-            const reasoningEnd = findReasoningEnd(thinkBuffer);
-            if (reasoningEnd) {
-              // 找到 </think>，丢弃之前内容，从之后开始输出
-              const after = stripReasoningArtifactsPreserveWhitespace(thinkBuffer.slice(reasoningEnd.end).replace(/^\n+/, ""));
-              thinkStripped = true;
-              thinkBuffer = "";
-              if (after) {
-                totalOutputChars += after.length;
-                yield after;
-              }
-            } else if (!couldBeReasoningStart(thinkBuffer) && thinkBuffer.length >= 1) {
-              // 确认不是 <think> 块，直接透传
-              thinkStripped = true;
-              const cleaned = stripReasoningArtifactsPreserveWhitespace(thinkBuffer);
-              totalOutputChars += cleaned.length;
-              if (cleaned) yield cleaned;
-              thinkBuffer = "";
-            }
-            // 否则继续缓冲，等待 </think> 或确认非 think 块
-          }
-        }
+        const cleaned = cleanDelta(parsed.content);
+        totalOutputChars += cleaned.length;
+        if (cleaned) yield cleaned;
       }
+    }
+    if (!streamComplete) {
+      throw new Error("模型流式响应在 [DONE] 前意外结束");
     }
   } finally {
     // 消费方提前退出、对局重置或流超时都必须取消上游读取，避免继续消耗余额。

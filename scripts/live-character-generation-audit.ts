@@ -2,12 +2,21 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import messages from "@/i18n/messages/zh.json";
+import { setLocale } from "@/i18n/locale-store";
 import { parseLLMJson } from "@/lib/llm-json";
 import { stripMarkdownCodeFences } from "@/lib/llm";
+import type { GameScenario } from "@/types/game";
+import {
+  applyDeepSeekPromptScope,
+  type PromptScope,
+} from "@/lib/deepseek-prompt-scope";
 
 const MODEL = "deepseek-v4-flash-0731";
 const PLAYER_COUNT = 9;
 const OUTPUT_PATH = path.resolve("dry-runs/live-character-generation-audit.json");
+const APP_PATH_MODE = process.env.CHARACTER_AUDIT_APP_PATH === "true";
+const DIRECT_PROVIDER_APP_URL = "direct-provider";
+const SINGLE_APP_ATTEMPT = process.env.CHARACTER_AUDIT_SINGLE_ATTEMPT === "true";
 
 type BaseProfile = {
   displayName: string;
@@ -36,10 +45,11 @@ const interpolate = (template: string, values: Record<string, string | number>) 
   );
 
 const scenario = {
+  id: "live-character-generation-audit",
   title: "深夜便利店",
   description: "一群刚下班的人在便利店休息区玩一局狼人杀。",
   rolesHint: "普通上班族、夜班店员、学生和附近居民",
-};
+} satisfies GameScenario;
 
 const basePrompt = interpolate(messages.characterGenerator.baseProfilesPrompt, {
   count: PLAYER_COUNT,
@@ -146,6 +156,280 @@ async function callProvider(
   return { content, record };
 }
 
+class MemoryStorage implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length() {
+    return this.values.size;
+  }
+
+  clear() {
+    this.values.clear();
+  }
+
+  getItem(key: string) {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return Array.from(this.values.keys())[index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.values.set(key, String(value));
+  }
+}
+
+async function runClientGenerationAudit() {
+  const appUrl = process.env.CHARACTER_AUDIT_APP_URL?.trim().replace(/\/+$/, "");
+  const apiKey = process.env.TOKENDANCE_API_KEY?.trim();
+  if (!appUrl || !apiKey) {
+    throw new Error("应用路径审计缺少 CHARACTER_AUDIT_APP_URL 或 TOKENDANCE_API_KEY");
+  }
+
+  // 只在本进程内模拟用户选择自定义 TokenDance Key。URL 模式走部署后的
+  // /api/chat；direct-provider 模式只验证客户端生成管线，不代表生产 Route。
+  setLocale("zh");
+  const storage = new MemoryStorage();
+  storage.setItem("wolfcha_model_source", "custom");
+  storage.setItem("wolfcha_model_source_explicit_v1", "true");
+  storage.setItem("wolfcha_custom_key_enabled", "true");
+  storage.setItem("wolfcha_tokendance_api_key", apiKey);
+  storage.setItem("wolfcha_generator_model", MODEL);
+
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const originalLocalStorage = globalThis.localStorage;
+  const mockWindow = {
+    localStorage: storage,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => true,
+  };
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: mockWindow,
+  });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: storage,
+  });
+  const startedAt = Date.now();
+  const routeCalls: Array<{
+    stream: boolean;
+    promptScope: PromptScope;
+    status: number;
+    durationMs: number;
+    outputChars?: number;
+    finishReason?: string | null;
+    doneMarkerSeen?: boolean;
+    responseHash?: string;
+    usage?: unknown;
+  }> = [];
+  const baseProfileHashes: string[] = [];
+  const emittedCharacterHashes: string[] = [];
+  let resultHashes: string[] = [];
+  let personaHashes: string[] = [];
+  let error: string | null = null;
+
+  const forwardDirectProviderRequest = async (init?: RequestInit): Promise<Response> => {
+    const callStartedAt = Date.now();
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      model?: string;
+      messages?: unknown[];
+      prompt_scope?: PromptScope;
+      temperature?: number;
+      max_tokens?: number;
+      stream?: boolean;
+      response_format?: unknown;
+    };
+    if (
+      SINGLE_APP_ATTEMPT &&
+      body.stream === true &&
+      routeCalls.some((call) => call.stream)
+    ) {
+      return Response.json({ error: "审计只允许一次完整角色流" }, { status: 400 });
+    }
+    const response = await originalFetch(providerUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "X-App-Name": "Wolfcha",
+        "X-Site-URL": "https://www.wolf-cha.com",
+      },
+      body: JSON.stringify({
+        model: body.model,
+        messages: applyDeepSeekPromptScope(
+          Array.isArray(body.messages) ? body.messages : [],
+          body.prompt_scope ?? "utility",
+        ),
+        temperature: body.temperature,
+        max_tokens: body.max_tokens,
+        stream: body.stream === true,
+        thinking: { type: "disabled" },
+        ...(body.response_format ? { response_format: body.response_format } : {}),
+      }),
+    });
+    const callRecord: (typeof routeCalls)[number] = {
+      stream: body.stream === true,
+      promptScope: body.prompt_scope ?? "utility",
+      status: response.status,
+      durationMs: Date.now() - callStartedAt,
+    };
+    routeCalls.push(callRecord);
+
+    if (!body.stream || !response.body) return response;
+
+    const decoder = new TextDecoder();
+    const responseDigest = createHash("sha256");
+    let buffer = "";
+    let outputChars = 0;
+    let finishReason: string | null = null;
+    let doneMarkerSeen = false;
+    let usage: unknown = null;
+    const updateCallRecord = () => {
+      callRecord.durationMs = Date.now() - callStartedAt;
+      callRecord.outputChars = outputChars;
+      callRecord.finishReason = finishReason;
+      callRecord.doneMarkerSeen = doneMarkerSeen;
+      callRecord.responseHash = responseDigest.copy().digest("hex");
+      callRecord.usage = usage;
+    };
+    const inspectLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) return;
+      const data = trimmed.slice(5).trimStart();
+      if (data === "[DONE]") {
+        doneMarkerSeen = true;
+        updateCallRecord();
+        return;
+      }
+      try {
+        const payload = JSON.parse(data) as {
+          choices?: Array<{
+            delta?: { content?: string };
+            finish_reason?: string | null;
+          }>;
+          usage?: unknown;
+        };
+        const content = payload.choices?.[0]?.delta?.content ?? "";
+        outputChars += content.length;
+        responseDigest.update(content);
+        finishReason = payload.choices?.[0]?.finish_reason ?? finishReason;
+        usage = payload.usage ?? usage;
+        updateCallRecord();
+      } catch {
+        // 生产解析器会报告完整坏帧；审计器只记录，不改变转发内容。
+      }
+    };
+    const inspectedBody = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        lines.forEach(inspectLine);
+        controller.enqueue(chunk);
+      },
+      flush() {
+        buffer += decoder.decode();
+        if (buffer.trim()) inspectLine(buffer);
+        updateCallRecord();
+      },
+    }));
+    return new Response(inspectedBody, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
+
+  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+    const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    if (appUrl === DIRECT_PROVIDER_APP_URL) {
+      if (raw === "/api/demo-config") {
+        return Promise.resolve(Response.json({
+          source: "database",
+          enabled: false,
+          active: false,
+          startsAt: null,
+          expiresAt: null,
+          serverNow: new Date().toISOString(),
+        }));
+      }
+      if (raw === "/api/chat") return forwardDirectProviderRequest(init);
+    }
+    const resolved = raw.startsWith("/") ? new URL(raw, `${appUrl}/`).toString() : raw;
+    return originalFetch(resolved, init);
+  };
+
+  try {
+    const { generateCharacters } = await import("@/lib/character-generator");
+    const characters = await generateCharacters(PLAYER_COUNT, scenario, {
+      onBaseProfiles: (profiles) => {
+        baseProfileHashes.push(...profiles.map((profile) => digest(profile.displayName)));
+      },
+      onCharacter: (_index, character) => {
+        emittedCharacterHashes.push(digest(character.displayName));
+      },
+    });
+    resultHashes = characters.map((character) => digest(character.displayName));
+    personaHashes = characters.map((character) => digest(JSON.stringify({
+      persona: character.persona,
+      playerMind: character.playerMind,
+    })));
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : String(caught);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) {
+      Reflect.deleteProperty(globalThis, "window");
+    } else {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+    if (originalLocalStorage === undefined) {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    } else {
+      Object.defineProperty(globalThis, "localStorage", {
+        configurable: true,
+        value: originalLocalStorage,
+      });
+    }
+  }
+
+  const report = {
+    generatedAt: new Date().toISOString(),
+    mode: appUrl === DIRECT_PROVIDER_APP_URL
+      ? "client-generation-direct-provider"
+      : "app-path",
+    appUrl,
+    model: MODEL,
+    playerCount: PLAYER_COUNT,
+    durationMs: Date.now() - startedAt,
+    routeCalls,
+    baseProfileCount: baseProfileHashes.length,
+    uniqueBaseProfileCount: new Set(baseProfileHashes).size,
+    emittedCharacterCount: emittedCharacterHashes.length,
+    resultCount: resultHashes.length,
+    uniqueResultNameCount: new Set(resultHashes).size,
+    uniquePersonaCount: new Set(personaHashes).size,
+    baseAndResultOrderMatches:
+      baseProfileHashes.length === PLAYER_COUNT &&
+      JSON.stringify(baseProfileHashes) === JSON.stringify(resultHashes),
+    error,
+  };
+  await mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
+  await writeFile(OUTPUT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify(report, null, 2));
+  if (error || report.resultCount !== PLAYER_COUNT || !report.baseAndResultOrderMatches) {
+    process.exitCode = 1;
+  }
+}
+
 const buildPersonaPrompt = (profiles: BaseProfile[]) => {
   const roster = profiles
     .map((profile, index) => interpolate(messages.characterGenerator.rosterLine, {
@@ -171,6 +455,10 @@ const buildPersonaPrompt = (profiles: BaseProfile[]) => {
 };
 
 async function main() {
+  if (APP_PATH_MODE) {
+    await runClientGenerationAudit();
+    return;
+  }
   const calls: ProviderCall[] = [];
   const fixedProfiles: BaseProfile[] = [
     { displayName: "张伟", gender: "male", age: 35, mbti: "ESTJ", basicInfo: "刚下夜班的出租车司机" },

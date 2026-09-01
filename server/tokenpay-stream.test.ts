@@ -111,6 +111,137 @@ test("completion stream cancels upstream when the consumer exits early", async (
   }
 });
 
+test("completion stream flushes split UTF-8 and accepts a final DONE frame without newline", async () => {
+  const { supabase } = await import("@/lib/supabase");
+  const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
+  const originalFetch = globalThis.fetch;
+
+  Object.defineProperty(supabase.auth, "getSession", {
+    configurable: true,
+    value: async () => ({
+      data: { session: { access_token: "test-access-token" } },
+      error: null,
+    }),
+  });
+
+  const encoded = new TextEncoder().encode(
+    'data: {"choices":[{"delta":{"content":"好"}}]}\n\ndata: [DONE]',
+  );
+  const splitAt = encoded.indexOf(0xe5) + 1;
+  globalThis.fetch = async () => new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoded.slice(0, splitAt));
+        controller.enqueue(encoded.slice(splitAt));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
+
+  try {
+    const { generateCompletionStream } = await import("@/lib/llm");
+    const chunks: string[] = [];
+    for await (const chunk of generateCompletionStream({
+      model: "glm-5.3-flash",
+      messages: [{ role: "user", content: "hello" }],
+    })) {
+      chunks.push(chunk);
+    }
+    assert.equal(chunks.join(""), "好");
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(supabase.auth, "getSession", {
+      configurable: true,
+      value: originalGetSession,
+    });
+  }
+});
+
+test("completion stream rejects EOF before the DONE marker", async () => {
+  const { supabase } = await import("@/lib/supabase");
+  const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
+  const originalFetch = globalThis.fetch;
+
+  Object.defineProperty(supabase.auth, "getSession", {
+    configurable: true,
+    value: async () => ({
+      data: { session: { access_token: "test-access-token" } },
+      error: null,
+    }),
+  });
+  globalThis.fetch = async () => new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+        ));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
+
+  try {
+    const { generateCompletionStream } = await import("@/lib/llm");
+    await assert.rejects(async () => {
+      for await (const chunk of generateCompletionStream({
+        model: "glm-5.3-flash",
+        messages: [{ role: "user", content: "hello" }],
+      })) {
+        void chunk;
+      }
+    }, /\[DONE\] 前意外结束/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(supabase.auth, "getSession", {
+      configurable: true,
+      value: originalGetSession,
+    });
+  }
+});
+
+test("completion stream rejects malformed complete SSE data frames", async () => {
+  const { supabase } = await import("@/lib/supabase");
+  const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
+  const originalFetch = globalThis.fetch;
+
+  Object.defineProperty(supabase.auth, "getSession", {
+    configurable: true,
+    value: async () => ({
+      data: { session: { access_token: "test-access-token" } },
+      error: null,
+    }),
+  });
+  globalThis.fetch = async () => new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: {not-json}\n\ndata: [DONE]\n\n"));
+        controller.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
+
+  try {
+    const { generateCompletionStream } = await import("@/lib/llm");
+    await assert.rejects(async () => {
+      for await (const chunk of generateCompletionStream({
+        model: "glm-5.3-flash",
+        messages: [{ role: "user", content: "hello" }],
+      })) {
+        void chunk;
+      }
+    }, /无法解析的 SSE 数据帧/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Object.defineProperty(supabase.auth, "getSession", {
+      configurable: true,
+      value: originalGetSession,
+    });
+  }
+});
+
 test("stream protocol quota errors are surfaced instead of silently retried", async () => {
   const { readStreamProtocolError } = await import("@/lib/llm");
   const error = readStreamProtocolError({
