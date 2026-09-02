@@ -196,12 +196,11 @@ export type ResponseFormat =
   | { type: "json_object" }
   | {
       type: "json_schema";
-      strict?: boolean;
       json_schema: {
         name: string;
         description?: string;
+        strict?: boolean;
         schema: unknown;
-        // Note: 'strict' is not supported by ZenMux, use json_object for simple cases
       };
     };
 
@@ -1108,6 +1107,10 @@ export async function generateJSON<T>(
   try {
     return parseJsonTolerant<T>(result.content);
   } catch (firstError) {
+    // JSON Schema 请求由 Provider 保证结构；异常时直接暴露错误，避免一次
+    // 角色生成被静默重放并重复计费。
+    if (options.response_format?.type === "json_schema") throw firstError;
+
     const retryMessages: LLMMessage[] = [
       ...messagesWithFormat,
       { role: "assistant", content: result.content.slice(0, 4000) },

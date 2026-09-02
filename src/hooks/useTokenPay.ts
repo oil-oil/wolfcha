@@ -1,35 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { fetchWithTimeout, withTimeout } from "@/lib/request-timeout";
+import {
+  readTokenPayJson,
+  TokenPayApiError,
+  tokenPayFetch,
+  type TokenPayConnection,
+} from "@/lib/tokenpay-client";
 
 const CONNECTION_ENDPOINT = "/api/tokenpay/connection";
 const BALANCE_ENDPOINT = "/api/tokenpay/balance";
 const OAUTH_START_ENDPOINT = "/api/tokenpay/oauth/start";
 const PAYMENT_SESSIONS_ENDPOINT = "/api/tokenpay/payment-sessions";
 const REDEMPTION_ENDPOINT = "/api/tokenpay/redemption";
-const JSON_CONTENT_TYPE = "application/json";
 const PAYMENT_POLL_INTERVAL_MS = 3000;
 const PAYMENT_POLL_MAX_INTERVAL_MS = 30000;
-const SESSION_TIMEOUT_MS = 10_000;
-const REQUEST_TIMEOUT_MS = 15_000;
-
-export type TokenPayConnectionStatus =
-  | "connected"
-  | "reauthorize_required"
-  | "disconnected";
+export type { TokenPayConnection, TokenPayConnectionStatus } from "@/lib/tokenpay-client";
 export type TokenPayPaymentStatus =
   | "pending"
   | "paid"
   | "failed"
   | "closed"
   | "refunded";
-
-export interface TokenPayConnection {
-  connected: boolean;
-  status: TokenPayConnectionStatus | null;
-}
 
 export interface TokenPayBalance {
   creditsMicro: number;
@@ -45,68 +37,6 @@ export interface TokenPayPaymentSession {
   expiredAt: string | number;
   createdAt: string | number;
   paidAt?: string | number;
-}
-
-type ApiErrorPayload = {
-  error?: unknown;
-  message?: unknown;
-  recoveryAction?: unknown;
-};
-
-class TokenPayApiError extends Error {
-  constructor(
-    message: string,
-    readonly recoveryAction?: string,
-  ) {
-    super(message);
-  }
-}
-
-function getApiError(payload: ApiErrorPayload, fallback: string) {
-  if (typeof payload.error === "string") return payload.error;
-  if (typeof payload.message === "string") return payload.message;
-  return fallback;
-}
-
-async function getAccessToken() {
-  const { data: { session } } = await withTimeout(
-    supabase.auth.getSession(),
-    SESSION_TIMEOUT_MS,
-  );
-  if (!session?.access_token) {
-    throw new Error("unauthorized");
-  }
-  return session.access_token;
-}
-
-async function tokenPayFetch(input: string, init: RequestInit = {}) {
-  const token = await getAccessToken();
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", JSON_CONTENT_TYPE);
-  }
-  return fetchWithTimeout(input, { ...init, headers }, REQUEST_TIMEOUT_MS);
-}
-
-async function readJson<T>(response: Response): Promise<T> {
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    const errorPayload = (payload ?? {}) as ApiErrorPayload;
-    throw new TokenPayApiError(
-      getApiError(errorPayload, `request_failed_${response.status}`),
-      typeof errorPayload.recoveryAction === "string"
-        ? errorPayload.recoveryAction
-        : undefined,
-    );
-  }
-  return payload as T;
 }
 
 function isPendingSession(session: TokenPayPaymentSession) {
@@ -153,7 +83,7 @@ export function useTokenPay() {
 
     try {
       const response = await tokenPayFetch(BALANCE_ENDPOINT);
-      const payload = await readJson<{ balance: TokenPayBalance }>(response);
+      const payload = await readTokenPayJson<{ balance: TokenPayBalance }>(response);
       balanceRef.current = payload.balance;
       setBalance(payload.balance);
       return payload.balance;
@@ -180,7 +110,7 @@ export function useTokenPay() {
 
     try {
       const response = await tokenPayFetch(CONNECTION_ENDPOINT);
-      const payload = await readJson<TokenPayConnection>(response);
+      const payload = await readTokenPayJson<TokenPayConnection>(response);
       setConnection(payload);
       hasLoadedConnectionRef.current = true;
       return payload;
@@ -210,7 +140,7 @@ export function useTokenPay() {
     setOauthLoading(true);
     try {
       const response = await tokenPayFetch(OAUTH_START_ENDPOINT, { method: "POST" });
-      const payload = await readJson<{ authorizationUrl: string }>(response);
+      const payload = await readTokenPayJson<{ authorizationUrl: string }>(response);
       window.location.assign(payload.authorizationUrl);
     } finally {
       setOauthLoading(false);
@@ -219,7 +149,7 @@ export function useTokenPay() {
 
   const disconnect = useCallback(async () => {
     const response = await tokenPayFetch(CONNECTION_ENDPOINT, { method: "DELETE" });
-    await readJson<{ success: true }>(response);
+    await readTokenPayJson<{ success: true }>(response);
     const disconnected: TokenPayConnection = { connected: false, status: "disconnected" };
     setConnection(disconnected);
     balanceRef.current = null;
@@ -241,7 +171,7 @@ export function useTokenPay() {
         method: "POST",
         body: JSON.stringify({ amount }),
       });
-      const payload = await readJson<{ session: TokenPayPaymentSession }>(response);
+      const payload = await readTokenPayJson<{ session: TokenPayPaymentSession }>(response);
       setPaymentSession(payload.session);
       return payload.session;
     } catch (error) {
@@ -265,7 +195,7 @@ export function useTokenPay() {
         method: "POST",
         body: JSON.stringify({ code: normalized }),
       });
-      const payload = await readJson<{ creditsMicro: number }>(response);
+      const payload = await readTokenPayJson<{ creditsMicro: number }>(response);
       void refreshBalance();
       return payload.creditsMicro;
     } catch (error) {
@@ -287,7 +217,7 @@ export function useTokenPay() {
     setPaymentError(null);
     try {
       const response = await tokenPayFetch(`${PAYMENT_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}`);
-      const { session } = await readJson<{ session: TokenPayPaymentSession }>(response);
+      const { session } = await readTokenPayJson<{ session: TokenPayPaymentSession }>(response);
       setPaymentSession(session);
       if (session.status === "paid") {
         void refreshBalance();

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const creditsSource = readFileSync("src/hooks/useCredits.ts", "utf8");
 const tokenPaySource = readFileSync("src/hooks/useTokenPay.ts", "utf8");
+const tokenPayClientSource = readFileSync("src/lib/tokenpay-client.ts", "utf8");
 const welcomeSource = readFileSync("src/components/game/WelcomeScreen.tsx", "utf8");
 const creditsSourceFile = readFileSync("src/hooks/useCredits.ts", "utf8");
 const authHeadersSource = readFileSync("src/lib/auth-headers.ts", "utf8");
@@ -19,10 +20,13 @@ test("Supabase auth listener stays synchronous so session reads cannot deadlock"
 });
 
 test("TokenPay loading paths always settle", () => {
-  assert.match(tokenPaySource, /SESSION_TIMEOUT_MS\s*=\s*10_000/);
-  assert.match(tokenPaySource, /REQUEST_TIMEOUT_MS\s*=\s*15_000/);
-  assert.match(welcomeSource, /controller\.abort\(\), 12_000/);
+  assert.match(tokenPayClientSource, /SESSION_TIMEOUT_MS\s*=\s*10_000/);
+  assert.match(tokenPayClientSource, /REQUEST_TIMEOUT_MS\s*=\s*15_000/);
+  assert.match(tokenPayClientSource, /CONNECTION_RETRY_DELAYS_MS\s*=\s*\[0, 300, 1_000\]/);
+  assert.match(welcomeSource, /loadTokenPayConnectionWithRetry\(userId\)/);
+  assert.match(welcomeSource, /window\.addEventListener\("focus", refresh\)/);
   assert.doesNotMatch(welcomeSource, /if \(creditsLoading\) return;/);
+  assert.match(tokenPaySource, /finally \{[\s\S]*setConnectionLoading\(false\)/);
 });
 
 test("game start dependencies have bounded waits", () => {

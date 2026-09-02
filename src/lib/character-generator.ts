@@ -1,4 +1,9 @@
-import { generateJSON, generateCompletionStream, stripMarkdownCodeFences } from "./llm";
+import {
+  generateJSON,
+  generateCompletionStream,
+  stripMarkdownCodeFences,
+  type ResponseFormat,
+} from "./llm";
 import {
   ALL_MODELS,
   GENERATOR_MODEL,
@@ -12,7 +17,6 @@ import {
 } from "@/types/game";
 import {
   getGeneratorModel,
-  getModelSource,
   getSelectedModels,
   hasDashscopeKey,
   hasTokendanceKey,
@@ -190,10 +194,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object";
 }
 
-function hasStringField(value: unknown, field: string): value is Record<string, string> {
-  return isRecord(value) && typeof value[field] === "string";
-}
-
 const isValidMbti = (v: unknown): v is string => typeof v === "string" && /^[A-Z]{4}$/.test(v.trim());
 
 export interface BaseProfile {
@@ -208,14 +208,6 @@ const normalizeBaseProfiles = (result: unknown): { profiles: BaseProfile[]; raw:
   if (isRecord(result) && Array.isArray(result.profiles)) {
     return { profiles: result.profiles as BaseProfile[], raw: result };
   }
-
-  if (Array.isArray(result)) {
-    if (result.length > 0 && hasStringField(result[0], "displayName")) {
-      return { profiles: result as BaseProfile[], raw: result };
-    }
-    return { profiles: [], raw: result };
-  }
-
   return { profiles: [], raw: result };
 };
 
@@ -251,51 +243,16 @@ const buildBaseProfilesPrompt = (count: number, scenario: GameScenario) => {
 };
 
 const buildCharacterSchemaLine = (p: BaseProfile): string => (
-  `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string, "mbti": "${p.mbti}", "gender": "${p.gender}", "age": ${p.age} }, "playerMind": { "courage": string, "memoryBias": string, "suspicionThreshold": string, "selfProtection": string, "logicDepth": string, "tablePresence": string } }`
+  `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string }, "playerMind": { "courage": string, "memoryBias": string, "suspicionThreshold": string, "selfProtection": string, "logicDepth": string, "tablePresence": string } }`
 );
 
 const normalizeGeneratedCharacters = (
   result: unknown
 ): { characters: GeneratedCharacter[]; raw: unknown } => {
-  if (result && typeof result === "object" && "displayName" in result && "persona" in result) {
-    return { characters: [result as GeneratedCharacter], raw: result };
-  }
-
   if (isRecord(result) && Array.isArray(result.characters)) {
     return { characters: result.characters as GeneratedCharacter[], raw: result };
   }
-
-  if (Array.isArray(result)) {
-    if (result.length > 0 && hasStringField(result[0], "displayName")) {
-      return { characters: result as GeneratedCharacter[], raw: result };
-    }
-    return { characters: [], raw: result };
-  }
-
   return { characters: [], raw: result };
-};
-
-const isValidPersona = (p: unknown): p is Persona => {
-  if (!isRecord(p)) return false;
-  // styleLabel is now optional
-  if (p.styleLabel !== undefined && typeof p.styleLabel !== "string") return false;
-  if (!Array.isArray(p.voiceRules) || p.voiceRules.filter((x): x is string => typeof x === "string" && x.trim().length > 0).length === 0) return false;
-  if (!isValidMbti(p.mbti)) return false;
-  if (!isValidGender(p.gender)) return false;
-  if (typeof p.age !== "number" || !Number.isFinite(p.age) || p.age < 16 || p.age > 70) return false;
-  if (p.relationships !== undefined) {
-    if (!Array.isArray(p.relationships)) return false;
-    if (p.relationships.some((x) => typeof x !== "string")) return false;
-  }
-  return true;
-};
-
-const isValidPersonaForProfile = (p: unknown, profile: BaseProfile): p is Persona => {
-  if (!isValidPersona(p)) return false;
-  if (p.gender !== profile.gender) return false;
-  if (p.age !== profile.age) return false;
-  if (String(p.mbti).trim() !== profile.mbti) return false;
-  return true;
 };
 
 const PLAYER_MIND_REQUIRED_FIELDS: Array<keyof PlayerMind> = [
@@ -306,18 +263,6 @@ const PLAYER_MIND_REQUIRED_FIELDS: Array<keyof PlayerMind> = [
   "logicDepth",
   "tablePresence",
 ];
-
-const isValidPlayerMind = (mind: unknown): mind is PlayerMind => {
-  if (!mind || typeof mind !== "object") return false;
-  const record = mind as Record<string, unknown>;
-  if (PLAYER_MIND_REQUIRED_FIELDS.some((key) => {
-    const value = record[key];
-    return typeof value !== "string" || !value.trim();
-  })) {
-    return false;
-  }
-  return true;
-};
 
 const PERSONA_TEXT_FIELDS = [
   "werewolfExperience",
@@ -339,106 +284,76 @@ const PERSONA_TEXT_FIELDS = [
   "wolfDeceptionStyle"
 >;
 
-const OPTIONAL_PERSONA_STRING_FIELDS = ["logicStyle", "socialHabit", "humorStyle"] as const satisfies ReadonlyArray<
-  "logicStyle" | "socialHabit" | "humorStyle"
->;
-
-const PLAYER_MIND_FALLBACKS: Record<keyof PlayerMind, string> = {
-  courage: "Usually avoids flashy risks, but will commit when the table direction becomes clear.",
-  memoryBias: "Remembers voting patterns and obvious contradictions first, then tone and timing.",
-  suspicionThreshold: "Needs more than one clue before fully changing sides, with votes and incentives carrying the most weight.",
-  selfProtection: "Tends to explain their logic first, then push back if pressure keeps building.",
-  logicDepth: "Can connect a few players and vote relationships, but still prefers concrete table evidence.",
-  tablePresence: "Speaks in measured turns, not loud by default, and becomes firmer in key moments.",
+const isValidPlayerMind = (mind: unknown): mind is PlayerMind => {
+  if (!isRecord(mind)) return false;
+  return PLAYER_MIND_REQUIRED_FIELDS.every((key) => (
+    typeof mind[key] === "string" && mind[key].trim().length > 0
+  ));
 };
 
-function normalizeStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value
-      .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-  if (typeof value === "string" && value.trim()) {
-    return [value.trim()];
-  }
-  return [];
-}
-
-function normalizePlayerMind(mind: unknown): PlayerMind {
-  const record = mind && typeof mind === "object" ? (mind as Record<string, unknown>) : {};
+function parsePlayerMind(mind: unknown): PlayerMind | null {
+  if (!isValidPlayerMind(mind)) return null;
   return {
-    courage: typeof record.courage === "string" && record.courage.trim() ? record.courage.trim() : PLAYER_MIND_FALLBACKS.courage,
-    memoryBias:
-      typeof record.memoryBias === "string" && record.memoryBias.trim()
-        ? record.memoryBias.trim()
-        : PLAYER_MIND_FALLBACKS.memoryBias,
-    suspicionThreshold:
-      typeof record.suspicionThreshold === "string" && record.suspicionThreshold.trim()
-        ? record.suspicionThreshold.trim()
-        : PLAYER_MIND_FALLBACKS.suspicionThreshold,
-    selfProtection:
-      typeof record.selfProtection === "string" && record.selfProtection.trim()
-        ? record.selfProtection.trim()
-        : PLAYER_MIND_FALLBACKS.selfProtection,
-    logicDepth:
-      typeof record.logicDepth === "string" && record.logicDepth.trim()
-        ? record.logicDepth.trim()
-        : PLAYER_MIND_FALLBACKS.logicDepth,
-    tablePresence:
-      typeof record.tablePresence === "string" && record.tablePresence.trim()
-        ? record.tablePresence.trim()
-        : PLAYER_MIND_FALLBACKS.tablePresence,
+    courage: mind.courage.trim(),
+    memoryBias: mind.memoryBias.trim(),
+    suspicionThreshold: mind.suspicionThreshold.trim(),
+    selfProtection: mind.selfProtection.trim(),
+    logicDepth: mind.logicDepth.trim(),
+    tablePresence: mind.tablePresence.trim(),
   };
 }
 
-function normalizePersonaForProfile(persona: unknown, profile: BaseProfile): Persona {
-  const record = isRecord(persona) ? persona : {};
-  const voiceRules = normalizeStringArray(record.voiceRules);
+function parsePersonaForProfile(persona: unknown, profile: BaseProfile): Persona | null {
+  if (!isRecord(persona)) return null;
+  if (
+    !Array.isArray(persona.voiceRules) ||
+    persona.voiceRules.length === 0 ||
+    persona.voiceRules.some((rule) => typeof rule !== "string" || !rule.trim()) ||
+    PERSONA_TEXT_FIELDS.some((field) => (
+      typeof persona[field] !== "string" || !persona[field].trim()
+    ))
+  ) {
+    return null;
+  }
+
   const normalized: Persona = {
-    styleLabel: typeof record.styleLabel === "string" && record.styleLabel.trim() ? record.styleLabel.trim() : undefined,
-    voiceRules: voiceRules.length > 0 ? voiceRules : ["speaks in a natural, table-focused way"],
+    voiceRules: persona.voiceRules.map((rule) => rule.trim()),
     mbti: profile.mbti,
     gender: profile.gender,
     age: profile.age,
-    voiceId: typeof record.voiceId === "string" && record.voiceId.trim() ? record.voiceId.trim() : undefined,
-    relationships: undefined,
     basicInfo: profile.basicInfo,
   };
 
   for (const field of PERSONA_TEXT_FIELDS) {
-    const value = record[field];
-    if (typeof value === "string" && value.trim()) {
-      normalized[field] = value.trim();
-    }
+    normalized[field] = (persona[field] as string).trim();
   }
-
-  for (const field of OPTIONAL_PERSONA_STRING_FIELDS) {
-    const value = record[field];
-    if (typeof value === "string" && value.trim()) {
-      normalized[field] = value.trim();
-    }
-  }
-
-  const triggerTopics = normalizeStringArray(record.triggerTopics);
-  if (triggerTopics.length > 0) {
-    normalized.triggerTopics = triggerTopics;
-  }
-
   return normalized;
 }
 
+const isValidPersonaForProfile = (persona: unknown, profile: BaseProfile): persona is Persona => (
+  isRecord(persona) &&
+  Array.isArray(persona.voiceRules) &&
+  persona.voiceRules.length > 0 &&
+  PERSONA_TEXT_FIELDS.every((field) => (
+    typeof persona[field] === "string" && persona[field].trim().length > 0
+  )) &&
+  persona.gender === profile.gender &&
+  persona.age === profile.age &&
+  persona.mbti === profile.mbti
+);
+
 function normalizeGeneratedCharacterForProfile(char: unknown, profile: BaseProfile): GeneratedCharacter | null {
-  if (!char || typeof char !== "object") return null;
-  const record = char as Record<string, unknown>;
-  const rawName = typeof record.displayName === "string" ? record.displayName.trim() : "";
+  if (!isRecord(char)) return null;
+  const rawName = typeof char.displayName === "string" ? char.displayName.trim() : "";
   if (!rawName) return null;
+  const persona = parsePersonaForProfile(char.persona, profile);
+  const playerMind = parsePlayerMind(char.playerMind);
+  if (!persona || !playerMind) return null;
 
   return {
     displayName: rawName,
-    persona: normalizePersonaForProfile(record.persona, profile),
-    playerMind: normalizePlayerMind(record.playerMind),
-    avatarSeed: typeof record.avatarSeed === "string" && record.avatarSeed.trim() ? record.avatarSeed.trim() : undefined,
+    persona,
+    playerMind,
   };
 }
 
@@ -486,7 +401,7 @@ const alignCharactersToProfiles = (
         rawCharacter,
         normalizedCharacter: c,
         profile: { gender: profile.gender, age: profile.age, mbti: profile.mbti },
-        isValid: c ? isValidPersona(c.persona) : false,
+        isValid: c ? isValidPersonaForProfile(c.persona, profile) : false,
         isValidPlayerMind: c ? isValidPlayerMind(c.playerMind) : false,
         genderMatch: p?.gender === profile.gender,
         ageMatch: p?.age === profile.age,
@@ -531,6 +446,106 @@ const buildFullPersonasPrompt = (
   });
 };
 
+const nonEmptyStringSchema = { type: "string", minLength: 1 } as const;
+
+function buildBaseProfilesResponseFormat(count: number): ResponseFormat {
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "base_profiles",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["profiles"],
+        properties: {
+          profiles: {
+            type: "array",
+            minItems: count,
+            maxItems: count,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["displayName", "gender", "age", "mbti", "basicInfo"],
+              properties: {
+                displayName: nonEmptyStringSchema,
+                gender: { type: "string", enum: ["male", "female"] },
+                age: { type: "integer", minimum: 20, maximum: 55 },
+                mbti: { type: "string", pattern: "^[A-Z]{4}$" },
+                basicInfo: nonEmptyStringSchema,
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+function buildPersonaBatchResponseFormat(profiles: BaseProfile[]): ResponseFormat {
+  const personaTextProperties = Object.fromEntries(
+    PERSONA_TEXT_FIELDS.map((field) => [field, nonEmptyStringSchema]),
+  );
+  const playerMindProperties = Object.fromEntries(
+    PLAYER_MIND_REQUIRED_FIELDS.map((field) => [field, nonEmptyStringSchema]),
+  );
+
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "character_batch",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["characters"],
+        properties: {
+          characters: {
+            type: "array",
+            minItems: profiles.length,
+            maxItems: profiles.length,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["displayName", "persona", "playerMind"],
+              properties: {
+                displayName: {
+                  type: "string",
+                  enum: profiles.map((profile) => profile.displayName),
+                },
+                persona: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "voiceRules",
+                    ...PERSONA_TEXT_FIELDS,
+                  ],
+                  properties: {
+                    voiceRules: {
+                      type: "array",
+                      minItems: 1,
+                      items: nonEmptyStringSchema,
+                    },
+                    ...personaTextProperties,
+                  },
+                },
+                playerMind: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: PLAYER_MIND_REQUIRED_FIELDS,
+                  properties: playerMindProperties,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 export async function generateCharacters(
   count: number,
   scenario?: GameScenario,
@@ -540,263 +555,198 @@ export async function generateCharacters(
   }
 ): Promise<GeneratedCharacter[]> {
   const usedScenario = scenario ?? getRandomScenario();
-  let cachedBaseProfiles: BaseProfile[] | null = null;
-  const cachedPersonaBatches = new Map<number, GeneratedCharacter[]>();
-  const lastEmittedCharacters = new Map<number, GeneratedCharacter>();
-  const modelSource = getModelSource();
-  const maxAttempts = modelSource === "tokenpay" ? 1 : 2;
-  const runOnce = async (attempt: number) => {
-    let baseProfiles = cachedBaseProfiles;
+  const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
+  const baseResult = await generateJSON<unknown>({
+    model: getGeneratorModel(),
+    messages: [{ role: "user", content: basePrompt }],
+    temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
+    max_tokens: Math.max(2400, count * 350 + 600),
+    reasoning: CHARACTER_GENERATOR_REASONING,
+    response_format: buildBaseProfilesResponseFormat(count),
+  });
+  const baseProfiles = normalizeBaseProfiles(baseResult).profiles;
+  if (!isValidBaseProfiles(baseProfiles, count)) {
+    throw new Error("Base profile generation returned invalid schema");
+  }
+  options?.onBaseProfiles?.(baseProfiles);
 
-    if (!baseProfiles) {
-      const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
-
-      // 动态计算 max_tokens：每个角色约需 300-400 tokens，加上 JSON 结构开销
-      const baseMaxTokens = Math.max(2400, count * 350 + 600);
-
-      const baseResult = await generateJSON<unknown>({
-        model: getGeneratorModel(),
-        messages: [{ role: "user", content: basePrompt }],
-        temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-        max_tokens: baseMaxTokens,
-        reasoning: CHARACTER_GENERATOR_REASONING,
-      });
-
-      const normalizedBase = normalizeBaseProfiles(baseResult);
-      baseProfiles = normalizedBase.profiles;
-
-      if (!isValidBaseProfiles(baseProfiles, count)) {
-        throw new Error("Base profile generation returned invalid schema");
-      }
-
-      cachedBaseProfiles = baseProfiles;
-      options?.onBaseProfiles?.(baseProfiles);
-    }
-
-    const finalizedCharacters: GeneratedCharacter[] = [];
-    const emitCharacter = (index: number, character: GeneratedCharacter) => {
-      finalizedCharacters[index] = character;
-      // 成功批次重试时会复用同一对象，不重复通知；失败批次重新生成的是
-      // 新对象，必须覆盖通知，避免界面残留上一次不完整流里的旧画像。
-      if (lastEmittedCharacters.get(index) === character) return;
-      lastEmittedCharacters.set(index, character);
-      options?.onCharacter?.(index, character);
-      console.log(`[character-gen] emitted character ${index}: ${character.displayName}`);
-    };
-
-    const generatePersonaBatch = async (
-      batchProfiles: BaseProfile[],
-      batchStartIndex: number,
-    ): Promise<GeneratedCharacter[]> => {
-      const cached = cachedPersonaBatches.get(batchStartIndex);
-      if (cached) {
-        cached.forEach((character, localIndex) => {
-          emitCharacter(batchStartIndex + localIndex, character);
-        });
-        return cached;
-      }
-
-      const batchStartedAt = Date.now();
-      const batchModel = getGeneratorModel();
-      const fullPrompt = buildFullPersonasPrompt(
-        usedScenario,
-        baseProfiles,
-        batchProfiles,
-      );
-      const batchCharacters: GeneratedCharacter[] = [];
-      const emittedLocalIndices = new Set<number>();
-      let accumulatedContent = "";
-
-      try {
-        // 大模型一次生成九个完整画像时实测会产生超过一万 token，并在正常
-        // stop 时留下损坏 JSON。三人分批后单批上限固定为 4200，九人总上限
-        // 12600，不高于旧版单请求的 13050。
-        const stream = generateCompletionStream({
-          model: batchModel,
-          messages: [{ role: "user", content: fullPrompt }],
-          temperature: GAME_TEMPERATURE.CHARACTER_PERSONA,
-          max_tokens: CHARACTER_PERSONA_BATCH_MAX_TOKENS,
-          reasoning: CHARACTER_GENERATOR_REASONING,
-        });
-
-        for await (const chunk of stream) {
-          accumulatedContent += chunk;
-          const cleaned = stripMarkdownCodeFences(accumulatedContent);
-          const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
-          const matches = cleaned.match(characterPattern);
-
-          for (const match of matches ?? []) {
-            const rawCharacter = parseLLMJson<GeneratedCharacter>(match);
-            if (!rawCharacter?.displayName) continue;
-            const localIndex = batchProfiles.findIndex(
-              (profile, index) =>
-                profile.displayName === rawCharacter.displayName &&
-                !emittedLocalIndices.has(index),
-            );
-            if (localIndex === -1) continue;
-
-            const profile = batchProfiles[localIndex];
-            const normalized = normalizeGeneratedCharacterForProfile(rawCharacter, profile);
-            if (
-              !normalized ||
-              !isValidPersonaForProfile(normalized.persona, profile) ||
-              !isValidPlayerMind(normalized.playerMind)
-            ) {
-              continue;
-            }
-
-            const voiceId = resolveVoiceId(
-              normalized.persona.voiceId,
-              normalized.persona.gender,
-              normalized.persona.age,
-              "zh" as AppLocale,
-            );
-            const character: GeneratedCharacter = {
-              displayName: profile.displayName,
-              persona: {
-                ...normalized.persona,
-                basicInfo: profile.basicInfo,
-                voiceId,
-                relationships: undefined,
-              },
-              playerMind: normalized.playerMind,
-            };
-            emittedLocalIndices.add(localIndex);
-            batchCharacters[localIndex] = character;
-            emitCharacter(batchStartIndex + localIndex, character);
-          }
-        }
-
-        if (batchCharacters.filter(Boolean).length < batchProfiles.length) {
-          const fullResult = parseLLMJson<unknown>(stripMarkdownCodeFences(accumulatedContent));
-          if (!fullResult) {
-            throw new Error(`Character batch ${batchStartIndex} returned invalid JSON`);
-          }
-          const normalized = normalizeGeneratedCharacters(fullResult);
-          const aligned = alignCharactersToProfiles(normalized.characters, batchProfiles);
-          if (!aligned) {
-            throw new Error(`Character batch ${batchStartIndex} returned invalid schema`);
-          }
-
-          aligned.forEach((character, localIndex) => {
-            if (batchCharacters[localIndex]) return;
-            const profile = batchProfiles[localIndex];
-            const voiceId = resolveVoiceId(
-              character.persona.voiceId,
-              character.persona.gender,
-              character.persona.age,
-              "zh" as AppLocale,
-            );
-            const completed: GeneratedCharacter = {
-              displayName: profile.displayName,
-              persona: {
-                ...character.persona,
-                basicInfo: profile.basicInfo,
-                voiceId,
-                relationships: undefined,
-              },
-              playerMind: character.playerMind,
-            };
-            batchCharacters[localIndex] = completed;
-            emitCharacter(batchStartIndex + localIndex, completed);
-          });
-        }
-
-        cachedPersonaBatches.set(batchStartIndex, batchCharacters);
-        await aiLogger.log({
-          type: "character_generation",
-          request: {
-            model: batchModel,
-            messages: [{ role: "user", content: fullPrompt }],
-          },
-          response: {
-            content: JSON.stringify(batchCharacters.map((c) => ({
-              displayName: c.displayName,
-              hiddenCommunicationProfile: {
-                werewolfExperience: c.persona.werewolfExperience,
-                vocabularyStyle: c.persona.vocabularyStyle,
-                reasoningStyle: c.persona.reasoningStyle,
-                speechLengthHabit: c.persona.speechLengthHabit,
-                pressureStyle: c.persona.pressureStyle,
-                uncertaintyStyle: c.persona.uncertaintyStyle,
-                mistakePattern: c.persona.mistakePattern,
-                wolfDeceptionStyle: c.persona.wolfDeceptionStyle,
-              },
-              playerMind: c.playerMind,
-            }))),
-            duration: Date.now() - batchStartedAt,
-            rawResponse: JSON.stringify({ batchStartIndex, attempt: attempt + 1 }),
-          },
-        });
-        return batchCharacters;
-      } catch (error) {
-        await aiLogger.log({
-          type: "character_generation",
-          request: {
-            model: batchModel,
-            messages: [{ role: "user", content: fullPrompt }],
-          },
-          response: {
-            content: accumulatedContent,
-            duration: Date.now() - batchStartedAt,
-            raw: accumulatedContent,
-            rawResponse: JSON.stringify({ batchStartIndex, attempt: attempt + 1 }),
-          },
-          error: String(error),
-        });
-        throw error;
-      }
-    };
-
-    const batchTasks: Promise<GeneratedCharacter[]>[] = [];
-    for (let start = 0; start < baseProfiles.length; start += CHARACTER_PERSONA_BATCH_SIZE) {
-      batchTasks.push(
-        generatePersonaBatch(
-          baseProfiles.slice(start, start + CHARACTER_PERSONA_BATCH_SIZE),
-          start,
-        ),
-      );
-    }
-    const batchResults = await Promise.allSettled(batchTasks);
-    const failedBatch = batchResults.find(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    );
-    if (failedBatch) throw failedBatch.reason;
-    if (finalizedCharacters.filter(Boolean).length !== baseProfiles.length) {
-      throw new Error("Character generation returned incomplete batches");
-    }
-
-    return finalizedCharacters;
+  const finalizedCharacters: GeneratedCharacter[] = [];
+  const emitCharacter = (index: number, character: GeneratedCharacter) => {
+    finalizedCharacters[index] = character;
+    options?.onCharacter?.(index, character);
+    console.log(`[character-gen] emitted character ${index}: ${character.displayName}`);
   };
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    try {
-      console.log(
-        `[character-gen] Attempt ${attempt + 1}/${maxAttempts}, modelSource: ${modelSource}, customKeyEnabled: ${isCustomKeyEnabled()}, hasZenmux: ${hasZenmuxKey()}, hasDashscope: ${hasDashscopeKey()}, hasTokendance: ${hasTokendanceKey()}`
-      );
-      return await runOnce(attempt);
-    } catch (error) {
-      lastError = error;
-      console.error(`[character-gen] Attempt ${attempt + 1} failed:`, error);
-      
-      const errorMsg = String(error);
-      const isQuotaError = errorMsg.includes("[QUOTA_EXHAUSTED]") || 
-                          errorMsg.includes("402") || 
-                          errorMsg.includes("insufficient") ||
-                          errorMsg.includes("余额");
-      
-      if (isQuotaError || modelSource === "tokenpay") {
-        console.error("[character-gen] Non-retryable generation failure, aborting retry");
-        throw error;
-      }
-      
-      if (attempt + 1 < maxAttempts) {
-        continue;
-      }
-      console.error("Character generation failed:", error);
-    }
-  }
+  const generatePersonaBatch = async (
+    batchProfiles: BaseProfile[],
+    batchStartIndex: number,
+  ): Promise<GeneratedCharacter[]> => {
+    const batchStartedAt = Date.now();
+    const batchModel = getGeneratorModel();
+    const fullPrompt = buildFullPersonasPrompt(
+      usedScenario,
+      baseProfiles,
+      batchProfiles,
+    );
+    const batchCharacters: GeneratedCharacter[] = [];
+    const emittedLocalIndices = new Set<number>();
+    let accumulatedContent = "";
 
-  throw lastError;
+    try {
+      // 三人一批并行生成，避免九人长输出达到 token 上限；每批只调用一次。
+      const stream = generateCompletionStream({
+        model: batchModel,
+        messages: [{ role: "user", content: fullPrompt }],
+        temperature: GAME_TEMPERATURE.CHARACTER_PERSONA,
+        max_tokens: CHARACTER_PERSONA_BATCH_MAX_TOKENS,
+        reasoning: CHARACTER_GENERATOR_REASONING,
+        response_format: buildPersonaBatchResponseFormat(batchProfiles),
+      });
+
+      for await (const chunk of stream) {
+        accumulatedContent += chunk;
+        const cleaned = stripMarkdownCodeFences(accumulatedContent);
+        const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
+        const matches = cleaned.match(characterPattern);
+
+        for (const match of matches ?? []) {
+          const rawCharacter = parseLLMJson<GeneratedCharacter>(match);
+          if (!rawCharacter?.displayName) continue;
+          const localIndex = batchProfiles.findIndex(
+            (profile, index) =>
+              profile.displayName === rawCharacter.displayName &&
+              !emittedLocalIndices.has(index),
+          );
+          if (localIndex === -1) continue;
+
+          const profile = batchProfiles[localIndex];
+          const normalized = normalizeGeneratedCharacterForProfile(rawCharacter, profile);
+          if (
+            !normalized ||
+            !isValidPersonaForProfile(normalized.persona, profile) ||
+            !isValidPlayerMind(normalized.playerMind)
+          ) {
+            continue;
+          }
+
+          const voiceId = resolveVoiceId(
+            normalized.persona.voiceId,
+            normalized.persona.gender,
+            normalized.persona.age,
+            "zh" as AppLocale,
+          );
+          const character: GeneratedCharacter = {
+            displayName: profile.displayName,
+            persona: {
+              ...normalized.persona,
+              basicInfo: profile.basicInfo,
+              voiceId,
+              relationships: undefined,
+            },
+            playerMind: normalized.playerMind,
+          };
+          emittedLocalIndices.add(localIndex);
+          batchCharacters[localIndex] = character;
+          emitCharacter(batchStartIndex + localIndex, character);
+        }
+      }
+
+      if (batchCharacters.filter(Boolean).length < batchProfiles.length) {
+        const fullResult = parseLLMJson<unknown>(stripMarkdownCodeFences(accumulatedContent));
+        if (!fullResult) {
+          throw new Error(`Character batch ${batchStartIndex} returned invalid JSON`);
+        }
+        const normalized = normalizeGeneratedCharacters(fullResult);
+        const aligned = alignCharactersToProfiles(normalized.characters, batchProfiles);
+        if (!aligned) {
+          throw new Error(`Character batch ${batchStartIndex} returned invalid schema`);
+        }
+
+        aligned.forEach((character, localIndex) => {
+          if (batchCharacters[localIndex]) return;
+          const profile = batchProfiles[localIndex];
+          const voiceId = resolveVoiceId(
+            character.persona.voiceId,
+            character.persona.gender,
+            character.persona.age,
+            "zh" as AppLocale,
+          );
+          const completed: GeneratedCharacter = {
+            displayName: profile.displayName,
+            persona: {
+              ...character.persona,
+              basicInfo: profile.basicInfo,
+              voiceId,
+              relationships: undefined,
+            },
+            playerMind: character.playerMind,
+          };
+          batchCharacters[localIndex] = completed;
+          emitCharacter(batchStartIndex + localIndex, completed);
+        });
+      }
+
+      await aiLogger.log({
+        type: "character_generation",
+        request: {
+          model: batchModel,
+          messages: [{ role: "user", content: fullPrompt }],
+        },
+        response: {
+          content: JSON.stringify(batchCharacters.map((c) => ({
+            displayName: c.displayName,
+            hiddenCommunicationProfile: {
+              werewolfExperience: c.persona.werewolfExperience,
+              vocabularyStyle: c.persona.vocabularyStyle,
+              reasoningStyle: c.persona.reasoningStyle,
+              speechLengthHabit: c.persona.speechLengthHabit,
+              pressureStyle: c.persona.pressureStyle,
+              uncertaintyStyle: c.persona.uncertaintyStyle,
+              mistakePattern: c.persona.mistakePattern,
+              wolfDeceptionStyle: c.persona.wolfDeceptionStyle,
+            },
+            playerMind: c.playerMind,
+          }))),
+          duration: Date.now() - batchStartedAt,
+          rawResponse: JSON.stringify({ batchStartIndex }),
+        },
+      });
+      return batchCharacters;
+    } catch (error) {
+      await aiLogger.log({
+        type: "character_generation",
+        request: {
+          model: batchModel,
+          messages: [{ role: "user", content: fullPrompt }],
+        },
+        response: {
+          content: accumulatedContent,
+          duration: Date.now() - batchStartedAt,
+          raw: accumulatedContent,
+          rawResponse: JSON.stringify({ batchStartIndex }),
+        },
+        error: String(error),
+      });
+      throw error;
+    }
+  };
+
+  const batchTasks: Promise<GeneratedCharacter[]>[] = [];
+  for (let start = 0; start < baseProfiles.length; start += CHARACTER_PERSONA_BATCH_SIZE) {
+    batchTasks.push(
+      generatePersonaBatch(
+        baseProfiles.slice(start, start + CHARACTER_PERSONA_BATCH_SIZE),
+        start,
+      ),
+    );
+  }
+  const batchResults = await Promise.allSettled(batchTasks);
+  const failedBatch = batchResults.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failedBatch) throw failedBatch.reason;
+  if (finalizedCharacters.filter(Boolean).length !== baseProfiles.length) {
+    throw new Error("Character generation returned incomplete batches");
+  }
+  return finalizedCharacters;
 }

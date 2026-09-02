@@ -5,6 +5,7 @@ import test from "node:test";
 const welcomeSource = readFileSync("src/components/game/WelcomeScreen.tsx", "utf8");
 const characterSource = readFileSync("src/lib/character-generator.ts", "utf8");
 const llmSource = readFileSync("src/lib/llm.ts", "utf8");
+const tokenPayClientSource = readFileSync("src/lib/tokenpay-client.ts", "utf8");
 const recoveryHostSource = readFileSync(
   "src/components/game/TokenPayRecoveryHost.tsx",
   "utf8",
@@ -13,17 +14,20 @@ const recoveryHostSource = readFileSync(
 test("a disconnected TokenPay selection cannot start a game", () => {
   assert.match(
     welcomeSource,
-    /getModelSource\(\) === "tokenpay"[\s\S]*!\(tokenPayConnected \|\| isTokenPayConnected\(\)\)[\s\S]*openTokenPayConnection\(false\)/,
+    /getModelSource\(\) === "tokenpay"[\s\S]*await refreshTokenPayConnection\(\)[\s\S]*if \(!connected\)[\s\S]*openTokenPayConnection\(false\)/,
   );
+  assert.match(tokenPayClientSource, /loadTokenPayConnectionWithRetry/);
   assert.match(welcomeSource, /handleCreditFailure\(result\)/);
   assert.match(welcomeSource, /result\?\.recoveryAction === "reauthorize_api_key"/);
 });
 
-test("character generation reuses the paid base-profile stage", () => {
-  assert.match(characterSource, /let cachedBaseProfiles: BaseProfile\[\] \| null = null/);
-  assert.match(characterSource, /cachedBaseProfiles = baseProfiles/);
-  assert.match(characterSource, /if \(isQuotaError \|\| modelSource === "tokenpay"\)[\s\S]*throw error/);
-  assert.doesNotMatch(characterSource, /isCustomKeyEnabled\(\) && isQuotaError/);
+test("character generation is schema-constrained and single-pass", () => {
+  assert.match(characterSource, /response_format: buildBaseProfilesResponseFormat\(count\)/);
+  assert.match(characterSource, /type: "json_schema"/);
+  assert.match(characterSource, /strict: true/);
+  assert.doesNotMatch(characterSource, /cachedBaseProfiles|cachedPersonaBatches/);
+  assert.doesNotMatch(characterSource, /for \(let attempt|runOnce\(/);
+  assert.doesNotMatch(characterSource, /normalizeBaseProfile\(/);
 });
 
 test("character personas are generated as bounded JSON batches", () => {
@@ -31,14 +35,15 @@ test("character personas are generated as bounded JSON batches", () => {
   assert.match(characterSource, /CHARACTER_PERSONA_BATCH_MAX_TOKENS = 4200/);
   assert.match(characterSource, /Promise\.allSettled\(batchTasks\)/);
   assert.match(characterSource, /temperature: GAME_TEMPERATURE\.CHARACTER_PERSONA/);
-  assert.match(characterSource, /cachedPersonaBatches/);
+  assert.match(characterSource, /每批只调用一次/);
   assert.match(characterSource, /仅作全局去重参考/);
 });
 
 test("TokenPay character generation never replays an ambiguous paid stream", () => {
-  assert.match(characterSource, /const maxAttempts = modelSource === "tokenpay" \? 1 : 2/);
-  assert.match(characterSource, /isQuotaError \|\| modelSource === "tokenpay"/);
-  assert.match(characterSource, /lastEmittedCharacters\.get\(index\) === character/);
+  assert.match(characterSource, /response_format: buildPersonaBatchResponseFormat\(batchProfiles\)/);
+  assert.match(llmSource, /if \(options\.response_format\?\.type === "json_schema"\) throw firstError/);
+  assert.doesNotMatch(characterSource, /lastEmittedCharacters/);
+  assert.doesNotMatch(characterSource, /CharacterBatchSchemaError/);
   assert.doesNotMatch(characterSource, /\(two-stage generation\)/);
 });
 

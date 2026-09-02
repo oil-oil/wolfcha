@@ -35,6 +35,7 @@ import {
   syncTokenPayConnectionState,
   type ModelSource,
 } from "@/lib/api-keys";
+import { loadTokenPayConnectionWithRetry } from "@/lib/tokenpay-client";
 import { useAppLocale } from "@/i18n/useAppLocale";
 import {
   SPRING_CAMPAIGN_CODE,
@@ -301,10 +302,11 @@ export function WelcomeScreen({
   const [isLowCreditOpen, setIsLowCreditOpen] = useState(false);
   const [userProfileDefaultTab, setUserProfileDefaultTab] = useState<string | undefined>(undefined);
   const [tokenPayConnected, setTokenPayConnectedState] = useState(false);
-  const [tokenPaySyncedUserId, setTokenPaySyncedUserId] = useState<string | null>(null);
-  const tokenPaySyncing = Boolean(
-    session?.user.id && tokenPaySyncedUserId !== session.user.id,
-  );
+  const tokenPaySyncVersionRef = useRef(0);
+  const tokenPaySyncInFlightRef = useRef<{
+    userId: string;
+    promise: Promise<boolean | null>;
+  } | null>(null);
   const tokenPayQueryHandledRef = useRef(false);
   const selectionStorageKey = useMemo(() => {
     return user?.id
@@ -422,6 +424,43 @@ export function WelcomeScreen({
 
   const [modelSource, setModelSourceState] = useState<ModelSource>(() => getModelSource());
 
+  const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
+    const nextSource = syncTokenPayConnectionState(connected);
+    setTokenPayConnectedState(connected);
+    setModelSourceState(nextSource);
+  }, []);
+
+  const refreshTokenPayConnection = useCallback((): Promise<boolean | null> => {
+    const userId = session?.user.id;
+    if (!userId) {
+      handleTokenPayConnectionChange(false);
+      return Promise.resolve(false);
+    }
+
+    const currentRequest = tokenPaySyncInFlightRef.current;
+    if (currentRequest?.userId === userId) return currentRequest.promise;
+
+    const version = ++tokenPaySyncVersionRef.current;
+    const promise = loadTokenPayConnectionWithRetry(userId)
+      .then((connection) => {
+        if (tokenPaySyncVersionRef.current !== version) return null;
+        handleTokenPayConnectionChange(connection.connected);
+        return connection.connected;
+      })
+      .catch((error) => {
+        if (tokenPaySyncVersionRef.current !== version) return null;
+        console.warn("[TokenPay] Connection sync failed", error);
+        return null;
+      })
+      .finally(() => {
+        if (tokenPaySyncVersionRef.current === version) {
+          tokenPaySyncInFlightRef.current = null;
+        }
+      });
+    tokenPaySyncInFlightRef.current = { userId, promise };
+    return promise;
+  }, [handleTokenPayConnectionChange, session?.user.id]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const syncModelSource = () => {
@@ -443,6 +482,27 @@ export function WelcomeScreen({
       window.removeEventListener(MODEL_SOURCE_CHANGE_EVENT, syncModelSource);
     };
   }, []);
+
+  useEffect(() => {
+    tokenPaySyncVersionRef.current += 1;
+    tokenPaySyncInFlightRef.current = null;
+    handleTokenPayConnectionChange(false);
+    if (!session?.user.id) {
+      return;
+    }
+    void refreshTokenPayConnection();
+  }, [handleTokenPayConnectionChange, refreshTokenPayConnection, session?.user.id]);
+
+  useEffect(() => {
+    if (!session?.user.id) return;
+    const refresh = () => void refreshTokenPayConnection();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [refreshTokenPayConnection, session?.user.id]);
 
   // 调试面板状态
   const [mounted, setMounted] = useState(false);
@@ -794,11 +854,6 @@ export function WelcomeScreen({
     if (isStartingRef.current) {
       return;
     }
-    if (tokenPaySyncing) {
-      toast(t("tokenPay.syncing"));
-      return;
-    }
-
     const latestDemoConfig = await refreshDemoConfig(true);
     const demoModeActive = latestDemoConfig.active;
 
@@ -809,12 +864,14 @@ export function WelcomeScreen({
       return;
     }
 
-    if (
-      getModelSource() === "tokenpay" &&
-      !(tokenPayConnected || isTokenPayConnected())
-    ) {
-      openTokenPayConnection(false);
-      return;
+    if (getModelSource() === "tokenpay") {
+      const connected = tokenPayConnected
+        ? true
+        : await refreshTokenPayConnection();
+      if (!connected) {
+        openTokenPayConnection(false);
+        return;
+      }
     }
 
     const hasExternalSource = hasActiveExternalModelSource();
@@ -845,61 +902,16 @@ export function WelcomeScreen({
     setIsUserProfileOpen(true);
   };
 
-  const handleTokenPayConnectionChange = useCallback((connected: boolean) => {
-    const nextSource = syncTokenPayConnectionState(connected);
-    setTokenPayConnectedState(connected);
-    setModelSourceState(nextSource);
-  }, []);
-
-  useEffect(() => {
-    if (!session?.access_token) {
-      handleTokenPayConnectionChange(false);
-      setTokenPaySyncedUserId(null);
-      return;
-    }
-
-    let active = true;
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
-    handleTokenPayConnectionChange(false);
-    void fetch("/api/tokenpay/connection", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      cache: "no-store",
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`tokenpay_connection_${response.status}`);
-        return response.json() as Promise<{ connected?: unknown }>;
-      })
-      .then((connection) => {
-        if (active) handleTokenPayConnectionChange(connection.connected === true);
-      })
-      .catch(() => {
-        // 同步失败时保持 TokenPay 禁用，避免跨账号误用旧连接。
-      })
-      .finally(() => {
-        window.clearTimeout(timeoutId);
-        if (active) setTokenPaySyncedUserId(session.user.id);
-      });
-    return () => {
-      active = false;
-      window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [handleTokenPayConnectionChange, session?.access_token, session?.user.id]);
-
   const handleStartGameFromLowCreditModal = async () => {
-    if (tokenPaySyncing) {
-      toast(t("tokenPay.syncing"));
-      return;
-    }
-    if (
-      getModelSource() === "tokenpay" &&
-      !(tokenPayConnected || isTokenPayConnected())
-    ) {
-      setIsLowCreditOpen(false);
-      openTokenPayConnection(false);
-      return;
+    if (getModelSource() === "tokenpay") {
+      const connected = tokenPayConnected
+        ? true
+        : await refreshTokenPayConnection();
+      if (!connected) {
+        setIsLowCreditOpen(false);
+        openTokenPayConnection(false);
+        return;
+      }
     }
     const latestDemoConfig = await refreshDemoConfig(true);
     await startGameWithCreditGuard(latestDemoConfig.active);
