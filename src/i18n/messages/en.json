@@ -988,21 +988,25 @@
   "prompts": {
     "daySpeech": {
       "speakOrder": {
-        "status": "Speech order for this round: {orderList}\nCurrent speaker: {currentSeat} (position {speakOrder}/{totalSpeakers})\nSeats with a public speech record: {spokenList}\nTurn already passed without a public speech record: {passedList}\nNot reached yet and without a public speech record: {unspokenList}\nThese are objective records for the current round only. The current speaker is not counted as having spoken until this speech is complete."
+        "status": "All participants in this speech round ({totalSpeakers} total, including both spoken and not-yet-spoken seats): {orderList}\nCurrent speaker: {currentSeat} (position {speakOrder}/{totalSpeakers})\nSeats with a public speech record: {spokenList}\nTurn already passed without a public speech record: {passedList}\nNot reached yet and without a public speech record: {unspokenList}\nThese are objective records for the current round only. The current speaker is not counted as having spoken until this speech is complete."
       },
       "campaign": {
         "badge": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death.",
-        "pk": "【PK】This is the sheriff PK speech phase.",
+        "badgePk": "【Current phase】This is the PK speech after a tied sheriff vote. A sheriff revote follows.",
+        "votePk": "【Current phase】This is the PK speech after a tied daytime elimination vote. An elimination revote follows; this is not a sheriff campaign or sheriff vote.",
         "candidateNote": "Note: Only candidates speak in this phase. Non-candidates ({list}) will not speak.",
+        "pkParticipantNote": "Note: Only the players in this PK speak. Other players ({list}) will not speak in this phase.",
         "emptyCandidateNote": "Note: Candidate list is empty (unusual). Only respond based on visible speech records; do not speculate about non-speakers."
       },
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n【Scenario】\nThis is an online Werewolf game. Players communicate by text.\n\n{winCondition}\n\n{persona}",
       "task": {
-        "lastWords": "You've been eliminated. Deliver your last words.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
-        "lastWordsVotedOut": "You were voted out. Deliver your last words.\n【Death cause】This death cause is vote execution, unrelated to witch poison.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
-        "lastWordsVotedOutHunter": "You were voted out. Deliver your last words.\n【Death cause】This death cause is vote execution, unrelated to witch poison; a Hunter voted out can still shoot.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
+        "lastWords": "You've been eliminated. Only deliver your last words now; there is no further discussion, vote call, or vote in this phase.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
+        "lastWordsVotedOut": "You were voted out. Only deliver your last words now.\n【Current phase】Today's elimination vote is complete. There is no further discussion, vote call, or vote today.\n【Death cause】This death cause is vote execution, unrelated to witch poison.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
+        "lastWordsVotedOutHunter": "You were voted out. Only deliver your last words now.\n【Current phase】Today's elimination vote is complete. There is no further discussion, vote call, or vote today. Immediately after these last words comes the one-time shooting window for this death; passing in that window permanently forfeits this shot, and it cannot be saved for a later round.\n【Death cause】This death cause is vote execution, unrelated to witch poison; a Hunter voted out can still shoot.\n【Identity Check】You are Seat #{seat} ({name}). Do not confuse your seat number.",
         "campaign": "This is the sheriff campaign speech.",
-        "dayDiscussion": "This is daytime discussion.",
+        "votePk": "This is the PK speech after a tied daytime elimination vote. The next vote is an elimination revote, not a sheriff vote.",
+        "pk": "This is the PK speech phase.",
+        "dayDiscussion": "This is daytime free discussion after the sheriff campaign and sheriff election have ended. The next vote after this round is an elimination vote, not a sheriff vote.",
         "section": "【Current position】\nYou are playing a live Werewolf game. You are not a commentator or a referee.\nYou only know information from your own perspective. You have your own personality, memory, team goal, and current pressure.\nIt is your turn to speak. {taskLine}\n{campaignRequirements}"
       },
       "guidelines": {
@@ -1011,7 +1015,9 @@
       },
       "phaseHint": {
         "badge": "You are delivering a sheriff campaign speech.",
-        "pk": "You are delivering a sheriff PK speech."
+        "badgePk": "You are delivering a PK speech after a tied sheriff vote.",
+        "votePk": "You are delivering a PK speech after a tied elimination vote. An elimination revote follows, not a sheriff vote.",
+        "pk": "You are delivering a PK speech."
       },
       "phaseSection": "【Current phase】\n{phaseHint}",
       "userNoTranscript": "(None yet. You are speaker #{speakOrder}.)",
@@ -1020,12 +1026,12 @@
     },
     "vote": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【Voting Rules】\nEach player votes to eliminate one suspect. Most votes = eliminated. Tie = PK speeches then revote.\n\n【Task】\nChoose one player to eliminate. Base the decision on your team's win condition, public checks, role claims, counterclaims, and vote calls.\n- If you are the Seer and a confirmed werewolf is eligible, you should usually vote that werewolf.\n- If you are on the village team, do not ignore a single Seer claim's checks, the sheriff or a credible player's vote call, or clear counterclaims.\n- If you are on the werewolf team, you may fake your stance, but avoid obviously self-exposing random choices.\n\nOptions: {options}",
+      "task": "【Current phase】\nThis is the daytime elimination vote, not the sheriff election.\n\n【Voting rules】\nEach living player with voting rights chooses one currently eligible living player. The player with the most votes is eliminated; a tie proceeds to PK speeches and a revote under the game rules.\n\n【Task】\nChoose one player for your elimination vote. Decide independently using only the public facts, private information, and team objective visible to you.\n\nOptions: {options}",
       "option": "Seat {seat} ({name})",
       "reasonExample": "one short reason for this vote",
       "userNoTranscript": "(None)",
       "userNoSelfSpeech": "(You didn't speak today)",
-      "user": "{gameContext}\n\n【Before voting, mentally check】\n- Whether today's discussion contains a Seer claim, a gold-water result, or a wolf check.\n- Whether key roles such as Hunter, Witch, or Guard have competing claims.\n- Whether the sheriff or someone you find credible made a clear vote call.\n- Your vote should stay consistent with your team's goal, your known information, and your own speech today.\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no extra text:\n{voteJsonFormat}"
+      "user": "{gameContext}\n\n【Current step】\nDaytime free discussion is complete. This is now the elimination vote. Your choice determines whom you vote to eliminate; it is not a sheriff vote.\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no extra text:\n{voteJsonFormat}"
     },
     "night": {
       "option": "Seat {seat} ({name})",
@@ -1073,7 +1079,7 @@
       "option": "Seat {seat} ({name})",
       "signup": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}\n\n{persona}",
-        "task": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death. The sheriff leads discussions and consolidates votes.\n\n【Task】\nThis is the sheriff signup phase. Decide whether to run for sheriff.\n\n【Output format】\nOnly output a single digit: 1 to sign up, 0 to skip\nNo explanations, no extra text, no code blocks",
+        "task": "【Sheriff Badge】\nThe sheriff has 1.5 votes and can transfer the badge upon death. The sheriff leads discussions and consolidates votes.\n\n【Task】\nThis is the sheriff signup phase. Decide whether to run for sheriff.\n\n【Output format】\nReturn exactly one JSON object with no markdown, explanation, or extra text:\nRun: {\"signup\":true}\nSkip: {\"signup\":false}",
         "user": "{context}\n\n【Today's discussion】\n{todayTranscript}\n\nDo you want to run for sheriff?",
         "noTranscript": "(None)"
       },
@@ -1094,11 +1100,9 @@
     },
     "hunter": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
-      "task": "【Hunter Skill】\nYou can shoot one player if voted out or killed by werewolves. You cannot shoot if poisoned by the Witch. Shooting is immediate and irreversible.\n\n【Task】\nDecide whether to shoot.\n\nOptions: {options}",
+      "task": "【Current phase】\nThis is the one-time Hunter shooting window for this death.\n\n【Hunter skill】\nYou can shoot one player if voted out or killed by werewolves. You cannot shoot if poisoned by the Witch. Shooting is immediate and irreversible. Passing permanently forfeits this shot; it cannot be saved for a later round.\n\n【Task】\nChoose one currently eligible living player to shoot, or pass.\n\nOptions: {options}",
       "user": "{context}\n\nWhich seat do you want to shoot?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text.\nShoot example: {jsonFormat}\nPass example: {passJsonFormat}",
-      "lastWordsContext": "\n\n【Your Last Words】\n{lastWords}\n\n【Important】Please keep your shooting decision consistent with your last words. If you expressed intent to shoot in your last words, execute it now.",
-      "lastWordsIntentHint": "You stated in your last words that you would shoot Seat {seat} ({name}). Please execute your decision.",
-      "lastWordsPassHint": "You stated in your last words that you would not shoot. Please stay consistent."
+      "lastWordsContext": "\n\n【Public record that already occurred: your last words】\n{lastWords}"
     },
     "whiteWolfKingBoom": {
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
@@ -1663,6 +1667,14 @@
       "publicRoleConfigurationItem": "- {role} × {count}",
       "publicRoleConfigurationScope": "Note: This shows only the role totals announced at the start. It does not map roles to seats or reveal whether a role is still alive.",
       "publicRoleConfigurationCheckRule": "Public rule: Only the Seer can check whether one player is good or a wolf at night.",
+      "publicWinRule": "Public rule: While the game is ongoing, the number of living wolves is still below the number of living good players. Wolves win when those counts become equal; good wins when all wolves are eliminated.",
+      "publicIdentityRule": "Public rule: Normal deaths and elimination votes do not reveal roles. Player claims, reported checks, and role reads are only player statements; a role is confirmed only when the host triggers a public role ability. An eliminated role not publicly confirmed by the host cannot be used to assert an exact remaining role count.",
+      "publicRoleRevealsTitle": "【Role events confirmed by the host】",
+      "publicRoleRevealsNone": "- None; the host has not publicly confirmed any player's role.",
+      "hunterRoleReveal": "- Day {day}: {hunter} was publicly confirmed by the host as the Hunter and shot {target}. A shot performs no check and does not reveal {target}'s role.",
+      "whiteWolfKingRoleReveal": "- Day {day}: {player} was publicly confirmed by the host as the White Wolf King and exploded, taking {target} with them.",
+      "idiotRoleReveal": "- Day {day}: {player} was publicly confirmed by the host as the Idiot.",
+      "unannouncedNightResult": "The host has not announced last night's deaths. You know only what is explicitly listed in your private role information. An empty death list does not establish a peaceful night, and you cannot assert who died last night.",
       "selfSpeechIncludedInTimeline": "Your speech is already preserved as Seat {seat} at its actual position in the complete timeline above, so it is not repeated here.",
       "transcriptPhaseHeader": "【{phase} (actual chronological order)】",
       "transcriptPhaseBadgeSpeech": "Sheriff campaign speeches",
@@ -1672,13 +1684,15 @@
       "wolfFriendlyFireNote": "Rule note: werewolf kills may target teammates or self (self-kill allowed); keep this in mind.",
       "peacefulNightNote": "Peaceful night explanation: A peaceful night means no one died last night. Three possible reasons: ①Witch used antidote to save someone ②Guard successfully protected someone ③Werewolves skipped kill (no target selected). Note: Wolf self-kill results in death, NOT a peaceful night.",
       "peacefulNightNoteNoGuard": "Peaceful night explanation: A peaceful night means no one died last night. Two possible reasons: ①Witch used antidote to save someone ②Werewolves skipped kill (no target selected). Note: There is NO Guard role in this game; wolf self-kill results in death, NOT a peaceful night.",
-      "phaseOrderNote": "Phase order: Night (wolf kills) → Dawn death announcement → Sheriff campaign → Free discussion → Vote. Note: Wolf kills happen BEFORE the campaign; wolves have NOT heard any daytime speeches when they kill.",
+      "phaseOrderNote": "Phase order: Night (wolf kills) → Dawn death announcement → Free discussion → Vote. Wolf kills happen before daytime speech, so today's not-yet-spoken statements cannot explain last night's target.",
       "phaseOrderNoteDay1BadgeBeforeDeath": "Phase order: Night (wolf kills) → Sheriff campaign → Dawn death announcement → Free discussion → Vote. Note: Wolf kills happen BEFORE the campaign; wolves have NOT heard any daytime speeches when they kill.",
       "noSameDayCausalityNote": "Timeline reminder: last night's kill target is locked before today's daytime begins; do not treat today's campaign, role claims, or speeches as the direct cause of last night's kill.",
       "deathCauseWolf": "wolf kill",
       "deathCausePoison": "poisoned",
       "deathCauseVote": "voted out",
-      "deathCauseDeath": "death",
+      "deathCauseDeath": "cause not public",
+      "deathCauseHunterShot": "public Hunter shot",
+      "deathCauseWhiteWolfKing": "public White Wolf King explosion",
       "deathCauseUnknown": "unknown",
       "noSheriff": "none",
       "voteCount": "votes",
@@ -1899,9 +1913,12 @@
       "werewolfParticipated": "Participated in wolf kill"
     },
     "dailySummary": {
-      "systemPrompt": "You are an objective Werewolf game recorder.\n\nTask: Compress the given record into BULLET LIST for long-term memory.\n\nCore principles\n- Objectively record \"who said what, who did what\". No judgments.\n- Preserve original points and stances, not your opinions.\n- Record facts only; avoid speculative causality.\n- Do NOT write: \"because they campaigned/claimed/spoke today, they were killed last night\".\n- If the log shows \"campaign first, death announcement later\", treat it as announcement order only; the kill still happened at night.\n\nMust include (ALL required)\n1. Night result: peaceful night / who died / cause of death\n2. Sheriff result: who ran, who won, vote counts\n3. Role claims: who claimed what role, what checks reported\n4. Each speaking player's core viewpoint (1 sentence summary)\n5. Alignment stances: who supported whom, who questioned whom\n6. Vote result: who was exiled, vote distribution\n\nFormat requirements\n- Must include seat numbers (e.g., \"Seat 2\")\n- Keep each bullet short\n- 6-12 bullets required\n- Ensure EVERY speaking player is recorded\n\nOutput format: strictly return JSON:\n'{' \"bullets\": [\"Point 1\", \"Point 2\", ...] '}'",
+      "systemPrompt": "You are an objective Werewolf game recorder.\n\nTask: Compress the given record into BULLET LIST for long-term memory.\n\nCore principles\n- Objectively record who said what and who did what. Add no judgments.\n- Player claims, reported checks, and role reads must remain attributed as 'Seat X claimed/thought'; never rewrite them as host-confirmed facts.\n- Normal elimination does not reveal a role, so it cannot establish an exact remaining role count.\n- Record a cause of death only when the host explicitly made it public; otherwise write 'cause not public'. Never infer wolf kill, poison, protection, or healing.\n- Preserve the actual event phase. Daytime votes, last words, Hunter shots, and badge transfers must not be recorded as events from last night.\n- Do NOT write that a campaign, claim, or daytime speech caused last night's kill.\n- If the log shows the campaign before the death announcement, that is announcement order only; night actions still finished before daytime began.\n\nMust include (ALL required)\n1. Public night result: peaceful night / who died / host-public cause or 'cause not public'\n2. Today's sheriff event: list candidates, winner, and votes only if a campaign happened today; otherwise write 'no sheriff campaign today' and the current sheriff, never reconstruct prior candidates\n3. Role claims: who claimed what role, what checks were reported\n4. Each speaking player's core viewpoint (one short summary)\n5. Alignment stances: who supported whom, who questioned whom\n6. Vote result: who was exiled, vote distribution\n\nFormat requirements\n- Include seat numbers (e.g. Seat 2)\n- Keep each bullet short\n- Usually use 6-12 bullets; use more when needed to cover every speaker\n- Record every speaking player\n\nOutput format: strictly return JSON:\n'{' \"bullets\": [\"Point 1\", \"Point 2\", ...] '}'",
       "userPrompt": "【Day {day} Daytime Log】\n{transcript}\n\nStrictly return JSON:",
-      "fallbackText": "Day {day}: No summary available"
+      "fallbackText": "Day {day}: No summary available",
+      "voteResultTitle": "Vote result",
+      "voteResultLine": "{target}: {voteCount} votes from {voters}",
+      "noVoters": "none"
     },
     "voteFallback": {
       "missingReason": "No reason provided",

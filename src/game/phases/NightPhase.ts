@@ -509,11 +509,12 @@ export class NightPhase extends GamePhase {
 
     const uncheckedPlayers = alivePlayers.filter((p) => !checkedSeats.includes(p.seat));
     const alreadyChecked = alivePlayers.filter((p) => checkedSeats.includes(p.seat));
+    const eligiblePlayers = uncheckedPlayers.length > 0 ? uncheckedPlayers : alivePlayers;
 
     const checkedList = alreadyChecked
       .map((p) => t("promptUtils.gameContext.seatLabel", { seat: p.seat + 1 }))
       .join(t("promptUtils.gameContext.listSeparator"));
-    const optionsList = (uncheckedPlayers.length > 0 ? uncheckedPlayers : alivePlayers)
+    const optionsList = eligiblePlayers
       .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
       .join(t("promptUtils.gameContext.listSeparator"));
 
@@ -537,7 +538,7 @@ export class NightPhase extends GamePhase {
 
     const user = t("prompts.night.seer.user", {
       context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
-      jsonFormat: JSON.stringify({ seat: 5 }),
+      jsonFormat: JSON.stringify({ seat: (eligiblePlayers[0]?.seat ?? player.seat) + 1 }),
     });
 
     return { system, user, systemParts };
@@ -599,7 +600,7 @@ export class NightPhase extends GamePhase {
 
     const user = t("prompts.night.wolf.user", {
       context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
-      jsonFormat: JSON.stringify({ seat: 2 }),
+      jsonFormat: JSON.stringify({ seat: (alivePlayers[0]?.seat ?? player.seat) + 1 }),
     });
 
     return { system, user, systemParts };
@@ -618,8 +619,8 @@ export class NightPhase extends GamePhase {
       role: getRoleText("Guard"),
       winCondition: getWinCondition("Guard"),
     });
-    const options = alivePlayers
-      .filter((p) => p.seat !== lastTarget)
+    const eligiblePlayers = alivePlayers.filter((p) => p.seat !== lastTarget);
+    const options = eligiblePlayers
       .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
       .join(t("promptUtils.gameContext.listSeparator"));
     const lastTargetLine =
@@ -636,7 +637,7 @@ export class NightPhase extends GamePhase {
 
     const user = t("prompts.night.guard.user", {
       context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
-      jsonFormat: JSON.stringify({ seat: 3 }),
+      jsonFormat: JSON.stringify({ seat: (eligiblePlayers[0]?.seat ?? player.seat) + 1 }),
     });
 
     return { system, user, systemParts };
@@ -696,7 +697,7 @@ export class NightPhase extends GamePhase {
       poisonLine,
       poisonTargets,
       saveJsonFormat: JSON.stringify({ action: "save" }),
-      poisonJsonFormat: JSON.stringify({ action: "poison", seat: 3 }),
+      poisonJsonFormat: JSON.stringify({ action: "poison", seat: (alivePlayers[0]?.seat ?? player.seat) + 1 }),
       passJsonFormat: JSON.stringify({ action: "pass" }),
     });
     const systemParts: SystemPromptPart[] = [

@@ -84,7 +84,12 @@ test("警徽报名批处理为每个玩家建立独立 Prompt，并按返回顺�
   ];
   const state = makeState(players);
   const originalFetch = globalThis.fetch;
-  let requestBody: { requests: Array<{ messages: Array<{ content: string | unknown[] }> }> } | undefined;
+  let requestBody: {
+    requests: Array<{
+      messages: Array<{ content: string | unknown[] }>;
+      response_format?: { type?: string; json_schema?: { strict?: boolean } };
+    }>;
+  } | undefined;
 
   globalThis.fetch = async (_input, init) => {
     if (!init?.body) {
@@ -94,7 +99,10 @@ test("警徽报名批处理为每个玩家建立独立 Prompt，并按返回顺�
       });
     }
     const body = JSON.parse(String(init.body)) as {
-      requests: Array<{ messages: Array<{ content: string | unknown[] }> }>;
+      requests: Array<{
+        messages: Array<{ content: string | unknown[] }>;
+        response_format?: { type?: string; json_schema?: { strict?: boolean } };
+      }>;
     };
     requestBody = body;
     return new Response(JSON.stringify({
@@ -103,7 +111,7 @@ test("警徽报名批处理为每个玩家建立独立 Prompt，并按返回顺�
         data: {
           id: `badge-${index}`,
           choices: [{
-            message: { role: "assistant", content: index === 0 ? "1" : "0" },
+            message: { role: "assistant", content: JSON.stringify({ signup: index === 0 }) },
             finish_reason: "stop",
           }],
         },
@@ -118,6 +126,10 @@ test("警徽报名批处理为每个玩家建立独立 Prompt，并按返回顺�
     assert.ok(requests);
     assert.equal(requests.length, players.length);
     assert.deepEqual(result, { seer: true, guard: false });
+    for (const request of requests) {
+      assert.equal(request.response_format?.type, "json_schema");
+      assert.equal(request.response_format?.json_schema?.strict, true);
+    }
 
     const seerPrompt = requestText(requests[0]);
     const guardPrompt = requestText(requests[1]);
@@ -127,6 +139,8 @@ test("警徽报名批处理为每个玩家建立独立 Prompt，并按返回顺�
     assert.doesNotMatch(guardPrompt, /<your_seer_checks>/);
     assert.match(seerPrompt, /警徽竞选报名环节/);
     assert.match(guardPrompt, /警徽竞选报名环节/);
+    assert.match(seerPrompt, /\{"signup":true\}/);
+    assert.match(guardPrompt, /\{"signup":false\}/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -148,7 +162,7 @@ test("警徽报名单个响应非法或失败时只将对应玩家判为不上�
         ok: true,
         data: {
           id: "badge-0",
-          choices: [{ message: { role: "assistant", content: "1" }, finish_reason: "stop" }],
+          choices: [{ message: { role: "assistant", content: '{"signup":true}' }, finish_reason: "stop" }],
         },
       },
       {

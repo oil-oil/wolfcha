@@ -26,6 +26,7 @@ import { buildCachedSystemMessageFromParts } from "./prompt-utils";
 import { parseLLMJson } from "./llm-json";
 import { getI18n } from "@/i18n/translator";
 import { getRoleConfiguration } from "@/lib/role-configuration";
+import { resolveBadgeElectionWinner } from "@/lib/historical-vote-snapshots";
 
 export { getRoleConfiguration } from "@/lib/role-configuration";
 export { getSpeakingOrder } from "@/lib/speech-order";
@@ -181,6 +182,7 @@ export function createInitialGameState(): GameState {
       votes: {},
       allVotes: {},
       history: {},
+      electionWinners: {},
       revoteCount: 0,
     },
     votes: {},
@@ -539,7 +541,7 @@ export function tallyVotes(state: GameState): { seat: number; count: number } | 
 }
 
 /** Extract structured vote_data from [VOTE_RESULT] in day messages. Preserves "who voted for whom" so it is not lost when context is trimmed. */
-function extractVoteDataFromDayMessages(
+export function extractVoteDataFromDayMessages(
   dayMessages: ChatMessage[],
   state: GameState
 ): DailySummaryVoteData | undefined {
@@ -561,8 +563,11 @@ function extractVoteDataFromDayMessages(
         votes[k] = Array.isArray(r.voterSeats) ? r.voterSeats : [];
       }
       if (data.title === badgeVoteTitle && Object.keys(votes).length > 0) {
-        const winner = state.badge.holderSeat ?? -1;
-        sheriff = { winner, votes };
+        const voteGroups = Object.fromEntries(
+          Object.entries(votes).map(([targetSeat, voterSeats]) => [Number(targetSeat), voterSeats])
+        );
+        const winner = resolveBadgeElectionWinner(state, state.day, voteGroups);
+        if (typeof winner === "number") sheriff = { winner, votes };
       } else if (data.title === dayVoteTitle && Object.keys(votes).length > 0) {
         const eliminated = state.dayHistory?.[state.day]?.executed?.seat ?? -1;
         execution = { eliminated, votes };
@@ -577,6 +582,59 @@ function extractVoteDataFromDayMessages(
   if (sheriff != null && sheriff.winner >= 0) out.sheriff_election = sheriff;
   if (execution != null && execution.eliminated >= 0) out.execution_vote = execution;
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+export function formatDailySummaryTranscriptMessage(
+  message: ChatMessage,
+  state: GameState,
+  systemSpeaker: string
+): string | null {
+  if (!message.isSystem) {
+    const { t } = getI18n();
+    const player = state.players.find((candidate) => candidate.playerId === message.playerId);
+    const seatLabel = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : "";
+    const nameLabel = player?.displayName || message.playerName;
+    const speaker = seatLabel ? `${seatLabel} ${nameLabel}`.trim() : nameLabel;
+    return `${speaker}: ${message.content}`;
+  }
+
+  if (!message.content.startsWith("[VOTE_RESULT]")) {
+    return `${systemSpeaker}: ${message.content}`;
+  }
+
+  try {
+    const { t } = getI18n();
+    const payload = JSON.parse(message.content.slice("[VOTE_RESULT]".length)) as {
+      title?: unknown;
+      results?: Array<{ targetSeat?: unknown; voterSeats?: unknown; voteCount?: unknown }>;
+    };
+    const validSeats = new Set(state.players.map((player) => player.seat));
+    const results = (Array.isArray(payload.results) ? payload.results : [])
+      .flatMap((result) => {
+        if (typeof result.targetSeat !== "number" || !validSeats.has(result.targetSeat)) return [];
+        const target = state.players.find((player) => player.seat === result.targetSeat);
+        const voters = Array.isArray(result.voterSeats)
+          ? result.voterSeats.filter((seat): seat is number => typeof seat === "number" && validSeats.has(seat))
+          : [];
+        const voterLabels = voters.map((seat) => {
+          const voter = state.players.find((player) => player.seat === seat);
+          return `${t("mentions.seatLabel", { seat: seat + 1 })}${voter ? ` ${voter.displayName}` : ""}`;
+        });
+        const targetLabel = `${t("mentions.seatLabel", { seat: result.targetSeat + 1 })}${target ? ` ${target.displayName}` : ""}`;
+        return [t("gameMaster.dailySummary.voteResultLine", {
+          target: targetLabel,
+          voters: voterLabels.join(t("promptUtils.gameContext.listSeparator")) || t("gameMaster.dailySummary.noVoters"),
+          voteCount: typeof result.voteCount === "number" ? result.voteCount : voters.length,
+        })];
+      });
+
+    if (results.length === 0) return null;
+    const title = typeof payload.title === "string" ? payload.title : t("gameMaster.dailySummary.voteResultTitle");
+    return `${systemSpeaker}: ${title}\n${results.join("\n")}`;
+  } catch {
+    // Internal zero-based vote payloads must never be passed to the model verbatim.
+    return null;
+  }
 }
 
 export async function generateDailySummary(
@@ -600,14 +658,8 @@ export async function generateDailySummary(
   const voteData = extractVoteDataFromDayMessages(dayMessages, state);
 
   const transcript = dayMessages
-    .map((m) => {
-      if (m.isSystem) return `${systemSpeaker}: ${m.content}`;
-      const player = state.players.find((p) => p.playerId === m.playerId);
-      const seatLabel = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : "";
-      const nameLabel = player?.displayName || m.playerName;
-      const speaker = seatLabel ? `${seatLabel} ${nameLabel}`.trim() : nameLabel;
-      return `${speaker}: ${m.content}`;
-    })
+    .map((message) => formatDailySummaryTranscriptMessage(message, state, systemSpeaker))
+    .filter((line): line is string => line !== null)
     .join("\n")
     .slice(0, 15000);
 
@@ -619,25 +671,41 @@ export async function generateDailySummary(
     { role: "user", content: user },
   ];
 
-  const completion = await generateCompletionWithParseRetry(
+  const summaryModelRef = getModelRefForModel(summaryModel);
+  const completion = await generateCompletionAndParse(
     {
       model: summaryModel,
       messages,
       temperature: GAME_TEMPERATURE.SUMMARY,
-      response_format: { type: "json_object" },
+      response_format: structuredResponseFormat(summaryModelRef, "daily_summary", {
+        type: "object",
+        properties: {
+          bullets: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+        required: ["bullets"],
+        additionalProperties: false,
+      }),
     },
     (cleaned) => {
       const obj = parseLLMJson<{ bullets?: unknown; summary?: unknown }>(cleaned);
       if (!obj || typeof obj !== "object" || Array.isArray(obj)) return parseFail();
-      if (Array.isArray(obj.bullets) && obj.bullets.length > 0) {
-        return parseOk({ bullets: obj.bullets.map(b => String(b)), voteData });
+      if (Array.isArray(obj.bullets)) {
+        const bullets = obj.bullets
+          .filter((bullet): bullet is string => typeof bullet === "string")
+          .map((bullet) => bullet.trim())
+          .filter(Boolean);
+        if (bullets.length > 0) {
+          return parseOk({ bullets, voteData });
+        }
       }
       if (typeof obj.summary === "string" && obj.summary.trim()) {
         return parseOk({ bullets: [obj.summary.trim()], voteData });
       }
       return parseFail();
-    },
-    jsonRetryInstruction(JSON.stringify({ bullets: ["要点1", "要点2"] }))
+    }
   );
 
   await aiLogger.log({
@@ -657,13 +725,7 @@ export async function generateDailySummary(
   });
 
   if (completion.parsed) return completion.parsed;
-
-  // Fallback: use raw content without JSON wrapper
-  const fallback = completion.result.content
-    .replace(/```json\s*|\s*```/g, "")
-    .trim();
-
-  return { bullets: fallback ? [fallback] : [], voteData };
+  return { bullets: [], voteData };
 }
 
 export async function* generateAISpeechStream(
@@ -1150,9 +1212,13 @@ export async function generateAIVote(
   );
   const startTime = Date.now();
   const { messages } = buildMessagesForPrompt(prompt);
+  const validSeats = alivePlayers.map((p) => p.seat);
+
+  if (validSeats.length === 0) {
+    return { seat: AI_VOTE_ABSTAIN, reason: t("gameMaster.voteFallback.noTargets") };
+  }
 
   try {
-    const validSeats = alivePlayers.map((p) => p.seat);
     const parseSeatValue = (value: unknown): number | null => {
       const displaySeat =
         typeof value === "number"
@@ -1165,13 +1231,13 @@ export async function generateAIVote(
       return validSeats.includes(seat) ? seat : null;
     };
 
-    const completion = await generateCompletionWithParseRetry(
+    const completion = await generateCompletionAndParse(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
-        response_format: { type: "json_object" },
+        response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "day_vote", validSeats),
       }),
       (cleaned) => {
         const parsed = parseLLMJson<{
@@ -1192,8 +1258,7 @@ export async function generateAIVote(
 
         const reason = typeof parsed.reason === "string" ? parsed.reason.trim() : "";
         return parseOk({ seat, reason: reason || t("gameMaster.voteFallback.missingReason") });
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 3, reason: t("gameMaster.voteFallback.missingReason") }))
+      }
     );
 
     const parsedResult = completion.parsed ?? {
@@ -1291,6 +1356,42 @@ function firstSeat(validSeats: number[]): number | undefined {
   return [...validSeats].sort((a, b) => a - b)[0];
 }
 
+function supportsStrictJsonSchema(modelRef: Pick<ModelRef, "provider" | "model">): boolean {
+  if (modelRef.provider === "dashscope") return false;
+  const model = modelRef.model.toLowerCase();
+  return model.startsWith("deepseek/") || model.startsWith("deepseek-");
+}
+
+function structuredResponseFormat(
+  modelRef: Pick<ModelRef, "provider" | "model">,
+  name: string,
+  schema: unknown
+): NonNullable<GenerateOptions["response_format"]> {
+  if (!supportsStrictJsonSchema(modelRef)) return { type: "json_object" };
+  return {
+    type: "json_schema",
+    json_schema: { name, strict: true, schema },
+  };
+}
+
+function seatSelectionResponseFormat(
+  modelRef: Pick<ModelRef, "provider" | "model">,
+  name: string,
+  validSeats: number[]
+): NonNullable<GenerateOptions["response_format"]> {
+  return structuredResponseFormat(modelRef, name, {
+    type: "object",
+    properties: {
+      seat: {
+        type: "integer",
+        enum: validSeats.map((seat) => seat + 1),
+      },
+    },
+    required: ["seat"],
+    additionalProperties: false,
+  });
+}
+
 type ParseAttempt<T> = { ok: true; value: T } | { ok: false };
 
 type ParsedCompletion<T> = {
@@ -1308,41 +1409,19 @@ function parseFail(): ParseAttempt<never> {
   return { ok: false };
 }
 
-async function generateCompletionWithParseRetry<T>(
+async function generateCompletionAndParse<T>(
   options: GenerateOptions,
-  parse: (cleaned: string) => ParseAttempt<T>,
-  retryInstruction: string
+  parse: (cleaned: string) => ParseAttempt<T>
 ): Promise<ParsedCompletion<T>> {
-  let messages = options.messages;
-  let last: ParsedCompletion<T> | null = null;
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const result = await generateCompletion({ ...options, messages });
-    const cleaned = stripMarkdownCodeFences(result.content).trim();
-    const parsed = parse(cleaned);
-
-    last = {
-      result,
-      cleaned,
-      parsed: parsed.ok ? parsed.value : null,
-      attempts: attempt,
-    };
-
-    if (parsed.ok) return last;
-
-    messages = [
-      ...options.messages,
-      { role: "assistant", content: result.content.slice(0, 4000) },
-      { role: "user", content: retryInstruction },
-    ];
-  }
-
-  if (!last) throw new Error("No LLM completion attempts were made");
-  return last;
-}
-
-function jsonRetryInstruction(formatHint: string): string {
-  return `上一轮输出无法按预期 JSON 结构解析。The previous output did not match the expected JSON schema. 请严格只返回 JSON / Return JSON only, no markdown, no explanation, no extra text. 预期结构 / Expected shape: ${formatHint}`;
+  const result = await generateCompletion(options);
+  const cleaned = stripMarkdownCodeFences(result.content).trim();
+  const parsed = parse(cleaned);
+  return {
+    result,
+    cleaned,
+    parsed: parsed.ok ? parsed.value : null,
+    attempts: 1,
+  };
 }
 
 /**
@@ -1356,6 +1435,7 @@ export async function generateAIBadgeSignupBatch(
   if (!players || players.length === 0) return {};
 
   const model = getSummaryModel();
+  const modelRef = getModelRefForModel(model);
   const requests = players.map((player) => {
     const prompt = resolvePhasePrompt("DAY_BADGE_SIGNUP", state, player);
     const { messages } = buildMessagesForPrompt(prompt);
@@ -1367,6 +1447,12 @@ export async function generateAIBadgeSignupBatch(
         messages,
         promptScope: "gameplay" as const,
         temperature: GAME_TEMPERATURE.BADGE_SIGNUP,
+        response_format: structuredResponseFormat(modelRef, "badge_signup", {
+          type: "object",
+          properties: { signup: { type: "boolean" } },
+          required: ["signup"],
+          additionalProperties: false,
+        }),
       },
     };
   });
@@ -1377,9 +1463,8 @@ export async function generateAIBadgeSignupBatch(
 
   const parseBadgeSignupDecision = (content: string): boolean | null => {
     const cleaned = stripMarkdownCodeFences(String(content ?? "")).trim();
-    if (cleaned === "1") return true;
-    if (cleaned === "0") return false;
-    return null;
+    const parsed = parseLLMJson<{ signup?: unknown }>(cleaned);
+    return typeof parsed?.signup === "boolean" ? parsed.signup : null;
   };
 
   try {
@@ -1419,7 +1504,7 @@ export async function generateAIBadgeSignupBatch(
           ...(!result?.ok
             ? { error: result?.error ?? "Missing batch response" }
             : decision === null
-              ? { error: "Invalid badge signup response: expected 1 or 0" }
+              ? { error: "Invalid badge signup response: expected boolean schema" }
               : {}),
         });
       })
@@ -1469,19 +1554,18 @@ export async function generateAIBadgeVote(
   if (validSeats.length === 0) return BADGE_VOTE_ABSTAIN;
 
   try {
-    const completion = await generateCompletionWithParseRetry<number>(
+    const completion = await generateCompletionAndParse<number>(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
-        response_format: { type: "json_object" },
+        response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "badge_vote", validSeats),
       }),
       (cleaned) => {
         const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "vote"]);
         return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: (firstSeat(validSeats) ?? 0) + 1 }))
+      }
     );
     const parsedSeat = completion.parsed ?? BADGE_VOTE_ABSTAIN;
 
@@ -1547,7 +1631,7 @@ export async function generateBadgeTransfer(
       return BADGE_TRANSFER_TORN;
     };
 
-    const completion = await generateCompletionWithParseRetry(
+    const completion = await generateCompletionAndParse(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
@@ -1575,8 +1659,7 @@ export async function generateBadgeTransfer(
           return parseOk(pickSafeSeat());
         }
         return parseOk(parsedSeat);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 3 }))
+      }
     );
 
     const parsedSeat = completion.parsed ?? BADGE_TRANSFER_TORN;
@@ -1631,20 +1714,21 @@ export async function generateSeerAction(
   const { messages } = buildMessagesForPrompt(prompt);
   const validSeats = alivePlayers.map((p) => p.seat);
 
+  if (validSeats.length === 0) return undefined;
+
   try {
-    const completion = await generateCompletionWithParseRetry(
+    const completion = await generateCompletionAndParse(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
-        response_format: { type: "json_object" },
+        response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "seer_action", validSeats),
       }),
       (cleaned) => {
         const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "check"]);
         return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 5 }))
+      }
     );
     const parsedSeat = completion.parsed ?? undefined;
 
@@ -1698,19 +1782,18 @@ export async function generateWolfAction(
   const validSeats = alivePlayers.map((p) => p.seat);
 
   try {
-    const completion = await generateCompletionWithParseRetry(
+    const completion = await generateCompletionAndParse(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
-        response_format: { type: "json_object" },
+        response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "wolf_action", validSeats),
       }),
       (cleaned) => {
         const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "kill"]);
         return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 2 }))
+      }
     );
     const parsedSeat = completion.parsed ?? undefined;
 
@@ -1775,7 +1858,7 @@ export async function generateWitchAction(
   const passAction: WitchAction = { type: "pass" };
 
   try {
-    const completion = await generateCompletionWithParseRetry<WitchAction>(
+    const completion = await generateCompletionAndParse<WitchAction>(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
@@ -1809,12 +1892,7 @@ export async function generateWitchAction(
         }
 
         return parseFail();
-      },
-      jsonRetryInstruction([
-        canSave ? JSON.stringify({ action: "save" }) : null,
-        canPoison && validPoisonSeats.length > 0 ? JSON.stringify({ action: "poison", seat: (firstSeat(validPoisonSeats) ?? 0) + 1 }) : null,
-        JSON.stringify({ action: "pass" }),
-      ].filter(Boolean).join(" 或 / or "))
+      }
     );
     const parsedAction = completion.parsed ?? passAction;
 
@@ -1871,20 +1949,21 @@ export async function generateGuardAction(
   const { messages } = buildMessagesForPrompt(prompt);
   const validSeats = alivePlayers.map((p) => p.seat);
 
+  if (validSeats.length === 0) return undefined;
+
   try {
-    const completion = await generateCompletionWithParseRetry(
+    const completion = await generateCompletionAndParse(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
-        response_format: { type: "json_object" },
+        response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "guard_action", validSeats),
       }),
       (cleaned) => {
         const parsedSeat = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "protect"]);
         return parsedSeat === null ? parseFail() : parseOk(parsedSeat);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 3 }))
+      }
     );
     const parsedSeat = completion.parsed ?? undefined;
 
@@ -1941,7 +2020,7 @@ export async function generateHunterShoot(
   const validSeats = alivePlayers.map((p) => p.seat);
 
   try {
-    const completion = await generateCompletionWithParseRetry<number | null>(
+    const completion = await generateCompletionAndParse<number | null>(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
@@ -1967,8 +2046,7 @@ export async function generateHunterShoot(
 
         const parsedTarget = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "shoot"]);
         return parsedTarget === null ? parseFail() : parseOk(parsedTarget);
-      },
-      jsonRetryInstruction(JSON.stringify({ seat: 5 }))
+      }
     );
     const parsedTarget = completion.parsed;
 
@@ -2028,7 +2106,7 @@ export async function generateWhiteWolfKingBoomDecision(
   if (validSeats.length === 0) return null;
 
   try {
-    const completion = await generateCompletionWithParseRetry<number | null>(
+    const completion = await generateCompletionAndParse<number | null>(
       mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
         model: player.agentProfile!.modelRef.model,
         messages,
@@ -2061,8 +2139,7 @@ export async function generateWhiteWolfKingBoomDecision(
 
         const target = parseLLMDisplaySeat(cleaned, validSeats, ["seat", "targetSeat", "target", "boom"]);
         return target === null ? parseFail() : parseOk(target);
-      },
-      jsonRetryInstruction(`${JSON.stringify({ action: "boom", seat: (firstSeat(validSeats) ?? 0) + 1 })} 或 / or ${JSON.stringify({ action: "pass" })}`)
+      }
     );
     const parsedTarget = completion.parsed;
 

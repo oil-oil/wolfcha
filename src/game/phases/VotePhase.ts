@@ -128,6 +128,7 @@ export class VotePhase extends GamePhase {
         p.playerId !== player.playerId &&
         (!eligibleSeats || eligibleSeats.has(p.seat))
     );
+    const exampleSeat = (alivePlayers[0]?.seat ?? player.seat) + 1;
 
     const { t } = getI18n();
     const todayTranscript = buildTodayTranscript(state);
@@ -155,7 +156,7 @@ export class VotePhase extends GamePhase {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
       selfSpeech: selfSpeechContext || t("prompts.vote.userNoSelfSpeech"),
-      voteJsonFormat: JSON.stringify({ seat: 3, reason: t("prompts.vote.reasonExample") }),
+      voteJsonFormat: JSON.stringify({ seat: exampleSeat }),
     });
 
     return { system, user, systemParts };
@@ -260,7 +261,18 @@ export class VotePhase extends GamePhase {
 
     const currentVotes = { ...state.votes };
     const newHistory = { ...state.voteHistory, [state.day]: currentVotes };
-    currentState = { ...currentState, voteHistory: newHistory };
+    const previousDayRecord = (state.dayHistory || {})[state.day] || {};
+    currentState = {
+      ...currentState,
+      voteHistory: newHistory,
+      dayHistory: {
+        ...(state.dayHistory || {}),
+        [state.day]: {
+          ...previousDayRecord,
+          sheriffSeatAtVote: state.badge.holderSeat,
+        },
+      },
+    };
 
     runtime.setGameState(currentState);
     await runtime.waitForUnpause();
