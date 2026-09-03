@@ -1,3 +1,4 @@
+import type { LlmProviderId } from "@/types/game";
 import "server-only";
 
 import { withTimeout } from "@/lib/request-timeout";
@@ -36,7 +37,7 @@ export interface GameSessionAiAttemptInput {
   userId: string;
   requestId: string;
   attempt: number;
-  provider: "zenmux" | "dashscope" | "tokendance";
+  provider: LlmProviderId;
   promptScope: "gameplay" | "utility";
   mode: "completion" | "batch" | "stream";
   outcome: GameSessionAiOutcome;
@@ -128,8 +129,9 @@ async function writeGameSessionAiAttempt(
     p_model: input.model,
     p_input_chars: input.inputChars,
     p_output_chars: input.outputChars,
-    p_prompt_tokens: input.promptTokens,
-    p_completion_tokens: input.completionTokens,
+    // 自定义 OpenAI 兼容 Provider 的流式响应常无 usage 统计；RPC 校验拒绝 NULL，归零兜底
+    p_prompt_tokens: input.promptTokens ?? 0,
+    p_completion_tokens: input.completionTokens ?? 0,
   });
 
   const result = data?.[0];

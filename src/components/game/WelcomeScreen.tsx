@@ -34,6 +34,8 @@ import {
   setModelSource,
   syncTokenPayConnectionState,
   type ModelSource,
+
+  hasActiveCustomLlmKey,
 } from "@/lib/api-keys";
 import { loadTokenPayConnectionWithRetry } from "@/lib/tokenpay-client";
 import { useAppLocale } from "@/i18n/useAppLocale";
@@ -748,7 +750,7 @@ export function WelcomeScreen({
 
   const hasActiveExternalModelSource = () => (
     (getModelSource() === "custom" &&
-      (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey())) ||
+      (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey() || hasActiveCustomLlmKey())) ||
     (getModelSource() === "tokenpay" && (tokenPayConnected || isTokenPayConnected()))
   );
 

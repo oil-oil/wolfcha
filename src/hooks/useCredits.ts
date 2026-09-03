@@ -14,7 +14,9 @@ import {
   getZenmuxApiKey,
   getModelSource,
   setTokenPayConnected,
+  hasActiveCustomLlmKey,
 } from "@/lib/api-keys";
+import { buildCustomProviderHeaders } from "@/lib/custom-providers";
 import { clearGuestId, getGuestId, readGuestIdFromStorage } from "@/lib/demo-mode";
 import { supabase } from "@/lib/supabase";
 import {
@@ -168,7 +170,13 @@ export function useCredits() {
       const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
       const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
       const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
-      const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
+      const customProviderHeaders = customEnabled ? buildCustomProviderHeaders() : {};
+      const hasCustomKey = Boolean(
+        headerApiKey ||
+        dashscopeApiKey ||
+        tokendanceApiKey ||
+        hasActiveCustomLlmKey(),
+      );
       const tokenPayRequested = modelSource === "tokenpay";
       const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
       const requestInit: RequestInit = {
@@ -183,6 +191,7 @@ export function useCredits() {
           ...(tokendanceApiKey && tokendanceBaseUrl
             ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
             : {}),
+          ...customProviderHeaders,
           ...(tokenPayRequested ? { "X-TokenPay-Mode": "true" } : {}),
         },
         body: JSON.stringify({

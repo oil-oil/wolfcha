@@ -256,6 +256,19 @@ function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: str
   return allowedPool[0].model;
 }
 
+function resolveCustomModelForRole(
+  storedValue: string,
+  fallbackValue: string,
+  storageKey: string
+): string {
+  // 自定义 Key 模式：存储值优先；为空时回退到 active custom Provider 的首个
+  // 模型（而不是内置 ZenMux——服务器没有内置 key，否则会 500）。
+  if (storedValue) return storedValue;
+  const customRefs = getCustomModelRefs();
+  if (customRefs.length > 0) return customRefs[0].model;
+  return fallbackValue;
+}
+
 function resolveModelForCurrentKeyState(
   storedValue: string,
   fallbackValue: string,

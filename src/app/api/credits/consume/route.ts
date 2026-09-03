@@ -464,6 +464,9 @@ export async function POST(request: Request) {
   const headerZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
   const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
+  // 自定义 OpenAI 兼容 Provider 的凭据同样构成"自带 Key"路径（免扣项目额度）
+  const headerCustomBaseUrl = request.headers.get("x-custom-base-url")?.trim();
+  const headerCustomApiKey = request.headers.get("x-custom-api-key")?.trim();
   const tokenPayRequested = request.headers.get(TOKENPAY_MODE_HEADER) === "true";
   let tokenPayConnected = false;
   if (tokenPayRequested) {
@@ -492,7 +495,11 @@ export async function POST(request: Request) {
     );
   }
   const hasExternalKey = Boolean(
-    headerZenmuxKey || headerDashscopeKey || headerTokendanceKey || tokenPayConnected,
+    headerZenmuxKey ||
+    headerDashscopeKey ||
+    headerTokendanceKey ||
+    tokenPayConnected ||
+    (headerCustomBaseUrl && headerCustomApiKey),
   );
   const now = new Date();
   const springCampaignBase = buildSpringCampaignBase(now);
