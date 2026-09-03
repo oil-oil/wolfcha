@@ -22,7 +22,6 @@ Copy `.env.example` to `.env.local` and fill in:
 - `DASHSCOPE_API_KEY` — Alibaba Cloud model support
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` — payments
 - `NEXT_PUBLIC_WATCHA_CLIENT_ID` / `WATCHA_CLIENT_SECRET` — optional OAuth
-- `NEWAPI_API_KEY` / `NEWAPI_BASE_URL` — optional custom model endpoint
 
 ## Architecture Overview
 
@@ -54,7 +53,7 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 ### AI Integration
 
-- All LLM calls go through the **`/api/chat`** route (`src/app/api/chat/route.ts`), which proxies to ZenMux, Dashscope, or a custom NewAPI endpoint based on the model's provider
+- All LLM calls go through the **`/api/chat`** route (`src/app/api/chat/route.ts`), which proxies to ZenMux, Dashscope, TokenDance, or a user-defined OpenAI-compatible endpoint (provider `custom`, credentials via `X-Custom-Base-Url` / `X-Custom-Api-Key` headers) based on the model's provider
 - Models are registered in `src/types/game.ts` as `ALL_MODELS` and `PROJECT_MODELS` (each as `ModelRef` with `provider`, `model`, optional `temperature`/`reasoning`)
 - Prompt construction per phase is handled by `GamePhase` subclasses via `getPrompt(context, player): PromptResult`
 - `src/lib/llm.ts` — low-level streaming fetch helper
@@ -66,7 +65,7 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 - `src/lib/audio-manager.ts` — `AudioManager` singleton; task-based sequential audio queue
 - `src/lib/narrator-audio-player.ts` — narrator TTS playback
 - `src/lib/narrator-voice.ts` — voice selection logic
-- `/api/tts` route — calls MiniMax TTS API for character speech synthesis
+- `/api/tts` route — dispatches to a TTS provider adapter registry (`src/lib/tts/`): MiniMax (built-in), OpenAI-compatible `/audio/speech`, Volcengine, ElevenLabs; client config lives in `src/lib/tts-client.ts`
 
 ### i18n
 
@@ -76,8 +75,9 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 | Route | Purpose |
 |-------|---------|
-| `/api/chat` | LLM proxy (ZenMux / Dashscope / NewAPI) |
-| `/api/tts` | MiniMax TTS synthesis |
+| `/api/chat` | LLM proxy (ZenMux / Dashscope / TokenDance / custom OpenAI-compatible) |
+| `/api/llm-models` | Connectivity probe + model list proxy for custom LLM providers |
+| `/api/tts` | TTS synthesis (MiniMax / OpenAI-compatible / Volcengine / ElevenLabs) |
 | `/api/stt` | Speech-to-text |
 | `/api/credits/*` | Credit consumption, daily bonus, referral, redeem |
 | `/api/game-sessions` | Session tracking (Supabase) |
@@ -88,5 +88,5 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 - **`FlowToken` pattern**: Before any async operation, capture `flowController.getToken()`. After `await`, call `token.isValid()` to abort if the flow was interrupted (e.g., game reset mid-speech).
 - **Phase prompt generation**: Add a new phase by creating/extending a `GamePhase` subclass in `src/game/phases/`, then register it in `PhaseManager`.
-- **Model routing**: Built-in models use ZenMux or Dashscope providers. Custom user API keys route through the NewAPI provider path. See `src/lib/api-keys.ts` for key resolution.
+- **Model routing**: Built-in models use ZenMux or Dashscope providers; TokenPay traffic routes through TokenDance. User-supplied keys cover ZenMux / Dashscope / TokenDance plus configurable OpenAI-compatible providers (`src/lib/custom-providers.ts`). See `src/lib/api-keys.ts` for key resolution.
 - Uses **pnpm** as package manager.

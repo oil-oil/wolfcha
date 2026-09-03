@@ -7,6 +7,7 @@ const gameMachineSource = readFileSync("src/store/game-machine.ts", "utf8");
 const chatRouteSource = readFileSync("src/app/api/chat/route.ts", "utf8");
 const ttsRouteSource = readFileSync("src/app/api/tts/route.ts", "utf8");
 const audioManagerSource = readFileSync("src/lib/audio-manager.ts", "utf8");
+const ttsClientSource = readFileSync("src/lib/tts-client.ts", "utf8");
 const apiKeysSource = readFileSync("src/lib/api-keys.ts", "utf8");
 const welcomeSource = readFileSync("src/components/game/WelcomeScreen.tsx", "utf8");
 
@@ -29,7 +30,9 @@ test("对局授权失效与余额不足使用不同错误码", () => {
 
 test("TokenPay 无自有语音 Key 时不会调用项目 MiniMax", () => {
   assert.match(audioManagerSource, /resolveAiVoiceAvailability/);
-  assert.match(audioManagerSource, /modelSource !== "project" && hasMinimaxKey\(\)/);
+  // MiniMax 自带头与"项目模式不带头"的契约已收敛到 tts-client 统一构建
+  assert.match(audioManagerSource, /buildTtsRequestHeaders/);
+  assert.match(ttsClientSource, /getModelSource\(\) === "project" \|\| !hasMinimaxKey\(\)/);
   assert.doesNotMatch(audioManagerSource, /X-TokenPay-Mode/);
   assert.doesNotMatch(ttsRouteSource, /hasAuthorizedActiveTokenPaySession/);
 });
