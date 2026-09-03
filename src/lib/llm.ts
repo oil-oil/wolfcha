@@ -1103,33 +1103,5 @@ export async function generateJSON<T>(
     ...(shouldForceJsonObject ? { response_format: { type: "json_object" as const } } : {}),
     messages: messagesWithFormat,
   });
-
-  try {
-    return parseJsonTolerant<T>(result.content);
-  } catch (firstError) {
-    // JSON Schema 请求由 Provider 保证结构；异常时直接暴露错误，避免一次
-    // 角色生成被静默重放并重复计费。
-    if (options.response_format?.type === "json_schema") throw firstError;
-
-    const retryMessages: LLMMessage[] = [
-      ...messagesWithFormat,
-      { role: "assistant", content: result.content.slice(0, 4000) },
-      {
-        role: "user",
-        content: "The previous response was not valid JSON for the requested schema. Return valid JSON only, with no markdown and no extra text.",
-      },
-    ];
-
-    const retryResult = await generateCompletion({
-      ...options,
-      ...(shouldForceJsonObject ? { response_format: { type: "json_object" as const } } : {}),
-      messages: retryMessages,
-    });
-
-    try {
-      return parseJsonTolerant<T>(retryResult.content);
-    } catch {
-      throw firstError;
-    }
-  }
+  return parseJsonTolerant<T>(result.content);
 }

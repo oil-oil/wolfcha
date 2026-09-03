@@ -22,6 +22,7 @@ import type {
   DeathCause,
 } from "@/types/analysis";
 import { generateJSON } from "@/lib/llm";
+import { resolveBadgeElectionWinner } from "@/lib/historical-vote-snapshots";
 
 const MAX_SPEECH_ITEMS_PER_PHASE = 30;
 const MAX_SPEECH_CONTENT_LENGTH = 280;
@@ -564,21 +565,8 @@ function buildPlayerSnapshots(state: GameState): PlayerSnapshot[] {
 
 function buildRoundStates(state: GameState, snapshots: PlayerSnapshot[]): RoundState[] {
   const rounds: RoundState[] = [];
-  
-  // 从投票记录中计算第1天的原始当选者
   const badgeVotes = state.badge.history?.[1] || {};
-  const voteCounts: Record<number, number> = {};
-  for (const targetSeat of Object.values(badgeVotes)) {
-    const seat = Number(targetSeat);
-    voteCounts[seat] = (voteCounts[seat] || 0) + 1;
-  }
-  const sortedByVotes = Object.entries(voteCounts)
-    .map(([seat, count]) => ({ seat: Number(seat), count }))
-    .sort((a, b) => b.count - a.count);
-  // 原始当选者是得票最高的人
-  const originalElectedSeat = sortedByVotes.length > 0 
-    ? sortedByVotes[0].seat 
-    : state.badge.holderSeat;
+  const originalElectedSeat = resolveRecordedBadgeWinner(state, 1, badgeVotes);
   
   // 第0天（开局）：没有警长
   rounds.push({
@@ -597,7 +585,7 @@ function buildRoundStates(state: GameState, snapshots: PlayerSnapshot[]): RoundS
   
   for (let day = 1; day <= state.day; day++) {
     // 第1天：使用原始当选者
-    if (day === 1 && originalElectedSeat !== null) {
+    if (day === 1 && typeof originalElectedSeat === "number") {
       currentSheriffSeat = originalElectedSeat;
     }
     
@@ -682,16 +670,6 @@ function formatDeathCauseText(cause?: DeathCause): string {
   }
 }
 
-function getTopVotedSeat(votes: Record<string, number> | undefined): number | null {
-  if (!votes) return null;
-  const counts = new Map<number, number>();
-  for (const targetSeat of Object.values(votes)) {
-    counts.set(targetSeat, (counts.get(targetSeat) ?? 0) + 1);
-  }
-  const ranked = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  return ranked[0]?.[0] ?? null;
-}
-
 function formatVoteGroups(state: GameState, votes: Record<string, number> | undefined): string {
   if (!votes || Object.keys(votes).length === 0) return "无有效投票记录";
   const groups = new Map<number, string[]>();
@@ -707,6 +685,20 @@ function formatVoteGroups(state: GameState, votes: Record<string, number> | unde
     .sort((a, b) => a[0] - b[0])
     .map(([targetSeat, voters]) => `${formatSeatName(state, targetSeat)} <= ${voters.join("、")}`)
     .join("；");
+}
+
+function resolveRecordedBadgeWinner(
+  state: GameState,
+  day: number,
+  votes: Record<string, number> | undefined
+): number | null | undefined {
+  const groups: Record<number, number[]> = {};
+  for (const [voterId, targetSeat] of Object.entries(votes || {})) {
+    const voter = state.players.find((player) => player.playerId === voterId);
+    if (!voter) continue;
+    (groups[targetSeat] ||= []).push(voter.seat);
+  }
+  return resolveBadgeElectionWinner(state, day, groups);
 }
 
 function getRelevantSystemMessages(state: GameState, day: number): string[] {
@@ -812,11 +804,14 @@ function buildAuthoritativeHistoryText(state: GameState): string {
 
     const badgeVotes = state.badge.history?.[day];
     if (badgeVotes) {
-      const electedSeat = getTopVotedSeat(badgeVotes);
-      const electedText = electedSeat !== null ? `${formatSeatName(state, electedSeat)}当选或领先` : "无人当选";
+      const electedSeat = resolveRecordedBadgeWinner(state, day, badgeVotes);
+      const electedText = typeof electedSeat === "number" ? `${formatSeatName(state, electedSeat)}当选` : "无人当选";
       dayLines.push(`警长竞选：${electedText}；投票明细：${formatVoteGroups(state, badgeVotes)}`);
-    } else if (day === 1 && state.badge.holderSeat !== null) {
-      dayLines.push(`警徽最终在${formatSeatName(state, state.badge.holderSeat)}`);
+    } else {
+      const electedSeat = resolveRecordedBadgeWinner(state, day, undefined);
+      if (typeof electedSeat === "number") {
+        dayLines.push(`警长竞选：${formatSeatName(state, electedSeat)}当选`);
+      }
     }
 
     const voteRecord = state.voteHistory?.[day];
@@ -1041,9 +1036,6 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
     
     if (dayData?.executed) {
       const voteHistory = state.voteHistory?.[day] || {};
-      const sheriffPlayerId = state.badge.holderSeat !== null
-        ? state.players.find(p => p.seat === state.badge.holderSeat)?.playerId
-        : null;
       const votes: VoteRecord[] = Object.entries(voteHistory).map(([oderId, targetSeat]) => {
         const voter = state.players.find(p => p.playerId === oderId);
         return {
@@ -1052,18 +1044,10 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
         };
       });
 
-      // 计算加权票数（警长1.5票）
-      let weightedVoteCount = 0;
-      for (const [oderId, targetSeat] of Object.entries(voteHistory)) {
-        if (targetSeat === dayData.executed.seat) {
-          weightedVoteCount += oderId === sheriffPlayerId ? 1.5 : 1;
-        }
-      }
-
       dayEvents.push({
         type: "exile",
         target: `${dayData.executed.seat + 1}号`,
-        voteCount: weightedVoteCount,
+        voteCount: dayData.executed.votes,
         votes,
       });
     }
@@ -1118,8 +1102,9 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
     // Build day phases for better organization
     const dayPhases: DayPhase[] = [];
     
-    if (day === 1 && state.badge.holderSeat !== null) {
-      const badgeVotes = state.badge.history?.[1] || {};
+    const badgeVotes = state.badge.history?.[day] || {};
+    const originalElectedSeat = resolveRecordedBadgeWinner(state, day, badgeVotes);
+    if (day === 1 && typeof originalElectedSeat === "number") {
       const votes: VoteRecord[] = Object.entries(badgeVotes).map(([voterId, targetSeat]) => {
         const voter = state.players.find(p => p.playerId === voterId);
         return {
@@ -1128,22 +1113,12 @@ function buildTimeline(state: GameState, aiSummaries?: AISpeechSummaryResult): T
         };
       });
 
-      // 从投票记录中计算原始当选者（得票最高的人，可能与当前警长不同，因为警长可以转让）
       const voteCounts: Record<number, number> = {};
       for (const targetSeat of Object.values(badgeVotes)) {
         const seat = Number(targetSeat);
         voteCounts[seat] = (voteCounts[seat] || 0) + 1;
       }
-      const sortedCandidates = Object.entries(voteCounts)
-        .map(([seat, count]) => ({ seat: Number(seat), count }))
-        .sort((a, b) => b.count - a.count);
-      // 原始当选者是得票最高的人，如果没有投票记录则使用当前警长
-      const originalElectedSeat = sortedCandidates.length > 0 
-        ? sortedCandidates[0].seat 
-        : state.badge.holderSeat;
-      const originalElectedVoteCount = sortedCandidates.length > 0 
-        ? sortedCandidates[0].count 
-        : 0;
+      const originalElectedVoteCount = voteCounts[originalElectedSeat] || 0;
 
       // 从 badge.signup 中获取候选人（signup[playerId] === true 的玩家）
       const signupCandidates = state.players

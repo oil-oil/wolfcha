@@ -76,13 +76,17 @@ export class DaySpeechPhase extends GamePhase {
     const isLastWords = state.phase === "DAY_LAST_WORDS";
     const isBadgeSpeech = state.phase === "DAY_BADGE_SPEECH";
     const isPkSpeech = state.phase === "DAY_PK_SPEECH";
-    const isCampaignSpeech = isBadgeSpeech || isPkSpeech;
+    const isBadgePkSpeech = isPkSpeech && state.pkSource === "badge";
+    const isVotePkSpeech = isPkSpeech && state.pkSource === "vote";
+    const isCampaignSpeech = isBadgeSpeech || isBadgePkSpeech;
 
-    // Define valid speakers for this phase (campaign-only speakers)
-    const candidates =
-      isBadgeSpeech && Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
+    const candidates = isBadgeSpeech || isBadgePkSpeech
+      ? (Array.isArray(state.badge?.candidates) ? state.badge.candidates : [])
+      : isVotePkSpeech && Array.isArray(state.pkTargets)
+        ? state.pkTargets
+        : [];
 
-    const hasCandidateList = isBadgeSpeech && candidates.length > 0;
+    const hasCandidateList = (isBadgeSpeech || isPkSpeech) && candidates.length > 0;
 
     const speechRound = getSpeechRoundStatus(state, player.seat);
     const formatSeatList = (seats: number[]) =>
@@ -107,12 +111,14 @@ export class DaySpeechPhase extends GamePhase {
       .filter((p) => p.alive && !candidates.includes(p.seat))
       .map((p) => t("ui.seatNumber", { seat: p.seat + 1 }))
       .join(t("common.listSeparator"));
-    const campaignRequirements = isBadgeSpeech
+    const phaseRequirements = isBadgeSpeech
       ? t("prompts.daySpeech.campaign.badge") + "\n" + (hasCandidateList
         ? t("prompts.daySpeech.campaign.candidateNote", { list: nonCandidateList })
         : t("prompts.daySpeech.campaign.emptyCandidateNote"))
-      : isPkSpeech
-        ? t("prompts.daySpeech.campaign.pk")
+      : isBadgePkSpeech
+        ? t("prompts.daySpeech.campaign.badgePk") + "\n" + t("prompts.daySpeech.campaign.pkParticipantNote", { list: nonCandidateList })
+        : isVotePkSpeech
+          ? t("prompts.daySpeech.campaign.votePk") + "\n" + t("prompts.daySpeech.campaign.pkParticipantNote", { list: nonCandidateList })
         : "";
 
     const publicFactsForPlayer = buildPublicFactsForPlayer(state, player);
@@ -134,11 +140,15 @@ export class DaySpeechPhase extends GamePhase {
             : "prompts.daySpeech.task.lastWords",
         { seat: player.seat + 1, name: player.displayName }
       )
-      : isCampaignSpeech 
-        ? t("prompts.daySpeech.task.campaign") 
-        : t("prompts.daySpeech.task.dayDiscussion");
-    
-    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: campaignRequirements ? "\n" + campaignRequirements : "" });
+      : isCampaignSpeech
+        ? t("prompts.daySpeech.task.campaign")
+        : isVotePkSpeech
+          ? t("prompts.daySpeech.task.votePk")
+          : isPkSpeech
+            ? t("prompts.daySpeech.task.pk")
+            : t("prompts.daySpeech.task.dayDiscussion");
+
+    const taskSection = t("prompts.daySpeech.task.section", { taskLine, campaignRequirements: phaseRequirements ? "\n" + phaseRequirements : "" });
     const guidelinesSection = isGenshinMode
       ? t("prompts.daySpeech.guidelines.genshin")
       : t("prompts.daySpeech.guidelines.default");
@@ -152,8 +162,12 @@ export class DaySpeechPhase extends GamePhase {
 
     const phaseHint = isBadgeSpeech
       ? t("prompts.daySpeech.phaseHint.badge")
-      : isPkSpeech
-        ? t("prompts.daySpeech.phaseHint.pk")
+      : isBadgePkSpeech
+        ? t("prompts.daySpeech.phaseHint.badgePk")
+        : isVotePkSpeech
+          ? t("prompts.daySpeech.phaseHint.votePk")
+          : isPkSpeech
+            ? t("prompts.daySpeech.phaseHint.pk")
         : "";
     const phaseHintSection = phaseHint ? t("prompts.daySpeech.phaseSection", { phaseHint }) : "";
 

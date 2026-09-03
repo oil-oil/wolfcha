@@ -21,6 +21,7 @@ export class WhiteWolfKingBoomPhase extends GamePhase {
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );
+    const exampleSeat = (alivePlayers[0]?.seat ?? player.seat) + 1;
 
     const cacheableContent = t("prompts.whiteWolfKingBoom.base", {
       seat: player.seat + 1,
@@ -34,7 +35,7 @@ export class WhiteWolfKingBoomPhase extends GamePhase {
 
     const dynamicContent = t("prompts.whiteWolfKingBoom.task", {
       options,
-      jsonFormat: JSON.stringify({ action: "boom", seat: 5 }),
+      jsonFormat: JSON.stringify({ action: "boom", seat: exampleSeat }),
       passJsonFormat: JSON.stringify({ action: "pass" }),
     });
     const systemParts: SystemPromptPart[] = [
@@ -45,7 +46,7 @@ export class WhiteWolfKingBoomPhase extends GamePhase {
 
     const user = t("prompts.whiteWolfKingBoom.user", {
       context: gameContext,
-      jsonFormat: JSON.stringify({ action: "boom", seat: 5 }),
+      jsonFormat: JSON.stringify({ action: "boom", seat: exampleSeat }),
       passJsonFormat: JSON.stringify({ action: "pass" }),
     });
 

@@ -190,6 +190,8 @@ export interface GameState {
     votes: Record<string, number>;
     allVotes: Record<string, number>;
     history: Record<number, Record<string, number>>;
+    /** 每日警徽竞选最终赢家快照；null 表示该日竞选最终无人当选。 */
+    electionWinners?: Record<number, number | null>;
     revoteCount: number;
   };
   votes: Record<string, number>;
@@ -214,6 +216,8 @@ export interface GameState {
     {
       executed?: { seat: number; votes: number };
       voteTie?: boolean;
+      /** 当日放逐投票发生时的警长座位；null 表示当时无警长。 */
+      sheriffSeatAtVote?: number | null;
       hunterShot?: { hunterSeat: number; targetSeat: number };
       whiteWolfKingBoom?: { boomSeat: number; targetSeat: number };
       idiotRevealed?: { seat: number };

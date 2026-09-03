@@ -41,7 +41,8 @@ test("character personas are generated as bounded JSON batches", () => {
 
 test("TokenPay character generation never replays an ambiguous paid stream", () => {
   assert.match(characterSource, /response_format: buildPersonaBatchResponseFormat\(batchProfiles\)/);
-  assert.match(llmSource, /if \(options\.response_format\?\.type === "json_schema"\) throw firstError/);
+  assert.match(llmSource, /export async function generateJSON<[\s\S]*return parseJsonTolerant<T>\(result\.content\);/);
+  assert.doesNotMatch(llmSource, /const retryMessages: LLMMessage\[\]/);
   assert.doesNotMatch(characterSource, /lastEmittedCharacters/);
   assert.doesNotMatch(characterSource, /CharacterBatchSchemaError/);
   assert.doesNotMatch(characterSource, /\(two-stage generation\)/);

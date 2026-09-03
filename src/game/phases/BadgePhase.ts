@@ -45,6 +45,7 @@ export class BadgePhase extends GamePhase {
     const alivePlayers = state.players
       .filter((p) => p.alive && p.playerId !== player.playerId)
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
+    const exampleSeat = (alivePlayers[0]?.seat ?? player.seat) + 1;
     const context = buildGameContext(state, player, { excludePendingDeaths: true });
 
     const cacheableContent = t("prompts.badge.election.base", {
@@ -57,7 +58,7 @@ export class BadgePhase extends GamePhase {
       options: alivePlayers
         .map((p) => t("prompts.badge.option", { seat: p.seat + 1, name: p.displayName }))
         .join(t("promptUtils.gameContext.listSeparator")),
-      jsonFormat: JSON.stringify({ seat: 3 }),
+      jsonFormat: JSON.stringify({ seat: exampleSeat }),
     });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
@@ -131,6 +132,7 @@ export class BadgePhase extends GamePhase {
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );
+    const exampleSeat = (alivePlayers[0]?.seat ?? player.seat) + 1;
 
     const cacheableContent = t("prompts.badge.transfer.base", {
       seat: player.seat + 1,
@@ -142,7 +144,7 @@ export class BadgePhase extends GamePhase {
       options: alivePlayers
         .map((p) => t("prompts.badge.option", { seat: p.seat + 1, name: p.displayName }))
         .join(t("promptUtils.gameContext.listSeparator")),
-      jsonFormat: JSON.stringify({ seat: 3 }),
+      jsonFormat: JSON.stringify({ seat: exampleSeat }),
       tearJsonFormat: JSON.stringify({ action: "tear" }),
     });
     const systemParts: SystemPromptPart[] = [

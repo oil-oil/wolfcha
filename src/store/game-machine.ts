@@ -301,6 +301,10 @@ function normalizeGameState(state: GameState): GameState {
     badge: state.badge && typeof state.badge === "object" ? {
       ...initial.badge,
       ...state.badge,
+      electionWinners:
+        state.badge.electionWinners && typeof state.badge.electionWinners === "object"
+          ? state.badge.electionWinners
+          : initial.badge.electionWinners,
     } : initial.badge,
     nightActions: state.nightActions && typeof state.nightActions === "object" ? state.nightActions : initial.nightActions,
     roleAbilities: state.roleAbilities && typeof state.roleAbilities === "object" ? {

@@ -6,6 +6,10 @@ import { getSystemMessages, getSystemPatterns } from "./game-texts";
 import { getI18n } from "@/i18n/translator";
 import { getRoleName } from "./game-constants";
 import { getRoleConfiguration } from "./role-configuration";
+import {
+  resolveBadgeElectionWinner,
+  resolveSheriffSeatAtVote,
+} from "./historical-vote-snapshots";
 
 /**
  * Prompt helper utilities used by Phase prompts.
@@ -93,7 +97,55 @@ ${t("promptUtils.gameContext.publicRoleConfigurationTitle")}
 ${items.join("\n")}
 ${t("promptUtils.gameContext.publicRoleConfigurationScope")}
 ${t("promptUtils.gameContext.publicRoleConfigurationCheckRule")}
+${t("promptUtils.gameContext.publicWinRule")}
+${t("promptUtils.gameContext.publicIdentityRule")}
 </public_role_configuration>`;
+};
+
+const buildPublicRoleReveals = (state: GameState): string => {
+  const { t } = getI18n();
+  const facts: string[] = [];
+
+  Object.entries(state.nightHistory || {})
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .forEach(([day, history]) => {
+      if (!history.hunterShot) return;
+      facts.push(t("promptUtils.gameContext.hunterRoleReveal", {
+        day: Number(day),
+        hunter: formatSeatName(state, history.hunterShot.hunterSeat),
+        target: formatSeatName(state, history.hunterShot.targetSeat),
+      }));
+    });
+
+  Object.entries(state.dayHistory || {})
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .forEach(([day, history]) => {
+      if (history.hunterShot) {
+        facts.push(t("promptUtils.gameContext.hunterRoleReveal", {
+          day: Number(day),
+          hunter: formatSeatName(state, history.hunterShot.hunterSeat),
+          target: formatSeatName(state, history.hunterShot.targetSeat),
+        }));
+      }
+      if (history.whiteWolfKingBoom) {
+        facts.push(t("promptUtils.gameContext.whiteWolfKingRoleReveal", {
+          day: Number(day),
+          player: formatSeatName(state, history.whiteWolfKingBoom.boomSeat),
+          target: formatSeatName(state, history.whiteWolfKingBoom.targetSeat),
+        }));
+      }
+      if (history.idiotRevealed) {
+        facts.push(t("promptUtils.gameContext.idiotRoleReveal", {
+          day: Number(day),
+          player: formatSeatName(state, history.idiotRevealed.seat),
+        }));
+      }
+    });
+
+  return `<public_role_reveals>
+${t("promptUtils.gameContext.publicRoleRevealsTitle")}
+${facts.length > 0 ? facts.join("\n") : t("promptUtils.gameContext.publicRoleRevealsNone")}
+</public_role_reveals>`;
 };
 
 /**
@@ -280,7 +332,8 @@ const formatSeatName = (state: GameState, seat: number): string => {
 const buildVoteGroupLines = (
   state: GameState,
   voteGroups: Record<number, number[]>,
-  sheriffPlayerId?: string
+  sheriffPlayerId?: string,
+  includeVoteCount: boolean = true
 ): string[] => {
   const { t } = getI18n();
   return Object.entries(voteGroups)
@@ -295,8 +348,11 @@ const buildVoteGroupLines = (
     })
     .sort((a, b) => b.weightedVotes - a.weightedVotes)
     .map(({ targetSeat, voters, weightedVotes }) => {
-      const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
       const voterList = voters.map((seat) => seat + 1).join(",");
+      if (!includeVoteCount) {
+        return `  ${formatSeatName(state, targetSeat)}: {${t("promptUtils.gameContext.voters")}: [${voterList}]}`;
+      }
+      const voteLabel = Number.isInteger(weightedVotes) ? `${weightedVotes}` : weightedVotes.toFixed(1);
       return `  ${formatSeatName(state, targetSeat)}: {${t("promptUtils.gameContext.voteCount")}: ${voteLabel}, ${t("promptUtils.gameContext.voters")}: [${voterList}]}`;
     });
 };
@@ -306,9 +362,10 @@ const buildVoteGroupsFromPlayerTargets = (
   votes: Record<string, number>
 ): Record<number, number[]> => {
   const voteGroups: Record<number, number[]> = {};
+  const validSeats = new Set(state.players.map((player) => player.seat));
   Object.entries(votes).forEach(([voterId, targetSeat]) => {
     const voter = state.players.find((p) => p.playerId === voterId);
-    if (!voter) return;
+    if (!voter || !validSeats.has(targetSeat)) return;
     if (!voteGroups[targetSeat]) voteGroups[targetSeat] = [];
     voteGroups[targetSeat].push(voter.seat);
   });
@@ -316,20 +373,22 @@ const buildVoteGroupsFromPlayerTargets = (
 };
 
 const buildVoteGroupsFromSeatTargets = (
+  state: GameState,
   votes: Record<string, number[]>
 ): Record<number, number[]> => {
   const voteGroups: Record<number, number[]> = {};
+  const validSeats = new Set(state.players.map((player) => player.seat));
   Object.entries(votes).forEach(([target, voters]) => {
     const targetSeat = Number(target);
-    if (!Number.isFinite(targetSeat)) return;
+    if (!Number.isFinite(targetSeat) || !validSeats.has(targetSeat)) return;
     voteGroups[targetSeat] = voters
       .map((seat) => Number(seat))
-      .filter((seat) => Number.isFinite(seat));
+      .filter((seat) => Number.isFinite(seat) && validSeats.has(seat));
   });
   return voteGroups;
 };
 
-const getHistoricalSystemLines = (state: GameState, day: number): string[] => {
+const shouldIncludeHistoricalSystemLine = (content: string): boolean => {
   const systemMessages = getSystemMessages();
   const systemPatterns = getSystemPatterns();
   const excluded = new Set([
@@ -345,32 +404,14 @@ const getHistoricalSystemLines = (state: GameState, day: number): string[] => {
     systemMessages.badgeRevote,
     systemMessages.dayDiscussion,
     systemMessages.summarizingDay,
-    systemMessages.peacefulNight,
     systemMessages.guardActionStart,
     systemMessages.wolfActionStart,
     systemMessages.witchActionStart,
     systemMessages.seerActionStart,
   ]);
 
-  return state.messages
-    .filter((m) => m.day === day && m.isSystem)
-    .map((m) => String(m.content || "").trim())
-    .filter((content) => {
-      if (!content) return false;
-      if (content.startsWith("[VOTE_RESULT]")) return false;
-      if (excluded.has(content)) return false;
-      if (
-        systemPatterns.nightFall.test(content) ||
-        systemPatterns.playerKilled.test(content) ||
-        systemPatterns.playerPoisoned.test(content) ||
-        systemPatterns.playerMilkKilled.test(content) ||
-        systemPatterns.playerExecuted.test(content) ||
-        systemPatterns.voteTie.test(content)
-      ) {
-        return false;
-      }
-      return true;
-    });
+  if (!content || content.startsWith("[VOTE_RESULT]") || excluded.has(content)) return false;
+  return !systemPatterns.nightFall.test(content);
 };
 
 
@@ -382,9 +423,6 @@ export const buildPastDaysTranscript = (state: GameState): string => {
   const { t } = getI18n();
   if (state.day <= 1) return "";
 
-  const playerAliveMap = new Map<string, boolean>();
-  state.players.forEach((p) => playerAliveMap.set(p.playerId, p.alive));
-
   const formatMsg = (m: { playerId: string; playerName: string; content: string; isLastWords?: boolean }) => {
     const player = state.players.find((p) => p.playerId === m.playerId);
     const speaker = player ? t("mentions.seatLabel", { seat: player.seat + 1 }) : m.playerName;
@@ -392,62 +430,25 @@ export const buildPastDaysTranscript = (state: GameState): string => {
     return `${lastWordsLabel}${speaker}: ${m.content}`;
   };
 
-  // Build structured event header for a given day (deaths, executions — always preserved)
-  const buildDayHeader = (day: number): string => {
-    const parts: string[] = [];
-    const nightHistory = state.nightHistory?.[day];
-    if (nightHistory) {
-      const deathSeats = getRecordedNightDeaths(nightHistory).map((death) => death.seat);
-      if (deathSeats.length > 0) {
-        const names = deathSeats.map((s) => {
-          return formatSeatName(state, s);
-        });
-        parts.push(`夜晚出局: ${names.join("、")}`);
-      } else if (Array.isArray(nightHistory.deaths)) {
-        parts.push("平安夜");
-      }
-    }
-    const dayHistory = state.dayHistory?.[day];
-    const executed = dayHistory?.executed;
-    if (executed) {
-      parts.push(`投票出局: ${formatSeatName(state, executed.seat)} (${executed.votes}票)`);
-    } else if (dayHistory?.voteTie) {
-      parts.push("投票平票，无人出局");
-    }
-    if (dayHistory?.hunterShot) {
-      parts.push(`猎人开枪: ${formatSeatName(state, dayHistory.hunterShot.hunterSeat)} 带走 ${formatSeatName(state, dayHistory.hunterShot.targetSeat)}`);
-    }
-    // 猎人在夜间死亡触发的开枪记录在 nightHistory，而非 dayHistory；两者互斥，需一并复盘。
-    if (nightHistory?.hunterShot) {
-      parts.push(`猎人开枪: ${formatSeatName(state, nightHistory.hunterShot.hunterSeat)} 带走 ${formatSeatName(state, nightHistory.hunterShot.targetSeat)}`);
-    }
-    if (dayHistory?.whiteWolfKingBoom) {
-      parts.push(`白狼王自爆: ${formatSeatName(state, dayHistory.whiteWolfKingBoom.boomSeat)} 带走 ${formatSeatName(state, dayHistory.whiteWolfKingBoom.targetSeat)}`);
-    }
-    if (dayHistory?.idiotRevealed) {
-      parts.push(`白痴翻牌: ${formatSeatName(state, dayHistory.idiotRevealed.seat)} 免疫放逐并失去投票权`);
-    }
-    return parts.length > 0 ? `[${parts.join(" | ")}]` : "";
-  };
-
   // Group past-day messages by day (excluding current day)
-  const dayGroups: { day: number; header: string; transcript: string }[] = [];
+  const dayGroups: { day: number; transcript: string }[] = [];
   for (let d = 1; d < state.day; d++) {
-    const dayMessages = state.messages.filter(
-      (m) => m.day === d && !m.isSystem
-    );
-    const header = buildDayHeader(d);
-    const publicSystemLines = getHistoricalSystemLines(state, d).map((line) => `系统: ${line}`);
-    const transcript = [...publicSystemLines, ...dayMessages.map(formatMsg)].join("\n");
-    dayGroups.push({ day: d, header, transcript });
+    const transcript = state.messages
+      .filter((message) => message.day === d)
+      .flatMap((message) => {
+        if (!message.isSystem) return [formatMsg(message)];
+        const content = String(message.content || "").trim();
+        return shouldIncludeHistoricalSystemLine(content) ? [`系统: ${content}`] : [];
+      })
+      .join("\n");
+    dayGroups.push({ day: d, transcript });
   }
 
   if (dayGroups.length === 0) return "";
 
-  const sections = dayGroups.map(({ day, header, transcript }) => {
+  const sections = dayGroups.map(({ day, transcript }) => {
     const dayLabel = t("promptUtils.gameContext.dayLabel", { day });
-    const headerLine = header ? `${dayLabel}${header}` : dayLabel;
-    return transcript ? `${headerLine}\n${transcript}` : headerLine;
+    return transcript ? `${dayLabel}\n${transcript}` : dayLabel;
   });
 
   if (sections.length === 0) return "";
@@ -714,14 +715,11 @@ ${checks.join("\n")}
   }
   
   if (isWolfRole(player.role)) {
-    const teammates = state.players.filter(
-      (p) => isWolfRole(p.role) && p.playerId !== player.playerId
-    );
     const allWolves = state.players.filter((p) => isWolfRole(p.role));
     const aliveWolves = allWolves.filter((p) => p.alive);
-    const teammateList = teammates.length > 0
-      ? teammates.map((tm) => `${tm.seat + 1}号${tm.displayName}`).join("、")
-      : "无存活队友";
+    const formatWolfList = (wolves: Player[]) => wolves.length > 0
+      ? wolves.map((wolf) => `${wolf.seat + 1}号${wolf.displayName}`).join("、")
+      : "无";
 
     // 狼队历次出刀记录：这是狼阵营自己的夜间行动，属于合法私有信息。
     // 缺失它会导致狼人白天对死者归因/悍跳/自爆时与自己真实刀法脱节。
@@ -745,7 +743,8 @@ ${checks.join("\n")}
     }
 
     let wolfInfo = `<your_wolf_team>
-【狼队友】${teammateList}
+【存活狼队】${formatWolfList(aliveWolves)}
+【已出局狼队】${formatWolfList(allWolves.filter((wolf) => !wolf.alive))}
 【狼人存活】${aliveWolves.length}/${allWolves.length}`;
     if (killRecords.length > 0) {
       wolfInfo += `\n【狼队出刀记录】\n${killRecords.join("\n")}`;
@@ -768,6 +767,8 @@ export const buildGameContext = (
   const totalSeats = state.players.length;
   const publicGenericDeathCause = t("promptUtils.gameContext.deathCauseDeath");
   const publicExecutionCause = t("promptUtils.gameContext.deathCauseVote");
+  const publicHunterShotCause = t("promptUtils.gameContext.deathCauseHunterShot");
+  const publicWhiteWolfKingCause = t("promptUtils.gameContext.deathCauseWhiteWolfKing");
 
   // === 第一优先级：角色私有信息（放在最前面） ===
   const privateInfo = buildRolePrivateInfo(state, player, options);
@@ -785,13 +786,13 @@ export const buildGameContext = (
         cause = publicGenericDeathCause;
         deathDay = Number(day);
       }
-      if (history.hunterShot?.targetSeat === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
+      if (history.hunterShot?.targetSeat === p.seat) { cause = publicHunterShotCause; deathDay = Number(day); }
     }
     for (const [day, history] of Object.entries(state.dayHistory || {})) {
       if (history.executed?.seat === p.seat) { cause = publicExecutionCause; deathDay = Number(day); }
-      if (history.hunterShot?.targetSeat === p.seat) { cause = publicGenericDeathCause; deathDay = Number(day); }
+      if (history.hunterShot?.targetSeat === p.seat) { cause = publicHunterShotCause; deathDay = Number(day); }
       if (history.whiteWolfKingBoom?.boomSeat === p.seat || history.whiteWolfKingBoom?.targetSeat === p.seat) {
-        cause = publicGenericDeathCause;
+        cause = publicWhiteWolfKingCause;
         deathDay = Number(day);
       }
     }
@@ -816,6 +817,8 @@ export const buildGameContext = (
 <game_state>
 day: ${state.day}
 phase: ${phaseText}
+phase_code: ${state.phase}
+game_status: ${state.winner ? `ended_${state.winner}` : "ongoing"}
 you: {seat: ${player.seat + 1}, name: ${player.displayName}}
 total_seats: ${totalSeats}
 alive: [${aliveSeats.join(", ")}]
@@ -827,6 +830,15 @@ alive_count: ${alivePlayers.length}
   // Public setup information only: aggregate role counts and public rules.
   // Never derive this section from seat assignments in state.players.
   context += `\n\n${buildPublicRoleConfiguration(totalSeats)}`;
+
+  const publicRoleReveals = buildPublicRoleReveals(state);
+  if (publicRoleReveals) {
+    context += `\n\n${publicRoleReveals}`;
+  }
+
+  if (options?.excludePendingDeaths) {
+    context += `\n\n<unannounced_night_result>\n${t("promptUtils.gameContext.unannouncedNightResult")}\n</unannounced_night_result>`;
+  }
 
   // Add alive players list for reference
   const playerList = alivePlayers
@@ -905,14 +917,20 @@ alive_count: ${alivePlayers.length}
       if (dayHistory?.hunterShot && typeof dayHistory.hunterShot.targetSeat === "number") {
         const p = state.players.find(p => p.seat === dayHistory.hunterShot?.targetSeat);
         if (p && !p.alive) {
-          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicHunterShotCause}}`);
+        }
+      }
+      if (nightHistory?.hunterShot && typeof nightHistory.hunterShot.targetSeat === "number") {
+        const p = state.players.find(p => p.seat === nightHistory.hunterShot?.targetSeat);
+        if (p && !p.alive) {
+          currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicHunterShotCause}}`);
         }
       }
       if (dayHistory?.whiteWolfKingBoom) {
         [dayHistory.whiteWolfKingBoom.boomSeat, dayHistory.whiteWolfKingBoom.targetSeat].forEach((seat) => {
           const p = state.players.find((player) => player.seat === seat);
           if (p && !p.alive) {
-            currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicGenericDeathCause}}`);
+            currentDayDeaths.push(`{seat: ${p.seat + 1}, name: ${p.displayName}, cause: ${publicWhiteWolfKingCause}}`);
           }
         });
       }
@@ -928,17 +946,15 @@ alive_count: ${alivePlayers.length}
 
   const hasExecutionVotes = state.voteHistory && Object.keys(state.voteHistory).length > 0;
   const hasBadgeVotes = Object.keys(state.badge.history || {}).length > 0 ||
+    Object.keys(state.badge.electionWinners || {}).length > 0 ||
     Object.values(state.dailySummaryVoteData || {}).some((voteData) => !!voteData?.sheriff_election);
 
   if (hasExecutionVotes || hasBadgeVotes) {
     context += `\n\n<votes>`;
-    const sheriffSeat = state.badge.holderSeat;
-    const sheriffPlayer =
-      sheriffSeat !== null ? state.players.find((p) => p.seat === sheriffSeat) : null;
-    const sheriffPlayerId = sheriffPlayer?.playerId;
 
     const badgeVoteDays = new Set<number>();
     Object.keys(state.badge.history || {}).forEach((day) => badgeVoteDays.add(Number(day)));
+    Object.keys(state.badge.electionWinners || {}).forEach((day) => badgeVoteDays.add(Number(day)));
     Object.entries(state.dailySummaryVoteData || {}).forEach(([day, voteData]) => {
       if (voteData?.sheriff_election) badgeVoteDays.add(Number(day));
     });
@@ -950,18 +966,19 @@ alive_count: ${alivePlayers.length}
         const summaryBadgeVote = state.dailySummaryVoteData?.[day]?.sheriff_election;
         const badgeHistoryVotes = state.badge.history?.[day];
         const voteGroups = summaryBadgeVote?.votes
-          ? buildVoteGroupsFromSeatTargets(summaryBadgeVote.votes)
+          ? buildVoteGroupsFromSeatTargets(state, summaryBadgeVote.votes)
           : badgeHistoryVotes
             ? buildVoteGroupsFromPlayerTargets(state, badgeHistoryVotes)
             : {};
         const voteLines = buildVoteGroupLines(state, voteGroups);
-        if (voteLines.length === 0 && !summaryBadgeVote) return;
+        const winner = resolveBadgeElectionWinner(state, day, voteGroups);
+        if (voteLines.length === 0 && winner === undefined) return;
         context += `\nbadge_day_${day}:`;
         voteLines.forEach((line) => {
           context += `\n${line}`;
         });
-        if (summaryBadgeVote) {
-          context += `\n  ${t("promptUtils.gameContext.result")}: ${formatSeatName(state, summaryBadgeVote.winner)} 当选警长`;
+        if (typeof winner === "number") {
+          context += `\n  ${t("promptUtils.gameContext.result")}: ${formatSeatName(state, winner)} 当选警长`;
         }
       });
 
@@ -970,7 +987,16 @@ alive_count: ${alivePlayers.length}
       .forEach(([day, votes]) => {
         const dayNum = Number(day);
         const voteGroups = buildVoteGroupsFromPlayerTargets(state, votes);
-        const voteLines = buildVoteGroupLines(state, voteGroups, sheriffPlayerId);
+        const sheriffSeatAtVote = resolveSheriffSeatAtVote(state, dayNum);
+        const sheriffPlayerId = typeof sheriffSeatAtVote === "number"
+          ? state.players.find((p) => p.seat === sheriffSeatAtVote)?.playerId
+          : undefined;
+        const voteLines = buildVoteGroupLines(
+          state,
+          voteGroups,
+          sheriffPlayerId,
+          sheriffSeatAtVote !== undefined
+        );
         
         context += `\nday_${day}:`;
         voteLines.forEach((line) => {

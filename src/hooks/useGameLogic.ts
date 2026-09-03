@@ -51,6 +51,7 @@ import { PhaseManager } from "@/game/core/PhaseManager";
 import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
+import { continueAfterHunterShotWithBadgeTransfer } from "@/lib/hunter-badge-flow";
 import { isQuotaExhaustedMessage } from "@/lib/llm";
 import { aiLogger } from "@/lib/ai-logger";
 
@@ -656,11 +657,7 @@ export function useGameLogic() {
   badgeTransferRef.current = badgePhase.handleBadgeTransfer;
   onStartVoteRef.current = enterVotePhase;
   onBadgeSpeechEndRef.current = async (state: GameState) => {
-    const summarized = await maybeGenerateDailySummary(state);
-    if (summarized !== state) {
-      setGameState(summarized);
-    }
-    await badgePhase.startBadgeElectionPhase(summarized);
+    await badgePhase.startBadgeElectionPhase(state);
   };
   onPkSpeechEndRef.current = async (state: GameState) => {
     const token = getToken();
@@ -1096,17 +1093,31 @@ export function useGameLogic() {
     }
   }, [badgePhase, getToken, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
 
+  const transferBadgeAfterHunterShot = badgePhase.handleBadgeTransfer;
+  const continueAfterHunterShot = useCallback(async (
+    state: GameState,
+    continuation: (nextState: GameState) => Promise<void>
+  ) => {
+    await continueAfterHunterShotWithBadgeTransfer(
+      state,
+      transferBadgeAfterHunterShot,
+      continuation
+    );
+  }, [transferBadgeAfterHunterShot]);
+
   hunterDeathRef.current = async (state: GameState, hunter: Player, diedAtNight: boolean) => {
     const token = getToken();
     await specialEvents.handleHunterDeath(state, hunter, diedAtNight, token, async (afterState) => {
-      const startDayFn = startDayPhaseInternalRef.current;
-      const proceedFn = proceedToNightRef.current;
-      if (!startDayFn || !proceedFn) return;
-      if (diedAtNight) {
-        await startDayFn(afterState, token, { skipAnnouncements: true });
-      } else {
-        await proceedFn(afterState, token);
-      }
+      await continueAfterHunterShot(afterState, async (nextState) => {
+        const startDayFn = startDayPhaseInternalRef.current;
+        const proceedFn = proceedToNightRef.current;
+        if (!startDayFn || !proceedFn) return;
+        if (diedAtNight) {
+          await startDayFn(nextState, token, { skipAnnouncements: true });
+        } else {
+          await proceedFn(nextState, token);
+        }
+      });
     });
   };
 
@@ -1128,7 +1139,9 @@ export function useGameLogic() {
           afterBadgeTransferRef.current = async (afterTransferState) => {
             if (executedPlayer?.role === "Hunter" && afterTransferState.roleAbilities.hunterCanShoot) {
               await specialEvents.handleHunterDeath(afterTransferState, executedPlayer, false, token, async (afterHunterState) => {
-                await proceedToNight(afterHunterState, token);
+                await continueAfterHunterShot(afterHunterState, async (nextState) => {
+                  await proceedToNight(nextState, token);
+                });
               });
               return;
             }
@@ -1152,7 +1165,9 @@ export function useGameLogic() {
         // 猎人开枪
         if (executedPlayer?.role === "Hunter" && s.roleAbilities.hunterCanShoot) {
           await specialEvents.handleHunterDeath(s, executedPlayer, false, token, async (afterHunterState) => {
-            await proceedToNight(afterHunterState, token);
+            await continueAfterHunterShot(afterHunterState, async (nextState) => {
+              await proceedToNight(nextState, token);
+            });
           });
           return;
         }
@@ -1173,7 +1188,7 @@ export function useGameLogic() {
     await delay(DELAY_CONFIG.MEDIUM);
     if (!isTokenValid(token)) return;
     await proceedToNight(state, token);
-  }, [isTokenValid, startLastWordsPhase, badgePhase, specialEvents, endGame, proceedToNight]);
+  }, [isTokenValid, startLastWordsPhase, badgePhase, specialEvents, endGameSafely, proceedToNight, continueAfterHunterShot]);
   handleVoteCompleteRef.current = handleVoteComplete;
 
   
@@ -2106,16 +2121,18 @@ export function useGameLogic() {
         return;
       }
 
-      await delay(1200);
-      if (diedAtNight) {
-        currentState = transitionPhase(currentState, "DAY_START");
-        currentState = addSystemMessage(currentState, systemMessages.dayBreak);
-        setGameState(currentState);
-        await delay(800);
-        await startDayPhaseInternal(currentState, token, { skipAnnouncements: true });
-      } else {
-        await proceedToNight(currentState, token);
-      }
+      await continueAfterHunterShot(currentState, async (nextState) => {
+        await delay(1200);
+        if (diedAtNight) {
+          let dayState = transitionPhase(nextState, "DAY_START");
+          dayState = addSystemMessage(dayState, systemMessages.dayBreak);
+          setGameState(dayState);
+          await delay(800);
+          await startDayPhaseInternal(dayState, token, { skipAnnouncements: true });
+        } else {
+          await proceedToNight(nextState, token);
+        }
+      });
     }
     // 白狼王自爆
     else if (gameState.phase === "WHITE_WOLF_KING_BOOM" && humanPlayer.role === "WhiteWolfKing") {
@@ -2183,7 +2200,7 @@ export function useGameLogic() {
       await delay(1200);
       await proceedToNight(currentState, token);
     }
-  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGame, transitionPhase, speakerHost, t]);
+  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGameSafely, transitionPhase, speakerHost, t, continueAfterHunterShot]);
 
   /** 人类白狼王自爆（进入 WHITE_WOLF_KING_BOOM 阶段） */
   const handleWhiteWolfKingBoom = useCallback(async () => {
@@ -2248,6 +2265,7 @@ export function useGameLogic() {
 
       const rawTranscript = buildRawDayTranscript(nextState);
       const shouldSummarizeEarly =
+        nextState.phase === "DAY_SPEECH" &&
         nextState.day > 0 &&
         !nextState.dailySummaries?.[nextState.day]?.length &&
         rawTranscript.length > 10000;

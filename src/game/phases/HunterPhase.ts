@@ -16,7 +16,7 @@ export class HunterPhase extends GamePhase {
 
   /**
    * 获取猎人的遗言内容（如果有的话）
-   * 用于让开枪决策与遗言保持一致
+   * 只作为已经发生的公开记录提供，不从自然语言推断或强制执行动作。
    */
   private getHunterLastWords(context: GameContext, player: Player): string | null {
     const state = context.state;
@@ -34,37 +34,6 @@ export class HunterPhase extends GamePhase {
     return lastWordsMessages.map(m => m.content).join("\n");
   }
 
-  /**
-   * 从遗言中提取开枪意图
-   */
-  private extractShootIntentFromLastWords(lastWords: string): { targetSeat: number | null; hasIntent: boolean } {
-    // 匹配常见的开枪表达模式
-    const shootPatterns = [
-      /开枪.*?(\d+)\s*号/,
-      /带走.*?(\d+)\s*号/,
-      /打.*?(\d+)\s*号/,
-      /(\d+)\s*号.*?开枪/,
-      /锁.*?(\d+)\s*号/,
-    ];
-    
-    for (const pattern of shootPatterns) {
-      const match = lastWords.match(pattern);
-      if (match) {
-        const seat = parseInt(match[1], 10);
-        if (!isNaN(seat) && seat > 0) {
-          return { targetSeat: seat - 1, hasIntent: true }; // 转换为0-indexed
-        }
-      }
-    }
-    
-    // 检查是否有明确表示不开枪的意图
-    if (lastWords.includes("不开枪") || lastWords.includes("pass") || lastWords.includes("放弃开枪")) {
-      return { targetSeat: null, hasIntent: true };
-    }
-    
-    return { targetSeat: null, hasIntent: false };
-  }
-
   getPrompt(context: GameContext, player: Player): PromptResult {
     const { t } = getI18n();
     const state = context.state;
@@ -72,10 +41,10 @@ export class HunterPhase extends GamePhase {
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );
+    const exampleSeat = (alivePlayers[0]?.seat ?? player.seat) + 1;
 
     // 获取猎人的遗言
     const lastWords = this.getHunterLastWords(context, player);
-    const shootIntent = lastWords ? this.extractShootIntentFromLastWords(lastWords) : null;
 
     const cacheableContent = t("prompts.hunter.base", {
       seat: player.seat + 1,
@@ -87,24 +56,9 @@ export class HunterPhase extends GamePhase {
       .map((p) => t("prompts.night.option", { seat: p.seat + 1, name: p.displayName }))
       .join(t("promptUtils.gameContext.listSeparator"));
     
-    // 如果有遗言，在任务提示中包含遗言内容和开枪意图提示
-    let lastWordsSection = "";
-    if (lastWords) {
-      lastWordsSection = t("prompts.hunter.lastWordsContext", { lastWords });
-      if (shootIntent?.hasIntent) {
-        if (shootIntent.targetSeat !== null) {
-          const targetPlayer = alivePlayers.find(p => p.seat === shootIntent.targetSeat);
-          if (targetPlayer) {
-            lastWordsSection += "\n" + t("prompts.hunter.lastWordsIntentHint", { 
-              seat: shootIntent.targetSeat + 1, 
-              name: targetPlayer.displayName 
-            });
-          }
-        } else {
-          lastWordsSection += "\n" + t("prompts.hunter.lastWordsPassHint");
-        }
-      }
-    }
+    const lastWordsSection = lastWords
+      ? t("prompts.hunter.lastWordsContext", { lastWords })
+      : "";
     
     const dynamicContent = t("prompts.hunter.task", { options }) + lastWordsSection;
     const systemParts: SystemPromptPart[] = [
@@ -115,7 +69,7 @@ export class HunterPhase extends GamePhase {
 
     const user = t("prompts.hunter.user", {
       context: gameContext,
-      jsonFormat: JSON.stringify({ seat: 5 }),
+      jsonFormat: JSON.stringify({ seat: exampleSeat }),
       passJsonFormat: JSON.stringify({ action: "pass" }),
     });
 

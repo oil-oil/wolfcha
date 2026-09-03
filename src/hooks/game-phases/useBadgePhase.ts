@@ -216,6 +216,7 @@ export function useBadgePhase(
             candidates: [],
             revoteCount,
             history: { ...state.badge.history, [state.day]: finalVotes },
+            electionWinners: { ...state.badge.electionWinners, [state.day]: null },
           },
         };
 
@@ -261,6 +262,7 @@ export function useBadgePhase(
         holderSeat: winnerSeat,
         allVotes: {},
         history: { ...state.badge.history, [state.day]: finalVotes },
+        electionWinners: { ...state.badge.electionWinners, [state.day]: winnerSeat },
       },
     };
 
@@ -505,6 +507,7 @@ export function useBadgePhase(
           holderSeat: winnerSeat,
           allVotes: {},
           history: { ...currentState.badge.history, [currentState.day]: {} },
+          electionWinners: { ...currentState.badge.electionWinners, [currentState.day]: winnerSeat },
         },
       };
       // 使用特殊消息，不显示票数
