@@ -312,7 +312,7 @@ export interface Database {
           lifecycle_status: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
           request_id: string | null;
           attempt: number;
-          provider: "zenmux" | "dashscope" | "tokendance" | null;
+          provider: "zenmux" | "dashscope" | "tokendance" | "custom" | null;
           prompt_scope: "gameplay" | "utility" | null;
           mode: "completion" | "batch" | "stream" | null;
           outcome: string | null;
@@ -334,7 +334,7 @@ export interface Database {
           lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
           request_id?: string | null;
           attempt?: number;
-          provider?: "zenmux" | "dashscope" | "tokendance" | null;
+          provider?: "zenmux" | "dashscope" | "tokendance" | "custom" | null;
           prompt_scope?: "gameplay" | "utility" | null;
           mode?: "completion" | "batch" | "stream" | null;
           outcome?: string | null;
@@ -356,7 +356,7 @@ export interface Database {
           lifecycle_status?: "starting" | "running" | "failed" | "abandoned" | "completed" | null;
           request_id?: string | null;
           attempt?: number;
-          provider?: "zenmux" | "dashscope" | "tokendance" | null;
+          provider?: "zenmux" | "dashscope" | "tokendance" | "custom" | null;
           prompt_scope?: "gameplay" | "utility" | null;
           mode?: "completion" | "batch" | "stream" | null;
           outcome?: string | null;
@@ -530,7 +530,7 @@ export interface Database {
           p_user_id: string;
           p_request_id: string;
           p_attempt: number;
-          p_provider: "zenmux" | "dashscope" | "tokendance";
+          p_provider: "zenmux" | "dashscope" | "tokendance" | "custom";
           p_prompt_scope: "gameplay" | "utility";
           p_mode: "completion" | "batch" | "stream";
           p_outcome: "success" | "http_error" | "network_error" | "cancelled" | "interrupted" | "error";

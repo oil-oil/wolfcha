@@ -19,7 +19,9 @@ import {
   type SmartJumpResult,
 } from "@/lib/SmartJumpManager";
 import { PhaseManager } from "@/game/core/PhaseManager";
-import { DEFAULT_VOICE_ID, resolveVoiceId, VOICE_PRESETS, ENGLISH_VOICE_PRESETS, type AppLocale } from "@/lib/voice-constants";
+import { DEFAULT_VOICE_ID, VOICE_PRESETS, ENGLISH_VOICE_PRESETS, type AppLocale } from "@/lib/voice-constants";
+import { resolveVoiceIdForActiveProvider } from "@/lib/tts-client";
+import { buildTtsRequestHeaders } from "@/lib/tts-client";
 import { getLocale } from "@/i18n/locale-store";
 import { aiLogger } from "@/lib/ai-logger";
 import { useGameAnalysis } from "@/hooks/useGameAnalysis";
@@ -161,7 +163,10 @@ function TTSTab() {
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...buildTtsRequestHeaders(),
+        },
         body: JSON.stringify({ text, voiceId }),
       });
 
@@ -1631,11 +1636,12 @@ function PlayersTab({
                   <span className="text-xs text-yellow-400 font-mono">
                     {(() => {
                       const locale = getLocale() as AppLocale;
-                      const voiceId = resolveVoiceId(
+                      const voiceId = resolveVoiceIdForActiveProvider(
                         selectedPlayer.agentProfile?.persona?.voiceId,
                         selectedPlayer.agentProfile?.persona?.gender,
                         selectedPlayer.agentProfile?.persona?.age,
-                        locale
+                        locale,
+                        selectedPlayer.playerId,
                       );
                       const presets = locale === "en" ? ENGLISH_VOICE_PRESETS : VOICE_PRESETS;
                       const preset = presets.find((p) => p.id === voiceId);

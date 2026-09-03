@@ -8,7 +8,8 @@ import {
   setTokenPayConnected,
   type ModelSource,
 } from "@/lib/api-keys";
-import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef } from "@/types/game";
+import { buildCustomProviderHeaders, getModelRefForCustomModel } from "@/lib/custom-providers";
+import { ALL_MODELS, AVAILABLE_MODELS, PROJECT_MODELS, type ModelRef, type LlmProviderId } from "@/types/game";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { getAuthHeaders } from "@/lib/auth-headers";
@@ -36,7 +37,7 @@ export interface LLMMessage {
   reasoning_details?: unknown;
 }
 
-type Provider = "zenmux" | "dashscope" | "tokendance";
+type Provider = LlmProviderId;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -46,7 +47,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getProviderForModel(model: string): Provider {
   const modelRef =
     ALL_MODELS.find((ref) => ref.model === model) ??
-    PROJECT_MODELS.find((ref) => ref.model === model);
+    PROJECT_MODELS.find((ref) => ref.model === model) ??
+    getModelRefForCustomModel(model);
   return modelRef?.provider ?? "zenmux";
 }
 
@@ -114,6 +116,7 @@ function buildModelSourceHeaders(source: ModelSource): Record<string, string> {
     ...(tokendanceApiKey && tokendanceBaseUrl
       ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
       : {}),
+    ...buildCustomProviderHeaders(),
   };
 }
 

@@ -2404,5 +2404,92 @@
     "recharge": "充值游戏额度",
     "startGame": "继续开始游戏",
     "startGameNoCredits": "充值游戏额度"
-  }
+  },
+
+    "customProviders": {
+      "short": "自定义",
+      "tab": "自定义 Provider",
+      "title": "自定义 OpenAI 兼容 Provider",
+      "description": "填入任意 OpenAI 兼容端点的 Base URL 和 API Key（DeepSeek、Kimi、智谱、MiniMax、Grok、Gemini、Claude、OpenRouter、硅基流动等），测试连通后即可在下方模型池中选用其模型。",
+      "activeBadge": "使用中",
+      "modelCount": "{count} 个模型",
+      "activate": "设为使用中",
+      "deactivate": "取消使用",
+      "edit": "编辑",
+      "delete": "删除",
+      "add": "新增 Provider",
+      "preset": "厂商预设",
+      "presetPlaceholder": "选择厂商自动填入地址",
+      "name": "名称",
+      "namePlaceholder": "例如：DeepSeek 主力",
+      "baseUrl": "Base URL",
+      "baseUrlHint": "OpenAI 兼容根地址，通常以 /v1 结尾；只填域名时会自动补 /v1。",
+      "apiKey": "API Key",
+      "showKey": "显示 Key",
+      "hideKey": "隐藏 Key",
+      "probe": "测试连通",
+      "probing": "测试中…",
+      "save": "保存",
+      "cancel": "取消",
+      "modelsPreview": "拉取到 {count} 个模型",
+      "toasts": {
+        "probeOkModels": "连接成功，拉取到 {count} 个模型",
+        "probeOkNoModels": "连接成功（该端点未返回模型列表，可手动保存）",
+        "probeOkFallback": "连接成功（该端点不支持 /models，已用最小请求验证）",
+        "probeFail": "连接失败",
+        "missingFields": "请先填写 Base URL 和 API Key",
+        "saved": "已保存",
+        "deleted": "已删除"
+      }
+    },
+    "ttsProvider": {
+      "tab": "语音 TTS",
+      "title": "TTS 语音合成 Provider",
+      "description": "选择 AI 语音的合成厂商。默认使用内置 MiniMax；也可以换成你自己的 OpenAI 兼容、火山引擎或 ElevenLabs 账号。",
+      "provider": "厂商",
+      "apiKey": "API Key",
+      "test": "测试连通",
+      "probing": "测试中…",
+      "save": "保存",
+      "testHint": "测试会用默认音色合成一句话，不会播放声音。",
+      "minimaxNote": "使用内置 MiniMax 通道：项目模式走服务端配置；自定义模式下可使用你在「用我自己的 key 玩」里填写的 MiniMax Key。",
+      "openai": {
+        "baseUrl": "Base URL",
+        "baseUrlHint": "OpenAI /audio/speech 兼容端点，支持 OpenAI、硅基流动、Fish Audio、自部署网关等。",
+        "model": "模型"
+      },
+      "stepfun": {
+        "baseUrl": "Base URL",
+        "baseUrlHint": "标准 API 为 https://api.stepfun.com/v1；Step Plan 订阅用户请改用 https://api.stepfun.com/step_plan/v1。",
+        "model": "模型"
+      },
+      "volcengine": {
+        "appId": "App ID",
+        "accessToken": "Access Token",
+        "hint": "在火山引擎控制台开通语音合成服务后获取；音色 ID 以控制台的开通列表为准。"
+      },
+      "elevenlabs": {
+        "baseUrl": "Base URL",
+        "model": "模型"
+      },
+      "voices": {
+        "title": "音色试听",
+        "description": "点击音色名试听效果。角色创建时会按性别和年龄从当前厂商的音色表中分配。",
+        "loading": "生成中…",
+        "male": "男",
+        "female": "女",
+        "needConfig": "请先填写并保存当前厂商的凭据后再试听。"
+      },
+      "status": {
+        "active": "当前使用：{provider}",
+        "incomplete": "凭据未填完整，保存前请先补全。"
+      },
+      "toasts": {
+        "saved": "已保存",
+        "probeOk": "连接成功，语音可用",
+        "probeFail": "连接失败",
+        "previewFail": "试听失败"
+      }
+    }
+  
 }

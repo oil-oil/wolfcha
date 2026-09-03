@@ -33,6 +33,7 @@ import {
   getValidatedZenmuxKey,
   getValidatedDashscopeKey,
   getValidatedTokendanceKey,
+  hasActiveCustomLlmKey,
   hasDashscopeKey,
   hasTokendanceKey,
   hasZenmuxKey,
@@ -53,6 +54,9 @@ import {
   type ModelSource,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
+import { getCustomModelRefs, listCustomLlmProviders } from "@/lib/custom-providers";
+import { CustomLlmProviderPanel } from "@/components/game/settings/CustomLlmProviderPanel";
+import { TtsProviderPanel } from "@/components/game/settings/TtsProviderPanel";
 import { supabase } from "@/lib/supabase";
 import { REFERRAL_BONUS_ENABLED, SPRING_CAMPAIGN_ENABLED, REDEMPTION_CODE_ENABLED } from "@/lib/welfare-config";
 import { TokenPayPanel } from "@/components/game/TokenPayPanel";
@@ -116,6 +120,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const [tokendanceKey, setTokendanceKeyState] = useState("");
   const [minimaxKey, setMinimaxKeyState] = useState("");
   const [minimaxGroupId, setMinimaxGroupIdState] = useState("");
+  const [customProvidersVersion, setCustomProvidersVersion] = useState(0);
   const [showZenmuxKey, setShowZenmuxKey] = useState(false);
   const [showDashscopeKey, setShowDashscopeKey] = useState(false);
   const [showTokendanceKey, setShowTokendanceKey] = useState(false);
@@ -152,6 +157,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const getProviderLabel = (provider: ModelRef["provider"]) => {
     if (provider === "zenmux") return "Zenmux";
     if (provider === "tokendance") return "TokenDance";
+    if (provider === "custom") return t("customProviders.short");
     return t("customKey.dashscope.short");
   };
 
@@ -208,9 +214,14 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const zenmuxConfigured = Boolean(zenmuxKey.trim());
   const dashscopeConfigured = Boolean(dashscopeKey.trim());
   const tokendanceConfigured = hasTokendanceKey();
+  const customModelRefs = useMemo(
+    () => getCustomModelRefs(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customProvidersVersion],
+  );
   const modelPool = useMemo(() => {
-    return ALL_MODELS;
-  }, []);
+    return customModelRefs.length > 0 ? [...ALL_MODELS, ...customModelRefs] : ALL_MODELS;
+  }, [customModelRefs]);
   const defaultModelPool = useMemo(() => {
     return AVAILABLE_MODELS;
   }, []);
@@ -219,9 +230,10 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     if (zenmuxConfigured) providers.add("zenmux");
     if (dashscopeConfigured) providers.add("dashscope");
     if (tokendanceConfigured) providers.add("tokendance");
+    if (customModelRefs.length > 0) providers.add("custom");
     if (providers.size === 0) return [];
     return modelPool.filter((ref) => providers.has(ref.provider));
-  }, [dashscopeConfigured, modelPool, tokendanceConfigured, zenmuxConfigured]);
+  }, [customModelRefs, dashscopeConfigured, modelPool, tokendanceConfigured, zenmuxConfigured]);
   const defaultAvailableModels = useMemo(() => {
     const providers = new Set<ModelRef["provider"]>();
     if (zenmuxConfigured) providers.add("zenmux");
@@ -230,6 +242,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     if (providers.size === 0) return [];
     return defaultModelPool.filter((ref) => providers.has(ref.provider));
   }, [dashscopeConfigured, defaultModelPool, tokendanceConfigured, zenmuxConfigured]);
+  const handleCustomProvidersChanged = () => setCustomProvidersVersion((v) => v + 1);
   const playerModelPool = useMemo(() => {
     return filterPlayerModels(availableModelPool);
   }, [availableModelPool]);
@@ -565,6 +578,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
             <TabsTrigger value="payAsYouGo">{t("customKey.tabs.payAsYouGo")}</TabsTrigger>
             <TabsTrigger value="tokenpay">{t("customKey.tabs.tokenPay")}</TabsTrigger>
             <TabsTrigger value="custom">{t("customKey.tabs.custom")}</TabsTrigger>
+            <TabsTrigger value="tts">{t("ttsProvider.tab")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -817,7 +831,13 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                     checked={showCustomKeySettings}
                     onCheckedChange={(value) => {
                       if (value) {
-                        if (hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey()) {
+                        if (
+                          hasZenmuxKey() ||
+                          hasDashscopeKey() ||
+                          hasTokendanceKey() ||
+                          hasActiveCustomLlmKey() ||
+                          listCustomLlmProviders().length > 0
+                        ) {
                           changeModelSource("custom");
                         } else {
                           changeModelSource("project");
@@ -831,6 +851,9 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                   />
                 </div>
               </section>
+
+              {/* 1.5 自定义 OpenAI 兼容 Provider：始终可见，避免“没有 key 就看不到面板”的死锁 */}
+              <CustomLlmProviderPanel onProvidersChanged={handleCustomProvidersChanged} />
 
               {showCustomKeySettings && (
                 <>
@@ -1130,6 +1153,9 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                 </>
               )}
             </div>
+          </TabsContent>
+          <TabsContent value="tts">
+            <TtsProviderPanel />
           </TabsContent>
         </Tabs>
       </DialogContent>

@@ -55,7 +55,8 @@ import { TokenPayRecoveryHost } from "@/components/game/TokenPayRecoveryHost";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { getNarratorPlayer } from "@/lib/narrator-audio-player";
-import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
+import { type AppLocale } from "@/lib/voice-constants";
+import { resolveVoiceIdForActiveProvider } from "@/lib/tts-client";
 import { getLocale } from "@/i18n/locale-store";
 import { useSettings } from "@/hooks/useSettings";
 import { useTutorial } from "@/hooks/useTutorial";
@@ -664,11 +665,12 @@ export default function Home() {
 
     const player = gameState.players.find((p) => p.displayName === currentDialogue.speaker);
     const locale = getLocale() as AppLocale;
-    const voiceId = resolveVoiceId(
+    const voiceId = resolveVoiceIdForActiveProvider(
       player?.agentProfile?.persona?.voiceId,
       player?.agentProfile?.persona?.gender,
       player?.agentProfile?.persona?.age,
-      locale
+      locale,
+      player?.playerId,
     );
     const taskId = makeAudioTaskId(voiceId, text);
     const durationMs = audioManager.getCachedDurationMs(taskId);

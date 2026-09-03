@@ -15,6 +15,7 @@ import {
   type Persona,
   type PlayerMind,
 } from "@/types/game";
+import { getModelRefForCustomModel, getCustomModelRefs } from "@/lib/custom-providers";
 import {
   getGeneratorModel,
   getSelectedModels,
@@ -26,7 +27,9 @@ import {
 import { aiLogger } from "./ai-logger";
 import { GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
-import { resolveVoiceId, VOICE_PRESETS, type AppLocale } from "./voice-constants";
+import { VOICE_PRESETS, type AppLocale } from "./voice-constants";
+import { resolveVoiceIdForActiveProvider } from "@/lib/tts-client";
+import { buildTemplateBaseProfiles } from "@/lib/template-profiles";
 import { getI18n } from "@/i18n/translator";
 import { parseLLMJson } from "./llm-json";
 
@@ -71,6 +74,7 @@ function getModelRefForModel(model: string): ModelRef {
   return (
     PROJECT_MODELS.find((ref) => ref.model === model) ??
     ALL_MODELS.find((ref) => ref.model === model) ??
+    getModelRefForCustomModel(model) ??
     { provider: "zenmux" as const, model }
   );
 }
@@ -85,13 +89,20 @@ export const sampleModelRefs = (count: number): ModelRef[] => {
   const pool = (() => {
     if (!isCustomKeyEnabled()) return defaultPool;
 
-    // When custom key is enabled, use ALL_MODELS as the full available pool
-    const fullPool = ALL_MODELS.length > 0 ? ALL_MODELS : defaultPool;
+    // When custom key is enabled, use ALL_MODELS (plus any active custom
+    // OpenAI-compatible provider's models) as the full available pool
+    const customModelRefs = getCustomModelRefs();
+    const fullPool = customModelRefs.length > 0
+      ? [...ALL_MODELS, ...customModelRefs]
+      : ALL_MODELS.length > 0
+        ? ALL_MODELS
+        : defaultPool;
 
     const allowedProviders = new Set<ModelRef["provider"]>();
     if (hasZenmuxKey()) allowedProviders.add("zenmux");
     if (hasDashscopeKey()) allowedProviders.add("dashscope");
     if (hasTokendanceKey()) allowedProviders.add("tokendance");
+    if (customModelRefs.length > 0) allowedProviders.add("custom");
     if (allowedProviders.size === 0) return defaultPool;
 
     // Filter by allowed providers, then exclude non-player models
@@ -556,17 +567,11 @@ export async function generateCharacters(
 ): Promise<GeneratedCharacter[]> {
   const usedScenario = scenario ?? getRandomScenario();
   const basePrompt = buildBaseProfilesPrompt(count, usedScenario);
-  const baseResult = await generateJSON<unknown>({
-    model: getGeneratorModel(),
-    messages: [{ role: "user", content: basePrompt }],
-    temperature: GAME_TEMPERATURE.CHARACTER_GENERATION,
-    max_tokens: Math.max(2400, count * 350 + 600),
-    reasoning: CHARACTER_GENERATOR_REASONING,
-    response_format: buildBaseProfilesResponseFormat(count),
-  });
-  const baseProfiles = normalizeBaseProfiles(baseResult).profiles;
+  // 基础档案使用本地模板库确定性生成（零 LLM 调用），把角色进场速度从
+  // "先生成档案再生成形象"的两阶段压到"一人一流式并发"的一阶段。
+  const baseProfiles = buildTemplateBaseProfiles(count, usedScenario);
   if (!isValidBaseProfiles(baseProfiles, count)) {
-    throw new Error("Base profile generation returned invalid schema");
+    throw new Error("Base profile template generation failed");
   }
   options?.onBaseProfiles?.(baseProfiles);
 
@@ -629,11 +634,12 @@ export async function generateCharacters(
             continue;
           }
 
-          const voiceId = resolveVoiceId(
+          const voiceId = resolveVoiceIdForActiveProvider(
             normalized.persona.voiceId,
             normalized.persona.gender,
             normalized.persona.age,
             "zh" as AppLocale,
+            profile.displayName,
           );
           const character: GeneratedCharacter = {
             displayName: profile.displayName,
@@ -665,11 +671,12 @@ export async function generateCharacters(
         aligned.forEach((character, localIndex) => {
           if (batchCharacters[localIndex]) return;
           const profile = batchProfiles[localIndex];
-          const voiceId = resolveVoiceId(
+          const voiceId = resolveVoiceIdForActiveProvider(
             character.persona.voiceId,
             character.persona.gender,
             character.persona.age,
             "zh" as AppLocale,
+            profile.displayName,
           );
           const completed: GeneratedCharacter = {
             displayName: profile.displayName,

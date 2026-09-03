@@ -11,7 +11,7 @@ type VoteBatchRequest = {
   reasoning?: { enabled: boolean; effort?: "minimal" | "low" | "medium" | "high"; max_tokens?: number };
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
   response_format?: unknown;
-  provider?: "zenmux" | "dashscope" | "tokendance";
+  provider?: "zenmux" | "dashscope" | "tokendance" | "custom";
 };
 
 export async function POST(request: NextRequest) {
@@ -30,6 +30,8 @@ export async function POST(request: NextRequest) {
     const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
     const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
     const headerTokenPayMode = request.headers.get("x-tokenpay-mode")?.trim();
+    const headerCustomBaseUrl = request.headers.get("x-custom-base-url")?.trim();
+    const headerCustomApiKey = request.headers.get("x-custom-api-key")?.trim();
     const headerGameSessionId = request.headers.get("x-game-session-id")?.trim();
     const origin = request.nextUrl.origin;
 
@@ -43,6 +45,8 @@ export async function POST(request: NextRequest) {
         ...(headerTokendanceKey ? { "X-Tokendance-Api-Key": headerTokendanceKey } : {}),
         ...(headerTokendanceBaseUrl ? { "X-Tokendance-Base-Url": headerTokendanceBaseUrl } : {}),
         ...(headerTokenPayMode ? { "X-TokenPay-Mode": headerTokenPayMode } : {}),
+        ...(headerCustomBaseUrl ? { "X-Custom-Base-Url": headerCustomBaseUrl } : {}),
+        ...(headerCustomApiKey ? { "X-Custom-Api-Key": headerCustomApiKey } : {}),
         ...(headerGameSessionId ? { "X-Game-Session-Id": headerGameSessionId } : {}),
         Authorization: request.headers.get("Authorization") || "",
       },

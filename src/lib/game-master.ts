@@ -16,6 +16,7 @@ import {
   PROJECT_MODELS,
   type ModelRef,
 } from "@/types/game";
+import { getModelRefForCustomModel } from "@/lib/custom-providers";
 import { GAME_TEMPERATURE } from "./ai-config";
 import { sampleModelRefs, type GeneratedCharacter } from "./character-generator";
 import { aiLogger } from "./ai-logger";
@@ -68,6 +69,7 @@ function getModelRefForModel(model: string): ModelRef {
   return (
     PROJECT_MODELS.find((ref) => ref.model === model) ??
     ALL_MODELS.find((ref) => ref.model === model) ??
+    getModelRefForCustomModel(model) ??
     { provider: "zenmux" as const, model }
   );
 }

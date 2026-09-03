@@ -4,7 +4,8 @@ import {
   GAME_SESSION_EXPIRED_CODE,
   GAME_SESSION_EXPIRED_MESSAGE,
 } from "@/lib/game-session-policy";
-import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
+import { ALL_MODELS, PROJECT_MODELS, type LlmProviderId } from "@/types/game";
+import { joinProviderUrl } from "@/lib/custom-providers";
 import { randomUUID } from "node:crypto";
 import {
   getConnectedTokenPayApiKey,
@@ -45,7 +46,7 @@ const REQUEST_ID_HEADER = "X-Request-ID";
 const ATTEMPT_ID_HEADER = "X-Attempt-ID";
 const ATTEMPT_HEADER = "X-Attempt";
 
-type Provider = "zenmux" | "dashscope" | "tokendance";
+type Provider = LlmProviderId;
 
 type AttemptContext = {
   userId: string;
@@ -421,12 +422,107 @@ type RequestMeta = {
   requestId?: unknown;
 };
 
+type CustomProviderItemInput = {
+  baseUrl: string | null;
+  apiKey: string | null;
+  model: string;
+  messages: unknown[];
+  temperature: number;
+  max_tokens?: number;
+  reasoning_effort?: ReasoningEffort;
+  response_format?: unknown;
+  context: AttemptContext;
+};
+
+// 自定义 OpenAI 兼容 Provider 的批量（非流式）转发。
+// 能力未知：只透传兼容面最广的参数（json_object、reasoning_effort）。
+async function runCustomProviderItem(
+  input: CustomProviderItemInput,
+): Promise<
+  | { ok: true; data: unknown }
+  | { ok: false; status: number; error: string; details?: unknown }
+> {
+  if (!input.baseUrl || !input.apiKey) {
+    return { ok: false, status: 401, error: "此模型需要您提供自定义 Provider 的 Base URL 和 API Key" };
+  }
+  const customUrl = joinProviderUrl(input.baseUrl, "chat/completions");
+  if (!customUrl) {
+    return { ok: false, status: 500, error: "Invalid custom provider Base URL" };
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model: input.model,
+    messages: input.messages,
+    temperature: input.temperature,
+  };
+  if (typeof input.max_tokens === "number" && Number.isFinite(input.max_tokens)) {
+    // StepFun 的 flash 系列是混合推理模型：reasoning 也计入 max_tokens，前端按
+    // 非推理模型设定的 4200 会被思考耗尽导致 content 为空。对推理输出统一放大
+    // 并默认压低思考深度，保证正文拿得到预算。
+    const isStepFun = /stepfun\.com/i.test(input.baseUrl);
+    const base = Math.max(16, Math.floor(input.max_tokens));
+    requestBody.max_tokens = isStepFun ? Math.min(16384, base * 3) : base;
+    if (isStepFun && !input.reasoning_effort) {
+      requestBody.reasoning_effort = "low";
+    }
+  }
+  if (isReasoningEffort(input.reasoning_effort)) {
+    requestBody.reasoning_effort = input.reasoning_effort;
+  }
+  if (
+    input.response_format &&
+    typeof input.response_format === "object" &&
+    (input.response_format as { type?: unknown }).type === "json_object"
+  ) {
+    requestBody.response_format = input.response_format;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetchProvider(customUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    }, input.context);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    return {
+      ok: false,
+      status: response.status,
+      error: `自定义 Provider 请求失败（HTTP ${response.status}）`,
+      details: errorText.slice(0, 600),
+    };
+  }
+
+  try {
+    const result = await response.json();
+    await recordAttempt(input.context, "success", responseUsage(result));
+    return { ok: true, data: result };
+  } catch (error) {
+    await recordAttempt(input.context, "error", { errorCode: "invalid_response" });
+    throw error;
+  }
+}
+
 async function runBatchItem(
   payload: ChatRequestPayload,
   headerApiKey: string | null,
   headerDashscopeKey: string | null,
   headerTokendanceKey: string | null,
   headerTokendanceBaseUrl: string | null,
+  headerCustomBaseUrl: string | null,
+  headerCustomApiKey: string | null,
   meta: RequestMeta,
 ): Promise<
   | { ok: true; data: unknown }
@@ -456,7 +552,7 @@ async function runBatchItem(
   }
 
   const modelProvider: Provider | null =
-    provider === "dashscope" || provider === "zenmux" || provider === "tokendance" ? provider : getProviderForModel(model);
+    provider === "dashscope" || provider === "zenmux" || provider === "tokendance" || provider === "custom" ? provider : getProviderForModel(model);
   if (!modelProvider) {
     return { ok: false, status: 400, error: `Unknown model: ${String(model ?? "").trim() || "unknown"}` };
   }
@@ -685,6 +781,20 @@ async function runBatchItem(
     }
   }
 
+  if (modelProvider === "custom") {
+    return await runCustomProviderItem({
+      baseUrl: headerCustomBaseUrl,
+      apiKey: headerCustomApiKey,
+      model,
+      messages: processedMessages,
+      temperature: cappedTemperature,
+      max_tokens,
+      reasoning_effort,
+      response_format,
+      context,
+    });
+  }
+
   if (hasAnyCustomKeyHeader && !headerApiKey) {
     return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 Zenmux API Key（已拒绝回退到系统 Key）" };
   }
@@ -788,10 +898,13 @@ export async function POST(request: NextRequest) {
   const earlyZenmuxKey = request.headers.get("x-zenmux-api-key")?.trim();
   const earlyDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
   const earlyTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim();
+  const earlyCustomBaseUrl = request.headers.get("x-custom-base-url")?.trim();
+  const earlyCustomApiKey = request.headers.get("x-custom-api-key")?.trim();
   const hasCustomKeys = Boolean(
     (earlyZenmuxKey ?? "") ||
     (earlyDashscopeKey ?? "") ||
-    (earlyTokendanceKey ?? "")
+    (earlyTokendanceKey ?? "") ||
+    (earlyCustomBaseUrl && earlyCustomApiKey)
   );
 
   if (!hasCustomKeys) {
@@ -834,6 +947,8 @@ export async function POST(request: NextRequest) {
           headerDashscopeKey,
           headerTokendanceKey,
           headerTokendanceBaseUrl,
+          request.headers.get("x-custom-base-url")?.trim() || null,
+          request.headers.get("x-custom-api-key")?.trim() || null,
           {
             userId: auth.user.id,
             sessionId,
@@ -872,7 +987,7 @@ export async function POST(request: NextRequest) {
       provider,
     } = body;
     const modelProvider: Provider | null =
-      provider === "dashscope" || provider === "zenmux" || provider === "tokendance" ? provider : getProviderForModel(model);
+      provider === "dashscope" || provider === "zenmux" || provider === "tokendance" || provider === "custom" ? provider : getProviderForModel(model);
     if (!modelProvider) {
       // Reject unknown models early to avoid mis-routing.
       return NextResponse.json(
@@ -1157,6 +1272,105 @@ export async function POST(request: NextRequest) {
           errorResponse.headers.set(TOKENPAY_RECOVERY_HEADER, recoveryAction);
         }
         return errorResponse;
+      }
+
+      if (stream) {
+        const headers = new Headers();
+        headers.set("Content-Type", "text/event-stream");
+        headers.set("Cache-Control", "no-cache");
+        headers.set("Connection", "keep-alive");
+
+        return trackedStreamResponse(new Response(response.body, { headers }), attemptContext);
+      }
+
+      try {
+        const result = await response.json();
+        await recordAttempt(attemptContext, "success", responseUsage(result));
+        return NextResponse.json(result);
+      } catch (error) {
+        await recordAttempt(attemptContext, "error", { errorCode: "invalid_response" });
+        throw error;
+      }
+    }
+
+    if (modelProvider === "custom") {
+      const headerCustomBaseUrl = request.headers.get("x-custom-base-url")?.trim() || null;
+      const headerCustomApiKey = request.headers.get("x-custom-api-key")?.trim() || null;
+      if (!headerCustomBaseUrl || !headerCustomApiKey) {
+        return NextResponse.json(
+          { error: "此模型需要您提供自定义 Provider 的 Base URL 和 API Key" },
+          { status: 401 }
+        );
+      }
+
+      const customUrl = joinProviderUrl(headerCustomBaseUrl, "chat/completions");
+      if (!customUrl) {
+        return NextResponse.json(
+          { error: "Invalid custom provider Base URL" },
+          { status: 500 }
+        );
+      }
+
+      const requestBody: Record<string, unknown> = {
+        model,
+        messages: processedMessages,
+        temperature: cappedTemperature,
+      };
+
+      const reasoningEffort = isReasoningEffort(reasoning_effort) ? reasoning_effort : undefined;
+
+      if (typeof max_tokens === "number" && Number.isFinite(max_tokens)) {
+        // 与批量分支同因：StepFun flash 系列为混合推理模型，reasoning 计入
+        // max_tokens；放大预算并默认压低思考深度，避免正文为空。
+        const isStepFun = /stepfun\.com/i.test(headerCustomBaseUrl ?? "");
+        const base = Math.max(16, Math.floor(max_tokens));
+        requestBody.max_tokens = isStepFun ? Math.min(16384, base * 3) : base;
+        if (isStepFun && !reasoningEffort) {
+          requestBody.reasoning_effort = "low";
+        }
+      }
+
+      if (stream) {
+        requestBody.stream = true;
+      }
+
+      if (reasoningEffort) {
+        requestBody.reasoning_effort = reasoningEffort;
+      }
+
+      // 自定义 Provider 的能力未知，response_format 只透传兼容面最广的 json_object
+      if (
+        response_format &&
+        typeof response_format === "object" &&
+        (response_format as { type?: unknown }).type === "json_object"
+      ) {
+        requestBody.response_format = response_format;
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+      let response: Response;
+      try {
+        response = await fetchProvider(customUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${headerCustomApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        }, attemptContext);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return NextResponse.json(
+          { error: `自定义 Provider 请求失败（HTTP ${response.status}）`, details: errorText.slice(0, 600) },
+          { status: response.status }
+        );
       }
 
       if (stream) {

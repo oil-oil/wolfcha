@@ -5,6 +5,7 @@ import {
   SUMMARY_MODEL,
   REVIEW_MODEL,
 } from "@/types/game";
+import { getActiveCustomLlmProvider, getCustomModelRefs, getModelRefForCustomModel } from "@/lib/custom-providers";
 
 const ZENMUX_API_KEY_STORAGE = "wolfcha_zenmux_api_key";
 const DASHSCOPE_API_KEY_STORAGE = "wolfcha_dashscope_api_key";
@@ -167,7 +168,11 @@ export function hasMinimaxKey(): boolean {
 }
 
 function hasLocalLlmKey(): boolean {
-  return hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey();
+  return hasZenmuxKey() || hasDashscopeKey() || hasTokendanceKey() || hasActiveCustomLlmKey();
+}
+
+export function hasActiveCustomLlmKey(): boolean {
+  return getActiveCustomLlmProvider() !== null;
 }
 
 export function resolveModelSource(options: {
@@ -229,6 +234,12 @@ export function isTokenPayActive(): boolean {
 
 // When custom key is enabled, keep model within providers that have keys.
 function resolveModelWhenCustomEnabled(preferred: string, fallbackPreferred: string): string {
+  // 自定义 OpenAI 兼容 Provider 的模型不在内置 ALL_MODELS 里，
+  // 只要有启用的自定义 Provider 就原样放行。
+  if (!ALL_MODELS.some((ref) => ref.model === preferred) && getModelRefForCustomModel(preferred)) {
+    return preferred;
+  }
+
   const allowedProviders = new Set<(typeof ALL_MODELS)[number]["provider"]>();
   if (hasZenmuxKey()) allowedProviders.add("zenmux");
   if (hasDashscopeKey()) allowedProviders.add("dashscope");
@@ -299,7 +310,7 @@ export function getGeneratorModel(): string {
   if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? GENERATOR_MODEL;
   if (source !== "custom") return GENERATOR_MODEL;
   const stored = readStorage(GENERATOR_MODEL_STORAGE);
-  return resolveModelForCurrentKeyState(stored, GENERATOR_MODEL, GENERATOR_MODEL_STORAGE);
+  return resolveCustomModelForRole(stored, GENERATOR_MODEL, GENERATOR_MODEL_STORAGE);
 }
 
 export function setGeneratorModel(model: string) {
@@ -315,7 +326,7 @@ export function getSummaryModel(): string {
   if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? SUMMARY_MODEL;
   if (source !== "custom") return SUMMARY_MODEL;
   const stored = readStorage(SUMMARY_MODEL_STORAGE);
-  return resolveModelForCurrentKeyState(stored, SUMMARY_MODEL, SUMMARY_MODEL_STORAGE);
+  return resolveCustomModelForRole(stored, SUMMARY_MODEL, SUMMARY_MODEL_STORAGE);
 }
 
 export function setSummaryModel(model: string) {
@@ -331,7 +342,7 @@ export function getReviewModel(): string {
   if (source === "tokenpay") return AVAILABLE_MODELS[0]?.model ?? REVIEW_MODEL;
   if (source !== "custom") return REVIEW_MODEL;
   const stored = readStorage(REVIEW_MODEL_STORAGE);
-  return resolveModelForCurrentKeyState(stored, REVIEW_MODEL, REVIEW_MODEL_STORAGE);
+  return resolveCustomModelForRole(stored, REVIEW_MODEL, REVIEW_MODEL_STORAGE);
 }
 
 export function setReviewModel(model: string) {

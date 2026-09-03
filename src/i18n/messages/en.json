@@ -2322,5 +2322,92 @@
     "recharge": "Buy Game Credits",
     "startGame": "Continue Playing",
     "startGameNoCredits": "Buy Game Credits"
-  }
+  },
+
+    "customProviders": {
+      "short": "Custom",
+      "tab": "Custom Provider",
+      "title": "Custom OpenAI-compatible Provider",
+      "description": "Add any OpenAI-compatible endpoint with your own Base URL and API key (DeepSeek, Kimi, Zhipu, MiniMax, Grok, Gemini, Claude, OpenRouter, SiliconFlow, etc.). Test connectivity, then use its models in the model pool below.",
+      "activeBadge": "Active",
+      "modelCount": "{count} models",
+      "activate": "Set active",
+      "deactivate": "Deactivate",
+      "edit": "Edit",
+      "delete": "Delete",
+      "add": "Add provider",
+      "preset": "Vendor preset",
+      "presetPlaceholder": "Pick a vendor to fill the URL",
+      "name": "Name",
+      "namePlaceholder": "e.g. DeepSeek main",
+      "baseUrl": "Base URL",
+      "baseUrlHint": "OpenAI-compatible API root, usually ending with /v1; /v1 is appended for bare domains.",
+      "apiKey": "API Key",
+      "showKey": "Show key",
+      "hideKey": "Hide key",
+      "probe": "Test connection",
+      "probing": "Testing…",
+      "save": "Save",
+      "cancel": "Cancel",
+      "modelsPreview": "Fetched {count} models",
+      "toasts": {
+        "probeOkModels": "Connected, fetched {count} models",
+        "probeOkNoModels": "Connected (endpoint returned no model list, you can still save)",
+        "probeOkFallback": "Connected (endpoint lacks /models, verified with a minimal request)",
+        "probeFail": "Connection failed",
+        "missingFields": "Fill in Base URL and API Key first",
+        "saved": "Saved",
+        "deleted": "Deleted"
+      }
+    },
+    "ttsProvider": {
+      "tab": "Voice TTS",
+      "title": "TTS Voice Provider",
+      "description": "Choose the vendor that synthesizes AI voices. Uses the built-in MiniMax by default; switch to your own OpenAI-compatible, Volcengine, or ElevenLabs account.",
+      "provider": "Provider",
+      "apiKey": "API Key",
+      "test": "Test connection",
+      "probing": "Testing…",
+      "save": "Save",
+      "testHint": "The test synthesizes one short sentence with a default voice; nothing is played.",
+      "minimaxNote": "Uses the built-in MiniMax channel: server config in project mode, or the MiniMax key you saved under “Use my own key”.",
+      "openai": {
+        "baseUrl": "Base URL",
+        "baseUrlHint": "OpenAI /audio/speech compatible endpoint: OpenAI, SiliconFlow, Fish Audio, self-hosted gateways, etc.",
+        "model": "Model"
+      },
+      "stepfun": {
+        "baseUrl": "Base URL",
+        "baseUrlHint": "Standard API is https://api.stepfun.com/v1; Step Plan subscribers should use https://api.stepfun.com/step_plan/v1.",
+        "model": "Model"
+      },
+      "volcengine": {
+        "appId": "App ID",
+        "accessToken": "Access Token",
+        "hint": "Get these after enabling the speech service in the Volcengine console; voice IDs follow the console's activated list."
+      },
+      "elevenlabs": {
+        "baseUrl": "Base URL",
+        "model": "Model"
+      },
+      "voices": {
+        "title": "Voice preview",
+        "description": "Click a voice to preview. Characters get voices from the active provider's preset list based on gender and age.",
+        "loading": "Loading…",
+        "male": "M",
+        "female": "F",
+        "needConfig": "Fill in and save the credentials for this provider before previewing."
+      },
+      "status": {
+        "active": "Active: {provider}",
+        "incomplete": "Credentials incomplete — fill them in before saving."
+      },
+      "toasts": {
+        "saved": "Saved",
+        "probeOk": "Connected, voice is ready",
+        "probeFail": "Connection failed",
+        "previewFail": "Preview failed"
+      }
+    }
+  
 }

@@ -1,12 +1,11 @@
 import {
-  getMinimaxApiKey,
-  getMinimaxGroupId,
   getModelSource,
   hasMinimaxKey,
   resolveAiVoiceAvailability,
 } from "@/lib/api-keys";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
+import { buildTtsRequestHeaders, getTtsSettings, isCustomTtsActive, type TtsProviderId } from "@/lib/tts-client";
 
 export interface AudioTask {
   id: string; // unique message id
@@ -16,7 +15,16 @@ export interface AudioTask {
 }
 
 export function makeAudioTaskId(voiceId: string, text: string) {
-  return `${voiceId}::${text}`;
+  // 缓存键带上 TTS Provider，切换 Provider 后不会误用旧音频
+  return `${getActiveTtsProviderId()}::${voiceId}::${text}`;
+}
+
+function getActiveTtsProviderId(): TtsProviderId {
+  try {
+    return getTtsSettings().provider;
+  } catch {
+    return "minimax";
+  }
 }
 
 type PlayState = "idle" | "playing" | "loading";
@@ -39,19 +47,15 @@ class AudioManager {
   }
 
   private async buildTtsHeaders(): Promise<Record<string, string>> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const modelSource = getModelSource();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...buildTtsRequestHeaders(),
+    };
     const authHeaders = await getAuthHeaders();
     Object.assign(headers, authHeaders);
     const sessionId = gameSessionTracker.getSessionId();
     if (sessionId) {
       headers["X-Game-Session-Id"] = sessionId;
-    }
-    if (modelSource !== "project" && hasMinimaxKey()) {
-      const apiKey = getMinimaxApiKey();
-      const groupId = getMinimaxGroupId();
-      if (apiKey) headers["X-Minimax-Api-Key"] = apiKey;
-      if (groupId) headers["X-Minimax-Group-Id"] = groupId;
     }
     return headers;
   }
@@ -84,7 +88,10 @@ class AudioManager {
   }
 
   isEnabled(): boolean {
-    return this.enabled && resolveAiVoiceAvailability(getModelSource(), hasMinimaxKey());
+    if (!this.enabled) return false;
+    return (
+      resolveAiVoiceAvailability(getModelSource(), hasMinimaxKey()) || isCustomTtsActive()
+    );
   }
 
   /**
