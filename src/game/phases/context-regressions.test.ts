@@ -74,11 +74,29 @@ test("守卫保留每夜路线，结果按当夜公开结算判断，普通村�
   state.nightActions.lastGuardTarget = 2;
   state.players[0].alive = false;
   const privateInfo = buildGameContext(state, guard).split("</your_guard_info>")[0];
-  assert.match(privateInfo, /第1夜 → 1号.*当晚平安无事/);
-  assert.match(privateInfo, /第2夜 → 2号.*当晚平安无事/);
+  assert.match(privateInfo, /第1夜 → 1号.*守护目标当夜未出局/);
+  assert.match(privateInfo, /第2夜 → 2号.*守护目标当夜未出局/);
   assert.match(privateInfo, /第3夜 → 3号.*待天亮公布/);
   assert.match(privateInfo, /不能连续守护 3号/);
   assert.doesNotMatch(buildGameContext(state, state.players.find((p) => p.role === "Villager")!), /<your_guard_info>/);
+});
+
+test("实战回归：守护目标存活，但其他人死亡，不能把目标生存写成全场平安夜", () => {
+  const state = fresh(); state.day = 2;
+  const guard = state.players.find((p) => p.role === "Guard")!;
+  state.nightHistory = { 1: { guardTarget: guard.seat, deaths: [], resultsAnnounced: true },
+    2: { guardTarget: 0, deaths: [{ seat: 2, reason: "wolf" }], resultsAnnounced: true } };
+  const context = buildGameContext(state, guard).split("</your_guard_info>")[0];
+  assert.match(context, /全场第1夜：无人出局（平安夜）/);
+  assert.match(context, /第2夜 → 1号.*守护目标当夜未出局；全场第2夜：3号出局，并非平安夜/);
+  assert.doesNotMatch(context, /当晚平安无事|守护成功/);
+  assert.match(context, /不能证明守护生效/);
+  state.nightHistory[2].resultsAnnounced = false;
+  const hidden = buildGameContext(state, guard).split("</your_guard_info>")[0];
+  assert.match(hidden, /第2夜 → 1号.*待天亮公布/);
+  assert.doesNotMatch(hidden, /全场第2夜|3号出局/);
+  state.nightHistory[2] = { guardTarget: 0, resultsAnnounced: true };
+  assert.match(buildGameContext(state, guard), /当夜结算记录缺失，不能判断目标生死或是否平安夜/);
 });
 
 test("跨日记录保留警上、PK轮次、警下和遗言标签，不把现在的死亡状态套入过往发言", () => {

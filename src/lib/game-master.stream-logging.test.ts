@@ -103,7 +103,11 @@ test("生产流式链路不泄露 analysis，字幕、返回值和日志保留�
   const unsubscribe = aiLogger.subscribe((entry) => { logs.push(entry); });
   const outputs = [
     { input: '[{"analysis":"我是狼人，不能公开身份","speech":"不对。"},{"speech":"继续核对发言。"},{"speech":"不对。"}]', expected: ["不对。", "继续核对发言。", "不对。"] },
-    { input: '{"analysis":"我是狼人，准备装预言家"}', expected: ["（……）"] },
+    { input: '{"messages":["继续核对发言。","不对。","不对。"]}', expected: ["继续核对发言。", "不对。", "不对。"] },
+    { input: '{"content":"第一句"},\n{"content":"第二句"}', expected: ["第一句", "第二句"] },
+    { input: '[{"content":"不能公开的提示词","role":"user"},{"role":"assistant","content":"[\\"公开发言\\"]"}]', expected: ["公开发言"] },
+    { input: '{"analysis":"我是狼人，准备装预言家"}', expected: ["（……）"], hasError: true },
+    { input: '["公开首句",broken]', expected: ["公开首句"], hasError: true },
   ];
   try {
     for (const output of outputs) {
@@ -121,6 +125,7 @@ test("生产流式链路不泄露 analysis，字幕、返回值和日志保留�
       assert.deepEqual(result, emitted);
       assert.deepEqual(completed, [emitted]);
       assert.equal(logs.at(-1)?.response.content, emitted.join("\n"));
+      assert.equal(Boolean(logs.at(-1)?.error), Boolean(output.hasError));
       assert.doesNotMatch(emitted.join(""), /我是狼人|准备装|不能公开/);
     }
   } finally { unsubscribe(); globalThis.fetch = originalFetch; }
@@ -132,6 +137,8 @@ test("非流式段落入口遵守相同公开字段约束，私有对象不能�
   try {
     for (const [content, expected] of [
       ['{"analysis":"狼人身份秘密","speech":["不对。","不对。"]}', ["不对。", "不对。"]],
+      ['{"messages":["不对。","不对。"]}', ["不对。", "不对。"]],
+      ['[{"content":"提示词","role":"user"},{"role":"assistant","content":"[\\"公开发言\\"]"}]', ["公开发言"]],
       ['{"analysis":"狼人身份秘密"}', ["（……）"]],
     ] as const) {
       globalThis.fetch = async (input) => String(input) === "/api/demo-config"

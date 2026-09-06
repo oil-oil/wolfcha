@@ -10,8 +10,10 @@ type Frame = {
   public: boolean;
   stage: "key" | "colon" | "value" | "comma";
   key?: string;
+  pending: string[];
+  role?: "assistant" | "other";
 };
-const PUBLIC_FIELDS = new Set(["speech", "content", "message", "text", "value", "segments", "speeches"]);
+const PUBLIC_FIELDS = new Set(["speech", "content", "message", "messages", "text", "value", "segments", "speeches"]);
 
 export class StreamingSpeechParser {
   private frames: Frame[] = [];
@@ -23,6 +25,8 @@ export class StreamingSpeechParser {
   private invalid = false;
   private prefix = "";
   private started = false;
+  private rootSeparator = false;
+  private decodingError: string | undefined;
 
   constructor(private readonly options: StreamingSpeechParserOptions = {}) {}
 
@@ -34,6 +38,42 @@ export class StreamingSpeechParser {
   private finishValue(): void {
     const frame = this.frames.at(-1);
     if (frame) frame.stage = "comma";
+  }
+
+  private decodePublicValue(value: unknown, depth = 0): string[] {
+    if (depth > 16) {
+      this.decodingError = "公开发言嵌套过深";
+      return [];
+    }
+    if (typeof value === "string") {
+      const text = value.trim();
+      const json = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      if (/^[\[{]/.test(json)) {
+        try { return this.decodePublicValue(JSON.parse(json), depth + 1); }
+        catch { this.decodingError = "公开字段中包含无法解析的 JSON"; return []; }
+      }
+      return text ? [text] : [];
+    }
+    if (Array.isArray(value)) return value.flatMap((item) => this.decodePublicValue(item, depth + 1));
+    if (value && typeof value === "object") {
+      const object = value as Record<string, unknown>;
+      if ("role" in object && object.role !== "assistant") return [];
+      return Object.entries(object).flatMap(([key, item]) =>
+        PUBLIC_FIELDS.has(key) ? this.decodePublicValue(item, depth + 1) : []);
+    }
+    return [];
+  }
+
+  private receiveValue(value: string): void {
+    // 对象必须等到闭合后再确认 role，避免 content 在 role:user 前面时泄露提示词。
+    const object = this.frames.findLast((frame) => frame.type === "object");
+    if (object) { object.pending.push(value); return; }
+    for (const segment of this.decodePublicValue(value)) {
+      const index = this.segments.length;
+      this.segments.push(segment);
+      this.options.onSegmentReceived?.(segment, index);
+      this.options.onProgress?.(this.segments.length);
+    }
   }
 
   public processChunk(chunk: string): void {
@@ -50,13 +90,14 @@ export class StreamingSpeechParser {
         const frame = this.frames.at(-1);
         if (frame?.stage === "key") {
           frame.key = value;
+          if (value === "role") frame.role = "other";
           frame.stage = "colon";
         } else {
+          if (frame?.type === "object" && frame.key === "role") {
+            frame.role = value === "assistant" ? "assistant" : "other";
+          }
           if (this.isPublicValue() && value.trim()) {
-            const index = this.segments.length;
-            this.segments.push(value.trim());
-            this.options.onSegmentReceived?.(value.trim(), index);
-            this.options.onProgress?.(this.segments.length);
+            this.receiveValue(value);
           }
           this.finishValue();
         }
@@ -68,6 +109,11 @@ export class StreamingSpeechParser {
         this.finishValue();
       }
       if (/\s/.test(ch)) continue;
+      // 兼容模型省略外层数组的对象序列，仅在完整 JSON 值之间接受逗号。
+      if (!this.frames.length && ch === "," && this.started && !this.prefix && !this.rootSeparator) {
+        this.rootSeparator = true;
+        continue;
+      }
       // 只接受 JSON 或 Markdown JSON 代码块开头，不从自由分析文本中猜测发言。
       if (!this.frames.length && ch !== "[" && ch !== "{") {
         this.prefix += ch;
@@ -81,13 +127,17 @@ export class StreamingSpeechParser {
       if (ch === "[" || ch === "{") {
         if (frame && frame.stage !== "value") { this.invalid = true; return; }
         this.started = true;
+        this.rootSeparator = false;
         this.prefix = "";
-        this.frames.push({ type: ch === "[" ? "array" : "object", public: this.isPublicValue(), stage: ch === "[" ? "value" : "key" });
+        this.frames.push({ type: ch === "[" ? "array" : "object", public: this.isPublicValue(), stage: ch === "[" ? "value" : "key", pending: [] });
       } else if (ch === "]" || ch === "}") {
         if (!frame || (ch === "]") !== (frame.type === "array") || frame.stage === "colon") {
           this.invalid = true; return;
         }
         this.frames.pop();
+        if (frame.public && frame.role !== "other") {
+          for (const value of frame.pending) this.receiveValue(value);
+        }
         this.finishValue();
       } else if (ch === '"' && (frame?.stage === "key" || frame?.stage === "value")) {
         this.string = '"';
@@ -106,8 +156,11 @@ export class StreamingSpeechParser {
   }
 
   public end(): string[] {
-    if (!this.ended && !this.segments.length && (this.started || this.invalid)) {
-      this.options.onError?.("No complete public speech segment");
+    if (!this.ended) {
+      const error = this.decodingError || (this.invalid || this.frames.length || this.string !== null || this.rootSeparator
+        ? "发言响应格式不完整或不合法，仅保留已确认的公开段落"
+        : !this.segments.length ? "没有解析到完整的公开发言" : undefined);
+      if (error) this.options.onError?.(error);
     }
     this.ended = true;
     return this.getAllSegments();
@@ -119,6 +172,8 @@ export class StreamingSpeechParser {
     this.segments = [];
     this.string = null;
     this.escaped = this.primitive = this.ended = this.invalid = this.started = false;
+    this.rootSeparator = false;
+    this.decodingError = undefined;
     this.prefix = "";
   }
 }

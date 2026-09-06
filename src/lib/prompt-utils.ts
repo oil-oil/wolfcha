@@ -679,14 +679,19 @@ ${checks.join("\n")}
       .map(([day, history]) => {
         const seat = history.guardTarget!;
         const target = state.players.find((p) => p.seat === seat);
+        const deaths = getRecordedNightDeaths(history);
         const result = !outcomeKnownForDay(Number(day)) ? "守护结果待天亮公布"
-          : getRecordedNightDeaths(history).some((death) => death.seat === seat) ? "当晚未能守住，已出局" : "当晚平安无事";
+          : !Array.isArray(history.deaths) ? "当夜结算记录缺失，不能判断目标生死或是否平安夜"
+          : `${deaths.some((death) => death.seat === seat) ? "守护目标当夜出局" : "守护目标当夜未出局"}；全场第${day}夜：${deaths.length
+            ? `${deaths.map((death) => `${death.seat + 1}号`).join("、")}出局，并非平安夜`
+            : "无人出局（平安夜）"}`;
         return `  第${day}夜 → ${seat + 1}号${target?.displayName || ""}：${result}`;
       });
     const lastSeat = state.nightActions.lastGuardTarget;
     const lastTarget = state.players.find((p) => p.seat === lastSeat);
     return `<your_guard_info>
 【守护记录】${records.length ? `\n${records.join("\n")}` : "暂无已记录的守护行动"}
+【记录含义】守护目标未出局不代表全场平安夜，也不能证明守护生效或目标被狼人袭击。以每夜全场公开结果为准，不得为维护先前发言而改写死亡日期。
 ${lastSeat !== undefined ? `【上次守护】${lastSeat + 1}号${lastTarget?.displayName || ""}\n【今晚限制】不能连续守护 ${lastSeat + 1}号` : "【今晚限制】无，可以守护任何存活玩家"}
 </your_guard_info>`;
   }

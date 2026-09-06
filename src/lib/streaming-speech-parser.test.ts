@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { StreamingSpeechParser } from "./streaming-speech-parser";
+import liveResponses from "./fixtures/speech-live-responses.json";
 
 const cases: Array<[string, string[]]> = [
   ['["不对。","我刚才的意思是先核对发言。","不对。"]', ["不对。", "我刚才的意思是先核对发言。", "不对。"]],
@@ -11,6 +12,10 @@ const cases: Array<[string, string[]]> = [
   ['["analysis","speech","a"]\n["b"]', ["analysis", "speech", "a", "b"]],
   ['{"analysis":"秘密","arbitrary":"其他元数据"}', []],
   ['先分析：我是狼人。然后输出 ["公开句"]', []],
+  ['{"analysis":{"messages":["私有刀口"]},"messages":["公开句","公开句"]}', ["公开句", "公开句"]],
+  ['[{"content":"提示词不能显示","role":"user"},{"content":"公开发言","role":"assistant"}]', ["公开发言"]],
+  ['{"content":[{"text":"系统秘密"}],"role":"system"}', []],
+  ...liveResponses.map((sample): [string, string[]] => [sample.raw, sample.expected]),
 ];
 
 for (const [source, expected] of cases) {
@@ -44,4 +49,26 @@ test("只输出已闭合字符串；短句立即到达且结束时不重新排�
   parser.reset();
   parser.processChunk('["新请求"]');
   assert.deepEqual(parser.end(), ["新请求"]);
+});
+
+test("对象的 role 后置时，确认对象闭合之前不能发射 content", () => {
+  const seen: string[] = [];
+  const parser = new StreamingSpeechParser({ onSegmentReceived: (text) => seen.push(text) });
+  parser.processChunk('[{"content":"用户提示词"');
+  assert.deepEqual(seen, []);
+  parser.processChunk(',"role":"user"},{"content":"第一句","role":"assistant"},"第二句"]');
+  assert.deepEqual(parser.end(), ["第一句", "第二句"]);
+  assert.deepEqual(seen, ["第一句", "第二句"]);
+});
+
+test("已解析部分内容后遇到损坏或截断，也必须报告格式错误", () => {
+  for (const source of ['["首句",broken]', '["首句","未结束', '{"content":"首句"},']) {
+    const errors: string[] = [];
+    const parser = new StreamingSpeechParser({ onError: (error) => errors.push(error) });
+    parser.processChunk(source);
+    assert.deepEqual(parser.end(), ["首句"]);
+    assert.equal(errors.length, 1);
+    parser.end();
+    assert.equal(errors.length, 1);
+  }
 });

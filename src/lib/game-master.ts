@@ -812,7 +812,8 @@ export async function generateAISpeechSegments(
       temperature: GAME_TEMPERATURE.SPEECH,
     }));
 
-    const parser = new StreamingSpeechParser();
+    let parseError: string | undefined;
+    const parser = new StreamingSpeechParser({ onError: (error) => { parseError = error; } });
     parser.processChunk(result.content);
     const publicSegments = parser.end().map((segment) =>
       sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players)).filter(Boolean);
@@ -832,6 +833,7 @@ export async function generateAISpeechSegments(
         finishReason: result.raw.choices?.[0]?.finish_reason,
         duration: Date.now() - startTime,
       },
+      error: parseError,
     });
 
     return segments;
@@ -882,6 +884,7 @@ export async function generateAISpeechSegmentsStream(
 
   // 数组位置就是段落身份；相同文字可以是两个有意重复的段落。
   const emittedSegments: string[] = [];
+  let parseError: string | undefined;
   const parser = new StreamingSpeechParser({
     onSegmentReceived: (segment) => {
       const sanitized = sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players);
@@ -892,6 +895,7 @@ export async function generateAISpeechSegmentsStream(
       }
     },
     onProgress: options.onProgress,
+    onError: (error) => { parseError = error; },
   });
 
   try {
@@ -940,6 +944,7 @@ export async function generateAISpeechSegmentsStream(
           raw: accumulatedContent,
           duration: Date.now() - startTime,
         },
+        error: parseError,
       });
 
       options.onComplete?.(result);
