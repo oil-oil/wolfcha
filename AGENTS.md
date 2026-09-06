@@ -90,3 +90,12 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 - **Phase prompt generation**: Add a new phase by creating/extending a `GamePhase` subclass in `src/game/phases/`, then register it in `PhaseManager`.
 - **Model routing**: Built-in models use ZenMux or Dashscope providers. Custom user API keys route through the NewAPI provider path. See `src/lib/api-keys.ts` for key resolution.
 - Uses **pnpm** as package manager.
+
+### 单人上下文修改规范
+
+- 发言解析只允许公开字段；不要用任意引号提取、`Object.values` 或原始响应兜底朗读。
+- 段落幂等使用请求 ID + 索引，不能按文字去重。字幕、TTS、队列和历史提交必须验证同一个请求身份。
+- 特殊技能决策同样需要当天公开发言。增加阶段时扩展 `context-regressions.test.ts` 的证据矩阵。
+- 夜间结算与公开结果分开记录；临时切换提示词阶段不能改变信息可见性。
+- 逐轮投票保存独立快照，同时维护旧存档与开发回滚兼容。
+- 提交前运行 `pnpm test:single-player-context`，再做类型检查和生产构建；具体原因与边界见 `docs/单人上下文约束.md`。

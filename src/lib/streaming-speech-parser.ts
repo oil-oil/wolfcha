@@ -1,382 +1,128 @@
-/**
- * 流式语音解析器
- * 实时解析 AI 生成的发言段落，支持增量输出
- */
-
-import { LLMJSONParser } from "ai-json-fixer";
-
-const parser = new LLMJSONParser();
-
+/** 仅解析协议中的公开发言；分析字段及其整个子树永远不能进入字幕或 TTS。 */
 export interface StreamingSpeechParserOptions {
   onSegmentReceived?: (segment: string, index: number) => void;
   onProgress?: (current: number) => void;
   onError?: (error: string) => void;
 }
 
-/**
- * 流式语音解析器
- * 从流式 AI 响应中实时提取发言段落
- */
+type Frame = {
+  type: "array" | "object";
+  public: boolean;
+  stage: "key" | "colon" | "value" | "comma";
+  key?: string;
+};
+const PUBLIC_FIELDS = new Set(["speech", "content", "message", "text", "value", "segments", "speeches"]);
+
 export class StreamingSpeechParser {
-  private accumulatedContent = "";
-  private processedSegments: Set<string> = new Set();
-  private emittedSegmentsList: string[] = []; // 按顺序记录已发送的段落
-  private readonly onSegmentReceived?: (segment: string, index: number) => void;
-  private readonly onProgress?: (current: number) => void;
-  private readonly onError?: (error: string) => void;
-  private pendingEmit = false;
-  private emitTimeout: ReturnType<typeof setTimeout> | null = null;
+  private frames: Frame[] = [];
+  private segments: string[] = [];
+  private string: string | null = null;
+  private escaped = false;
+  private primitive = false;
+  private ended = false;
+  private invalid = false;
+  private prefix = "";
+  private started = false;
 
-  constructor(options: StreamingSpeechParserOptions = {}) {
-    this.onSegmentReceived = options.onSegmentReceived;
-    this.onProgress = options.onProgress;
-    this.onError = options.onError;
+  constructor(private readonly options: StreamingSpeechParserOptions = {}) {}
+
+  private isPublicValue(): boolean {
+    const frame = this.frames.at(-1);
+    return !frame || (frame.public && (frame.type === "array" || PUBLIC_FIELDS.has(frame.key ?? "")));
   }
 
-  /**
-   * 处理流式内容
-   * 只在检测到完整段落结束时触发解析（降低频率）
-   */
+  private finishValue(): void {
+    const frame = this.frames.at(-1);
+    if (frame) frame.stage = "comma";
+  }
+
   public processChunk(chunk: string): void {
-    if (!chunk) return;
-
-    this.accumulatedContent += chunk;
-
-    // 流式响应里，分隔符（比如 "] 或 ",）可能会被拆分到不同 chunk。
-    // 为了保证增量输出，只要 chunk 看起来包含了新字符串内容，就触发一次防抖解析。
-    const hasArrayStart = this.accumulatedContent.includes("[");
-    const likelyHasNewStringContent = chunk.includes('"') || chunk.includes("\n");
-
-    if (hasArrayStart && likelyHasNewStringContent) {
-      if (!this.pendingEmit) {
-        this.pendingEmit = true;
-        this.emitTimeout = setTimeout(() => {
-          this.pendingEmit = false;
-          this.tryExtractSegments();
-        }, 50);
+    if (this.ended || this.invalid) return;
+    for (const ch of chunk) {
+      if (this.string !== null) {
+        this.string += ch;
+        if (this.escaped) { this.escaped = false; continue; }
+        if (ch === "\\") { this.escaped = true; continue; }
+        if (ch !== '"') continue;
+        let value: string;
+        try { value = JSON.parse(this.string); } catch { this.invalid = true; return; }
+        this.string = null;
+        const frame = this.frames.at(-1);
+        if (frame?.stage === "key") {
+          frame.key = value;
+          frame.stage = "colon";
+        } else {
+          if (this.isPublicValue() && value.trim()) {
+            const index = this.segments.length;
+            this.segments.push(value.trim());
+            this.options.onSegmentReceived?.(value.trim(), index);
+            this.options.onProgress?.(this.segments.length);
+          }
+          this.finishValue();
+        }
+        continue;
       }
-    }
-  }
-
-  /**
-   * 结束解析，尝试提取剩余内容
-   */
-  public end(): string[] {
-    this.tryExtractSegments(true);
-    return this.getAllSegments();
-  }
-
-  /**
-   * 获取所有已解析的段落
-   */
-  public getAllSegments(): string[] {
-    return Array.from(this.processedSegments);
-  }
-
-  /**
-   * 获取已解析的段落数量
-   */
-  public getSegmentCount(): number {
-    return this.processedSegments.size;
-  }
-
-  /**
-   * 重置解析器状态
-   */
-  public reset(): void {
-    this.accumulatedContent = "";
-    this.processedSegments.clear();
-    this.emittedSegmentsList = [];
-    if (this.emitTimeout) {
-      clearTimeout(this.emitTimeout);
-      this.emitTimeout = null;
-    }
-    this.pendingEmit = false;
-  }
-
-  /**
-   * 尝试从累积内容中提取段落
-   */
-  private tryExtractSegments(isFinal = false): void {
-    if (!this.accumulatedContent.trim()) return;
-
-    try {
-      // 方法1: 尝试从流式内容中提取完整的字符串（使用正则匹配引号内的内容）
-      const extractedFromStream = this.extractSegmentsFromStream();
-      if (extractedFromStream > 0) {
+      if (this.primitive) {
+        if (!/[\s,\]}]/.test(ch)) continue;
+        this.primitive = false;
+        this.finishValue();
+      }
+      if (/\s/.test(ch)) continue;
+      // 只接受 JSON 或 Markdown JSON 代码块开头，不从自由分析文本中猜测发言。
+      if (!this.frames.length && ch !== "[" && ch !== "{") {
+        this.prefix += ch;
+        if (!"```json".startsWith(this.prefix) && !"```".startsWith(this.prefix)) {
+          this.invalid = true;
+          return;
+        }
+        continue;
+      }
+      const frame = this.frames.at(-1);
+      if (ch === "[" || ch === "{") {
+        if (frame && frame.stage !== "value") { this.invalid = true; return; }
+        this.started = true;
+        this.prefix = "";
+        this.frames.push({ type: ch === "[" ? "array" : "object", public: this.isPublicValue(), stage: ch === "[" ? "value" : "key" });
+      } else if (ch === "]" || ch === "}") {
+        if (!frame || (ch === "]") !== (frame.type === "array") || frame.stage === "colon") {
+          this.invalid = true; return;
+        }
+        this.frames.pop();
+        this.finishValue();
+      } else if (ch === '"' && (frame?.stage === "key" || frame?.stage === "value")) {
+        this.string = '"';
+      } else if (ch === ":" && frame?.stage === "colon") {
+        frame.stage = "value";
+      } else if (ch === "," && frame?.stage === "comma") {
+        frame.stage = frame.type === "array" ? "value" : "key";
+        frame.key = undefined;
+      } else if (frame?.stage === "value" && /[-\dntf]/.test(ch)) {
+        this.primitive = true;
+      } else {
+        this.invalid = true;
         return;
       }
-
-      // 方法2: 尝试使用 ai-json-fixer 修复并解析完整数组
-      const segments = this.tryParseWithFixer(isFinal);
-      if (segments && segments.length > this.emittedSegmentsList.length) {
-        for (const segment of segments) {
-          if (segment && !this.processedSegments.has(segment)) {
-            this.processedSegments.add(segment);
-            this.emittedSegmentsList.push(segment);
-            if (this.onSegmentReceived) {
-              this.onSegmentReceived(segment, this.emittedSegmentsList.length - 1);
-            }
-          }
-        }
-
-        if (this.onProgress) {
-          this.onProgress(this.processedSegments.size);
-        }
-      }
-    } catch (error) {
-      // 在流式处理中，解析错误是正常的
-      if (isFinal && this.processedSegments.size === 0) {
-        console.warn("Failed to parse speech segments:", error);
-        if (this.onError) {
-          this.onError("Failed to parse speech segments");
-        }
-      }
     }
   }
 
-  /**
-   * 从流式内容中提取完整的字符串段落
-   * 支持多个 JSON 数组（每行一个数组）和单个数组中的多个元素
-   */
-  private extractSegmentsFromStream(): number {
-    let extractedCount = 0;
-
-    try {
-      const validSegments: string[] = [];
-      let arrayDepth = 0;
-      let inString = false;
-      let escapeNext = false;
-      let currentString = "";
-
-      for (let i = 0; i < this.accumulatedContent.length; i++) {
-        const ch = this.accumulatedContent[i];
-
-        if (inString) {
-          if (escapeNext) {
-            escapeNext = false;
-            currentString += ch;
-            continue;
-          }
-          if (ch === "\\") {
-            escapeNext = true;
-            currentString += ch;
-            continue;
-          }
-          if (ch === '"') {
-            inString = false;
-            try {
-              let lookaheadIndex = i + 1;
-              while (
-                lookaheadIndex < this.accumulatedContent.length
-                && /\s/.test(this.accumulatedContent[lookaheadIndex] ?? "")
-              ) {
-                lookaheadIndex++;
-              }
-              const nextChar = this.accumulatedContent[lookaheadIndex];
-              const isJsonKey = nextChar === ":";
-
-              const parsed = JSON.parse('"' + currentString + '"');
-              if (typeof parsed === "string") {
-                const cleaned = parsed.trim();
-                // 过滤掉常见的 JSON 键名，只保留实际内容
-                const commonKeys = new Set(["message", "content", "text", "value", "speech", "speaker", "role", "type", "index", "id"]);
-                const reservedKeys = new Set(["analysis", "judgment", "judgement", "observation", "reasoning", "thought"]);
-                const lowered = cleaned.toLowerCase();
-                if (
-                  arrayDepth > 0
-                  && !isJsonKey
-                  && cleaned
-                  && cleaned.length > 5
-                  && !commonKeys.has(lowered)
-                  && !reservedKeys.has(lowered)
-                ) {
-                  validSegments.push(cleaned);
-                }
-              }
-            } catch {
-              // ignore
-            }
-            currentString = "";
-            continue;
-          }
-
-          currentString += ch;
-          continue;
-        }
-
-        if (ch === '"') {
-          inString = true;
-          escapeNext = false;
-          currentString = "";
-          continue;
-        }
-
-        if (ch === "[") {
-          arrayDepth++;
-          continue;
-        }
-        if (ch === "]" && arrayDepth > 0) {
-          arrayDepth--;
-          continue;
-        }
-      }
-
-      // 发送新的段落（只发送尚未处理的）
-      for (const segment of validSegments) {
-        if (!this.processedSegments.has(segment)) {
-          this.processedSegments.add(segment);
-          this.emittedSegmentsList.push(segment);
-          if (this.onSegmentReceived) {
-            this.onSegmentReceived(segment, this.emittedSegmentsList.length - 1);
-          }
-          extractedCount++;
-        }
-      }
-
-      if (extractedCount > 0 && this.onProgress) {
-        this.onProgress(this.processedSegments.size);
-      }
-    } catch (error) {
-      console.warn("Stream extraction error:", error);
+  public end(): string[] {
+    if (!this.ended && !this.segments.length && (this.started || this.invalid)) {
+      this.options.onError?.("No complete public speech segment");
     }
-
-    return extractedCount;
+    this.ended = true;
+    return this.getAllSegments();
   }
-
-  /**
-   * 使用 ai-json-fixer 尝试修复并解析 JSON
-   */
-  private tryParseWithFixer(isFinal: boolean): string[] | null {
-    try {
-      const content = this.accumulatedContent.trim();
-
-      // 清理 markdown 代码块
-      const cleaned = content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-
-      // 尝试使用 ai-json-fixer 解析
-      const parsed = parser.parse(cleaned);
-
-      if (Array.isArray(parsed)) {
-        const segments: string[] = [];
-        for (const item of parsed) {
-          if (typeof item === "string") {
-            // 情况1: ["话1", "话2"] - 字符串数组
-            const cleaned = item.trim();
-            if (cleaned) segments.push(cleaned);
-          } else if (item && typeof item === "object") {
-            // 情况2: [{"speaker": "...", "message": "..."}] - 对象数组
-            // 优先提取 content, message, text, value 等常见字段
-            const obj = item as Record<string, unknown>;
-            const text = obj.content || obj.message || obj.text || obj.value || obj.speech;
-            if (typeof text === "string") {
-              const cleaned = text.trim();
-              if (cleaned) segments.push(cleaned);
-            }
-          }
-        }
-        return segments.length > 0 ? segments : null;
-      }
-
-      // 如果是对象，尝试提取值
-      if (parsed && typeof parsed === "object") {
-        const segments: string[] = [];
-        for (const value of Object.values(parsed)) {
-          if (typeof value === "string") {
-            const cleaned = value.trim();
-            if (cleaned) segments.push(cleaned);
-          } else if (Array.isArray(value)) {
-            for (const item of value) {
-              if (typeof item === "string") {
-                const cleaned = item.trim();
-                if (cleaned) segments.push(cleaned);
-              }
-            }
-          }
-        }
-        if (segments.length > 0) return segments;
-      }
-
-      return null;
-    } catch {
-      // 尝试手动修复不完整的 JSON 数组
-      if (!isFinal) {
-        return this.tryRepairPartialArray();
-      }
-      return null;
-    }
-  }
-
-  /**
-   * 尝试修复不完整的 JSON 数组
-   */
-  private tryRepairPartialArray(): string[] | null {
-    try {
-      const content = this.accumulatedContent.trim();
-
-      // 如果以 [ 开始，尝试提取完整的字符串
-      if (content.startsWith("[")) {
-        const segments: string[] = [];
-        let inString = false;
-        let escapeNext = false;
-        let currentString = "";
-        let stringStart = -1;
-
-        for (let i = 0; i < content.length; i++) {
-          const char = content[i];
-
-          if (escapeNext) {
-            escapeNext = false;
-            if (inString) currentString += char;
-            continue;
-          }
-
-          if (char === "\\") {
-            escapeNext = true;
-            if (inString) currentString += char;
-            continue;
-          }
-
-          if (char === '"' && !escapeNext) {
-            if (!inString) {
-              inString = true;
-              stringStart = i;
-              currentString = "";
-            } else {
-              inString = false;
-              // 完成一个字符串
-              const cleaned = currentString.trim();
-              if (cleaned && cleaned.length > 1) {
-                segments.push(cleaned);
-              }
-              currentString = "";
-            }
-            continue;
-          }
-
-          if (inString) {
-            currentString += char;
-          }
-        }
-
-        return segments.length > 0 ? segments : null;
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
+  public getAllSegments(): string[] { return [...this.segments]; }
+  public getSegmentCount(): number { return this.segments.length; }
+  public reset(): void {
+    this.frames = [];
+    this.segments = [];
+    this.string = null;
+    this.escaped = this.primitive = this.ended = this.invalid = this.started = false;
+    this.prefix = "";
   }
 }
 
-/**
- * 创建流式语音解析器的便捷函数
- */
-export function createStreamingSpeechParser(
-  options: StreamingSpeechParserOptions = {}
-): StreamingSpeechParser {
+export function createStreamingSpeechParser(options: StreamingSpeechParserOptions = {}): StreamingSpeechParser {
   return new StreamingSpeechParser(options);
 }

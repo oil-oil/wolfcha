@@ -242,6 +242,7 @@ export function useSpecialEvents(
           seerTarget: currentState.nightActions.seerTarget,
           seerResult: currentState.nightActions.seerResult,
           deaths: nightDeaths,
+          resultsAnnounced: false,
         },
       },
     };

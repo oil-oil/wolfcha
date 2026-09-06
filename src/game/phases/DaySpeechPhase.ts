@@ -312,6 +312,10 @@ export class DaySpeechPhase extends GamePhase {
 
     currentState = {
       ...currentState,
+      nightHistory: {
+        ...currentState.nightHistory,
+        [currentState.day]: { ...currentState.nightHistory?.[currentState.day], resultsAnnounced: true },
+      },
       nightActions: {
         ...currentState.nightActions,
         pendingWolfVictim: undefined,

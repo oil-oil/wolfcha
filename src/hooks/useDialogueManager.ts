@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import type { SpeechRequest } from "@/lib/speech-request";
 import type { Player, Phase } from "@/types/game";
 
 export interface DialogueState {
@@ -10,6 +11,7 @@ export interface DialogueState {
 }
 
 export interface SpeechQueueState {
+  request?: SpeechRequest;
   segments: string[];
   currentIndex: number;
   player: Player;
@@ -23,6 +25,8 @@ export interface SpeechQueueState {
 }
 
 export interface PrefetchedSpeech {
+  gameId: string;
+  contextKey: string;
   playerId: string;
   phase: Phase;
   day: number;
@@ -33,6 +37,8 @@ export interface PrefetchedSpeech {
 }
 
 export interface PrefetchCriteria {
+  gameId: string;
+  contextKey: string;
   playerId: string;
   phase: Phase;
   day: number;
@@ -43,6 +49,8 @@ export const isPrefetchCompatible = (
   prefetch: PrefetchedSpeech,
   criteria: PrefetchCriteria
 ): boolean =>
+  prefetch.gameId === criteria.gameId &&
+  prefetch.contextKey === criteria.contextKey &&
   prefetch.playerId === criteria.playerId &&
   prefetch.phase === criteria.phase &&
   prefetch.day === criteria.day &&
@@ -76,7 +84,8 @@ export function useDialogueManager() {
   const initSpeechQueue = useCallback((
     segments: string[],
     player: Player,
-    afterSpeech?: (s: unknown) => Promise<void>
+    afterSpeech?: (s: unknown) => Promise<void>,
+    request?: SpeechRequest
   ) => {
     const normalizedSegments = segments.map((s) => s.trim()).filter((s) => s.length > 0);
     speechQueueRef.current = {
@@ -84,6 +93,7 @@ export function useDialogueManager() {
       currentIndex: 0,
       player,
       afterSpeech,
+      request,
       completedIndices: new Set(),
       awaitingNextSegment: false,
     };
@@ -105,7 +115,7 @@ export function useDialogueManager() {
   /** 更新发言队列索引 */
   const advanceSpeechQueue = useCallback(() => {
     const queue = speechQueueRef.current;
-    if (!queue) return null;
+    if (!queue || (queue.request && !queue.request.isValid())) return null;
 
     const nextIndex = queue.currentIndex + 1;
     if (nextIndex < queue.segments.length) {
@@ -139,13 +149,15 @@ export function useDialogueManager() {
   /** 初始化流式发言队列（不需要预先知道所有段落） */
   const initStreamingSpeechQueue = useCallback((
     player: Player,
-    afterSpeech?: (s: unknown) => Promise<void>
+    afterSpeech?: (s: unknown) => Promise<void>,
+    request?: SpeechRequest
   ) => {
     speechQueueRef.current = {
       segments: [],
       currentIndex: 0,
       player,
       afterSpeech,
+      request,
       isStreaming: true,
       isFinalized: false,
       committedIndices: new Set(),
@@ -189,18 +201,13 @@ export function useDialogueManager() {
   }, []);
 
   /** 向流式发言队列追加段落 */
-  const appendToSpeechQueue = useCallback((segment: string) => {
+  const appendToSpeechQueue = useCallback((segment: string, requestId?: string, index?: number) => {
     const queue = speechQueueRef.current;
-    if (!queue) return;
-
+    if (!queue || queue.request?.id !== requestId || (queue.request && !queue.request.isValid())) return;
+    // 网络重放按段落位置去重，相同文字出现在不同位置时保留。
+    if (index !== undefined && index !== queue.segments.length) return;
     const trimmed = segment.trim();
     if (!trimmed) return;
-
-    // Deduplication: prevent adding the same segment twice
-    // This can happen due to streaming parser edge cases
-    if (queue.segments.includes(trimmed)) {
-      return;
-    }
 
     // 在添加新段落前检查是否在等待下一段
     // 如果 currentIndex 指向当前最后一个段落，说明用户在等待
@@ -226,9 +233,9 @@ export function useDialogueManager() {
   }, []);
 
   /** 标记流式发言队列已完成接收 */
-  const finalizeSpeechQueue = useCallback((options?: { nextSpeakerIsAI?: boolean }) => {
+  const finalizeSpeechQueue = useCallback((options?: { nextSpeakerIsAI?: boolean; requestId?: string }) => {
     const queue = speechQueueRef.current;
-    if (!queue) return;
+    if (!queue || queue.request?.id !== options?.requestId || (queue.request && !queue.request.isValid())) return;
 
     queue.isStreaming = false;
     queue.isFinalized = true;

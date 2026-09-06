@@ -212,6 +212,7 @@ export interface ReasoningOptions {
 }
 
 export interface GenerateOptions {
+  signal?: AbortSignal;
   model: string;
   provider?: Provider;
   promptScope?: PromptScope;
@@ -388,6 +389,7 @@ async function fetchWithRetry(
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    init.signal?.throwIfAborted();
     const attemptNumber = ++attemptSequence.current;
     try {
       const headers = new Headers(init.headers);
@@ -414,6 +416,7 @@ async function fetchWithRetry(
         jitter;
       await sleep(backoffMs);
     } catch (err) {
+      init.signal?.throwIfAborted();
       lastError = err;
       // TokenPay 没有请求幂等键。网络断开时无法确认上游是否已经计费，
       // 因此只允许对明确未执行的 429 重试，不自动重放模糊失败。
@@ -445,6 +448,7 @@ async function fetchWithTokenPayRecovery(
     logicalRequestId,
     attemptSequence,
   );
+  init.signal?.throwIfAborted();
   if (response.ok || modelSource !== "tokenpay") return response;
   return retryTokenPayRequestAfterTopUp(
     response,
@@ -923,6 +927,7 @@ export async function* generateCompletionStream(
     "/api/chat",
     {
       method: "POST",
+      signal: options.signal,
       headers: {
         ...headers,
       },

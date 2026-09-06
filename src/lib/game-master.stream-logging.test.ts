@@ -95,3 +95,71 @@ test("流式限流兜底的返回、onComplete 与日志内容一致", async () 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("生产流式链路不泄露 analysis，字幕、返回值和日志保留短句与重复段落", async () => {
+  const [{ aiLogger }, { generateAISpeechSegmentsStream }] = await Promise.all([import("./ai-logger"), import("./game-master")]);
+  const originalFetch = globalThis.fetch;
+  const logs: AILogEntry[] = [];
+  const unsubscribe = aiLogger.subscribe((entry) => { logs.push(entry); });
+  const outputs = [
+    { input: '[{"analysis":"我是狼人，不能公开身份","speech":"不对。"},{"speech":"继续核对发言。"},{"speech":"不对。"}]', expected: ["不对。", "继续核对发言。", "不对。"] },
+    { input: '{"analysis":"我是狼人，准备装预言家"}', expected: ["（……）"] },
+  ];
+  try {
+    for (const output of outputs) {
+      globalThis.fetch = async (input) => {
+        if (String(input) === "/api/demo-config") return Response.json({ active: false, enabled: false });
+        const events = [...output.input].map((ch) => `data: ${JSON.stringify({ choices: [{ delta: { content: ch } }] })}\n\n`).join("");
+        return new Response(events + "data: [DONE]\n\n", { headers: { "Content-Type": "text/event-stream" } });
+      };
+      const emitted: string[] = [];
+      const completed: string[][] = [];
+      const result = await generateAISpeechSegmentsStream(state, player, {
+        onSegmentReceived: (segment) => emitted.push(segment), onComplete: (segments) => completed.push(segments),
+      });
+      assert.deepEqual(emitted, output.expected);
+      assert.deepEqual(result, emitted);
+      assert.deepEqual(completed, [emitted]);
+      assert.equal(logs.at(-1)?.response.content, emitted.join("\n"));
+      assert.doesNotMatch(emitted.join(""), /我是狼人|准备装|不能公开/);
+    }
+  } finally { unsubscribe(); globalThis.fetch = originalFetch; }
+});
+
+test("非流式段落入口遵守相同公开字段约束，私有对象不能触发原文兜底", async () => {
+  const { generateAISpeechSegments } = await import("./game-master");
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [content, expected] of [
+      ['{"analysis":"狼人身份秘密","speech":["不对。","不对。"]}', ["不对。", "不对。"]],
+      ['{"analysis":"狼人身份秘密"}', ["（……）"]],
+    ] as const) {
+      globalThis.fetch = async (input) => String(input) === "/api/demo-config"
+        ? Response.json({ active: false, enabled: false })
+        : Response.json({ id: "test", choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }] });
+      assert.deepEqual(await generateAISpeechSegments(state, player), [...expected]);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("取消发言会传到实际请求，取消后的请求不重试、不发射兜底段落", async () => {
+  const { generateAISpeechSegmentsStream } = await import("./game-master");
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  const emitted: string[] = [];
+  let calls = 0;
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/demo-config") return Response.json({ active: false, enabled: false });
+    calls++;
+    assert.equal(init?.signal, controller.signal);
+    controller.abort();
+    throw new DOMException("cancelled", "AbortError");
+  };
+  try {
+    await assert.rejects(generateAISpeechSegmentsStream(state, player, {
+      signal: controller.signal, onSegmentReceived: (segment) => emitted.push(segment),
+    }), { name: "AbortError" });
+    assert.equal(calls, 1);
+    assert.deepEqual(emitted, []);
+  } finally { globalThis.fetch = originalFetch; }
+});

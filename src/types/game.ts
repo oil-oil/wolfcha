@@ -155,7 +155,22 @@ export interface ChatMessage {
   phase?: Phase;
   isSystem?: boolean;
   isStreaming?: boolean;
+  speechRound?: number;
+  pkSource?: "badge" | "vote";
   isLastWords?: boolean;  // Flag for last words (遗言) messages
+}
+
+/** 已结算且公开的投票快照；旧存档中的每日票型仍保留作兼容回退。 */
+export interface VoteRound {
+  id: string;
+  day: number;
+  kind: "badge" | "execution";
+  round: number;
+  candidates: number[];
+  votes: Record<string, number>;
+  sheriffSeat: number | null;
+  winnerSeat: number | null;
+  outcome: "elected" | "executed" | "idiot-revealed" | "tie" | "no-votes";
 }
 
 export interface GameState {
@@ -197,10 +212,13 @@ export interface GameState {
   votes: Record<string, number>;
   voteReasons?: Record<string, string>;
   lastVoteReasons?: Record<string, string>;
+  voteRounds?: VoteRound[];
   voteHistory: Record<number, Record<string, number>>; // day -> { voterId -> targetSeat }
   nightHistory?: Record<
     number,
     {
+      /** 夜间结算已由主持人公开，不能用提示词的 phase 代替。 */
+      resultsAnnounced?: boolean;
       guardTarget?: number;
       wolfTarget?: number;
       witchSave?: boolean;

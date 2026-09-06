@@ -9,7 +9,9 @@ import { getAuthHeaders } from "@/lib/auth-headers";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 
 export interface AudioTask {
-  id: string; // unique message id
+  id: string; // 语音缓存键，同音色同文字可复用
+  playbackId?: string; // 请求 + 段落身份，允许重复句各自播放
+  isValid?: () => boolean;
   text: string;
   voiceId: string;
   playerId: string;
@@ -21,7 +23,7 @@ export function makeAudioTaskId(voiceId: string, text: string) {
 
 type PlayState = "idle" | "playing" | "loading";
 
-class AudioManager {
+export class AudioManager {
   private queue: AudioTask[] = [];
   private currentTask: AudioTask | null = null;
   private currentAudio: HTMLAudioElement | null = null;
@@ -169,9 +171,10 @@ class AudioManager {
 
   // 添加任务到队列
   addToQueue(task: AudioTask) {
-    if (!this.isEnabled()) return;
-    // 简单的去重：如果队列里已经有这个ID，就不加了
-    if (this.queue.some(t => t.id === task.id) || this.currentTask?.id === task.id) {
+    if (!this.isEnabled() || task.isValid?.() === false) return;
+    const playbackId = task.playbackId ?? task.id;
+    if (this.queue.some((t) => (t.playbackId ?? t.id) === playbackId) ||
+        (this.currentTask && (this.currentTask.playbackId ?? this.currentTask.id) === playbackId)) {
       return;
     }
     this.queue.push(task);
@@ -196,8 +199,8 @@ class AudioManager {
 
   // 清空整个队列（用于重置/新的一天）
   clearQueue() {
-    this.stopCurrent();
     this.queue = [];
+    this.stopCurrent();
   }
 
   clearCache() {
@@ -208,8 +211,10 @@ class AudioManager {
     if (!this.isEnabled()) return;
     if (this.state !== "idle") return;
     if (this.queue.length === 0) return;
-    const task = this.queue.shift();
-    if (!task) return;
+    let next = this.queue.shift();
+    while (next && next.isValid?.() === false) next = this.queue.shift();
+    if (!next) return;
+    const task = next;
 
     this.currentTask = task;
     this.state = "loading";
@@ -217,6 +222,8 @@ class AudioManager {
     try {
       // Use ensureReady for deduplicated fetching
       await this.ensureReady(task);
+      if (this.currentTask !== task) return;
+      if (task.isValid?.() === false) { this.stopCurrent(); return; }
 
       const cached = this.cache.get(task.id);
       if (!cached?.blob) {
@@ -255,6 +262,10 @@ class AudioManager {
       };
 
       const startPlayback = async () => {
+        if (this.currentTask !== task || task.isValid?.() === false) {
+          this.onAudioEnded(task, url);
+          return;
+        }
         this.state = "playing";
         this.onPlayStart?.(task.playerId);
         await audio.play();
@@ -285,7 +296,8 @@ class AudioManager {
 
     } catch (error) {
       console.error("AudioManager error:", error);
-      // 发生错误，结束当前任务，继续下一个
+      // 旧任务的失败不能清掉正在播放的新任务。
+      if (this.currentTask !== task) return;
       this.state = "idle";
       this.currentTask = null;
       this.processQueue();

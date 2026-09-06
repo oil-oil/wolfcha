@@ -653,6 +653,19 @@ export function applyBackwardJump(
     }
   }
 
+  // 回滚同时裁掉未来投票快照，不能让新分支读到被撤销的票型。
+  newState.voteRounds = newState.voteRounds?.filter((round) => {
+    if (round.day < target.day) return true;
+    if (round.day > target.day) return false;
+    const resolutionPhase = round.kind === "badge" ? "DAY_BADGE_ELECTION" : "DAY_RESOLVE";
+    return getPhaseIndex(target.phase) > getPhaseIndex(resolutionPhase);
+  });
+  if (newState.nightHistory?.[target.day] && getPhaseIndex(target.phase) <= getPhaseIndex("DAY_BADGE_ELECTION")) {
+    newState.nightHistory = { ...newState.nightHistory, [target.day]: {
+      ...newState.nightHistory[target.day], resultsAnnounced: false,
+    } };
+  }
+
   // 4. 重置当前行动数据
   newState.votes = {};
   newState.nightActions = {
@@ -1073,7 +1086,6 @@ export function applySmartJump(
   }
 
   let newState: GameState;
-  let needsManualFill = false;
 
   if (analysis.direction === "backward") {
     // 回滚不需要补全，直接执行

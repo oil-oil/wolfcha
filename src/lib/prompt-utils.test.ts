@@ -255,7 +255,7 @@ test("当天玩家死亡后仍保留其已发生的发言，并保持遗言的�
 
   const transcript = buildTodayTranscript(state);
 
-  assert.match(transcript, /8号（已出局）: 8号先发言/);
+  assert.match(transcript, /8号（当前已出局）: 8号先发言/);
   assert.ok(transcript.indexOf("8号先发言") < transcript.indexOf("9号随后发言"));
   assert.ok(transcript.indexOf("9号随后发言") < transcript.indexOf("我要验竞选了尚未发言的3号"));
   assert.ok(transcript.indexOf("我要验竞选了尚未发言的3号") < transcript.indexOf("3号之后才发言"));

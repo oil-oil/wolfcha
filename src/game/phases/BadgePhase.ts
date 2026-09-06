@@ -41,7 +41,6 @@ export class BadgePhase extends GamePhase {
   private buildBadgeElectionPrompt(state: GameContext["state"], player: Player): PromptResult {
     const { t } = getI18n();
     const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
-    const candidateSet = new Set(candidates);
     const alivePlayers = state.players
       .filter((p) => p.alive && p.playerId !== player.playerId)
       .filter((p) => (candidates.length > 0 ? candidates.includes(p.seat) : true));
@@ -66,23 +65,8 @@ export class BadgePhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
-    const seatByPlayerId = new Map(state.players.map((p) => [p.playerId, p.seat] as const));
-    const badgeSpeechText = state.messages
-      .filter((m) => m.day === state.day)
-      .filter((m) => !m.isSystem)
-      .filter((m) => m.phase === "DAY_BADGE_SPEECH" || m.phase === "DAY_PK_SPEECH")
-      .filter((m) => {
-        if (candidateSet.size === 0) return true;
-        const seat = seatByPlayerId.get(m.playerId);
-        return typeof seat === "number" && candidateSet.has(seat);
-      })
-      .map((m) => {
-        // 与 buildTodayTranscript/buildPastDaysTranscript 一致：对模型匿名为"N号"，缺座位才回退真名
-        const seat = seatByPlayerId.get(m.playerId);
-        const speaker = typeof seat === "number" ? t("mentions.seatLabel", { seat: seat + 1 }) : m.playerName;
-        return `${speaker}: ${m.content}`;
-      })
-      .join("\n");
+    // 候选资格只限制投票目标，不能抹去已公开的落选者发言。
+    const badgeSpeechText = buildTodayTranscript(state);
 
     const liteContextLines = [
       context,

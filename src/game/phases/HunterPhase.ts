@@ -2,7 +2,7 @@ import type { Player } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
-  buildGameContext,
+  buildDecisionContext,
   getRoleText,
   getWinCondition,
   buildSystemTextFromParts,
@@ -37,7 +37,7 @@ export class HunterPhase extends GamePhase {
   getPrompt(context: GameContext, player: Player): PromptResult {
     const { t } = getI18n();
     const state = context.state;
-    const gameContext = buildGameContext(state, player);
+    const gameContext = buildDecisionContext(state, player);
     const alivePlayers = state.players.filter(
       (p) => p.alive && p.playerId !== player.playerId
     );

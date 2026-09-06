@@ -1,5 +1,6 @@
 "use client";
 
+import { recordVoteRound } from "@/lib/vote-rounds";
 import { useCallback, useRef } from "react";
 import { useAtom } from "jotai";
 import { getI18n } from "@/i18n/translator";
@@ -193,6 +194,12 @@ export function useBadgePhase(
     for (const [, c] of entries) max = Math.max(max, c);
     const topSeats = entries.filter(([, c]) => c === max).map(([s]) => Number(s));
 
+    state = recordVoteRound(state, {
+      kind: "badge", round: (state.badge.revoteCount || 0) + 1, candidates,
+      votes: state.badge.votes, sheriffSeat: null, winnerSeat: topSeats.length === 1 ? topSeats[0] : null,
+      outcome: topSeats.length === 1 ? "elected" : topSeats.length ? "tie" : "no-votes",
+    });
+
     // 平票处理
     if (topSeats.length !== 1) {
       const revoteCount = (state.badge.revoteCount || 0) + 1;
@@ -204,8 +211,8 @@ export function useBadgePhase(
 
         const badgeTieTearMessage = texts.t("badgePhase.tieTear" as never);
 
-        // 合并所有轮次的投票保存到历史
-        const finalVotes = { ...state.badge.allVotes, ...state.badge.votes };
+        // 兼容字段只保存最后一轮；完整过程存于 voteRounds
+        const finalVotes = { ...state.badge.votes };
         let nextState: GameState = {
           ...state,
           badge: {
@@ -232,19 +239,20 @@ export function useBadgePhase(
         return;
       }
 
-      // 进入PK发言，累积当前轮投票到 allVotes
+      // 进入 PK 前公开本轮票型，再开始下一轮
       isResolvingBadgeElectionRef.current = false;
       const nextState: GameState = {
         ...state,
         badge: {
           ...state.badge,
           votes: {},
-          allVotes: { ...state.badge.allVotes, ...state.badge.votes },
+          allVotes: { ...state.badge.votes },
           revoteCount,
           candidates: topSeats,
         },
       };
-      await startBadgePkSpeech(nextState, topSeats);
+      await startBadgePkSpeech(addSystemMessage(nextState,
+        generateBadgeVoteDetails(state.badge.votes, state.players, candidates)), topSeats);
       return;
     }
 
@@ -253,8 +261,8 @@ export function useBadgePhase(
     const winner = state.players.find((p) => p.seat === winnerSeat);
     const votedCount = counts[winnerSeat] || 0;
 
-    // 合并所有轮次的投票（包括 PK 轮）保存到历史
-    const finalVotes = { ...state.badge.allVotes, ...state.badge.votes };
+    // 兼容字段只保存最后一轮；完整过程存于 voteRounds
+    const finalVotes = { ...state.badge.votes };
     let nextState: GameState = {
       ...state,
       badge: {
@@ -277,7 +285,7 @@ export function useBadgePhase(
     await delay(DELAY_CONFIG.DIALOGUE);
     isResolvingBadgeElectionRef.current = false;
     await onBadgeElectionComplete(nextState);
-  }, [setGameState, setDialogue, generateBadgeVoteDetails, onBadgeElectionComplete]);
+  }, [setGameState, setDialogue, generateBadgeVoteDetails, onBadgeElectionComplete, startBadgePkSpeech]);
 
   /** AI 报名决策（在用户决定后同时进行） */
   const resolveAIBadgeSignup = useCallback(async (state: GameState): Promise<GameState> => {

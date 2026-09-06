@@ -618,6 +618,7 @@ export function useGameLogic() {
     setIsWaitingForAI,
     setWaitingForNextRound,
     isTokenValid,
+    getToken,
     initSpeechQueue,
     initStreamingSpeechQueue,
     appendToSpeechQueue,
@@ -2244,7 +2245,7 @@ export function useGameLogic() {
     }
 
     const queue = getSpeechQueue();
-    if (!queue) {
+    if (!queue || (queue.request && !queue.request.isValid())) {
       return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
@@ -2259,7 +2260,9 @@ export function useGameLogic() {
     // 将当前句子添加到消息列表（如果尚未提交）
     const currentSegment = segments[currentIndex];
     if (currentSegment && currentSegment.trim().length > 0 && !isCurrentSegmentCommitted()) {
-      nextState = addPlayerMessage(nextState, player.playerId, currentSegment);
+      nextState = addPlayerMessage(nextState, player.playerId, currentSegment, {
+        id: queue.request ? `${queue.request.id}:${currentIndex}` : undefined,
+      });
       setGameState(nextState);
       markCurrentSegmentCommitted();
 

@@ -1,3 +1,4 @@
+import { recordVoteRound } from "@/lib/vote-rounds";
 import type { GameState, Player } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
@@ -279,13 +280,21 @@ export class VotePhase extends GamePhase {
 
     const result = tallyVotes(currentState);
 
+    const immunity = !!result && currentState.players.some((p) => p.seat === result.seat && p.role === "Idiot") &&
+      !currentState.roleAbilities.idiotRevealed;
+    currentState = recordVoteRound(currentState, {
+      kind: "execution", round: state.pkSource === "vote" ? 2 : 1,
+      candidates: state.pkSource === "vote" && state.pkTargets?.length ? state.pkTargets : state.players.filter((p) => p.alive).map((p) => p.seat),
+      votes: currentVotes, sheriffSeat: state.badge.holderSeat, winnerSeat: result?.seat ?? null,
+      outcome: result ? immunity ? "idiot-revealed" : "executed" : Object.keys(this.getVoteCounts(currentState)).length ? "tie" : "no-votes",
+    });
     const prevDayRecord = (currentState.dayHistory || {})[currentState.day] || {};
     if (result) {
       currentState = {
         ...currentState,
         dayHistory: {
           ...(currentState.dayHistory || {}),
-          [currentState.day]: { ...prevDayRecord, executed: { seat: result.seat, votes: result.count }, voteTie: false },
+          [currentState.day]: { ...prevDayRecord, executed: immunity ? undefined : { seat: result.seat, votes: result.count }, voteTie: false },
         },
       };
     } else {
@@ -321,7 +330,7 @@ export class VotePhase extends GamePhase {
           roleAbilities: { ...currentState.roleAbilities, idiotRevealed: true },
           dayHistory: {
             ...(currentState.dayHistory || {}),
-            [currentState.day]: { ...prevDayRec, idiotRevealed: { seat: result.seat } },
+            [currentState.day]: { ...prevDayRec, executed: undefined, voteTie: false, idiotRevealed: { seat: result.seat } },
           },
           pkTargets: undefined,
           pkSource: undefined,

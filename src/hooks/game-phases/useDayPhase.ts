@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { useAtom } from "jotai";
-import type { GameState, Player, Phase } from "@/types/game";
+import { useAtom, useStore } from "jotai";
+import type { GameState, Player } from "@/types/game";
 import type { PrefetchCriteria, PrefetchedSpeech } from "../useDialogueManager";
 import { gameStateAtom } from "@/store/game-machine";
 import {
@@ -12,6 +12,7 @@ import {
   addPlayerMessage,
   killPlayer,
   generateAISpeechSegmentsStream,
+  getSpeechContextKey,
 } from "@/lib/game-master";
 import { getNextSpeechSeat } from "@/lib/speech-order";
 import { PHASE_CATEGORIES } from "@/lib/game-constants";
@@ -19,6 +20,9 @@ import { type FlowToken } from "@/lib/game-flow-controller";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
 import { getLocale } from "@/i18n/locale-store";
+import { createSpeechRequest, type SpeechRequest } from "@/lib/speech-request";
+import { generateUUID } from "@/lib/utils";
+import { withTimeout } from "@/lib/request-timeout";
 import { isGameSessionExpiredMessage } from "@/lib/llm";
 
 export interface DayPhaseCallbacks {
@@ -26,10 +30,11 @@ export interface DayPhaseCallbacks {
   setIsWaitingForAI: (waiting: boolean) => void;
   setWaitingForNextRound: (waiting: boolean) => void;
   isTokenValid: (token: FlowToken) => boolean;
-  initSpeechQueue: (segments: string[], player: Player, afterSpeech?: (s: unknown) => Promise<void>) => void;
-  initStreamingSpeechQueue: (player: Player, afterSpeech?: (s: unknown) => Promise<void>) => void;
-  appendToSpeechQueue: (segment: string) => void;
-  finalizeSpeechQueue: (options?: { nextSpeakerIsAI?: boolean }) => void;
+  getToken: () => FlowToken;
+  initSpeechQueue: (segments: string[], player: Player, afterSpeech?: (s: unknown) => Promise<void>, request?: SpeechRequest) => void;
+  initStreamingSpeechQueue: (player: Player, afterSpeech?: (s: unknown) => Promise<void>, request?: SpeechRequest) => void;
+  appendToSpeechQueue: (segment: string, requestId?: string, index?: number) => void;
+  finalizeSpeechQueue: (options?: { nextSpeakerIsAI?: boolean; requestId?: string }) => void;
   setPrefetchedSpeech: (prefetch: PrefetchedSpeech | null) => void;
   consumePrefetchedSpeech: (criteria: PrefetchCriteria) => string[] | null;
   setAfterLastWords: (callback: ((s: GameState) => Promise<void>) | null) => void;
@@ -57,7 +62,7 @@ export function useDayPhase(
     setIsWaitingForAI,
     setWaitingForNextRound,
     isTokenValid,
-    initSpeechQueue,
+    getToken,
     initStreamingSpeechQueue,
     appendToSpeechQueue,
     finalizeSpeechQueue,
@@ -66,349 +71,156 @@ export function useDayPhase(
     setAfterLastWords,
   } = callbacks;
 
-  /** 判断是否为发言类阶段 */
-  const isSpeechLikePhase = (phase: Phase): boolean => {
-    return PHASE_CATEGORIES.SPEECH_PHASES.includes(phase as typeof PHASE_CATEGORIES.SPEECH_PHASES[number]);
-  };
+  const store = useStore();
+  const activeRequestRef = useRef<(SpeechRequest & { controller: AbortController }) | null>(null);
+  const prefetchControllerRef = useRef<AbortController | null>(null);
 
-  const buildPostSpeechState = useCallback((
-    baseState: GameState,
-    speaker: Player,
-    segments: string[]
-  ): GameState => {
-    const normalized = segments.map((segment) => segment.trim()).filter((segment) => segment.length > 0);
-    return normalized.reduce((nextState, segment) => {
-      return addPlayerMessage(nextState, speaker.playerId, segment);
-    }, baseState);
-  }, []);
-
-
-  // 使用 ref 来获取最新的 gameState，避免闭包问题
-  const gameStateRef = useRef(gameState);
-  gameStateRef.current = gameState;
-
-  // 防止 AI 发言重复触发
-  const currentSpeakingPlayerRef = useRef<string | null>(null);
-
-  // 用于存储流式生成的段落以便预取音频
-  const streamingSegmentsRef = useRef<string[]>([]);
-
-  const resolveNextSpeaker = useCallback((state: GameState) => {
-    const nextSeat = getNextSpeechSeat(state);
-    const nextPlayer = nextSeat === null
-      ? null
-      : state.players.find((player) => player.seat === nextSeat) ?? null;
-    const nextSpeakerIsAI = !!nextPlayer && !nextPlayer.isHuman && nextPlayer.alive;
-
-    return { nextSeat, nextSpeakerIsAI };
-  }, []);
-
-  const prefetchNextAISpeech = useCallback(async (
-    state: GameState,
-    player: Player
-  ) => {
-    if (!["DAY_SPEECH", "DAY_PK_SPEECH", "DAY_BADGE_SPEECH"].includes(state.phase)) return;
-    if (!player.agentProfile) return;
-
-    const basePrefetch: PrefetchedSpeech = {
-      playerId: player.playerId,
-      phase: state.phase,
-      day: state.day,
-      messageCount: state.messages.length,
-      segments: [],
-      isComplete: false,
-      createdAt: Date.now(),
-    };
-
-    setPrefetchedSpeech(basePrefetch);
-
-    const collected: string[] = [];
-
-    try {
-      const segments = await generateAISpeechSegmentsStream(state, player, {
-        onSegmentReceived: (segment) => {
-          collected.push(segment);
-          setPrefetchedSpeech({
-            ...basePrefetch,
-            segments: [...collected],
-            isComplete: false,
-          });
-        },
-        onComplete: (finalSegments) => {
-          setPrefetchedSpeech({
-            ...basePrefetch,
-            segments: finalSegments,
-            isComplete: true,
-          });
-        },
-        onError: () => {
-          setPrefetchedSpeech(null);
-        },
-      });
-
-      if (segments.length === 0) {
-        setPrefetchedSpeech(null);
-      }
-    } catch {
-      setPrefetchedSpeech(null);
+  useEffect(() => {
+    if (activeRequestRef.current && !activeRequestRef.current.isValid()) {
+      activeRequestRef.current.controller.abort();
+      prefetchControllerRef.current?.abort();
     }
-  }, [setPrefetchedSpeech]);
+  }, [gameState]);
+  useEffect(() => () => {
+    activeRequestRef.current?.controller.abort();
+    activeRequestRef.current = null;
+    prefetchControllerRef.current?.abort();
+  }, []);
 
-  /** AI 发言（流式分段输出） */
+  const prefetchNextAISpeech = useCallback(async (state: GameState, player: Player) => {
+    if (!player.agentProfile) return;
+    prefetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    prefetchControllerRef.current = controller;
+    const token = getToken();
+    const isValid = () => !controller.signal.aborted && token.isValid() &&
+      prefetchControllerRef.current === controller && store.get(gameStateAtom).gameId === state.gameId;
+    const base: PrefetchedSpeech = {
+      gameId: state.gameId, contextKey: getSpeechContextKey(state, player),
+      playerId: player.playerId, phase: state.phase, day: state.day,
+      messageCount: state.messages.length, segments: [], isComplete: false, createdAt: Date.now(),
+    };
+    setPrefetchedSpeech(base);
+    try {
+      const segments = await generateAISpeechSegmentsStream(state, player, { signal: controller.signal });
+      if (isValid()) setPrefetchedSpeech({ ...base, segments, isComplete: true });
+    } catch {
+      if (isValid()) setPrefetchedSpeech(null);
+    }
+  }, [getToken, setPrefetchedSpeech, store]);
+
+  /** 每次请求持有独立段落和令牌；所有异步回调在写入前验证来源。 */
   const runAISpeech = useCallback(async (
     state: GameState,
     player: Player,
     options?: { afterSpeech?: (s: GameState) => Promise<void> }
   ) => {
-    if (state.phase.includes("NIGHT")) {
-      console.warn("[wolfcha] runAISpeech called during NIGHT phase:", state.phase);
-      return;
-    }
+    if (!PHASE_CATEGORIES.SPEECH_PHASES.includes(state.phase as typeof PHASE_CATEGORIES.SPEECH_PHASES[number])) return;
+    if (activeRequestRef.current?.isValid()) return;
+    activeRequestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const id = generateUUID();
+    const request = createSpeechRequest(id, state, player, getToken(), () => store.get(gameStateAtom),
+      () => activeRequestRef.current?.id === id);
+    activeRequestRef.current = { ...request, controller };
+    if (!request.isValid()) return;
+    const isValid = () => request.isValid() && !controller.signal.aborted;
+    const afterSpeech = options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined;
+    const voiceId = resolveVoiceId(player.agentProfile?.persona?.voiceId,
+      player.agentProfile?.persona?.gender, player.agentProfile?.persona?.age, getLocale() as AppLocale);
+    const collected: string[] = [];
+    let displayedCount = 0;
+    let displayChain = Promise.resolve();
+    let audioChain = Promise.resolve();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    if (currentSpeakingPlayerRef.current === player.playerId) {
-      console.warn("[wolfcha] runAISpeech: already speaking for", player.displayName);
-      return;
-    }
-
-    // 重置流式段落收集器
-    streamingSegmentsRef.current = [];
-    let hasReceivedFirstSegment = false;
-    let isTimedOut = false;
-
-    // Get current locale for voice resolution
-    const locale = getLocale() as AppLocale;
-    const voiceId = resolveVoiceId(
-      player.agentProfile?.persona?.voiceId,
-      player.agentProfile?.persona?.gender,
-      player.agentProfile?.persona?.age,
-      locale
-    );
-
-    const prefetchCriteria: PrefetchCriteria = {
-      playerId: player.playerId,
-      phase: state.phase,
-      day: state.day,
-      messageCount: state.messages.length,
+    const appendSegment = (segment: string, index: number) => {
+      if (!isValid() || index !== collected.length) return;
+      collected.push(segment);
+      const task = { id: makeAudioTaskId(voiceId, segment), playbackId: `${id}:${index}`, isValid, text: segment, voiceId, playerId: player.playerId };
+      // 首段 TTS 等待不能让后续文字先进入队列。后续音频只预加载，不阻塞字幕。
+      displayChain = displayChain.then(async () => {
+        if (!isValid()) return;
+        let firstAudioReady = false;
+        if (index === 0 && audioManager.isEnabled()) {
+          try {
+            await withTimeout(audioManager.ensureReady(task), 15000);
+            firstAudioReady = true;
+          } catch { /* 保留文字，不重发失败的 TTS 请求 */ }
+        }
+        if (!isValid()) return;
+        if (index === 0) {
+          clearTimeout(timeoutId);
+          setIsWaitingForAI(false);
+        }
+        appendToSpeechQueue(segment, id, index);
+        displayedCount += 1;
+        if (audioManager.isEnabled()) {
+          if (index === 0) {
+            if (firstAudioReady) audioManager.addToQueue(task);
+            return;
+          }
+          audioChain = audioChain.then(async () => {
+            if (!isValid()) return;
+            try { await withTimeout(audioManager.ensureReady(task), 15000); } catch { return; }
+            if (isValid()) audioManager.addToQueue(task);
+          });
+        }
+      });
     };
 
-    const prefetchedSegments = consumePrefetchedSpeech(prefetchCriteria);
-    if (prefetchedSegments && prefetchedSegments.length > 0) {
-      currentSpeakingPlayerRef.current = player.playerId;
-
-      const ttsEnabled = audioManager.isEnabled();
-      const firstSegment = prefetchedSegments[0];
-
-      if (ttsEnabled && firstSegment) {
-        // Wait for first segment TTS before showing text
-        setDialogue(player.displayName, t("dayPhase.organizing"), true);
-        const task = {
-          id: makeAudioTaskId(voiceId, firstSegment),
-          text: firstSegment,
-          voiceId,
-          playerId: player.playerId,
-        };
-        try {
-          await audioManager.ensureReady(task);
-        } catch {
-          // TTS failed, continue without audio
-        }
-        setIsWaitingForAI(false);
-        initSpeechQueue(
-          prefetchedSegments,
-          player,
-          options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined
-        );
-        audioManager.addToQueue(task);
-        // Prefetch remaining segments in order (chained to preserve sequence)
-        let chain = Promise.resolve();
-        for (let i = 1; i < prefetchedSegments.length; i++) {
-          const seg = prefetchedSegments[i];
-          const segTask = { id: makeAudioTaskId(voiceId, seg), text: seg, voiceId, playerId: player.playerId };
-          chain = chain.then(() =>
-            audioManager.ensureReady(segTask).then(() => audioManager.addToQueue(segTask)).catch(() => {})
-          );
-        }
-      } else {
-        setIsWaitingForAI(false);
-        initSpeechQueue(
-          prefetchedSegments,
-          player,
-          options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined
-        );
-      }
-
-      currentSpeakingPlayerRef.current = null;
-      return;
-    }
-
-    currentSpeakingPlayerRef.current = player.playerId;
+    const prefetched = consumePrefetchedSpeech({
+      gameId: state.gameId, contextKey: getSpeechContextKey(state, player),
+      playerId: player.playerId, phase: state.phase, day: state.day, messageCount: state.messages.length,
+    });
+    prefetchControllerRef.current?.abort();
+    initStreamingSpeechQueue(player, afterSpeech, request);
     setIsWaitingForAI(true);
     setDialogue(player.displayName, t("dayPhase.organizing"), true);
 
-    // 60秒超时机制：避免卡死在"正在组织语言"状态
-    const ORGANIZING_TIMEOUT_MS = 60000;
     const timeoutPromise = new Promise<"timeout">((resolve) => {
-      setTimeout(() => {
-        if (!hasReceivedFirstSegment) {
-          isTimedOut = true;
-          resolve("timeout");
-        }
-      }, ORGANIZING_TIMEOUT_MS);
+      timeoutId = setTimeout(() => {
+        if (!isValid()) { resolve("timeout"); return; }
+        controller.abort();
+        // 超时兜底仍属于本次请求；关闭网络回调后才能写入。
+        if (displayedCount === 0) appendToSpeechQueue(t("dayPhase.timeout"), id, 0);
+        finalizeSpeechQueue({ requestId: id });
+        setIsWaitingForAI(false);
+        resolve("timeout");
+      }, 60000);
     });
 
     try {
-      // 初始化流式发言队列
-      initStreamingSpeechQueue(player, options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined);
-
-      // Chain to ensure audio segments are queued in order
-      let audioChain = Promise.resolve();
-
-      // 使用流式生成，带超时保护
-      const streamPromise = generateAISpeechSegmentsStream(state, player, {
-        onSegmentReceived: (segment, index) => {
-          // 如果已超时，忽略后续段落
-          if (isTimedOut) return;
-
-          // 检查当前阶段是否仍是发言阶段
-          const currentPhase = gameStateRef.current.phase;
-          if (!isSpeechLikePhase(currentPhase)) {
-            return;
-          }
-
-          // Deduplication: skip if segment already collected
-          if (streamingSegmentsRef.current.includes(segment)) {
-            return;
-          }
-          streamingSegmentsRef.current.push(segment);
-
-          const task = {
-            id: makeAudioTaskId(voiceId, segment),
-            text: segment,
-            voiceId,
-            playerId: player.playerId,
-          };
-
-          const ttsEnabled = audioManager.isEnabled();
-
-          if (!hasReceivedFirstSegment) {
-            hasReceivedFirstSegment = true;
-            if (ttsEnabled) {
-              // First segment: wait for TTS to be ready before showing text
-              // so the user sees "organizing" until audio is synthesized
-              audioChain = audioChain.then(() =>
-                audioManager.ensureReady(task).then(() => {
-                  if (isTimedOut) return;
-                  setIsWaitingForAI(false);
-                  appendToSpeechQueue(segment);
-                  audioManager.addToQueue(task);
-                }).catch(() => {
-                  // TTS failed, show text anyway
-                  setIsWaitingForAI(false);
-                  appendToSpeechQueue(segment);
-                })
-              );
-            } else {
-              // No TTS: show text immediately
-              setIsWaitingForAI(false);
-              appendToSpeechQueue(segment);
-            }
-          } else {
-            // Subsequent segments: show text immediately, prefetch in background
-            appendToSpeechQueue(segment);
-            if (ttsEnabled) {
-              // Chain ensures addToQueue runs in segment arrival order
-              audioChain = audioChain.then(() =>
-                audioManager.ensureReady(task).then(() => {
-                  audioManager.addToQueue(task);
-                }).catch(() => {})
-              );
-            }
-          }
-        },
-        onComplete: () => {
-          // 如果已超时，忽略完成回调
-          if (isTimedOut) return;
-
-          // 检查当前阶段是否仍是发言阶段
-          const currentState = gameStateRef.current;
-          const currentPhase = currentState.phase;
-          if (!isSpeechLikePhase(currentPhase)) {
-            console.warn("[wolfcha] runAISpeech: phase changed during AI speech generation, skipping display. Expected speech phase, got:", currentPhase);
-            return;
-          }
-
-          const { nextSeat, nextSpeakerIsAI } = resolveNextSpeaker(currentState);
-
-          if (nextSeat !== null && nextSpeakerIsAI) {
-            const postSpeechState = buildPostSpeechState(currentState, player, streamingSegmentsRef.current);
-            const nextPlayer = postSpeechState.players.find((p) => p.seat === nextSeat);
-            if (nextPlayer && !nextPlayer.isHuman && nextPlayer.alive) {
-              void prefetchNextAISpeech(postSpeechState, nextPlayer);
-            }
-          }
-
-          // 标记流式生成完成，并传递下一个发言者信息
-          finalizeSpeechQueue({ nextSpeakerIsAI });
-        },
-        onError: (error) => {
-          // 如果已超时，忽略错误回调
-          if (isTimedOut) return;
-
-          // 如果没有收到任何段落，显示中断消息
-          if (!hasReceivedFirstSegment) {
-            appendToSpeechQueue(t(
-              isGameSessionExpiredMessage(error)
-                ? "dayPhase.sessionExpired"
-                : "dayPhase.interrupted",
-            ));
-            finalizeSpeechQueue();
-          }
-        },
-      });
-
-      // 等待流式生成完成或超时
+      const streamPromise = prefetched
+        ? Promise.resolve(prefetched.forEach(appendSegment))
+        : generateAISpeechSegmentsStream(state, player, { signal: controller.signal, onSegmentReceived: appendSegment });
       const result = await Promise.race([streamPromise, timeoutPromise]);
-
-      // 处理超时情况
-      if (result === "timeout") {
-        console.warn(`[wolfcha] runAISpeech: timeout after ${ORGANIZING_TIMEOUT_MS}ms for ${player.displayName}, skipping to next speaker`);
-        // 显示超时消息并标记完成
-        appendToSpeechQueue(t("dayPhase.timeout"));
-        finalizeSpeechQueue();
+      if (result === "timeout" || !isValid()) return;
+      await displayChain;
+      if (!isValid()) return;
+      const nextSeat = getNextSpeechSeat(state);
+      const nextPlayer = state.players.find((p) => p.seat === nextSeat);
+      const nextSpeakerIsAI = !!nextPlayer && !nextPlayer.isHuman && nextPlayer.alive;
+      finalizeSpeechQueue({ nextSpeakerIsAI, requestId: id });
+      // 按相同段落 ID 构造预计状态，已提交的段落不会重复进入预取上下文。
+      if (nextSpeakerIsAI && nextPlayer) {
+        const postState = collected.reduce((next, segment, index) =>
+          addPlayerMessage(next, player.playerId, segment, { id: `${id}:${index}` }), store.get(gameStateAtom));
+        void prefetchNextAISpeech({ ...postState, currentSpeakerSeat: nextPlayer.seat }, nextPlayer);
       }
     } catch (error) {
-      // 如果流式生成失败且没有收到任何段落
-      if (!hasReceivedFirstSegment && !isTimedOut) {
-        initSpeechQueue(
-          [t(
-            isGameSessionExpiredMessage(String(error))
-              ? "dayPhase.sessionExpired"
-              : "dayPhase.interrupted",
-          )],
-          player,
-          options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined,
-        );
-      }
+      if (!isValid()) return;
+      await displayChain;
+      if (!isValid()) return;
+      if (!collected.length) appendToSpeechQueue(t(isGameSessionExpiredMessage(String(error))
+        ? "dayPhase.sessionExpired" : "dayPhase.interrupted"), id, 0);
+      finalizeSpeechQueue({ requestId: id });
     } finally {
-      currentSpeakingPlayerRef.current = null;
-      if (!hasReceivedFirstSegment) {
-        setIsWaitingForAI(false);
-      }
+      clearTimeout(timeoutId);
+      if (request.isValid()) setIsWaitingForAI(false);
     }
-  }, [
-    setIsWaitingForAI,
-    setDialogue,
-    initSpeechQueue,
-    initStreamingSpeechQueue,
-    appendToSpeechQueue,
-    finalizeSpeechQueue,
-    consumePrefetchedSpeech,
-    prefetchNextAISpeech,
-    resolveNextSpeaker,
-    buildPostSpeechState,
-    isSpeechLikePhase,
-    t,
-  ]);
+  }, [appendToSpeechQueue, consumePrefetchedSpeech, finalizeSpeechQueue, getToken,
+    initStreamingSpeechQueue, prefetchNextAISpeech, setDialogue, setIsWaitingForAI, store, t]);
 
   // 更新 ref 以打破循环依赖
   /** 开始遗言阶段 */
@@ -418,6 +230,7 @@ export function useDayPhase(
     afterLastWords: (s: GameState) => Promise<void>,
     token: FlowToken
   ) => {
+    if (!isTokenValid(token)) return;
     const speaker = state.players.find((p) => p.seat === seat);
     if (!speaker) {
       await afterLastWords(state);
@@ -448,7 +261,7 @@ export function useDayPhase(
         await afterLastWords(s as GameState);
       },
     });
-  }, [setGameState, setDialogue, setWaitingForNextRound, isTokenValid, runAISpeech]);
+  }, [setGameState, setDialogue, setWaitingForNextRound, isTokenValid, runAISpeech, setAfterLastWords, speakerHost, t]);
 
   return {
     startLastWordsPhase,
