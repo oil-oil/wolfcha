@@ -15,7 +15,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useAtom } from "jotai";
+import { useAtom, useStore } from "jotai";
 import { useLocalStorageState } from "ahooks";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -258,9 +258,11 @@ export function useGameLogic() {
     phaseExtrasRef.current = { phase, extras };
   }, []);
 
+  const gameStore = useStore();
   const buildVotePhaseExtras = useCallback((token: ReturnType<typeof getToken>, options?: { isRevote?: boolean }) => {
     return {
       token,
+      getGameState: () => gameStore.get(gameStateAtom),
       isRevote: options?.isRevote === true,
       humanPlayer,
       setGameState,
@@ -288,7 +290,7 @@ export function useGameLogic() {
         }
       },
     };
-  }, [getToken, humanPlayer, isTokenValid, setDialogue, setGameState, setIsWaitingForAI, waitForUnpause]);
+  }, [gameStore, getToken, humanPlayer, isTokenValid, setDialogue, setGameState, setIsWaitingForAI, waitForUnpause]);
 
   const buildNightPhaseExtras = useCallback((token: ReturnType<typeof getToken>) => {
     return {
@@ -628,7 +630,7 @@ export function useGameLogic() {
     setAfterLastWords: (cb) => { afterLastWordsRef.current = cb; },
   });
 
-  const { startLastWordsPhase, runAISpeech } = dayPhase;
+  const { startLastWordsPhase, runAISpeech, isSpeechBlocked } = dayPhase;
   runAISpeechRef.current = runAISpeech;
 
   // ============================================
@@ -1063,25 +1065,17 @@ export function useGameLogic() {
         // 如果已经全员投票，恢复后直接触发一次结算（否则维持现状）
         hasContinuedAfterRevealRef.current = true;
         isAwaitingRoleRevealRef.current = false;
-        void badgePhase.maybeResolveBadgeElection(s);
+        void badgePhase.startBadgeElectionPhase(s, { isResume: true });
         break;
       }
 
       case "DAY_VOTE": {
-        // 投票阶段恢复：检查是否所有应投票的玩家都已投完
         hasContinuedAfterRevealRef.current = true;
         isAwaitingRoleRevealRef.current = false;
-        // PK 投票时，参与PK的人不投票
-        const pkTargets =
-          s.pkSource === "vote" && Array.isArray(s.pkTargets) ? s.pkTargets : [];
-        const voterIds = s.players
-          .filter((p) => p.alive && !pkTargets.includes(p.seat))
-          .map((p) => p.playerId);
-        const allVoted = voterIds.length > 0 && voterIds.every((id) => typeof s.votes[id] === "number");
-        if (allVoted) {
-          void resolveVotesSafely(s, token);
-        }
-        // 否则等待剩余玩家投票（人类和AI）
+        void phaseManagerRef.current.getPhase("DAY_VOTE")?.handleAction(
+          { state: s, phase: "DAY_VOTE", extras: buildVotePhaseExtras(token) },
+          { type: "RESUME_VOTES" },
+        );
         break;
       }
 
@@ -1092,7 +1086,7 @@ export function useGameLogic() {
         break;
       }
     }
-  }, [badgePhase, getToken, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
+  }, [badgePhase, buildVotePhaseExtras, getToken, proceedToNight, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
 
   const transferBadgeAfterHunterShot = badgePhase.handleBadgeTransfer;
   const continueAfterHunterShot = useCallback(async (
@@ -1880,6 +1874,7 @@ export function useGameLogic() {
 
   /** 下一轮按钮 */
   const handleNextRound = useCallback(async () => {
+    if (isSpeechBlocked()) return;
     const startState = gameStateRef.current;
     const startGameId = startState.gameId;
     const startPhase = startState.phase;
@@ -1897,7 +1892,7 @@ export function useGameLogic() {
 
     const token = getToken();
     await runDaySpeechAction(liveState, token, "ADVANCE_SPEAKER");
-  }, [getToken, runDaySpeechAction, setWaitingForNextRound]);
+  }, [isSpeechBlocked, getToken, runDaySpeechAction, setWaitingForNextRound]);
 
   /** 人类投票 */
   const handleHumanVote = useCallback(async (targetSeat: number) => {
@@ -2253,7 +2248,7 @@ export function useGameLogic() {
       return { finished: false, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
     }
 
-    const { segments, currentIndex, player, afterSpeech } = queue;
+    const { segments, currentIndex, player } = queue;
 
     let nextState = gameStateRef.current;
 
@@ -2298,6 +2293,9 @@ export function useGameLogic() {
 
     setIsWaitingForAI(false);
 
+    if (isSpeechBlocked()) {
+      return { finished: true, shouldAdvanceToNextSpeaker: false, shouldAutoAdvanceToNextAI: false };
+    }
     if (result.afterSpeech) {
       await result.afterSpeech(nextState);
       // 如果下一个发言者是AI，返回标志让调用方知道可以自动推进
@@ -2307,7 +2305,7 @@ export function useGameLogic() {
     // 不设置 waitingForNextRound，直接返回 shouldAdvanceToNextSpeaker: true
     // 让调用方立即调用 handleNextRound，避免单条消息时需要按两次回车的问题
     return { finished: true, shouldAdvanceToNextSpeaker: true, shouldAutoAdvanceToNextAI: false };
-  }, [clearDialogue, clearSpeechQueue, setIsWaitingForAI, setWaitingForNextRound, getSpeechQueue, advanceSpeechQueue, setGameState, isCurrentSegmentCommitted, markCurrentSegmentCommitted, isCurrentSegmentCompleted]);
+  }, [clearDialogue, clearSpeechQueue, isSpeechBlocked, buildRawDayTranscript, maybeGenerateDailySummary, setIsWaitingForAI, setWaitingForNextRound, getSpeechQueue, advanceSpeechQueue, setGameState, isCurrentSegmentCommitted, markCurrentSegmentCommitted, isCurrentSegmentCompleted]);
 
   /** 切换暂停 */
   const togglePause = useCallback(() => {

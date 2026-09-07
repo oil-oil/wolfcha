@@ -373,7 +373,7 @@ export async function runSinglePlayerContextAudit(
 
     for (const player of players) {
       // 故意使用非 JSON 文本，覆盖正式流式解析器的回退分支。
-      transport.setNext("警徽阶段审计发言");
+      transport.setNext('["警徽阶段审计发言"]');
       await gameMaster.generateAISpeechSegmentsStream(
         { ...preAnnouncement, phase: "DAY_BADGE_SPEECH" },
         player

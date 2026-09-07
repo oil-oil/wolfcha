@@ -63,9 +63,8 @@ export function isRestorableGameState(state: GameState | null | undefined): bool
 }
 
 /**
- * Check if the current phase's required action has been completed.
- * We only save state when the phase action is complete to avoid
- * restoring into the middle of an action.
+ * 判断当前状态是否可恢复。投票中的每张已提交票都是稳定事实，
+ * 不需要等待整轮完成；未结算的技能中间态仍保留前一个检查点。
  * 
  * 细粒度保存策略：
  * - 守卫选完 → 可保存
@@ -74,7 +73,7 @@ export function isRestorableGameState(state: GameState | null | undefined): bool
  * - 预言家查完 → 可保存
  * - 白天/夜晚开始 → 可保存（过渡阶段）
  */
-function isPhaseActionCompleted(state: GameState): boolean {
+function isCheckpointSafe(state: GameState): boolean {
   switch (state.phase) {
     // 过渡阶段，进入时即可保存
     case "NIGHT_START":
@@ -123,30 +122,10 @@ function isPhaseActionCompleted(state: GameState): boolean {
       // 为安全起见，不在这里保存
       return false;
 
-    case "DAY_BADGE_ELECTION": {
-      const candidates = Array.isArray(state.badge?.candidates) ? state.badge.candidates : [];
-      // 候选人不投票
-      const voterIds = state.players
-        .filter((p) => p.alive && !candidates.includes(p.seat))
-        .map((p) => p.playerId);
-      if (voterIds.length === 0) return true;
-      return voterIds.every((id) => typeof state.badge?.votes?.[id] === "number");
-    }
-
-    case "DAY_VOTE": {
-      // PK投票时，参与PK的人不投票
-      const pkTargets =
-        state.pkSource === "vote" && Array.isArray(state.pkTargets) ? state.pkTargets : [];
-      // 已翻牌白痴不参与投票
-      const revealedIdiotId = state.roleAbilities.idiotRevealed
-        ? state.players.find((p) => p.role === "Idiot" && p.alive)?.playerId
-        : undefined;
-      const voterIds = state.players
-        .filter((p) => p.alive && !pkTargets.includes(p.seat) && p.playerId !== revealedIdiotId)
-        .map((p) => p.playerId);
-      if (voterIds.length === 0) return true;
-      return voterIds.every((id) => typeof state.votes[id] === "number");
-    }
+    // 每张已提交的票都是稳定事实；恢复时只补尚未投票的人。
+    case "DAY_BADGE_ELECTION":
+    case "DAY_VOTE":
+      return true;
 
     // 发言阶段：允许保存（会牺牲“刷新后能继续同一段流式发言”的能力）
     // 但可以显著提升 Day 1 警徽竞选、发言推进等场景的恢复颗粒度，避免刷新后回到 DAY_START 重跑流程。
@@ -173,7 +152,7 @@ function isPhaseActionCompleted(state: GameState): boolean {
  */
 export function getRestorePhase(state: GameState): Phase {
   // 如果当前阶段已完成，可以直接恢复到当前阶段
-  if (isPhaseActionCompleted(state)) {
+  if (isCheckpointSafe(state)) {
     return state.phase;
   }
 
@@ -415,7 +394,7 @@ const THROTTLED_SAVE_PHASES: Phase[] = [
 
 /**
  * Save game state to localStorage
- * 细粒度保存：只有当阶段动作完成时才保存
+ * 细粒度保存：保存可恢复的稳定状态（包含投票中途）
  * 这样刷新后可以恢复到最近完成的检查点
  * 
  * 发言阶段使用 throttle 策略，避免频繁序列化影响性能
@@ -439,10 +418,13 @@ function saveGameState(state: GameState): void {
     return;
   }
   
-  // 只有当阶段动作完成时才保存
-  // 这样刷新后恢复的是"最近完成的动作"，而不是"正在进行的动作"
-  if (!isPhaseActionCompleted(state)) {
-    // 动作未完成，不保存，保留之前的检查点
+  // 只写可恢复检查点；投票可以保留部分已经完成的行动。
+  if (!isCheckpointSafe(state)) {
+    // 进入不可恢复的结算中间态时，也必须取消上一阶段捕获的延迟写入。
+    if (pendingSpeechSaveTimer !== null) {
+      clearTimeout(pendingSpeechSaveTimer);
+      pendingSpeechSaveTimer = null;
+    }
     return;
   }
   

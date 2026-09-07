@@ -34,7 +34,7 @@ export interface BadgePhaseCallbacks {
 export interface BadgePhaseActions {
   startBadgeSignupPhase: (state: GameState) => Promise<void>;
   startBadgeSpeechPhase: (state: GameState) => Promise<void>;
-  startBadgeElectionPhase: (state: GameState, options?: { isRevote?: boolean }) => Promise<void>;
+  startBadgeElectionPhase: (state: GameState, options?: { isRevote?: boolean; isResume?: boolean }) => Promise<void>;
   resumeBadgeSignupPhase: (state: GameState) => Promise<void>;
   handleBadgeSignup: (wants: boolean) => Promise<void>;
   handleBadgeTransfer: (state: GameState, sheriff: Player, afterTransfer: (s: GameState) => Promise<void>) => Promise<void>;
@@ -480,8 +480,9 @@ export function useBadgePhase(
   }, [setGameState, setDialogue, waitForUnpause, runAISpeech]);
 
   /** 开始警长竞选投票 */
-  const startBadgeElectionPhase = useCallback(async (state: GameState, options?: { isRevote?: boolean }) => {
+  const startBadgeElectionPhase = useCallback(async (state: GameState, options?: { isRevote?: boolean; isResume?: boolean }) => {
     const texts = getTexts();
+    const isResume = options?.isResume === true;
     const isRevote = options?.isRevote === true || state.phase === "DAY_BADGE_ELECTION";
     const shouldTransition = state.phase !== "DAY_BADGE_ELECTION";
     let currentState = shouldTransition ? transitionPhase(state, "DAY_BADGE_ELECTION") : state;
@@ -538,8 +539,10 @@ export function useBadgePhase(
     } else {
       setDialogue(texts.speakerHost, texts.uiText.aiVoting, false);
     }
+    gameStateRef.current = currentState;
     setGameState(currentState);
-    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !candidates.includes(p.seat));
+    const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !candidates.includes(p.seat) &&
+      (!isResume || typeof currentState.badge.votes[p.playerId] !== "number"));
     try {
       for (const aiPlayer of aiPlayers) {
         setIsWaitingForAI(true);
@@ -556,8 +559,11 @@ export function useBadgePhase(
           targetSeat = BADGE_VOTE_ABSTAIN;
         }
 
-        // 从最新状态获取投票，避免覆盖人类玩家的投票
+        // 对局或投票轮次已经变化时，旧返回不能写入新一轮。
         const latestState = gameStateRef.current;
+        if (latestState.gameId !== state.gameId || latestState.day !== state.day ||
+            latestState.phase !== "DAY_BADGE_ELECTION" ||
+            latestState.badge.revoteCount !== currentState.badge.revoteCount) return;
         currentState = {
           ...currentState,
           badge: {
@@ -565,6 +571,7 @@ export function useBadgePhase(
             votes: { ...latestState.badge.votes, [aiPlayer.playerId]: targetSeat },
           },
         };
+        gameStateRef.current = currentState;
         setGameState(currentState);
       }
     } finally {
@@ -573,7 +580,7 @@ export function useBadgePhase(
 
     // AI投票结束后统一结算一次
     await maybeResolveBadgeElection(currentState);
-  }, [setGameState, setDialogue, setIsWaitingForAI, maybeResolveBadgeElection]);
+  }, [setGameState, setDialogue, setIsWaitingForAI, maybeResolveBadgeElection, onBadgeElectionComplete]);
 
   // 更新 ref 以打破循环依赖
   startBadgeSpeechPhaseRef.current = startBadgeSpeechPhase;

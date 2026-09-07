@@ -10,6 +10,7 @@ import {
   getWinCondition,
   buildSystemTextFromParts,
   buildPublicFactsForPlayer,
+  buildDecisionGrounding,
 } from "@/lib/prompt-utils";
 import type { FlowToken } from "@/lib/game-flow-controller";
 import {
@@ -177,7 +178,9 @@ export class DaySpeechPhase extends GamePhase {
       selfSpeech: selfSpeechContext || t("prompts.daySpeech.userNoSelfSpeech"),
       phaseHintSection,
       speakOrderHint,
-    });
+    }) + `\n\n${buildDecisionGrounding(state, player)}\n本轮发言顺序核对：你之后尚待发言：${formatSeatList(speechRound.yetToSpeakSeats)}。${speechRound.yetToSpeakSeats.length === 0
+      ? "你是本轮最后发言者，之后直接进入下一阶段；现在给出结论，不要等待本轮不存在的后续回应。"
+      : "尚未发言者没有本轮新观点，不要把前一位的话归到他们名下。"}`;
 
     return { system, user, systemParts };
   }

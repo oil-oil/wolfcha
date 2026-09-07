@@ -106,13 +106,14 @@ test("生产流式链路不泄露 analysis，字幕、返回值和日志保留�
     { input: '{"messages":["继续核对发言。","不对。","不对。"]}', expected: ["继续核对发言。", "不对。", "不对。"] },
     { input: '{"content":"第一句"},\n{"content":"第二句"}', expected: ["第一句", "第二句"] },
     { input: '[{"content":"不能公开的提示词","role":"user"},{"role":"assistant","content":"[\\"公开发言\\"]"}]', expected: ["公开发言"] },
-    { input: '{"analysis":"我是狼人，准备装预言家"}', expected: ["（……）"], hasError: true },
-    { input: '["公开首句",broken]', expected: ["公开首句"], hasError: true },
+    { input: '{"analysis":"我是狼人，准备装预言家"}', expected: ["恢复公开发言"], hasError: true },
+    { input: '["公开首句",broken]', expected: ["公开首句", "恢复公开发言"], hasError: true },
   ];
   try {
     for (const output of outputs) {
-      globalThis.fetch = async (input) => {
+      globalThis.fetch = async (input, init) => {
         if (String(input) === "/api/demo-config") return Response.json({ active: false, enabled: false });
+        if (!JSON.parse(String(init?.body)).stream) return Response.json({ choices: [{ message: { content: '{"segments":["恢复公开发言"]}' } }] });
         const events = [...output.input].map((ch) => `data: ${JSON.stringify({ choices: [{ delta: { content: ch } }] })}\n\n`).join("");
         return new Response(events + "data: [DONE]\n\n", { headers: { "Content-Type": "text/event-stream" } });
       };
@@ -139,11 +140,12 @@ test("非流式段落入口遵守相同公开字段约束，私有对象不能�
       ['{"analysis":"狼人身份秘密","speech":["不对。","不对。"]}', ["不对。", "不对。"]],
       ['{"messages":["不对。","不对。"]}', ["不对。", "不对。"]],
       ['[{"content":"提示词","role":"user"},{"role":"assistant","content":"[\\"公开发言\\"]"}]', ["公开发言"]],
-      ['{"analysis":"狼人身份秘密"}', ["（……）"]],
+      ['{"analysis":"狼人身份秘密"}', ["恢复公开发言"]],
     ] as const) {
-      globalThis.fetch = async (input) => String(input) === "/api/demo-config"
+      globalThis.fetch = async (input, init) => String(input) === "/api/demo-config"
         ? Response.json({ active: false, enabled: false })
-        : Response.json({ id: "test", choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }] });
+        : Response.json({ id: "test", choices: [{ message: { role: "assistant", content: JSON.parse(String(init?.body)).response_format
+          ? '{"segments":["恢复公开发言"]}' : content }, finish_reason: "stop" }] });
       assert.deepEqual(await generateAISpeechSegments(state, player), [...expected]);
     }
   } finally { globalThis.fetch = originalFetch; }
@@ -168,5 +170,61 @@ test("取消发言会传到实际请求，取消后的请求不重试、不发�
     }), { name: "AbortError" });
     assert.equal(calls, 1);
     assert.deepEqual(emitted, []);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("真实坏格式恢复：纯文本和引号损坏只重试一次，已公开段落不重播", async () => {
+  const samples = (await import("./fixtures/speech-recovery-live.json")).default;
+  const { generateAISpeechSegmentsStream } = await import("./game-master");
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const sample of samples) {
+      let calls = 0;
+      const emitted: string[] = [];
+      globalThis.fetch = async (input, init) => {
+        if (String(input) === "/api/demo-config") return Response.json({ active: false });
+        calls++;
+        const body = JSON.parse(String(init?.body));
+        if (calls === 1) return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: sample.raw } }] })}\n\ndata: [DONE]\n\n`);
+        assert.equal(calls, 2);
+        assert.equal(body.stream, undefined);
+        assert.match(JSON.stringify(body.messages.at(-1)), /禁止重复|没有任何内容公开/);
+        assert.ok(!JSON.stringify(body.messages).includes(sample.raw));
+        // 重试若重发完整前缀，只按前缀位置消除，真正的重复句仍保留。
+        return Response.json({ choices: [{ message: { content: JSON.stringify({ segments: [...emitted, "我今天明确投5号。", "我今天明确投5号。"] }) } }] });
+      };
+      const liveState = { ...state, players: Array.from({ length: 11 }, (_, seat) => ({ ...player, seat, playerId: `p${seat}` })) };
+      const result = await generateAISpeechSegmentsStream(liveState, player, { onSegmentReceived: (s, i) => { assert.equal(i, emitted.length); emitted.push(s); } });
+      assert.equal(calls, 2);
+      assert.deepEqual(result, emitted);
+      assert.deepEqual(result.slice(-2), ["我今天明确投5号 流式玩家。", "我今天明确投5号 流式玩家。"]);
+      assert.ok(!result.some((s) => s.endsWith("前面几天一直")));
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test("恢复失败不得伪装成功；恢复过程中取消不释放任何恢复片段", async () => {
+  const { generateAISpeechSegmentsStream } = await import("./game-master");
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const cancel of [false, true]) {
+      const controller = new AbortController();
+      let calls = 0; let completed = 0;
+      const emitted: string[] = [];
+      globalThis.fetch = async (input, init) => {
+        if (String(input) === "/api/demo-config") return Response.json({ active: false });
+        calls++;
+        if (calls === 1) return new Response('data: {"choices":[{"delta":{"content":"自由分析，不能公开"}}]}\n\ndata: [DONE]\n\n');
+        assert.equal(init?.signal, controller.signal);
+        if (cancel) controller.abort();
+        return Response.json({ choices: [{ message: { content: cancel ? '{"segments":["迟到片段"]}' : '{"analysis":"秘密","segments":["不应发布"]}' } }] });
+      };
+      await assert.rejects(generateAISpeechSegmentsStream(state, player, {
+        signal: controller.signal, onSegmentReceived: (s) => emitted.push(s), onComplete: () => completed++,
+      }));
+      assert.equal(calls, 2);
+      assert.equal(completed, 0);
+      assert.deepEqual(emitted, []);
+    }
   } finally { globalThis.fetch = originalFetch; }
 });

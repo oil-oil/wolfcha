@@ -20,6 +20,7 @@ export type GameAction =
   | { type: "START_DAY_SPEECH_AFTER_BADGE"; options?: { skipAnnouncements?: boolean } }
   | { type: "ADVANCE_SPEAKER" }
   | { type: "RESOLVE_VOTES" }
+  | { type: "RESUME_VOTES" }
   | { type: "VOTE"; targetSeat: number }
   | { type: "NIGHT_ACTION"; targetSeat: number; witchAction?: "save" | "poison" | "pass" }
   | { type: "CUSTOM"; payload: unknown };

@@ -692,6 +692,7 @@ function attachGameSessionHeader(headers: Record<string, string>) {
 export async function generateCompletion(
   options: GenerateOptions
 ): Promise<{ content: string; reasoning_details?: unknown; raw: ChatCompletionResponse }> {
+  options.signal?.throwIfAborted();
   const maxTokens =
     typeof options.max_tokens === "number" && Number.isFinite(options.max_tokens)
       ? Math.max(16, Math.floor(options.max_tokens))
@@ -726,6 +727,7 @@ export async function generateCompletion(
     "/api/chat",
     {
       method: "POST",
+      signal: options.signal,
       headers: {
         ...headers,
       },
@@ -753,6 +755,7 @@ export async function generateCompletion(
   }
 
   const result: ChatCompletionResponse = await response.json();
+  options.signal?.throwIfAborted();
   const choice = result.choices?.[0];
   const assistantMessage = choice?.message;
 

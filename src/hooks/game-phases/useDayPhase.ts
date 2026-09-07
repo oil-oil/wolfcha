@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { useAtom, useStore } from "jotai";
 import type { GameState, Player } from "@/types/game";
 import type { PrefetchCriteria, PrefetchedSpeech } from "../useDialogueManager";
@@ -41,6 +42,7 @@ export interface DayPhaseCallbacks {
 }
 
 export interface DayPhaseActions {
+  isSpeechBlocked: () => boolean;
   startLastWordsPhase: (state: GameState, seat: number, afterLastWords: (s: GameState) => Promise<void>, token: FlowToken) => Promise<void>;
   runAISpeech: (state: GameState, player: Player, options?: { afterSpeech?: (s: GameState) => Promise<void> }) => Promise<void>;
 }
@@ -74,6 +76,8 @@ export function useDayPhase(
   const store = useStore();
   const activeRequestRef = useRef<(SpeechRequest & { controller: AbortController }) | null>(null);
   const prefetchControllerRef = useRef<AbortController | null>(null);
+  const failedRequestRef = useRef<SpeechRequest | null>(null);
+  const isSpeechBlocked = useCallback(() => failedRequestRef.current?.isValid() === true, []);
 
   useEffect(() => {
     if (activeRequestRef.current && !activeRequestRef.current.isValid()) {
@@ -123,6 +127,7 @@ export function useDayPhase(
     const request = createSpeechRequest(id, state, player, getToken(), () => store.get(gameStateAtom),
       () => activeRequestRef.current?.id === id);
     activeRequestRef.current = { ...request, controller };
+    failedRequestRef.current = null;
     if (!request.isValid()) return;
     const isValid = () => request.isValid() && !controller.signal.aborted;
     const afterSpeech = options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined;
@@ -212,15 +217,25 @@ export function useDayPhase(
       if (!isValid()) return;
       await displayChain;
       if (!isValid()) return;
-      if (!collected.length) appendToSpeechQueue(t(isGameSessionExpiredMessage(String(error))
-        ? "dayPhase.sessionExpired" : "dayPhase.interrupted"), id, 0);
+      // 错误属于系统，不能记为角色台词。保留已确认段落，阻止自动推进至下一人。
+      failedRequestRef.current = request;
+      if (!collected.length) setDialogue(speakerHost, t(isGameSessionExpiredMessage(String(error))
+        ? "dayPhase.sessionExpired" : "dayPhase.interrupted"), false);
       finalizeSpeechQueue({ requestId: id });
+      toast.error(getLocale() === "zh" ? "发言生成失败，游戏已暂停推进" : "Speech failed. Progress is paused.", {
+        duration: Infinity,
+        action: { label: getLocale() === "zh" ? "重试发言" : "Retry speech", onClick: () => {
+          if (!request.isValid()) return;
+          activeRequestRef.current = null;
+          void runAISpeech(store.get(gameStateAtom), player, options);
+        } },
+      });
     } finally {
       clearTimeout(timeoutId);
       if (request.isValid()) setIsWaitingForAI(false);
     }
   }, [appendToSpeechQueue, consumePrefetchedSpeech, finalizeSpeechQueue, getToken,
-    initStreamingSpeechQueue, prefetchNextAISpeech, setDialogue, setIsWaitingForAI, store, t]);
+    initStreamingSpeechQueue, prefetchNextAISpeech, setDialogue, setIsWaitingForAI, speakerHost, store, t]);
 
   // 更新 ref 以打破循环依赖
   /** 开始遗言阶段 */
@@ -264,6 +279,7 @@ export function useDayPhase(
   }, [setGameState, setDialogue, setWaitingForNextRound, isTokenValid, runAISpeech, setAfterLastWords, speakerHost, t]);
 
   return {
+    isSpeechBlocked,
     startLastWordsPhase,
     runAISpeech,
   };

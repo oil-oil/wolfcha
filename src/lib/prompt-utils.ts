@@ -264,6 +264,37 @@ const buildHiddenCommunicationProfileSection = (persona: Persona, locale: string
   return `\n<hidden_communication_profile>\nUse this only to shape your Werewolf skill, vocabulary, and speech length. Do not state it to other players. Let the flaws and uncertainty show only occasionally, not in every speech.\n${lines.map((line) => `- ${line}`).join("\n")}\n</hidden_communication_profile>`;
 };
 
+/** 决策前的短事实账本：只取主持人已公布的结果和本人行动，绝不把玩家声明升级为事实。 */
+export function buildDecisionGrounding(state: GameState, player: Player): string {
+  const lines: string[] = [];
+  for (let day = 1; day <= state.day; day++) {
+    const night = state.nightHistory?.[day];
+    if (!areNightResultsVisible(state, day)) {
+      lines.push(`第${day}夜：结果尚未公布。`);
+    } else if (!night || !Array.isArray(night.deaths)) {
+      lines.push(`第${day}夜：记录缺失，不能判为平安夜。`);
+    } else {
+      const deaths = getRecordedNightDeaths(night);
+      lines.push(`第${day}夜：${deaths.length ? `${deaths.map((d) => `${d.seat + 1}号`).join("、")}出局，不是平安夜` : "无人出局（平安夜）"}。`);
+    }
+  }
+  for (const round of state.voteRounds ?? []) {
+    const target = round.votes[player.playerId];
+    const kind = round.kind === "badge" ? "警徽选举" : "放逐";
+    const vote = typeof target === "number" ? target < 0 ? "弃票" : `投给${target + 1}号`
+      : round.candidates.includes(player.seat) && (round.kind === "badge" || round.round > 1)
+        ? "作为候选人没有投票资格" : "没有本人投票记录";
+    lines.push(`本人第${round.day}天${kind}第${round.round}轮：${vote}。`);
+  }
+  if ((state.phase === "DAY_BADGE_SPEECH" || (state.phase === "DAY_PK_SPEECH" && state.pkSource === "badge")) &&
+      state.badge.candidates.includes(player.seat)) lines.push("本轮你是警徽候选人，没有选举投票权，不存在投自己或投他人的选举票。");
+  return `<decision_grounding>
+${lines.join("\n")}
+复述票型要区分警徽和放逐、投票人和被投人；累计几次平安夜不等于连续几夜。玩家原话是声明，身份只有主持人翻牌才算公开确认；被投出不等于已验明狼人。
+引用发言必须核对发言人、日期和完整上下句；对方同一句中的纠正也要算，不能把已纠正的口误当作仍坚持的观点。没有查验记录的座位不能补成金水。你的真实身份与私有查验用于自己判断，不得误把自己列入待查身份；策略性隐瞒或悍跳可以保留。
+</decision_grounding>`;
+}
+
 const buildHiddenPlayerMindSection = (player: Player, locale: string): string => {
   const mind = player.agentProfile?.playerMind;
   if (!mind) return "";

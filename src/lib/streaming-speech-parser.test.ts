@@ -72,3 +72,15 @@ test("已解析部分内容后遇到损坏或截断，也必须报告格式错�
     assert.equal(errors.length, 1);
   }
 });
+
+test("实战引号回归：后续分隔符验证前不释放字符串，绝不播出半句", () => {
+  const seen: string[] = [];
+  const errors: string[] = [];
+  const parser = new StreamingSpeechParser({ onSegmentReceived: (s) => seen.push(s), onError: (e) => errors.push(e) });
+  parser.processChunk('["完整首句", "你说我一直"');
+  assert.deepEqual(seen, ["完整首句"]);
+  parser.processChunk('再看看"，但今天我明确投5号。"]');
+  assert.deepEqual(parser.end(), ["完整首句"]);
+  assert.equal(parser.hasCompleteDocument(), false);
+  assert.equal(errors.length, 1);
+});

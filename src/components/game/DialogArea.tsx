@@ -1201,8 +1201,9 @@ export function DialogArea({
               </button>
             </div>
           )}
+          {/* 操作控件直接随状态挂载，不等待上一块对话的退出动画。 */}
           {shouldShowDialogPanel && (
-          <AnimatePresence mode="wait">
+          <div key={phase}>
               {/* 游戏结束 - 文字形式 */}
               {showGameEnd && (
                 <motion.div
@@ -1747,7 +1748,7 @@ export function DialogArea({
                   <NightActionStatus phase={gameState.phase} humanRole={humanPlayer?.role} />
                 </motion.div>
               )}
-            </AnimatePresence>
+            </div>
           )}
         </div>
       </div>

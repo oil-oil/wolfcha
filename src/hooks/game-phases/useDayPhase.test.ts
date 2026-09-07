@@ -11,8 +11,9 @@ import { withTimeout } from "@/lib/request-timeout";
 const tick = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const deferred = () => {
   let resolve!: (value?: any) => void;
-  const promise = new Promise<any>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (error: Error) => void;
+  const promise = new Promise<any>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 };
 
 function harness(tts = false) {
@@ -20,6 +21,7 @@ function harness(tts = false) {
   const second = { ...first, playerId: "b", seat: 1, displayName: "B" };
   let state: any = { gameId: "game", day: 1, phase: "DAY_SPEECH", currentSpeakerSeat: 0, speechRoundStartMessageIndex: 0, messages: [], players: [first, second] };
   const pending: any[] = [];
+  const failures: any[] = [];
   const audio: string[] = [];
   const readiness = new Map<string, ReturnType<typeof deferred>>();
   const cleanups: Array<() => void> = [];
@@ -36,6 +38,7 @@ function harness(tts = false) {
       useState: (value: any) => [value, () => {}],
       useEffect: (fn: any) => { const cleanup = fn(); if (cleanup) cleanups.push(cleanup); },
     };
+    if (id === "sonner") return { toast: { error: (_: string, options: any) => failures.push(options) } };
     if (id === "jotai") return { useAtom: () => [state, (next: any) => { state = next; }], useStore: () => ({ get: () => state }) };
     if (id === "next-intl") return { useTranslations: () => (key: string) => key };
     if (id === "@/store/game-machine") return { gameStateAtom: {} };
@@ -70,7 +73,7 @@ function harness(tts = false) {
   const day = load("src/hooks/game-phases/useDayPhase.ts").useDayPhase(null, {
     ...dialogue, getToken: () => flow.getToken(), isTokenValid: (token: any) => token.isValid(), setAfterLastWords: () => {},
   });
-  return { first, second, pending, audio, readiness, flow, day, dialogue,
+  return { first, second, pending, failures, audio, readiness, flow, day, dialogue,
     timeout: () => organizingTimeout?.(),
     get state() { return state; }, setState(next: any) { state = next; },
     dispose() { cleanups.forEach((fn) => fn()); readiness.forEach((d) => d.resolve()); pending.forEach((p) => p.resolve([])); },
@@ -171,5 +174,25 @@ test("首段已收到但 TTS 尚未就绪时超时，仍给出可推进的兜底
     await tick();
     assert.deepEqual([...queue.segments], ["dayPhase.timeout"]);
     assert.deepEqual(h.audio, []);
+  } finally { h.dispose(); }
+});
+
+
+test("发言恢复耗尽后停住推进，错误不作为角色台词，用户重试仍在同一发言轮次", async () => {
+  const h = harness();
+  try {
+    const running = h.day.runAISpeech(h.state, h.first);
+    h.pending[0].reject(new Error("公开发言格式恢复失败"));
+    await running;
+    assert.equal(h.day.isSpeechBlocked(), true);
+    assert.deepEqual([...h.dialogue.getSpeechQueue().segments], []);
+    assert.equal(h.failures.length, 1);
+    h.failures[0].action.onClick();
+    assert.equal(h.pending.length, 2);
+    assert.equal(h.day.isSpeechBlocked(), false);
+    h.pending[1].options.onSegmentReceived("重试后的公开发言", 0);
+    h.pending[1].resolve(["重试后的公开发言"]);
+    await tick();
+    assert.deepEqual([...h.dialogue.getSpeechQueue().segments], ["重试后的公开发言"]);
   } finally { h.dispose(); }
 });

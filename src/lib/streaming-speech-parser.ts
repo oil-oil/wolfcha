@@ -27,6 +27,8 @@ export class StreamingSpeechParser {
   private started = false;
   private rootSeparator = false;
   private decodingError: string | undefined;
+  private pendingString: string | undefined;
+  private completeDocument = false;
 
   constructor(private readonly options: StreamingSpeechParserOptions = {}) {}
 
@@ -79,6 +81,22 @@ export class StreamingSpeechParser {
   public processChunk(chunk: string): void {
     if (this.ended || this.invalid) return;
     for (const ch of chunk) {
+      // 引号后必须有合法分隔符，才确认这是一整段，避免未转义引号截出半句话。
+      if (this.pendingString !== undefined) {
+        if (/\s/.test(ch)) continue;
+        const frame = this.frames.at(-1);
+        if (ch !== "," && ch !== (frame?.type === "array" ? "]" : "}")) {
+          this.invalid = true;
+          return;
+        }
+        const value = this.pendingString;
+        this.pendingString = undefined;
+        if (frame?.type === "object" && frame.key === "role") {
+          frame.role = value === "assistant" ? "assistant" : "other";
+        }
+        if (this.isPublicValue() && value.trim()) this.receiveValue(value);
+        this.finishValue();
+      }
       if (this.string !== null) {
         this.string += ch;
         if (this.escaped) { this.escaped = false; continue; }
@@ -93,13 +111,7 @@ export class StreamingSpeechParser {
           if (value === "role") frame.role = "other";
           frame.stage = "colon";
         } else {
-          if (frame?.type === "object" && frame.key === "role") {
-            frame.role = value === "assistant" ? "assistant" : "other";
-          }
-          if (this.isPublicValue() && value.trim()) {
-            this.receiveValue(value);
-          }
-          this.finishValue();
+          this.pendingString = value;
         }
         continue;
       }
@@ -135,6 +147,7 @@ export class StreamingSpeechParser {
           this.invalid = true; return;
         }
         this.frames.pop();
+        if (!this.frames.length) this.completeDocument = true;
         if (frame.public && frame.role !== "other") {
           for (const value of frame.pending) this.receiveValue(value);
         }
@@ -167,6 +180,8 @@ export class StreamingSpeechParser {
   }
   public getAllSegments(): string[] { return [...this.segments]; }
   public getSegmentCount(): number { return this.segments.length; }
+  /** 完整公开文档之后的垃圾尾缀可以丢弃；文档本身中断则必须恢复。 */
+  public hasCompleteDocument(): boolean { return this.completeDocument; }
   public reset(): void {
     this.frames = [];
     this.segments = [];
@@ -174,6 +189,8 @@ export class StreamingSpeechParser {
     this.escaped = this.primitive = this.ended = this.invalid = this.started = false;
     this.rootSeparator = false;
     this.decodingError = undefined;
+    this.pendingString = undefined;
+    this.completeDocument = false;
     this.prefix = "";
   }
 }

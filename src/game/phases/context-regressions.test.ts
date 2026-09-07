@@ -210,3 +210,36 @@ test("开发回滚清掉未来轮次和夜间公开标记，避免未来信息�
   assert.deepEqual(result.voteRounds, []);
   assert.equal(result.nightHistory?.[1].resultsAnnounced, false);
 });
+
+test("实战事实账本区分累计平安夜和连续平安夜，个人票型不能混淆警徽与放逐", async () => {
+  const { buildDecisionGrounding } = await import("@/lib/prompt-utils");
+  const state = fresh(); state.day = 5;
+  const actor = state.players[0];
+  state.nightHistory = { 1: { deaths: [] }, 2: { deaths: [] }, 3: { deaths: [{ seat: 0, reason: "wolf" }] }, 4: { deaths: [{ seat: 7, reason: "wolf" }] }, 5: { deaths: [], resultsAnnounced: false } };
+  state.voteRounds = [
+    { id: "badge-1", kind: "badge", day: 1, round: 1, candidates: [0, 7, 9], votes: {}, sheriffSeat: null, winnerSeat: 7, outcome: "elected" },
+    { id: "execution-1", kind: "execution", day: 1, round: 1, candidates: [8], votes: { [actor.playerId]: 8 }, sheriffSeat: 7, winnerSeat: 8, outcome: "executed" },
+  ];
+  const context = buildDecisionGrounding(state, actor);
+  assert.match(context, /第3夜：1号出局，不是平安夜/);
+  assert.match(context, /第4夜：8号出局，不是平安夜/);
+  assert.match(context, /第5夜：结果尚未公布/);
+  assert.match(context, /本人第1天警徽选举第1轮：作为候选人没有投票资格/);
+  assert.match(context, /本人第1天放逐第1轮：投给9号/);
+  state.nightHistory[5].resultsAnnounced = true;
+  assert.match(buildDecisionGrounding(state, actor), /第5夜：无人出局（平安夜）/);
+});
+
+test("最后发言者得到明确收尾约束，投票输入末尾保留本人的完整公开结论", async () => {
+  await import("@/lib/game-master");
+  const { PhaseManager } = await import("../core/PhaseManager");
+  const state = fresh(); state.badge.holderSeat = 0; state.daySpeechStartSeat = 1;
+  const actor = state.players[0];
+  state.messages = [message(state, "我今天不投6号，我的最终选择是10号。", "DAY_SPEECH")];
+  const manager = new PhaseManager();
+  assert.match(manager.getPrompt("DAY_SPEECH", { state }, actor)!.user, /你是本轮最后发言者/);
+  state.phase = "DAY_VOTE";
+  const vote = manager.getPrompt("DAY_VOTE", { state }, actor)!.user;
+  assert.match(vote.split("<my_public_position>")[1], /我今天不投6号，我的最终选择是10号/);
+  assert.match(vote, /没有新证据就延续自己的公开结论/);
+});

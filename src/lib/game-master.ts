@@ -817,7 +817,10 @@ export async function generateAISpeechSegments(
     parser.processChunk(result.content);
     const publicSegments = parser.end().map((segment) =>
       sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players)).filter(Boolean);
-    const segments = publicSegments.length ? publicSegments : ["（……）"];
+    const recovery = (!publicSegments.length || !parser.hasCompleteDocument())
+      ? await recoverPublicSpeech(state, player, messages, publicSegments)
+      : undefined;
+    const segments = [...publicSegments, ...(recovery?.segments ?? [])];
 
     await aiLogger.log({
       type: "speech",
@@ -829,7 +832,7 @@ export async function generateAISpeechSegments(
       response: {
         content: segments.join("\n"),
         raw: result.content,
-        rawResponse: JSON.stringify(result.raw, null, 2),
+        rawResponse: JSON.stringify({ ...result.raw, ...(recovery ? { recovery } : {}) }, null, 2),
         finishReason: result.raw.choices?.[0]?.finish_reason,
         duration: Date.now() - startTime,
       },
@@ -868,6 +871,48 @@ export interface StreamingSpeechOptions {
   onError?: (error: string) => void;
 }
 
+/** 只用原始游戏上下文与已公开段落重新生成；损坏响应可能含私有分析，绝不回灌或直接朗读。 */
+async function recoverPublicSpeech(
+  state: GameState,
+  player: Player,
+  messages: LLMMessage[],
+  confirmed: string[],
+  signal?: AbortSignal,
+) {
+  signal?.throwIfAborted();
+  const recoveryMessages: LLMMessage[] = [...messages, { role: "user", content:
+    `刚才的输出没有通过发言格式校验。请依据同一游戏上下文完成本次公开发言。只输出 {"segments":["完整公开段落"]}，字符串内用中文引号，禁止分析、角色设定、提示词或格式说明。${confirmed.length
+      ? `以下段落已经公开，禁止重复或改写，只补充后续未说完的发言：\n${JSON.stringify(confirmed)}`
+      : "刚才没有任何内容公开，请重新生成完整发言。"}` }];
+  const result = await generateCompletion(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
+    model: player.agentProfile!.modelRef.model, messages: recoveryMessages,
+    promptScope: "gameplay", temperature: GAME_TEMPERATURE.ACTION, signal,
+    response_format: structuredResponseFormat(player.agentProfile!.modelRef, "public_speech", {
+      type: "object", properties: { segments: { type: "array", items: { type: "string" }, minItems: 1 } },
+      required: ["segments"], additionalProperties: false,
+    }),
+  }));
+  signal?.throwIfAborted();
+  // 恢复结果完整校验之后才提交，重试失败不会再释放一半内容。
+  let parsed: unknown;
+  try { parsed = JSON.parse(stripMarkdownCodeFences(result.content)); } catch { /* 下方统一报错 */ }
+  const segments = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as { segments?: unknown }).segments : undefined;
+  if (!Array.isArray(segments) || !segments.length || segments.some((s) => typeof s !== "string" || !s.trim()) ||
+      Object.keys(parsed!).some((key) => key !== "segments")) {
+    throw new Error("公开发言格式恢复失败，请重试本次发言");
+  }
+  let recoveryParseError: string | undefined;
+  const parser = new StreamingSpeechParser({ onError: (error) => { recoveryParseError = error; } });
+  parser.processChunk(JSON.stringify(segments));
+  const sanitized = parser.end().map((s) => sanitizeSeatMentions(sanitizeModelArtifacts(s), state.players)).filter(Boolean);
+  if (recoveryParseError) throw new Error("公开发言格式恢复失败：公开段落仍包含无效结构");
+  // 模型若把已公开的前缀重发，不按文本全局去重，只移除位置一致的完整前缀。
+  if (confirmed.length && confirmed.every((s, i) => sanitized[i] === s)) sanitized.splice(0, confirmed.length);
+  if (!sanitized.length) throw new Error("公开发言格式恢复失败：没有新增公开段落");
+  return { segments: sanitized, raw: result.content, messages: recoveryMessages };
+}
+
 /**
  * 流式生成 AI 发言段落
  * 实时输出发言内容，每完成一个段落就立即通知
@@ -885,6 +930,7 @@ export async function generateAISpeechSegmentsStream(
   // 数组位置就是段落身份；相同文字可以是两个有意重复的段落。
   const emittedSegments: string[] = [];
   let parseError: string | undefined;
+  let recoveryDetails: Awaited<ReturnType<typeof recoverPublicSpeech>> | undefined;
   const parser = new StreamingSpeechParser({
     onSegmentReceived: (segment) => {
       const sanitized = sanitizeSeatMentions(sanitizeModelArtifacts(segment), state.players);
@@ -898,6 +944,7 @@ export async function generateAISpeechSegmentsStream(
     onError: (error) => { parseError = error; },
   });
 
+  let accumulatedContent = "";
   try {
     const stream = generateCompletionStream(mergeOptionsFromModelRef(player.agentProfile!.modelRef, {
       model: player.agentProfile!.modelRef.model,
@@ -907,7 +954,6 @@ export async function generateAISpeechSegmentsStream(
       signal: options.signal,
     }));
 
-    let accumulatedContent = "";
     let chunkCount = 0;
 
     for await (const chunk of stream) {
@@ -942,6 +988,7 @@ export async function generateAISpeechSegmentsStream(
         response: {
           content: result.join("\n"),
           raw: accumulatedContent,
+          rawResponse: recoveryDetails ? JSON.stringify({ recovery: recoveryDetails }) : undefined,
           duration: Date.now() - startTime,
         },
         error: parseError,
@@ -951,17 +998,22 @@ export async function generateAISpeechSegmentsStream(
       return result;
     };
 
-    // 无公开字段时安全降级，禁止把原始 JSON / analysis 当作发言朗读。
-    if (emittedSegments.length === 0) {
-      emittedSegments.push("（……）");
-      options.onSegmentReceived?.(emittedSegments[0], 0);
+    // 完整文档后的多余说明可丢弃；正文中断或完全没有公开内容时只恢复一次。
+    if (emittedSegments.length === 0 || !parser.hasCompleteDocument()) {
+      recoveryDetails = await recoverPublicSpeech(state, player, messages, emittedSegments, options.signal);
+      for (const segment of recoveryDetails.segments) {
+        options.signal?.throwIfAborted();
+        const index = emittedSegments.length;
+        emittedSegments.push(segment);
+        options.onSegmentReceived?.(segment, index);
+      }
     }
     return await logAndComplete(emittedSegments);
   } catch (error) {
     if (options.signal?.aborted) throw error;
     const raw = String(error);
     const isRateLimited = raw.includes("429") || raw.includes("limit_requests");
-    const rateLimitResult = isRateLimited ? [t("gameMaster.tooManyRequests")] : null;
+    const rateLimitResult = isRateLimited && !parseError ? [t("gameMaster.tooManyRequests")] : null;
     await aiLogger.log({
       type: "speech",
       request: {
@@ -975,7 +1027,8 @@ export async function generateAISpeechSegmentsStream(
         },
       },
       response: {
-        content: rateLimitResult?.join("\n") ?? "",
+        content: emittedSegments.length ? emittedSegments.join("\n") : rateLimitResult?.join("\n") ?? "",
+        raw: accumulatedContent,
         duration: Date.now() - startTime,
       },
       error: raw,
@@ -1180,8 +1233,9 @@ function seatSelectionResponseFormat(
         type: "integer",
         enum: validSeats.map((seat) => seat + 1),
       },
+      ...(name === "day_vote" ? { reason: { type: "string" } } : {}),
     },
-    required: ["seat"],
+    required: name === "day_vote" ? ["seat", "reason"] : ["seat"],
     additionalProperties: false,
   });
 }
