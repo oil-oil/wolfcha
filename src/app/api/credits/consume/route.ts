@@ -12,6 +12,7 @@ import {
 } from "@/lib/spring-campaign";
 import { hasConnectedTokenPay, TOKENPAY_MODE_HEADER } from "@/lib/tokenpay";
 import { recordGameSessionCreditEvent } from "@/lib/server-game-observability";
+import { consumeWatchaPayQuota, getWatchaPayAccess, isWatchaPayConfigured, WatchaPayError } from "@/lib/watcha-pay";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,11 @@ type AuthenticatedUser = {
   email?: string | null;
 };
 
-type StartRequestSource = "demo" | "external" | "spring_quota" | "project_credit";
+type StartRequestSource = "demo" | "external" | "spring_quota" | "project_credit" | "watcha_pay";
 
 type ExistingGameStart = {
   id: string;
+  credit_authorized: boolean;
   start_request_id: string;
   start_request_fingerprint: string;
   start_request_source: StartRequestSource;
@@ -132,7 +134,7 @@ async function findExistingGameStart(
 ): Promise<ExistingGameStart | null> {
   const { data, error } = await supabaseAdmin
     .from("game_sessions")
-    .select("id, start_request_id, start_request_fingerprint, start_request_source, lifecycle_status, completed")
+    .select("id, credit_authorized, start_request_id, start_request_fingerprint, start_request_source, lifecycle_status, completed")
     .eq("user_id", userId)
     .eq("start_request_id", requestId)
     .maybeSingle();
@@ -154,10 +156,13 @@ async function buildExistingGameStartResponse(
   user: AuthenticatedUser,
   payload: ConsumeCreditPayload,
   existing: ExistingGameStart,
-) {
+): Promise<NextResponse> {
   assertMatchingGameStart(existing, payload);
   if (existing.completed || existing.lifecycle_status === "completed" || existing.lifecycle_status === "abandoned") {
     throw new TerminalGameStartError();
+  }
+  if (existing.start_request_source === "watcha_pay" && !existing.credit_authorized) {
+    return consumeWatchaPayAndAuthorizeSession(user, payload, existing.start_request_id, existing);
   }
   if (existing.lifecycle_status === "failed") {
     const nowIso = new Date().toISOString();
@@ -178,10 +183,14 @@ async function buildExistingGameStartResponse(
     if (!reactivated) throw new TerminalGameStartError();
   }
   const credits = await readCurrentCredits(user.id);
+  const watchaPayRemaining = existing.start_request_source === "watcha_pay"
+    ? await getWatchaPayAccess(user.id).then(result => result.remaining).catch(() => undefined)
+    : undefined;
   await recordConsumeEvent(user.id, existing.id, existing.start_request_id, "replay");
   return NextResponse.json({
     success: true,
     credits,
+    ...(watchaPayRemaining === undefined ? {} : { watchaPayRemaining }),
     bypassed: existing.start_request_source === "demo" || existing.start_request_source === "external",
     usedTemporaryQuota: existing.start_request_source === "spring_quota",
     sessionId: existing.id,
@@ -193,7 +202,7 @@ async function buildIdempotencyConflictResponse(
   user: AuthenticatedUser,
   payload: ConsumeCreditPayload,
   requestId: string,
-) {
+): Promise<NextResponse> {
   let existing: ExistingGameStart | null = null;
   try {
     existing = await findExistingGameStart(user.id, requestId);
@@ -346,6 +355,120 @@ async function consumeCreditAndCreateSession(
     credits: row.credits,
     replayed: row.replayed === true,
   };
+}
+
+async function deletePendingWatchaPaySession(
+  userId: string,
+  sessionId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("game_sessions")
+    .delete()
+    .eq("id", sessionId)
+    .eq("user_id", userId)
+    .eq("credit_authorized", false);
+  if (error) {
+    console.error("[Watcha Pay] Failed to remove rejected game start");
+  }
+}
+
+async function consumeWatchaPayAndAuthorizeSession(
+  user: AuthenticatedUser,
+  payload: ConsumeCreditPayload,
+  requestId: string,
+  existing: ExistingGameStart | null = null,
+): Promise<NextResponse> {
+  const requestSource: StartRequestSource = "watcha_pay";
+  let sessionId = existing?.id ?? null;
+
+  try {
+    if (existing) {
+      assertMatchingGameStart(existing, payload);
+    } else {
+      const session = await createGameSessionForConsume(user, payload, {
+        creditAuthorized: false,
+        usedCustomKey: false,
+        requestId,
+        requestFingerprint: buildStartRequestFingerprint(requestSource, payload),
+        requestSource,
+      });
+      if (session.source !== requestSource || !session.sessionId) {
+        throw new IdempotencyConflictError();
+      }
+      sessionId = session.sessionId;
+    }
+
+    if (!sessionId) throw new Error("Missing Watcha Pay game session");
+    // 并发请求可能已经完成授权，或该 session 已终止；沿用线上生命周期保护。
+    const latestStart = await findExistingGameStart(user.id, requestId);
+    if (!latestStart) throw new Error("Missing pending session");
+    if (latestStart.credit_authorized || latestStart.completed
+      || latestStart.lifecycle_status === "completed" || latestStart.lifecycle_status === "abandoned") {
+      return buildExistingGameStartResponse(user, payload, latestStart);
+    }
+    const result = await consumeWatchaPayQuota(user.id, 1, requestId);
+    const { data: authorizedSession, error: updateError } = await supabaseAdmin
+      .from("game_sessions")
+      .update({
+        credit_authorized: true,
+        last_activity_at: new Date().toISOString(),
+      } as never)
+      .eq("id", sessionId)
+      .eq("user_id", user.id)
+      .eq("start_request_source", requestSource)
+      .select("id")
+      .maybeSingle();
+    if (updateError || !authorizedSession) {
+      const latest = await findExistingGameStart(user.id, requestId).catch(() => null);
+      if (
+        !latest
+        || latest.id !== sessionId
+        || latest.start_request_source !== requestSource
+        || !latest.credit_authorized
+      ) {
+        console.error("[Watcha Pay] Failed to authorize consumed game session");
+        return NextResponse.json(
+          { error: "Failed to authorize Watcha Pay game session" },
+          { status: 503 },
+        );
+      }
+    }
+    await recordConsumeEvent(user.id, sessionId, requestId, "success");
+    return NextResponse.json({
+      success: true,
+      credits: await readCurrentCredits(user.id),
+      watchaPayRemaining: result.remaining,
+      usedTemporaryQuota: false,
+      sessionId,
+      idempotentReplay: existing !== null,
+    });
+  } catch (error) {
+    if (error instanceof IdempotencyConflictError) {
+      return buildIdempotencyConflictResponse(user, payload, requestId);
+    }
+    if (error instanceof WatchaPayError && error.code === "insufficient_quota") {
+      if (sessionId) await deletePendingWatchaPaySession(user.id, sessionId);
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          code: "insufficient_watcha_pay_quota",
+          credits: await readCurrentCredits(user.id),
+          watchaPayRemaining: 0,
+        },
+        { status: 402 },
+      );
+    }
+
+    // 超时或未知结果时保留未授权 session；客户端使用同一请求 ID 重试，
+    // 平台幂等键可避免重复扣减，确认成功前游戏服务也无法占用该 session。
+    console.error("[Watcha Pay] Failed to consume game quota", {
+      code: error instanceof WatchaPayError ? error.code : "unknown",
+    });
+    return NextResponse.json(
+      { error: "Watcha Pay is temporarily unavailable" },
+      { status: 503 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -720,6 +843,7 @@ export async function POST(request: Request) {
       return buildIdempotencyConflictResponse(user, payload, startRequestId);
     }
     if (String(error).includes("Insufficient credits")) {
+      if (isWatchaPayConfigured()) return consumeWatchaPayAndAuthorizeSession(user, payload, startRequestId);
       await recordConsumeEvent(user.id, null, startRequestId, "reject", "insufficient_credits");
       return NextResponse.json(
         {

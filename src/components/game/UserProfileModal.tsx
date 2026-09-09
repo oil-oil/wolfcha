@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { UserCircle, Key, SignOut, ShareNetwork, Copy, CaretDown, Check, ArrowRight, Eye, EyeSlash, CreditCard, Minus, Plus } from "@phosphor-icons/react";
+import { UserCircle, Key, SignOut, ShareNetwork, Copy, CaretDown, Check, ArrowRight, Eye, EyeSlash, CreditCard } from "@phosphor-icons/react";
  import {
    Dialog,
    DialogContent,
@@ -53,8 +53,8 @@ import {
   type ModelSource,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
-import { supabase } from "@/lib/supabase";
 import { REFERRAL_BONUS_ENABLED, SPRING_CAMPAIGN_ENABLED, REDEMPTION_CODE_ENABLED } from "@/lib/welfare-config";
+import { WatchaPayPurchase } from "@/components/game/WatchaPayPurchase";
 import { TokenPayPanel } from "@/components/game/TokenPayPanel";
 import {
   ALL_MODELS,
@@ -138,9 +138,6 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     dashscope: "",
     tokendance: "",
   });
-  const [purchaseQuantity, setPurchaseQuantity] = useState(10);
-  const [purchaseQuantityInput, setPurchaseQuantityInput] = useState("10");
-  const [isPurchasing, setIsPurchasing] = useState(false);
   const [isWechatQrOpen, setIsWechatQrOpen] = useState(false);
   const [redeemCodeInput, setRedeemCodeInput] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -488,39 +485,6 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     toast(t("customKey.toasts.cleared"));
   };
 
-  const handlePurchase = async () => {
-    if (isPurchasing || purchaseQuantity < 10) return;
-    setIsPurchasing(true);
-    try {
-      // Get fresh access token to avoid using expired token
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) {
-        toast(t("customKey.payAsYouGo.error"));
-        return;
-      }
-
-      const response = await fetch("/api/stripe/payment-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ quantity: purchaseQuantity }),
-      });
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast(t("customKey.payAsYouGo.error"));
-      }
-    } catch {
-      toast(t("customKey.payAsYouGo.error"));
-    } finally {
-      setIsPurchasing(false);
-    }
-  };
-
   const handleRedeem = async () => {
     if (isRedeeming || !redeemCodeInput.trim() || !onRedeemCode) return;
     setIsRedeeming(true);
@@ -543,7 +507,6 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     }
   };
 
-  const totalPrice = (purchaseQuantity * 0.5).toFixed(2);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -701,96 +664,8 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                 </>
               )}
 
-              <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-[var(--text-muted)]">{t("customKey.payAsYouGo.pricePerGame", { price: "0.50" })}</span>
-                </div>
+              {open && <WatchaPayPurchase key={email ?? "guest"} onCreditsChange={onCreditsChange} />}
 
-                <div className="space-y-2">
-                  <Label className="text-xs">{t("customKey.payAsYouGo.quantity")}</Label>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newVal = Math.max(10, purchaseQuantity - 1);
-                        setPurchaseQuantity(newVal);
-                        setPurchaseQuantityInput(newVal.toString());
-                      }}
-                      disabled={purchaseQuantity <= 10}
-                      className="h-9 w-9 p-0"
-                    >
-                      <Minus size={16} />
-                    </Button>
-                    <Input
-                      type="number"
-                      min={10}
-                      max={100}
-                      value={purchaseQuantityInput}
-                      onChange={(e) => {
-                        const inputValue = e.target.value;
-                        setPurchaseQuantityInput(inputValue);
-                        // Allow empty input for better UX
-                        if (inputValue === "") {
-                          return;
-                        }
-                        const val = parseInt(inputValue, 10);
-                        if (!isNaN(val) && val >= 10) {
-                          setPurchaseQuantity(Math.min(100, Math.max(10, val)));
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const inputValue = e.target.value;
-                        if (inputValue === "" || isNaN(parseInt(inputValue, 10))) {
-                          setPurchaseQuantityInput("10");
-                          setPurchaseQuantity(10);
-                        } else {
-                          const val = parseInt(inputValue, 10);
-                          const clampedVal = Math.min(100, Math.max(10, val));
-                          setPurchaseQuantityInput(clampedVal.toString());
-                          setPurchaseQuantity(clampedVal);
-                        }
-                      }}
-                      className="h-9 w-20 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const newVal = Math.min(100, purchaseQuantity + 1);
-                        setPurchaseQuantity(newVal);
-                        setPurchaseQuantityInput(newVal.toString());
-                      }}
-                      disabled={purchaseQuantity >= 100}
-                      className="h-9 w-9 p-0"
-                    >
-                      <Plus size={16} />
-                    </Button>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-[var(--text-muted)]">{t("customKey.payAsYouGo.minQuantity")}</p>
-                    <p className="text-xs text-[var(--text-muted)] opacity-70">{t("customKey.payAsYouGo.minQuantityHint")}</p>
-                  </div>
-                </div>
-
-                <div className="border-t border-[var(--border-color)] pt-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.payAsYouGo.total")}</span>
-                    <span className="text-lg font-semibold text-[var(--color-gold)]">${totalPrice}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handlePurchase}
-                    disabled={isPurchasing}
-                    className="w-full gap-2"
-                  >
-                    <CreditCard size={16} />
-                    {isPurchasing ? t("customKey.payAsYouGo.redirecting") : t("customKey.payAsYouGo.purchase")}
-                  </Button>
-                </div>
-              </section>
             </div>
           </TabsContent>
 

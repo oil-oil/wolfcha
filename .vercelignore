@@ -1,0 +1,5 @@
+# 不上传本地凭证、测试构建及开发依赖。
+.env*
+node_modules
+.next
+supabase/.temp

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import {
   fetchDemoModeConfigClient,
@@ -87,7 +87,11 @@ function buildStartIntentFingerprint(
 export function useCredits() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [credits, setCredits] = useState<number | null>(null);
+  const [projectCredits, setCredits] = useState<number | null>(null);
+  const [watchaBalance, setWatchaBalance] = useState({ userId: "", remaining: 0 });
+  const creditsRequestVersion = useRef(0);
+  const credits = useMemo(() => projectCredits === null ? null : projectCredits
+    + (watchaBalance.userId === user?.id ? watchaBalance.remaining : 0), [projectCredits, watchaBalance, user?.id]);
   const [demoConfig, setDemoConfig] = useState<DemoModePublicConfigSnapshot>(() =>
     getDefaultDemoModeConfigSnapshot()
   );
@@ -105,6 +109,8 @@ export function useCredits() {
 
   const fetchCredits = useCallback(async () => {
     if (!user) return;
+    const version = ++creditsRequestVersion.current;
+    const isCurrent = () => version === creditsRequestVersion.current;
     setLoading(true);
 
     const { data, error } = await supabase
@@ -113,6 +119,7 @@ export function useCredits() {
       .eq("id", user.id)
       .single();
 
+    if (!isCurrent()) return;
     const creditsRow = data as {
       credits: number;
       referral_code: string;
@@ -124,7 +131,23 @@ export function useCredits() {
       setTotalReferrals(creditsRow.total_referrals);
     }
 
-    setLoading(false);
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!isCurrent()) return;
+      if (!currentSession || currentSession.user.id !== user.id) throw new Error("Unauthorized");
+      const response = await fetchWithTimeout("/api/watcha-pay/access", {
+        headers: { Authorization: `Bearer ${currentSession.access_token}` }, cache: "no-store",
+      }, 15_000);
+      const payload = await response.json();
+      if (!isCurrent()) return;
+      const remaining = response.ok && payload.access === "granted"
+        && Number.isSafeInteger(payload.remaining) && payload.remaining >= 0 ? payload.remaining : 0;
+      setWatchaBalance({ userId: user.id, remaining });
+    } catch {
+      if (isCurrent()) setWatchaBalance({ userId: user.id, remaining: 0 });
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
   }, [user]);
 
   const refreshDemoConfig = useCallback(async (forceRefresh = false) => {
@@ -231,6 +254,7 @@ export function useCredits() {
         campaign?: SpringCampaignSnapshot;
         sessionId?: string | null;
         idempotentReplay?: boolean;
+        watchaPayRemaining?: number;
       };
       if (options.createSession && !payload.sessionId) {
         return {
@@ -241,6 +265,9 @@ export function useCredits() {
         };
       }
       setCredits(payload.credits);
+      if (Number.isSafeInteger(payload.watchaPayRemaining) && Number(payload.watchaPayRemaining) >= 0) {
+        setWatchaBalance({ userId: session.user.id, remaining: Number(payload.watchaPayRemaining) });
+      }
       if (payload.campaign) {
         setSpringCampaign(payload.campaign);
       }
@@ -546,6 +573,7 @@ export function useCredits() {
   }, [handleAuthenticatedSession]);
 
   useEffect(() => {
+    const requestVersionRef = creditsRequestVersion;
     const timer = window.setTimeout(() => {
       if (user) {
         void fetchCredits();
@@ -563,8 +591,19 @@ export function useCredits() {
 
     return () => {
       window.clearTimeout(timer);
+      requestVersionRef.current++;
     };
   }, [user, fetchCredits]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void fetchCredits(); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [fetchCredits]);
 
   return {
     user,

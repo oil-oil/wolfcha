@@ -240,7 +240,7 @@ export interface Database {
           region: string | null;
           start_request_id: string | null;
           start_request_fingerprint: string | null;
-          start_request_source: "demo" | "external" | "spring_quota" | "project_credit" | null;
+          start_request_source: "demo" | "external" | "spring_quota" | "project_credit" | "watcha_pay" | null;
           last_activity_at: string;
           created_at: string;
           ended_at: string | null;
@@ -268,7 +268,7 @@ export interface Database {
           region?: string | null;
           start_request_id?: string | null;
           start_request_fingerprint?: string | null;
-          start_request_source?: "demo" | "external" | "spring_quota" | "project_credit" | null;
+          start_request_source?: "demo" | "external" | "spring_quota" | "project_credit" | "watcha_pay" | null;
           last_activity_at?: string;
           created_at?: string;
           ended_at?: string | null;
@@ -296,7 +296,7 @@ export interface Database {
           region?: string | null;
           start_request_id?: string | null;
           start_request_fingerprint?: string | null;
-          start_request_source?: "demo" | "external" | "spring_quota" | "project_credit" | null;
+          start_request_source?: "demo" | "external" | "spring_quota" | "project_credit" | "watcha_pay" | null;
           last_activity_at?: string;
           created_at?: string;
           ended_at?: string | null;
