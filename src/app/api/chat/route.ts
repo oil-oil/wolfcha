@@ -6,6 +6,7 @@ import {
 } from "@/lib/game-session-policy";
 import { ALL_MODELS, PROJECT_MODELS } from "@/types/game";
 import { randomUUID } from "node:crypto";
+import { applyTokenDanceResponseFormat } from "@/lib/tokendance-response-format";
 import {
   getConnectedTokenPayApiKey,
   getTokenPayAppUrl,
@@ -635,7 +636,7 @@ async function runBatchItem(
     }
 
     if (response_format && supportsResponseFormat(model)) {
-      requestBody.response_format = response_format;
+      applyTokenDanceResponseFormat(requestBody, response_format);
     }
 
     const controller = new AbortController();
@@ -1111,7 +1112,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (response_format && supportsResponseFormat(model)) {
-        requestBody.response_format = response_format;
+        applyTokenDanceResponseFormat(requestBody, response_format);
       }
 
       const controller = new AbortController();

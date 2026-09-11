@@ -102,3 +102,9 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 - 夜间结算与公开结果分开记录；临时切换提示词阶段不能改变信息可见性。
 - 逐轮投票保存独立快照，同时维护旧存档与开发回滚兼容。
 - 提交前运行 `pnpm test:single-player-context`，再做类型检查和生产构建；具体原因与边界见 `docs/单人上下文约束.md`。
+
+### 模型切换与输出格式验证
+
+- 默认模型切换时同时核对内置玩家、总结、复盘以及 TokenPay 模型归一化；总结和复盘复用内置模型定义，避免单独硬编码后遗漏更新。
+- 不能仅凭模型名称前缀判断严格 Schema 支持。按实际 Provider、模型和 `response_format.type` 实测；TokenDance DeepSeek 的 `json_schema` 在统一出口转为 `json_object`，结构要求保留在提示词中，返回结果继续经过业务校验。
+- 格式适配须覆盖普通、流式和批量请求，并运行 `pnpm test:tokenpay`。真实模型验证应确认输出可解析且字段有效，不能只检查 HTTP 200。

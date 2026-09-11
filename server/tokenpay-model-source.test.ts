@@ -6,7 +6,7 @@ import {
   resolveModelSource,
   setModelSource,
 } from "@/lib/api-keys";
-import { ALL_MODELS, AVAILABLE_MODELS, MODEL_IDS } from "@/types/game";
+import { ALL_MODELS, AVAILABLE_MODELS, MODEL_IDS, SUMMARY_MODEL, REVIEW_MODEL } from "@/types/game";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL ||= "https://example.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||= "test-publishable-key";
@@ -133,13 +133,15 @@ test("legacy key settings migrate to exactly one model source", () => {
   assert.equal(resolveModelSource({}), "project");
 });
 
-test("TokenPay default model uses DeepSeek V4 Flash", () => {
+test("TokenPay、总结和复盘默认使用 DeepSeek V4.1 Flash", () => {
   const builtInModel = AVAILABLE_MODELS[0];
   const selectableModel = ALL_MODELS.find(
-    (model) => model.model === MODEL_IDS.tokendance.deepseekV4Flash0731,
+    (model) => model.model === MODEL_IDS.tokendance.deepseekV41Flash,
   );
 
-  assert.equal(builtInModel.model, MODEL_IDS.tokendance.deepseekV4Flash0731);
+  assert.equal(builtInModel.model, "deepseek-v4.1-flash");
+  assert.equal(SUMMARY_MODEL, builtInModel.model);
+  assert.equal(REVIEW_MODEL, builtInModel.model);
   assert.deepEqual(builtInModel.reasoning, { enabled: false });
   assert.deepEqual(selectableModel?.reasoning, { enabled: false });
 });
@@ -153,7 +155,7 @@ test("TokenPay 会同时归一化旧存档的模型与 Provider", async () => {
       "zenmux",
     ),
     {
-      model: MODEL_IDS.tokendance.deepseekV4Flash0731,
+      model: MODEL_IDS.tokendance.deepseekV41Flash,
       provider: "tokendance",
     },
   );
