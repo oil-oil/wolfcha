@@ -2183,6 +2183,8 @@
       "redirecting": "正在获取购买入口...",
       "error": "创建支付链接失败",
       "watchaPayTitle": "通过爱猹收充值",
+      "watchaPayUnavailable": "爱猹收支付服务暂不可用，暂时无法查询余额或获取充值入口，请稍后重试。",
+      "watchaPayTraceId": "查询编号：{id}",
       "watchaPayDescription": "购买次数计入当前登录账号，每开一局消耗 1 次。",
       "watchaPayHint": "套餐次数、售价及有效期以支付宝购买页面为准。",
       "watchaPayPurchase": "查看充值套餐",
