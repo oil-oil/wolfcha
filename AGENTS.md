@@ -20,7 +20,7 @@ Copy `.env.example` to `.env.local` and fill in:
 - `MINIMAX_API_KEY` / `MINIMAX_GROUP_ID` — TTS voice synthesis
 - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — auth & database
 - `DASHSCOPE_API_KEY` — Alibaba Cloud model support
-- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` — payments
+- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — 仅用于历史订单回调；新订单已停用
 - `NEXT_PUBLIC_WATCHA_CLIENT_ID` / `WATCHA_CLIENT_SECRET` — optional OAuth
 - `NEWAPI_API_KEY` / `NEWAPI_BASE_URL` — optional custom model endpoint
 

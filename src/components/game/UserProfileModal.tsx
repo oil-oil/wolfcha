@@ -138,7 +138,6 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     dashscope: "",
     tokendance: "",
   });
-  const [isWechatQrOpen, setIsWechatQrOpen] = useState(false);
   const [redeemCodeInput, setRedeemCodeInput] = useState("");
   const [isRedeeming, setIsRedeeming] = useState(false);
   const profileActionGridClassName = REFERRAL_BONUS_ENABLED
@@ -607,65 +606,39 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
 
           <TabsContent value="payAsYouGo">
             <div className="space-y-4">
-              {REDEMPTION_CODE_ENABLED && (
-                <>
-                  <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.payAsYouGo.purchaseTitle")}</h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.payAsYouGo.purchaseDesc")}</p>
-                    </div>
-                    <div className="flex justify-center">
-                      <img
-                        src="/pay.png"
-                        alt="Purchase QR Code"
-                        className="w-48 h-48 object-contain rounded-lg"
-                      />
-                    </div>
-                    <a
-                      href="https://pay.ldxp.cn/item/j9arl2"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-hover)]"
-                    >
-                      {t("customKey.payAsYouGo.openPurchaseLink")}
-                      <ArrowRight size={14} />
-                    </a>
-                  </section>
-
-                  <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
-                    <div>
-                      <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.payAsYouGo.redeemTitle")}</h3>
-                      <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.payAsYouGo.redeemHint")}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={redeemCodeInput}
-                        onChange={(e) => setRedeemCodeInput(e.target.value)}
-                        placeholder={t("customKey.payAsYouGo.redeemPlaceholder")}
-                        className="flex-1"
-                        disabled={isRedeeming}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && redeemCodeInput.trim() && !isRedeeming) {
-                            void handleRedeem();
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => void handleRedeem()}
-                        disabled={isRedeeming || !redeemCodeInput.trim()}
-                        className="gap-2"
-                      >
-                        <CreditCard size={16} />
-                        {isRedeeming ? t("customKey.payAsYouGo.redeeming") : t("customKey.payAsYouGo.redeemButton")}
-                      </Button>
-                    </div>
-                  </section>
-                </>
-              )}
-
               {open && <WatchaPayPurchase key={email ?? "guest"} onCreditsChange={onCreditsChange} />}
 
+              {REDEMPTION_CODE_ENABLED && (
+                <section className="rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-[var(--text-primary)]">{t("customKey.payAsYouGo.redeemTitle")}</h3>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{t("customKey.payAsYouGo.redeemHint")}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={redeemCodeInput}
+                      onChange={(e) => setRedeemCodeInput(e.target.value)}
+                      placeholder={t("customKey.payAsYouGo.redeemPlaceholder")}
+                      className="flex-1"
+                      disabled={isRedeeming}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && redeemCodeInput.trim() && !isRedeeming) {
+                          void handleRedeem();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void handleRedeem()}
+                      disabled={isRedeeming || !redeemCodeInput.trim()}
+                      className="gap-2"
+                    >
+                      <CreditCard size={16} />
+                      {isRedeeming ? t("customKey.payAsYouGo.redeeming") : t("customKey.payAsYouGo.redeemButton")}
+                    </Button>
+                  </div>
+                </section>
+              )}
             </div>
           </TabsContent>
 
