@@ -12,12 +12,21 @@ export type WatchaPayErrorCode =
 export class WatchaPayError extends Error {
   readonly code: WatchaPayErrorCode;
   readonly status?: number;
+  readonly upstreamCode?: string;
+  readonly traceId?: string;
 
-  constructor(code: WatchaPayErrorCode, message: string, status?: number) {
+  constructor(
+    code: WatchaPayErrorCode,
+    message: string,
+    status?: number,
+    diagnostics: { upstreamCode?: string; traceId?: string } = {},
+  ) {
     super(message);
     this.name = "WatchaPayError";
     this.code = code;
     this.status = status;
+    this.upstreamCode = diagnostics.upstreamCode;
+    this.traceId = diagnostics.traceId;
   }
 }
 
@@ -187,10 +196,19 @@ function parseAccessResponse(payload: unknown): WatchaPayAccess {
     throw invalidResponse("Watcha Pay access response must be an object");
   }
   const access = payload.access;
+  if (access === "unavailable") {
+    const reason = payload.reason;
+    if (!isPlainObject(reason) || reason.code !== "configuration_action_required") {
+      throw invalidResponse("Watcha Pay returned an unknown unavailable reason");
+    }
+    // 官方不可用响应没有 entitlement，不能把它伪造成零余额或授权成功。
+    throw new WatchaPayError("unavailable", "Watcha Pay requires configuration action", 503, {
+      upstreamCode: reason.code,
+    });
+  }
   if (
     access !== "granted" &&
-    access !== "purchase_required" &&
-    access !== "unavailable"
+    access !== "purchase_required"
   ) {
     throw invalidResponse("Watcha Pay access response has an invalid access value");
   }
@@ -243,7 +261,8 @@ async function readJson(response: Response): Promise<unknown> {
     return await response.json();
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
-    throw invalidResponse("Watcha Pay returned invalid JSON", response.status);
+    // 上游 HTTP 200 不代表内容有效，解析失败不能继续向客户端返回 200。
+    throw invalidResponse("Watcha Pay returned invalid JSON", 502);
   }
 }
 
@@ -266,7 +285,7 @@ async function postWatchaPay(
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) handleHttpFailure(response, operation);
+    if (!response.ok) await handleHttpFailure(response, operation);
     // 超时必须覆盖响应体读取，避免上游只返回响应头后永久挂起。
     return await readJson(response);
   } catch (error) {
@@ -277,18 +296,33 @@ async function postWatchaPay(
   }
 }
 
-function handleHttpFailure(response: Response, operation: string): never {
+async function handleHttpFailure(response: Response, operation: string): Promise<never> {
+  const trace = response.headers.get("x-trace-id");
+  const traceId = trace && /^[A-Za-z0-9_-]{1,128}$/.test(trace) ? trace : undefined;
+  let upstreamCode: string | undefined;
+  try {
+    const payload: unknown = await response.json();
+    const error = isPlainObject(payload) ? payload.error : undefined;
+    const code = isPlainObject(error) ? error.code : error;
+    if (typeof code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(code)) {
+      upstreamCode = code;
+    }
+  } catch {
+    // CDN 可能返回 HTML；保留 HTTP 状态与追踪信息，不转发原始错误或凭据。
+  }
   if (response.status === 409 && operation === "consume") {
     throw new WatchaPayError(
       "insufficient_quota",
       "Watcha Pay quota is insufficient",
       response.status,
+      { upstreamCode, traceId },
     );
   }
   throw new WatchaPayError(
     "unavailable",
     `Watcha Pay ${operation} request failed (${response.status})`,
     response.status,
+    { upstreamCode, traceId },
   );
 }
 

@@ -42,16 +42,23 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
-    const status = error instanceof WatchaPayError
-      ? error.code === "misconfigured" ? 503 : error.status ?? 502
-      : 502;
+    const failure = error instanceof WatchaPayError ? error : undefined;
+    const status = failure?.code === "misconfigured" || failure?.status === 503
+      || failure?.status === 429 ? 503 : 502;
     console.error("[Watcha Pay] Failed to read entitlement", {
-      code: error instanceof WatchaPayError ? error.code : "unknown",
+      code: failure?.code ?? "unknown",
+      upstreamStatus: failure?.status,
+      upstreamCode: failure?.upstreamCode,
+      traceId: failure?.traceId,
       status,
     });
     return NextResponse.json(
-      { error: "Failed to read Watcha Pay entitlement" },
-      { status },
+      {
+        error: "Watcha Pay is temporarily unavailable",
+        code: "watcha_pay_unavailable",
+        ...(failure?.traceId ? { traceId: failure.traceId } : {}),
+      },
+      { status, headers: { "Cache-Control": "private, no-store" } },
     );
   }
 }
