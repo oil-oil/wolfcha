@@ -954,7 +954,7 @@ alive_count: ${alivePlayers.length}
       }
     }
 
-    // Dead players note - softer guideline, allow referencing death causes but focus on alive players
+    // 出局只影响行动资格，不能让已经公开的查杀、发言和票型退出推理上下文。
     context += `\n\n<focus_reminder>${t("promptUtils.gameContext.focusReminder")}</focus_reminder>`;
   }
 
