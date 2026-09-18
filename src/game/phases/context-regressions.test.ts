@@ -4,7 +4,7 @@ import { createSinglePlayerContextAuditState } from "../../../scripts/single-pla
 import { setLocale } from "@/i18n/locale-store";
 import { buildGameContext, buildPastDaysTranscript } from "@/lib/prompt-utils";
 import { recordVoteRound } from "@/lib/vote-rounds";
-import type { GameState, Phase } from "@/types/game";
+import type { GameState, Phase, Role } from "@/types/game";
 
 process.env.NEXT_PUBLIC_SUPABASE_URL ||= "http://127.0.0.1:54321";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||= "context-regression-key";
@@ -26,6 +26,78 @@ const message = (state: GameState, content: string, phase: Phase, seat = 0, roun
 });
 
 const decisions: Phase[] = ["DAY_BADGE_SIGNUP", "DAY_BADGE_ELECTION", "BADGE_TRANSFER", "DAY_VOTE", "HUNTER_SHOOT", "WHITE_WOLF_KING_BOOM", "DAY_SPEECH", "DAY_LAST_WORDS", "DAY_PK_SPEECH"];
+
+// 来自玩家反馈的最小局面：1号单边预报2号查杀，被放逐后6号接警徽。
+// 只复现公开证据链，不把玩家期待的票型写成必须执行的策略。
+function seerFeedbackState(): GameState {
+  const state = fresh();
+  const roles: Role[] = ["Seer", "Werewolf", "Villager", "Werewolf", "Witch", "Hunter", "Villager", "Guard", "Werewolf", "WhiteWolfKing", "Idiot"];
+  state.players = state.players.map((player, seat) => ({
+    ...player, role: roles[seat], alive: seat !== 0, isHuman: seat === 5,
+    alignment: roles[seat] === "Werewolf" || roles[seat] === "WhiteWolfKing" ? "wolf" : "village",
+  }));
+  state.messages = [
+    message(state, "我是1号预言家，首夜查杀2号。", "DAY_BADGE_SPEECH", 0),
+    message(state, "1号太急着推人了，我没有身份要跳。", "DAY_BADGE_SPEECH", 1),
+    message(state, "全场没有第二个预言家，我站边1号，今天出2号。", "DAY_SPEECH", 5),
+    { ...message(state, "我仍然报2号查杀，警徽交给6号。", "DAY_LAST_WORDS", 0), isLastWords: true },
+  ];
+  state.dayHistory = { 1: { executed: { seat: 0, votes: 6 } } };
+  state.nightHistory = { 1: { deaths: [], resultsAnnounced: true }, 2: { guardTarget: 5, deaths: [], resultsAnnounced: true } };
+  state.badge.holderSeat = 5;
+  state.day = 2;
+  state.currentSpeakerSeat = 6;
+  state.daySpeechStartSeat = 6;
+  state.messages.push(message(state, "我是6号，我明神了，警长归票2号。", "DAY_SPEECH", 5));
+  return state;
+}
+
+for (const locale of ["zh", "en"] as const) {
+  for (const isGenshinMode of [false, true]) {
+    test(`出局预言家证据：${locale}/${isGenshinMode ? "原神" : "普通"}允许继续分析公开查杀`, async () => {
+      await import("@/lib/game-master");
+      const { PhaseManager } = await import("../core/PhaseManager");
+      setLocale(locale);
+      try {
+        const state = seerFeedbackState();
+        state.isGenshinMode = isGenshinMode;
+        const manager = new PhaseManager();
+        for (const phase of ["DAY_SPEECH", "DAY_VOTE"] as const) {
+          state.phase = phase;
+          const prompt = manager.getPrompt(phase, { state }, state.players[6])!;
+          const full = `${prompt.system}\n${prompt.user}`;
+          assert.match(prompt.user, /我是1号预言家，首夜查杀2号/);
+          assert.match(prompt.user, /我仍然报2号查杀，警徽交给6号/);
+          assert.match(prompt.user, /我是6号，我明神了，警长归票2号/);
+          assert.doesNotMatch(full, /只讨论(?:当前)?存活玩家|避免围绕已出局玩家|不要过度复盘已出局玩家|(?:Only discuss|Discuss) living players only|Only discuss living players|avoid postmortems|avoid over-analyzing eliminated players/);
+          assert.match(full, locale === "zh" ? /已出局玩家的公开发言、身份声明、声称的查验、投票与警徽流转仍可作为推理依据/ : /Eliminated players' public speeches, role claims, claimed checks, votes, and badge transfers remain available for reasoning/);
+          assert.match(full, locale === "zh" ? /单边声明或持有警徽不等于身份已确认/ : /An uncontested claim or holding the badge does not confirm a role/);
+          assert.doesNotMatch(full, /<your_seer_checks>|<your_guard_info>|<your_wolf_team>/);
+          assert.doesNotMatch(full, /必须投2号|必须服从警长|must vote for Seat 2/i);
+        }
+      } finally { setLocale("zh"); }
+    });
+  }
+}
+
+test("反馈场景：第三夜守卫能看到明神归票，但上一夜守过6号时不能连守", async () => {
+  await import("@/lib/game-master");
+  const { NightPhase } = await import("./NightPhase");
+  const state = seerFeedbackState();
+  state.day = 3;
+  state.phase = "NIGHT_GUARD_ACTION";
+  state.nightActions.lastGuardTarget = 5;
+  const phase = new NightPhase();
+  const prompt = phase.getPrompt({ state }, state.players[7]);
+  assert.match(prompt.user, /我是6号，我明神了，警长归票2号/);
+  assert.match(prompt.user, /我是1号预言家，首夜查杀2号/);
+  assert.match(prompt.system, /上晚保护了6号，今晚不能选/);
+  assert.doesNotMatch(prompt.system.split("可选: ")[1]?.split("\n")[0] ?? "", /6号/);
+  state.nightActions.lastGuardTarget = 7;
+  const eligible = phase.getPrompt({ state }, state.players[7]);
+  assert.match(eligible.system.split("可选: ")[1]?.split("\n")[0] ?? "", /6号/);
+});
+
 for (const phase of decisions) {
   test(`阶段矩阵：${phase} 必须包含已公开的当天证据`, async () => {
     await import("@/lib/game-master");
