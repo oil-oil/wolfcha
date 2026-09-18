@@ -12,6 +12,8 @@
   ·
   <a href="#本地运行">本地运行</a>
   ·
+  <a href="./docs/游戏规则.md">游戏规则与新手入门</a>
+  ·
   <a href="./README.md">English</a>
 </p>
 

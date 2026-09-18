@@ -12,6 +12,8 @@
   ·
   <a href="#local-development">Run locally</a>
   ·
+  <a href="./docs/游戏规则.md">游戏规则（中文）</a>
+  ·
   <a href="./README.zh.md">中文说明</a>
 </p>
 

@@ -1,5 +1,7 @@
 # Wolfcha
 
+[游戏规则与新手入门（中文）](./docs/游戏规则.md)
+
 <div align="center">
   <img src="public/logo.png" alt="Wolfcha Logo" width="240" />
   <h3>Play Werewolf with AI — a full table, no party required</h3>
