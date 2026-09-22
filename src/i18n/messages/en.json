@@ -2087,6 +2087,8 @@
       "redirecting": "Loading purchase options...",
       "error": "Failed to create payment link",
       "watchaPayTitle": "Recharge with Watcha Pay",
+      "watchaPayUnavailable": "Watcha Pay is temporarily unavailable. Balance checks and recharge links are unavailable; please try again later.",
+      "watchaPayTraceId": "Query reference: {id}",
       "watchaPayDescription": "Purchased quota is credited to your signed-in account. Each game uses one credit.",
       "watchaPayHint": "Package size, price and validity are shown on the Alipay purchase page.",
       "watchaPayPurchase": "View recharge packages",
