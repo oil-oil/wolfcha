@@ -2,23 +2,29 @@ import {
   getMinimaxApiKey,
   getMinimaxGroupId,
   getModelSource,
+  getTokendanceApiKey,
+  getTokendanceBaseUrl,
   hasMinimaxKey,
+  hasTokendanceKey,
   resolveAiVoiceAvailability,
 } from "@/lib/api-keys";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 
+export type TtsProvider = "minimax" | "tokendance";
+
 export interface AudioTask {
-  id: string; // 语音缓存键，同音色同文字可复用
-  playbackId?: string; // 请求 + 段落身份，允许重复句各自播放
+  id: string;
+  playbackId?: string;
   isValid?: () => boolean;
   text: string;
   voiceId: string;
   playerId: string;
+  ttsProvider?: TtsProvider;
 }
 
-export function makeAudioTaskId(voiceId: string, text: string) {
-  return `${voiceId}::${text}`;
+export function makeAudioTaskId(voiceId: string, text: string, ttsProvider: TtsProvider = "minimax") {
+  return `${ttsProvider}::${voiceId}::${text}`;
 }
 
 type PlayState = "idle" | "playing" | "loading";
@@ -32,35 +38,32 @@ export class AudioManager {
   private inFlight = new Map<string, Promise<void>>();
   private enabled = false;
 
-  // Callbacks
   private onPlayStart: ((playerId: string) => void) | null = null;
   private onPlayEnd: ((playerId: string) => void) | null = null;
 
-  constructor() {
-    // binding if needed
-  }
-
-  private async buildTtsHeaders(): Promise<Record<string, string>> {
+  private async buildTtsHeaders(provider: TtsProvider): Promise<Record<string, string>> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const modelSource = getModelSource();
-    const authHeaders = await getAuthHeaders();
-    Object.assign(headers, authHeaders);
+    Object.assign(headers, await getAuthHeaders());
     const sessionId = gameSessionTracker.getSessionId();
-    if (sessionId) {
-      headers["X-Game-Session-Id"] = sessionId;
+    if (sessionId) headers["X-Game-Session-Id"] = sessionId;
+
+    if (provider === "tokendance" && getModelSource() === "custom" && hasTokendanceKey()) {
+      headers["X-Tokendance-Api-Key"] = getTokendanceApiKey();
+      headers["X-Tokendance-Base-Url"] = getTokendanceBaseUrl();
     }
-    if (modelSource !== "project" && hasMinimaxKey()) {
-      const apiKey = getMinimaxApiKey();
-      const groupId = getMinimaxGroupId();
-      if (apiKey) headers["X-Minimax-Api-Key"] = apiKey;
-      if (groupId) headers["X-Minimax-Group-Id"] = groupId;
+
+    // Project and TokenPay credentials stay on the server. User-supplied
+    // credentials are sent only while custom keys are the active source.
+    if (provider === "minimax" && getModelSource() === "custom" && hasMinimaxKey()) {
+      headers["X-Minimax-Api-Key"] = getMinimaxApiKey();
+      headers["X-Minimax-Group-Id"] = getMinimaxGroupId();
     }
     return headers;
   }
 
   setCallbacks(
     onPlayStart: (playerId: string) => void,
-    onPlayEnd: (playerId: string) => void
+    onPlayEnd: (playerId: string) => void,
   ) {
     this.onPlayStart = onPlayStart;
     this.onPlayEnd = onPlayEnd;
@@ -70,7 +73,6 @@ export class AudioManager {
     return this.cache.get(taskId)?.durationMs;
   }
 
-  /** Check if audio for a task is already cached (ready to play). */
   isCached(taskId: string): boolean {
     return this.cache.has(taskId);
   }
@@ -78,31 +80,25 @@ export class AudioManager {
   setEnabled(value: boolean) {
     if (this.enabled === value) return;
     this.enabled = value;
-    if (!value) {
-      this.clearQueue();
-    } else {
-      this.processQueue();
-    }
+    if (!value) this.clearQueue();
+    else this.processQueue();
   }
 
   isEnabled(): boolean {
-    return this.enabled && resolveAiVoiceAvailability(getModelSource(), hasMinimaxKey());
+    return this.enabled && resolveAiVoiceAvailability(
+      getModelSource(),
+      hasMinimaxKey(),
+      hasTokendanceKey(),
+    );
   }
 
-  /**
-   * Ensure a task's audio is fetched (deduplicated).
-   * Returns a promise that resolves when audio is cached.
-   */
   async ensureReady(task: AudioTask): Promise<void> {
     if (!this.isEnabled()) return;
     if (this.cache.has(task.id)) return;
 
     const existing = this.inFlight.get(task.id);
     if (existing) return existing;
-
-    const promise = this.fetchAndCache(task).finally(() => {
-      this.inFlight.delete(task.id);
-    });
+    const promise = this.fetchAndCache(task).finally(() => this.inFlight.delete(task.id));
     this.inFlight.set(task.id, promise);
     return promise;
   }
@@ -110,26 +106,24 @@ export class AudioManager {
   async prefetchTasks(tasks: AudioTask[], options?: { concurrency?: number }) {
     if (!this.isEnabled()) return;
     const concurrency = Math.max(1, options?.concurrency ?? 3);
-    const queue = [...tasks];
+    const pending = [...tasks];
     const workers = Array.from({ length: concurrency }, async () => {
-      while (queue.length > 0) {
-        const t = queue.shift();
-        if (!t) return;
-        await this.ensureReady(t);
+      while (pending.length > 0) {
+        const task = pending.shift();
+        if (!task) return;
+        await this.ensureReady(task);
       }
     });
     await Promise.all(workers);
   }
 
   private async fetchAndCache(task: AudioTask) {
-    const headers = await this.buildTtsHeaders();
-
+    const ttsProvider = task.ttsProvider ?? "minimax";
     const response = await fetch("/api/tts", {
       method: "POST",
-      headers,
-      body: JSON.stringify({ text: task.text, voiceId: task.voiceId }),
+      headers: await this.buildTtsHeaders(ttsProvider),
+      body: JSON.stringify({ text: task.text, voiceId: task.voiceId, ttsProvider }),
     });
-
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new Error(`TTS request failed: ${response.status} ${body.slice(0, 600)}`);
@@ -147,45 +141,42 @@ export class AudioManager {
 
   private async getDurationMs(objectUrl: string): Promise<number> {
     return await new Promise((resolve) => {
-      const a = new Audio();
-      a.preload = "metadata";
-
+      const audio = new Audio();
+      audio.preload = "metadata";
       const cleanup = () => {
-        a.onloadedmetadata = null;
-        a.onerror = null;
+        audio.onloadedmetadata = null;
+        audio.onerror = null;
       };
-
-      a.onloadedmetadata = () => {
-        const sec = Number.isFinite(a.duration) ? a.duration : 0;
+      audio.onloadedmetadata = () => {
+        const seconds = Number.isFinite(audio.duration) ? audio.duration : 0;
         cleanup();
-        resolve(Math.max(0, Math.round(sec * 1000)));
+        resolve(Math.max(0, Math.round(seconds * 1000)));
       };
-      a.onerror = () => {
+      audio.onerror = () => {
         cleanup();
         resolve(0);
       };
-
-      a.src = objectUrl;
+      audio.src = objectUrl;
     });
   }
 
-  // 添加任务到队列
   addToQueue(task: AudioTask) {
     if (!this.isEnabled() || task.isValid?.() === false) return;
     const playbackId = task.playbackId ?? task.id;
-    if (this.queue.some((t) => (t.playbackId ?? t.id) === playbackId) ||
-        (this.currentTask && (this.currentTask.playbackId ?? this.currentTask.id) === playbackId)) {
+    if (this.queue.some((item) => (item.playbackId ?? item.id) === playbackId)
+      || (this.currentTask && (this.currentTask.playbackId ?? this.currentTask.id) === playbackId)) {
       return;
     }
     this.queue.push(task);
     this.processQueue();
   }
 
-  // 立即停止当前播放（用于跳过/截断）
   stopCurrent() {
     if (this.currentAudio) {
+      const url = this.currentAudio.src;
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
+      if (typeof url === "string" && url.startsWith("blob:")) URL.revokeObjectURL(url);
       this.currentAudio = null;
     }
     if (this.currentTask) {
@@ -193,11 +184,9 @@ export class AudioManager {
       this.currentTask = null;
     }
     this.state = "idle";
-    // 停止后尝试播放下一个
     this.processQueue();
   }
 
-  // 清空整个队列（用于重置/新的一天）
   clearQueue() {
     this.queue = [];
     this.stopCurrent();
@@ -207,114 +196,90 @@ export class AudioManager {
     this.cache.clear();
   }
 
+  private async playCachedTask(task: AudioTask) {
+    const cached = this.cache.get(task.id);
+    if (!cached?.blob || this.currentTask !== task) throw new Error("TTS cache miss before playback");
+
+    const url = URL.createObjectURL(cached.blob);
+    const audio = new Audio(url);
+    this.currentAudio = audio;
+    audio.onloadedmetadata = () => {
+      const existing = this.cache.get(task.id);
+      if (!existing || (existing.durationMs ?? 0) > 0) return;
+      const seconds = Number.isFinite(audio.duration) ? audio.duration : 0;
+      if (seconds > 0) this.cache.set(task.id, { ...existing, durationMs: Math.round(seconds * 1000) });
+    };
+    audio.onended = () => this.onAudioEnded(task, url);
+    audio.onerror = (event) => {
+      console.error("Audio playback error:", event);
+      this.onAudioEnded(task, url);
+    };
+
+    const startPlayback = async () => {
+      if (this.currentTask !== task || task.isValid?.() === false) {
+        this.onAudioEnded(task, url);
+        return;
+      }
+      this.state = "playing";
+      this.onPlayStart?.(task.playerId);
+      await audio.play();
+    };
+
+    try {
+      await startPlayback();
+    } catch (error: unknown) {
+      const errorLike = typeof error === "object" && error !== null
+        ? error as { name?: unknown; message?: unknown }
+        : null;
+      const name = typeof errorLike?.name === "string" ? errorLike.name : "";
+      const message = typeof errorLike?.message === "string" ? errorLike.message : String(error || "");
+      const blocked = name === "NotAllowedError" || message.includes("user gesture") || message.includes("not allowed");
+      if (!blocked) throw error;
+      this.state = "idle";
+      const resume = () => {
+        window.removeEventListener("pointerdown", resume);
+        window.removeEventListener("keydown", resume);
+        if (this.currentTask !== task) return;
+        void startPlayback().catch((resumeError) => {
+          console.error("Audio resume error:", resumeError);
+          this.onAudioEnded(task, url);
+        });
+      };
+      window.addEventListener("pointerdown", resume);
+      window.addEventListener("keydown", resume);
+    }
+  }
+
   private async processQueue() {
-    if (!this.isEnabled()) return;
-    if (this.state !== "idle") return;
-    if (this.queue.length === 0) return;
-    let next = this.queue.shift();
-    while (next && next.isValid?.() === false) next = this.queue.shift();
-    if (!next) return;
-    const task = next;
+    if (!this.isEnabled() || this.state !== "idle") return;
+    let task = this.queue.shift();
+    while (task && task.isValid?.() === false) task = this.queue.shift();
+    if (!task) return;
 
     this.currentTask = task;
     this.state = "loading";
-
     try {
-      // Use ensureReady for deduplicated fetching
       await this.ensureReady(task);
-      if (this.currentTask !== task) return;
-      if (task.isValid?.() === false) { this.stopCurrent(); return; }
-
-      const cached = this.cache.get(task.id);
-      if (!cached?.blob) {
-        throw new Error("TTS cache miss after ensureReady");
-      }
-
-      const url = URL.createObjectURL(cached.blob);
-
-      // 检查此时是否已经被切歌了（例如在加载过程中用户按了跳过）
-      if (this.currentTask !== task) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-
-      // 2. 播放音频
-      const audio = new Audio(url);
-      this.currentAudio = audio;
-
-      audio.onloadedmetadata = () => {
-        const existing = this.cache.get(task.id);
-        if (!existing) return;
-        if (typeof existing.durationMs === "number" && existing.durationMs > 0) return;
-        const sec = Number.isFinite(audio.duration) ? audio.duration : 0;
-        if (sec > 0) {
-          this.cache.set(task.id, { ...existing, durationMs: Math.round(sec * 1000) });
-        }
-      };
-
-      audio.onended = () => {
-        this.onAudioEnded(task, url);
-      };
-
-      audio.onerror = (e) => {
-        console.error("Audio playback error:", e);
-        this.onAudioEnded(task, url);
-      };
-
-      const startPlayback = async () => {
-        if (this.currentTask !== task || task.isValid?.() === false) {
-          this.onAudioEnded(task, url);
-          return;
-        }
-        this.state = "playing";
-        this.onPlayStart?.(task.playerId);
-        await audio.play();
-      };
-
-      try {
-        await startPlayback();
-      } catch (e: unknown) {
-        const errorLike = typeof e === "object" && e !== null ? e as { name?: unknown; message?: unknown } : null;
-        const name = typeof errorLike?.name === "string" ? errorLike.name : "";
-        const msg = typeof errorLike?.message === "string" ? errorLike.message : String(e || "");
-        const isBlocked = name === "NotAllowedError" || msg.includes("user gesture") || msg.includes("not allowed");
-        if (!isBlocked) throw e;
-
-        this.state = "idle";
-        const resume = () => {
-          window.removeEventListener("pointerdown", resume);
-          window.removeEventListener("keydown", resume);
-          if (this.currentTask !== task) return;
-          void startPlayback().catch((err) => {
-            console.error("Audio resume error:", err);
-            this.onAudioEnded(task, url);
-          });
-        };
-        window.addEventListener("pointerdown", resume);
-        window.addEventListener("keydown", resume);
-      }
-
+      await this.playCachedTask(task);
     } catch (error) {
       console.error("AudioManager error:", error);
-      // 旧任务的失败不能清掉正在播放的新任务。
-      if (this.currentTask !== task) return;
-      this.state = "idle";
-      this.currentTask = null;
-      this.processQueue();
+      if (this.currentTask === task) {
+        this.state = "idle";
+        this.currentTask = null;
+        this.processQueue();
+      }
     }
   }
 
   private onAudioEnded(task: AudioTask, url: string) {
     URL.revokeObjectURL(url);
-    if (this.currentTask === task) {
-      this.onPlayEnd?.(task.playerId);
-      this.currentTask = null;
-      this.currentAudio = null;
-      this.state = "idle";
-      this.processQueue();
-    }
+    if (this.currentTask !== task) return;
+    this.onPlayEnd?.(task.playerId);
+    this.currentTask = null;
+    this.currentAudio = null;
+    this.state = "idle";
+    this.processQueue();
   }
 }
 
-// Singleton instance
 export const audioManager = new AudioManager();

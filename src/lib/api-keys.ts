@@ -30,8 +30,9 @@ export type ModelSource = "project" | "tokenpay" | "custom";
 export function resolveAiVoiceAvailability(
   source: ModelSource,
   hasCustomTtsKey: boolean,
+  hasCustomTokendanceKey = false,
 ): boolean {
-  return source === "project" || hasCustomTtsKey;
+  return source === "project" || source === "tokenpay" || hasCustomTtsKey || hasCustomTokendanceKey;
 }
 
 function canUseStorage(): boolean {
@@ -187,8 +188,8 @@ export function resolveModelSource(options: {
   // TokenPay 连接状态返回前自动写入 project，不能把它误当成用户选择。
   if (storedSource && options.storedSourceExplicit) return storedSource;
   if (options.legacyCustomEnabled && options.hasLocalKey) return "custom";
-  if (options.tokenPayConnected) return "tokenpay";
   if (storedSource === "custom" && options.hasLocalKey) return "custom";
+  if (options.tokenPayConnected) return "tokenpay";
   if (storedSource === "tokenpay") return "tokenpay";
   return "project";
 }
@@ -264,6 +265,16 @@ export function isCustomKeyEnabled(): boolean {
 
 export function setCustomKeyEnabled(value: boolean) {
   setModelSource(value ? "custom" : isTokenPayConnected() ? "tokenpay" : "project");
+}
+
+/**
+ * 关闭一个外部来源时，回到另一个仍然可用的来源；两者都不可用时回到项目 Key。
+ * 这个选择只改变当前使用来源，不清除任一方已经保存的配置。
+ */
+export function getAlternativeModelSource(source: ModelSource): ModelSource {
+  if (source === "tokenpay" && hasLocalLlmKey()) return "custom";
+  if (source === "custom" && isTokenPayConnected()) return "tokenpay";
+  return "project";
 }
 
 export function getSelectedModels(): string[] {

@@ -50,11 +50,14 @@ function harness(tts = false) {
     };
     if (id === "@/lib/speech-order") return { getNextSpeechSeat: () => null };
     if (id === "@/lib/game-constants") return { PHASE_CATEGORIES: { SPEECH_PHASES: ["DAY_SPEECH", "DAY_LAST_WORDS", "DAY_PK_SPEECH"] } };
+    if (id === "@/lib/api-keys") return { getModelSource: () => "project" };
     if (id === "@/lib/audio-manager") return { makeAudioTaskId: () => "audio", audioManager: {
       isEnabled: () => tts, addToQueue: (task: any) => audio.push(task.text),
       ensureReady: (task: any) => { if (!readiness.has(task.text)) readiness.set(task.text, deferred()); return readiness.get(task.text)!.promise; },
     } };
-    if (id === "@/lib/voice-constants") return { resolveVoiceId: () => "voice" };
+    if (id === "@/lib/voice-constants") return {
+      resolveVoiceId: () => "voice",
+    };
     if (id === "@/i18n/locale-store") return { getLocale: () => "zh" };
     if (id === "@/lib/llm") return { isGameSessionExpiredMessage: () => false };
     if (id === "@/lib/utils") return { generateUUID: () => `request-${++serial}` };

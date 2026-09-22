@@ -18,7 +18,8 @@ import {
 import { getNextSpeechSeat } from "@/lib/speech-order";
 import { PHASE_CATEGORIES } from "@/lib/game-constants";
 import { type FlowToken } from "@/lib/game-flow-controller";
-import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
+import { audioManager, makeAudioTaskId, type TtsProvider } from "@/lib/audio-manager";
+import { getModelSource } from "@/lib/api-keys";
 import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
 import { getLocale } from "@/i18n/locale-store";
 import { createSpeechRequest, type SpeechRequest } from "@/lib/speech-request";
@@ -131,8 +132,18 @@ export function useDayPhase(
     if (!request.isValid()) return;
     const isValid = () => request.isValid() && !controller.signal.aborted;
     const afterSpeech = options?.afterSpeech as ((s: unknown) => Promise<void>) | undefined;
-    const voiceId = resolveVoiceId(player.agentProfile?.persona?.voiceId,
-      player.agentProfile?.persona?.gender, player.agentProfile?.persona?.age, getLocale() as AppLocale);
+    const modelSource = getModelSource();
+    const persona = player.agentProfile?.persona;
+    const voiceId = resolveVoiceId(
+      persona?.voiceId,
+      persona?.gender,
+      persona?.age,
+      getLocale() as AppLocale,
+    );
+    const ttsProvider: TtsProvider = modelSource === "tokenpay"
+      || player.agentProfile?.modelRef?.provider === "tokendance"
+      ? "tokendance"
+      : "minimax";
     const collected: string[] = [];
     let displayedCount = 0;
     let displayChain = Promise.resolve();
@@ -142,7 +153,15 @@ export function useDayPhase(
     const appendSegment = (segment: string, index: number) => {
       if (!isValid() || index !== collected.length) return;
       collected.push(segment);
-      const task = { id: makeAudioTaskId(voiceId, segment), playbackId: `${id}:${index}`, isValid, text: segment, voiceId, playerId: player.playerId };
+      const task = {
+        id: makeAudioTaskId(voiceId, segment, ttsProvider),
+        playbackId: `${id}:${index}`,
+        isValid,
+        text: segment,
+        voiceId,
+        playerId: player.playerId,
+        ttsProvider,
+      };
       // 首段 TTS 等待不能让后续文字先进入队列。后续音频只预加载，不阻塞字幕。
       displayChain = displayChain.then(async () => {
         if (!isValid()) return;

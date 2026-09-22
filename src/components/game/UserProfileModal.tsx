@@ -22,6 +22,7 @@ import {
   clearApiKeys,
   getDashscopeApiKey,
   getGeneratorModel,
+  getAlternativeModelSource,
   getMinimaxApiKey,
   getMinimaxGroupId,
   getModelSource,
@@ -154,6 +155,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
   const changeModelSource = (source: ModelSource) => {
     setModelSource(source);
     setModelSourceState(source);
+    if (source !== "custom") setIsCustomKeySetupOpen(false);
     onModelSourceChange?.(source);
   };
 
@@ -646,7 +648,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
             <TokenPayPanel
               active={modelSource === "tokenpay"}
               onActiveChange={(active) => {
-                changeModelSource(active ? "tokenpay" : "project");
+                changeModelSource(active ? "tokenpay" : getAlternativeModelSource("tokenpay"));
               }}
               onConnectionChange={onTokenPayConnectionChange}
             />
@@ -674,7 +676,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
                         return;
                       }
                       setIsCustomKeySetupOpen(false);
-                      changeModelSource(isTokenPayConnected() ? "tokenpay" : "project");
+                      changeModelSource(getAlternativeModelSource("custom"));
                     }}
                   />
                 </div>

@@ -13,6 +13,9 @@ import { DEFAULT_VOICE_ID } from "@/lib/voice-constants";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const DEFAULT_TOKENDANCE_TTS_MODEL = "minimax-speech-2.8-turbo";
+const DEFAULT_TOKENDANCE_TTS_ENDPOINT = "https://tokendance.space/gateway/minimax/v1/t2a_v2";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -21,11 +24,19 @@ export async function POST(req: NextRequest) {
   const auth = await authenticateRequest(req as unknown as Request);
   if ("error" in auth) return auth.error;
 
+  const parsed: unknown = await req.json().catch(() => ({}));
+  const parsedRecord = isRecord(parsed) ? parsed : {};
+  const text = typeof parsedRecord.text === "string" ? parsedRecord.text : String(parsedRecord.text ?? "");
+  const voiceId = typeof parsedRecord.voiceId === "string" ? parsedRecord.voiceId : String(parsedRecord.voiceId ?? "");
+  const ttsProvider = parsedRecord.ttsProvider === "tokendance" ? "tokendance" : "minimax";
   const headerApiKey = req.headers.get("x-minimax-api-key")?.trim();
   const headerGroupId = req.headers.get("x-minimax-group-id")?.trim();
-  const hasCustomTtsKey = Boolean(headerApiKey || headerGroupId);
+  const headerTokendanceKey = req.headers.get("x-tokendance-api-key")?.trim();
+  const hasCustomTtsKey = ttsProvider === "tokendance"
+    ? Boolean(headerTokendanceKey)
+    : Boolean(headerApiKey || headerGroupId);
 
-  if (hasCustomTtsKey && (!headerApiKey || !headerGroupId)) {
+  if (ttsProvider === "minimax" && hasCustomTtsKey && (!headerApiKey || !headerGroupId)) {
     return NextResponse.json({ error: "MiniMax API key and group ID are both required" }, { status: 400 });
   }
 
@@ -44,11 +55,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const parsed: unknown = await req.json().catch(() => ({}));
-    const parsedRecord = isRecord(parsed) ? parsed : {};
-    const text = typeof parsedRecord.text === "string" ? parsedRecord.text : String(parsedRecord.text ?? "");
-    const voiceId = typeof parsedRecord.voiceId === "string" ? parsedRecord.voiceId : String(parsedRecord.voiceId ?? "");
-
     const normText = text.trim();
     const normVoiceId = voiceId.trim();
 
@@ -56,12 +62,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing text or voiceId" }, { status: 400 });
     }
 
-    const apiKey = hasCustomTtsKey ? headerApiKey : process.env.MINIMAX_API_KEY;
+    const apiKey = ttsProvider === "tokendance"
+      ? (hasCustomTtsKey ? headerTokendanceKey : process.env.TOKENDANCE_API_KEY)?.trim()
+      : (hasCustomTtsKey ? headerApiKey : process.env.MINIMAX_API_KEY)?.trim();
     const groupId = hasCustomTtsKey ? headerGroupId : process.env.MINIMAX_GROUP_ID;
 
-    if (!apiKey || !groupId) {
-      console.error("Missing MiniMax credentials");
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+    if (!apiKey || (ttsProvider === "minimax" && !groupId)) {
+      console.error(`Missing ${ttsProvider === "tokendance" ? "TokenDance" : "MiniMax"} TTS credentials`);
+      return NextResponse.json({ error: "TTS server configuration error" }, { status: 500 });
     }
 
     // MiniMax T2A V2 API Endpoint
@@ -220,6 +228,90 @@ export async function POST(req: NextRequest) {
         },
       });
     };
+
+    if (ttsProvider === "tokendance") {
+      const endpoint = process.env.TOKENDANCE_TTS_ENDPOINT?.trim()
+        || DEFAULT_TOKENDANCE_TTS_ENDPOINT;
+      const model = process.env.TOKENDANCE_TTS_MODEL?.trim() || DEFAULT_TOKENDANCE_TTS_MODEL;
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            "X-App-URL": process.env.TOKENPAY_APP_URL?.trim() || "https://wolf-cha.com",
+          },
+          body: JSON.stringify({
+            model,
+            text: normText,
+            stream: false,
+            voice_setting: {
+              voice_id: normVoiceId,
+              speed: 1,
+              vol: 1,
+              pitch: 0,
+            },
+            audio_setting: {
+              sample_rate: 32000,
+              bitrate: 128000,
+              format: "mp3",
+              channel: 1,
+            },
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (error) {
+        console.error("TokenDance TTS request failed:", error);
+        return NextResponse.json({ error: "TokenDance TTS request failed" }, { status: 502 });
+      }
+
+      const responseText = await response.text().catch(() => "");
+      let json: unknown;
+      try {
+        json = JSON.parse(responseText);
+      } catch {
+        return NextResponse.json(
+          { error: `TokenDance TTS returned invalid JSON: ${responseText.slice(0, 300)}` },
+          { status: 502 },
+        );
+      }
+
+      if (!response.ok) {
+        const record = isRecord(json) ? json : {};
+        const baseResp = isRecord(record.base_resp) ? record.base_resp : null;
+        const message = baseResp && typeof baseResp.status_msg === "string"
+          ? baseResp.status_msg
+          : responseText.slice(0, 300);
+        console.error("TokenDance TTS API error:", response.status, message);
+        return NextResponse.json({ error: `TokenDance TTS API error: ${message}` }, { status: response.status || 502 });
+      }
+
+      const record = isRecord(json) ? json : {};
+      const baseResp = isRecord(record.base_resp) ? record.base_resp : null;
+      if (baseResp && Number(baseResp.status_code) !== 0) {
+        const message = typeof baseResp.status_msg === "string" ? baseResp.status_msg : "upstream task failed";
+        return NextResponse.json({ error: `TokenDance TTS error: ${message}` }, { status: 502 });
+      }
+
+      const data = isRecord(record.data) ? record.data : {};
+      const audioHex = typeof data.audio === "string" ? data.audio.trim() : "";
+      if (!audioHex || !/^[0-9a-f]+$/i.test(audioHex) || audioHex.length % 2 !== 0) {
+        return NextResponse.json({ error: "TokenDance TTS response did not contain valid audio" }, { status: 502 });
+      }
+
+      return respondAudio(Buffer.from(audioHex, "hex"), {
+        "X-TTS-Provider": "tokendance",
+        "X-TTS-Model": model,
+        "X-TTS-Voice-Id": normVoiceId,
+      });
+    }
+
+    // The TokenDance branch above has returned. From here on, MiniMax's
+    // native T2A endpoint always has both server or user credentials.
+    if (!apiKey || !groupId) {
+      return NextResponse.json({ error: "MiniMax TTS server configuration error" }, { status: 500 });
+    }
 
     const pickFallbackVoiceId = (badVoiceId: string) => {
       const v = badVoiceId.toLowerCase();
