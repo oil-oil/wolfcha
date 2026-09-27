@@ -313,5 +313,7 @@ test("最后发言者得到明确收尾约束，投票输入末尾保留本人�
   state.phase = "DAY_VOTE";
   const vote = manager.getPrompt("DAY_VOTE", { state }, actor)!.user;
   assert.match(vote.split("<my_public_position>")[1], /我今天不投6号，我的最终选择是10号/);
-  assert.match(vote, /没有新证据就延续自己的公开结论/);
+  // 不再强制“延续公开结论”：发言没表态时它会让模型编造立场并跟票；改为偏离已表态对象时必须说明依据。
+  assert.match(vote, /如果结论与你今天公开说过的投票对象不同，在 reason 中说明是哪条新发言或新事件改变了你的判断/);
+  assert.doesNotMatch(vote, /延续自己的公开结论/);
 });

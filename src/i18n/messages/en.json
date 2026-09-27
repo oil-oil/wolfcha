@@ -1020,6 +1020,45 @@
         "pk": "You are delivering a PK speech."
       },
       "phaseSection": "【Current phase】\n{phaseHint}",
+      "roleGoal": {
+        "section": "【What you need to accomplish this turn】\n{goal}\nThis is what your role normally needs to get done in this phase. How you phrase it and what you lead with is up to you. Do not recite this section aloud.",
+        "commit": "Before you finish, say whom you currently lean toward voting out. If you are still undecided, say which players you are choosing between and what speaks for each.",
+        "seer": {
+          "campaign": "You are the Seer, and your check results are the most valuable information the village has. A sheriff campaign speech normally does three things: claim Seer, report every night's check target and result so far, and say whom you plan to check next. Hiding your role means the village never gets this information and you look no different from an ordinary player.",
+          "discussion": "You are the Seer. A daytime speech normally reports every check target and result so far (including last night's) and says whom you want eliminated based on those checks. If you have not claimed yet, claiming now usually helps the village more than staying hidden.",
+          "lastWords": "You are the Seer. Last words are your final chance to pass on information: report every check target and result, say who you believe is a wolf, and whom the village can trust."
+        },
+        "witch": {
+          "campaign": "You are the Witch. You know your potion usage and the wolf target on every night you still held the antidote. Whether to claim during the campaign is your call: claiming provides information but makes you a night target. Either way, your reads must be consistent with this private information.",
+          "discussion": "You are the Witch. Your private information (whom you saved, whom you poisoned, which wolf targets you saw) lets you test other players' claims, for example whether a reported check or a story about the night matches the target you saw. Whether to reveal your role and potion usage is your call, but your reads must be consistent with what you know.",
+          "lastWords": "You are the Witch. Last words normally reveal your role, report your potion usage on every night and the wolf targets you saw, to help the village reconstruct the nights."
+        },
+        "guard": {
+          "campaign": "You are the Guard. You know whom you protected each night. You normally do not need to claim, to avoid becoming a night target, but your reads must be consistent with your protection record and each night's announced result. If you decide to stay hidden, do not say anything that gives your role away.",
+          "discussion": "You are the Guard. You know whom you protected each night. You normally do not need to claim, to avoid becoming a night target, but your reads must be consistent with your protection record and each night's announced result. If you decide to stay hidden, do not say anything that gives your role away.",
+          "lastWords": "You are the Guard. Last words normally reveal your role and report whom you protected each night, to help the village reconstruct the nights."
+        },
+        "hunter": {
+          "campaign": "You are the Hunter. You normally do not need to claim. If you decide to stay hidden, do not say things like \"I have a role but will not reveal it yet\", which amounts to claiming.",
+          "discussion": "You are the Hunter. You normally do not need to claim. If you decide to stay hidden, do not say things like \"I have a role but will not reveal it yet\", which amounts to claiming. When you are the main suspect and about to be voted out, claiming Hunter is a common way to defend yourself.",
+          "lastWords": "You are the Hunter. In your last words, state your reads and who you believe is a wolf. If you shoot afterwards, the target should match the reads you gave."
+        },
+        "idiot": {
+          "campaign": "You are the Idiot. You survive being voted out by revealing your card, so you can voice suspicion more boldly and absorb pressure. You normally do not need to claim. If you decide to stay hidden, do not say anything that gives your role away.",
+          "discussion": "You are the Idiot. You survive being voted out by revealing your card, so you can voice suspicion more boldly and absorb pressure. You normally do not need to claim. If you decide to stay hidden, do not say anything that gives your role away.",
+          "lastWords": "You are the Idiot. In your last words, state your reads and who you believe is a wolf."
+        },
+        "villager": {
+          "campaign": "Your judgment can only come from the public record. When campaigning, say how you would use the badge. If someone has already claimed Seer, say whether you believe them and why. You do not need to announce your own role.",
+          "discussion": "Your judgment can only come from the public record: who claimed which role, whether anyone counter-claimed, and whether votes line up with speeches. Name the player you currently suspect most and why. You do not need to announce your own role.",
+          "lastWords": "In your last words, state your reads and who you believe is a wolf, and point the village to what you noticed."
+        },
+        "wolf": {
+          "campaign": "You are on the wolf team. The goal is to get villagers voted out and protect your teammates. There are two common campaign plays: run as an ordinary villager, or fake-claim Seer with an invented check result. Which one is your call, but once chosen, your later speeches and votes must stay consistent with that cover. Never expose wolf-team information in public.",
+          "discussion": "You are on the wolf team. Always speak from inside your cover: if you fake-claimed Seer earlier, keep reporting checks; if you are posing as an ordinary villager, give suspects and reasons the way a villager would. Your public stance must stay consistent with your earlier speeches and votes. Never expose wolf-team information in public.",
+          "lastWords": "You are on the wolf team. Keep your cover in your last words, steer the village's suspicion toward villagers, and do not expose teammates who are still alive."
+        }
+      },
       "userNoTranscript": "(None yet. You are speaker #{speakOrder}.)",
       "userNoSelfSpeech": "(None)",
       "user": "{gameContext}\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech today】\n{selfSpeech}\n\n{phaseHintSection}\n\n【Speaking order】\n{speakOrderHint}\n\nYour turn. Return a JSON array:"
@@ -1028,7 +1067,10 @@
       "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
       "task": "【Current phase】\nThis is the daytime elimination vote, not the sheriff election.\n\n【Voting rules】\nEach living player with voting rights chooses one currently eligible living player. The player with the most votes is eliminated; a tie proceeds to PK speeches and a revote under the game rules.\n\n【Task】\nChoose one player for your elimination vote. Decide independently using only the public facts, private information, and team objective visible to you.\n\nOptions: {options}",
       "option": "Seat {seat} ({name})",
-      "reasonExample": "one short reason for this vote",
+      "reasonExample": "one sentence you could say aloud, without your private role information",
+      "knowledge": "【Werewolf basics】\n- When exactly one player has claimed Seer and nobody counter-claims, that player is most likely the real Seer. With a counter-claim, usually one is real and one is fake.\n- Voting out the only Seer claimant when nobody counter-claimed almost always hurts the village. Doubting that claim takes a counter-claim, or a reported check that contradicts public facts.",
+      "analysisGuide": "private analysis, at most 120 words, answering in order: (1) my role and team (2) who publicly claimed which role today, and whether anyone counter-claimed (3) whether anyone reported a check on me, and what my own private information shows (4) what voting for each main candidate would mean for my team",
+      "decisionRule": "Complete analysis first, then choose seat from its conclusion. If that differs from the vote target you stated publicly today, explain in reason which new speech or event changed your mind; do not invent replies that have not happened. analysis stays private; reason is one sentence you could say aloud and must not contain your private role information. Output only the JSON object shown under 【Format】.",
       "userNoTranscript": "(None)",
       "userNoSelfSpeech": "(You didn't speak today)",
       "user": "{gameContext}\n\n【Current step】\nDaytime free discussion is complete. This is now the elimination vote. Your choice determines whom you vote to eliminate; it is not a sheriff vote.\n\n【Today's discussion】\n{todayTranscript}\n\n【Your speech summary】\n\"{selfSpeech}\"\n\nWhich seat do you vote?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no extra text:\n{voteJsonFormat}"
@@ -1058,7 +1100,8 @@
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",
         "lastTarget": "You protected Seat {seat} last night; cannot pick again",
         "task": "【Guard Skill】\nEach night you can protect one player from wolf kills. If successful, the target survives.\n\n【Important Rules】\n- Cannot protect the same player on consecutive nights\n- Can protect yourself\n- If guard and witch both save the same target (milk poison), they still die\n\n【Task】\nChoose one player to protect.\n\nOptions: {options}\n{lastTargetLine}",
-        "user": "{context}\n\nWhich seat do you want to protect?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text:\n{jsonFormat}"
+        "restriction": "Reminder: you protected Seat {seat} last night, so you cannot pick Seat {seat} tonight. Choose only from the options list.",
+        "user": "{context}\n\nWhich seat do you want to protect?\n\n【Format】\nReturn a strict JSON object only. No code blocks, no explanations, no extra text:\n{jsonFormat}{restriction}"
       },
       "witch": {
         "base": "【Identity】\nYou are Seat {seat} \"{name}\"\nRole: {role}\n\n{winCondition}",

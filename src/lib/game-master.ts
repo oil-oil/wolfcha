@@ -1229,13 +1229,15 @@ function seatSelectionResponseFormat(
   return structuredResponseFormat(modelRef, name, {
     type: "object",
     properties: {
+      // 私下分析排在 seat 之前，模型才会先分析再落票；它只进日志，不进入任何公开记录。
+      ...(name === "day_vote" ? { analysis: { type: "string" } } : {}),
       seat: {
         type: "integer",
         enum: validSeats.map((seat) => seat + 1),
       },
       ...(name === "day_vote" ? { reason: { type: "string" } } : {}),
     },
-    required: name === "day_vote" ? ["seat", "reason"] : ["seat"],
+    required: name === "day_vote" ? ["analysis", "seat", "reason"] : ["seat"],
     additionalProperties: false,
   });
 }

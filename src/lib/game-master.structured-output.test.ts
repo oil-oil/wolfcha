@@ -71,6 +71,40 @@ test("不支持严格 Schema 的玩家模型降级为 json_object，非法动作
   }
 });
 
+test("放逐投票的严格 Schema 把私下分析排在座位之前，且分析不进入返回值", async () => {
+  const { createInitialGameState, generateAIVote } = await import("./game-master");
+  const voter = makePlayer("voter", 0, "deepseek-v4.1-flash");
+  const target = makePlayer("target", 1, "deepseek-v4.1-flash");
+  const state: GameState = {
+    ...createInitialGameState(),
+    phase: "DAY_VOTE",
+    day: 1,
+    players: [voter, target],
+  };
+  const originalFetch = globalThis.fetch;
+  const requestBodies: Array<{
+    response_format?: { json_schema?: { schema?: { properties?: Record<string, unknown>; required?: string[] } } };
+  }> = [];
+
+  globalThis.fetch = async (input, init) => {
+    if (requestUrl(input) === "/api/demo-config") {
+      return Response.json({ active: false, enabled: false });
+    }
+    requestBodies.push(JSON.parse(String(init?.body)));
+    return completionResponse('{"analysis":"我是村民，2号跳了预言家且无人对跳。","seat":2,"reason":"发言前后对不上"}');
+  };
+
+  try {
+    const result = await generateAIVote(state, voter);
+    const schema = requestBodies[0].response_format?.json_schema?.schema;
+    assert.deepEqual(Object.keys(schema?.properties ?? {}), ["analysis", "seat", "reason"]);
+    assert.deepEqual(schema?.required, ["analysis", "seat", "reason"]);
+    assert.deepEqual(result, { seat: 1, reason: "发言前后对不上" });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("空日总结不会保存原始 JSON，也不会触发第二次模型调用", async () => {
   const [{ createInitialGameState, generateDailySummary }, { getI18n }] = await Promise.all([
     import("./game-master"),

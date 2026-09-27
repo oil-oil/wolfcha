@@ -635,9 +635,13 @@ export class NightPhase extends GamePhase {
     ];
     const system = buildSystemTextFromParts(systemParts);
 
+    // 禁守限制在输出前重申一次：只写在 system 里时，模型会继续选上晚守过的座位。
     const user = t("prompts.night.guard.user", {
       context: this.buildContextWithDay(context, todayTranscript, selfSpeech),
       jsonFormat: JSON.stringify({ seat: (eligiblePlayers[0]?.seat ?? player.seat) + 1 }),
+      restriction: lastTarget !== undefined
+        ? `\n\n${t("prompts.night.guard.restriction", { seat: lastTarget + 1 })}`
+        : "",
     });
 
     return { system, user, systemParts };

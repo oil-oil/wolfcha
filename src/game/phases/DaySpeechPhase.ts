@@ -1,4 +1,4 @@
-import type { GameState, Player } from "@/types/game";
+import type { GameState, Player, Role } from "@/types/game";
 import { GamePhase } from "../core/GamePhase";
 import type { GameAction, GameContext, PromptResult, SystemPromptPart } from "../core/types";
 import {
@@ -42,6 +42,19 @@ type DaySpeechRuntime = {
   onPkSpeechEnd: (state: GameState) => Promise<void>;
   /** AI白狼王自爆决策：返回 true 表示已自爆（由调用方处理后续），false 表示不自爆 */
   onWhiteWolfKingBoomCheck: (state: GameState, wwk: Player) => Promise<boolean>;
+};
+
+const getRoleGoalKey = (role: Role) => {
+  switch (role) {
+    case "Seer": return "seer";
+    case "Witch": return "witch";
+    case "Guard": return "guard";
+    case "Hunter": return "hunter";
+    case "Idiot": return "idiot";
+    case "Werewolf":
+    case "WhiteWolfKing": return "wolf";
+    default: return "villager";
+  }
 };
 
 export class DaySpeechPhase extends GamePhase {
@@ -153,11 +166,19 @@ export class DaySpeechPhase extends GamePhase {
     const guidelinesSection = isGenshinMode
       ? t("prompts.daySpeech.guidelines.genshin")
       : t("prompts.daySpeech.guidelines.default");
+    // 只写明该身份在本环节通常要完成的事，不指向任何具体座位。缺少它时模型会照着前面几位的
+    // 发言风格续写：私有信息不进入发言却进入投票，表现为“说一套做一套”。
+    const goalPhase = isLastWords ? "lastWords" : isCampaignSpeech ? "campaign" : "discussion";
+    const roleGoal = [
+      t(`prompts.daySpeech.roleGoal.${getRoleGoalKey(player.role)}.${goalPhase}`),
+      state.phase === "DAY_SPEECH" ? t("prompts.daySpeech.roleGoal.commit") : "",
+    ].filter(Boolean).join("\n");
     const systemParts: SystemPromptPart[] = [
       { text: baseCacheable, cacheable: true, ttl: "1h" },
       { text: taskSection },
       ...(publicFactsForPlayer ? [{ text: publicFactsForPlayer }] : []),
       { text: guidelinesSection, cacheable: true, ttl: "1h" },
+      { text: t("prompts.daySpeech.roleGoal.section", { goal: roleGoal }) },
     ];
     const system = buildSystemTextFromParts(systemParts);
 

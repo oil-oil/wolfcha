@@ -165,16 +165,23 @@ export class VotePhase extends GamePhase {
     });
     const systemParts: SystemPromptPart[] = [
       { text: cacheableContent, cacheable: true, ttl: "1h" },
+      { text: t("prompts.vote.knowledge"), cacheable: true, ttl: "1h" },
       { text: dynamicContent },
     ];
     const system = buildSystemTextFromParts(systemParts);
 
+    // analysis 排在 seat 之前：关闭思考的模型只有先写出身份、跳身份情况和各候选人的得失，
+    // 才会把常识用到决定上；常识或分析字段单独出现都不改变结果。
     const user = t("prompts.vote.user", {
       gameContext,
       todayTranscript: todayTranscript || t("prompts.vote.userNoTranscript"),
       selfSpeech: selfSpeechContext || t("prompts.vote.userNoSelfSpeech"),
-      voteJsonFormat: JSON.stringify({ seat: exampleSeat }),
-    }) + `\n\n${buildDecisionGrounding(state, player)}\n<my_public_position>\n${selfSpeech || "本日没有本人公开发言"}\n</my_public_position>\n投票前核对自己最后明确支持或排除的目标。改变立场必须依据在那句话之后真正出现的新发言或新事件，并在 reason 中说明；没有新证据就延续自己的公开结论，不要编造尚未发生的回应。只输出 {"seat":座位号,"reason":"本次投票依据"}。`;
+      voteJsonFormat: JSON.stringify({
+        analysis: t("prompts.vote.analysisGuide"),
+        seat: exampleSeat,
+        reason: t("prompts.vote.reasonExample"),
+      }),
+    }) + `\n\n${buildDecisionGrounding(state, player)}\n<my_public_position>\n${selfSpeech || "本日没有本人公开发言"}\n</my_public_position>\n${t("prompts.vote.decisionRule")}`;
 
     return { system, user, systemParts };
   }

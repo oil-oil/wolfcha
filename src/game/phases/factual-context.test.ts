@@ -107,6 +107,24 @@ test("放逐投票明确区别于警徽投票，并移除角色策略引导", as
   assert.doesNotMatch(fullPrompt, /投票前请先在心里核对/);
 });
 
+test("放逐投票提供不分角色的常识，并要求先写出私下分析再落票", async () => {
+  const { VotePhase } = await import("./VotePhase");
+  const state = makeState();
+  state.phase = "DAY_VOTE";
+  state.currentSpeakerSeat = null;
+  const wolf = new VotePhase().getPrompt({ state }, state.players[0]);
+  const villager = new VotePhase().getPrompt({ state }, state.players[3]);
+
+  // 常识对所有身份一致，不按角色下发不同策略。
+  const knowledge = (system: string) => system.match(/【狼人杀常识】[\s\S]*?(?=\n\n|$)/)?.[0];
+  assert.match(wolf.system, /无人对跳时，这名玩家大概率是真预言家/);
+  assert.equal(knowledge(wolf.system), knowledge(villager.system));
+  // 只在心里核对不会改变结果，analysis 必须是排在 seat 之前的输出字段。
+  assert.match(villager.user, /\{"analysis":"[^"]+","seat":\d+,"reason":"[^"]+"\}/);
+  assert.match(villager.user, /analysis 不会公开/);
+  assert.match(villager.user, /reason 写一句可以公开说出口的理由，不要包含你的私有身份信息/);
+});
+
 test("放逐投票示例座位始终来自当下可选目标", async () => {
   const { VotePhase } = await import("./VotePhase");
   const state = makeState();
@@ -117,8 +135,58 @@ test("放逐投票示例座位始终来自当下可选目标", async () => {
   const fullPrompt = `${prompt.system}\n${prompt.user}`;
 
   assert.match(fullPrompt, /可选: 2号\(玩家2\)/);
-  assert.match(fullPrompt, /\{"seat":2\}/);
-  assert.doesNotMatch(fullPrompt, /\{"seat":3\}/);
+  assert.match(fullPrompt, /"seat":2,/);
+  assert.doesNotMatch(fullPrompt, /"seat":3,/);
+});
+
+test("发言 Prompt 按身份和环节给出要完成的事，不指向具体座位", async () => {
+  await import("@/lib/game-master");
+  const { DaySpeechPhase } = await import("./DaySpeechPhase");
+  const goalOf = (state: GameState, player: Player) =>
+    new DaySpeechPhase().getPrompt({ state }, player).system.match(/【你这一轮要完成的事】[\s\S]*$/)?.[0] ?? "";
+
+  const campaign = makeState();
+  campaign.phase = "DAY_BADGE_SPEECH";
+  campaign.badge.holderSeat = null;
+  campaign.badge.candidates = [0, 3, 8];
+  campaign.currentSpeakerSeat = 8;
+  campaign.daySpeechStartSeat = 0;
+  const seerCampaign = goalOf(campaign, campaign.players[8]);
+  assert.match(seerCampaign, /表明预言家身份；报出至今每一晚查验的对象和结果/);
+  assert.doesNotMatch(seerCampaign, /\d+号/);
+  assert.doesNotMatch(seerCampaign, /倾向把放逐票投给谁/);
+  assert.match(goalOf(campaign, campaign.players[0]), /伪装成普通好人竞选；或者悍跳预言家/);
+  assert.doesNotMatch(goalOf(campaign, campaign.players[3]), /你是预言家|狼人阵营/);
+
+  const discussion = makeState();
+  const villagerDiscussion = goalOf(discussion, discussion.players[3]);
+  assert.match(villagerDiscussion, /你的判断只能来自公开记录/);
+  // 目标段里的自我描述会被原样说出口并在全场扩散，村民目标不写“你是村民”。
+  assert.doesNotMatch(villagerDiscussion, /你是村民/);
+  assert.match(villagerDiscussion, /发言结束前说明你此刻倾向把放逐票投给谁/);
+
+  const lastWords = makeState();
+  lastWords.phase = "DAY_LAST_WORDS";
+  lastWords.players[8].alive = false;
+  lastWords.currentSpeakerSeat = 8;
+  assert.match(goalOf(lastWords, lastWords.players[8]), /遗言是你最后一次传递信息的机会/);
+});
+
+test("守卫上晚守过的座位在输出前再重申一次", async () => {
+  const { NightPhase } = await import("./NightPhase");
+  const state = makeState();
+  state.players[3].role = "Guard";
+  state.phase = "NIGHT_GUARD_ACTION";
+  state.day = 2;
+  state.currentSpeakerSeat = null;
+
+  const first = new NightPhase().getPrompt({ state }, state.players[3]);
+  assert.doesNotMatch(first.user, /再次确认/);
+
+  state.nightActions = { lastGuardTarget: 1 };
+  const second = new NightPhase().getPrompt({ state }, state.players[3]);
+  assert.match(second.system, /上晚保护了2号，今晚不能选/);
+  assert.match(second.user, /再次确认：你上晚守护了2号，今晚不能选2号，只能从可选列表中选择。$/);
 });
 
 test("放逐平票 PK 明确标记为放逐重投，不冒充警长竞选", async () => {
