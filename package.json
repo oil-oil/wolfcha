@@ -10,6 +10,7 @@
     "audit:single-player-context": "tsx scripts/single-player-context-audit.ts",
     "audit:single-player-context:live": "node --env-file=.env.local --import tsx scripts/live-single-player-context-audit.ts",
     "audit:character-generation:live": "node --env-file=.env.local --import tsx scripts/live-character-generation-audit.ts",
+    "audit:full-game:live": "node --env-file=.env.local --import tsx scripts/live-full-game-audit.ts",
     "lint": "eslint",
     "test:tokenpay": "NODE_OPTIONS=--conditions=react-server tsx --test server/tokenpay-*.test.ts",
     "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
