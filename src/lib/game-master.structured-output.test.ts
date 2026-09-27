@@ -105,6 +105,40 @@ test("放逐投票的严格 Schema 把私下分析排在座位之前，且分析
   }
 });
 
+test("投票与夜间行动声明决策用途，发言不声明", async () => {
+  const gm = await import("./game-master");
+  const { PLAYER_MODELS } = await import("@/types/game");
+  const model = PLAYER_MODELS[0].model;
+  const players = [makePlayer("a", 0, model), makePlayer("b", 1, model), makePlayer("c", 2, model)];
+  players[0].role = "Seer";
+  players[0].agentProfile!.modelRef = PLAYER_MODELS[0];
+  const state: GameState = { ...gm.createInitialGameState(), phase: "DAY_VOTE", day: 1, players };
+  const originalFetch = globalThis.fetch;
+  const bodies: Array<{ reasoning_profile?: string; reasoning?: { enabled?: boolean; effort?: string } }> = [];
+  let reply = '{"analysis":"x","seat":2,"reason":"y"}';
+  globalThis.fetch = async (input, init) => {
+    if (requestUrl(input) === "/api/demo-config") {
+      return Response.json({ active: false, enabled: false });
+    }
+    bodies.push(JSON.parse(String(init?.body)));
+    return completionResponse(reply);
+  };
+
+  try {
+    await gm.generateAIVote(state, players[0]);
+    reply = '{"seat":2}';
+    await gm.generateSeerAction({ ...state, phase: "NIGHT_SEER_ACTION" }, players[0]);
+    reply = '["公开发言。"]';
+    await gm.generateAISpeechSegments({ ...state, phase: "DAY_SPEECH", currentSpeakerSeat: 0, daySpeechStartSeat: 0 }, players[0]);
+
+    assert.deepEqual(bodies.map((body) => body.reasoning_profile), ["decision", "decision", undefined]);
+    assert.deepEqual(bodies[0].reasoning, { enabled: true, effort: "low" });
+    assert.deepEqual(bodies[2].reasoning, { enabled: false });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("空日总结不会保存原始 JSON，也不会触发第二次模型调用", async () => {
   const [{ createInitialGameState, generateDailySummary }, { getI18n }] = await Promise.all([
     import("./game-master"),

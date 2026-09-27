@@ -1084,6 +1084,7 @@ export async function generateAIVote(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "day_vote", validSeats),
       }),
       (cleaned) => {
@@ -1410,6 +1411,7 @@ export async function generateAIBadgeVote(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "badge_vote", validSeats),
       }),
       (cleaned) => {
@@ -1573,6 +1575,7 @@ export async function generateSeerAction(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "seer_action", validSeats),
       }),
       (cleaned) => {
@@ -1638,6 +1641,7 @@ export async function generateWolfAction(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "wolf_action", validSeats),
       }),
       (cleaned) => {
@@ -1714,6 +1718,7 @@ export async function generateWitchAction(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: { type: "json_object" },
       }),
       (cleaned) => {
@@ -1808,6 +1813,7 @@ export async function generateGuardAction(
         messages,
         promptScope: "gameplay",
         temperature: GAME_TEMPERATURE.ACTION,
+        reasoningProfile: "decision",
         response_format: seatSelectionResponseFormat(player.agentProfile!.modelRef, "guard_action", validSeats),
       }),
       (cleaned) => {

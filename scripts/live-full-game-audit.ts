@@ -17,6 +17,7 @@ import type { AILogEntry } from "@/lib/ai-logger";
 import type { LLMMessage } from "@/lib/llm";
 import { applyDeepSeekPromptScope, type PromptScope } from "@/lib/deepseek-prompt-scope";
 import { applyTokenDanceResponseFormat } from "@/lib/tokendance-response-format";
+import { buildTokendanceThinking, normalizeReasoningProfile, resolveReasoning, type ReasoningConfig } from "@/lib/reasoning-profile";
 import {
   ALL_MODELS,
   PROJECT_MODELS,
@@ -29,7 +30,6 @@ import {
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const MAX_PROVIDER_CALLS = 600;
-const VOTE_CONCURRENCY = 4;
 
 const argValue = (name: string): string | undefined => {
   const index = process.argv.indexOf(`--${name}`);
@@ -41,16 +41,16 @@ const CHARACTER_ROUNDS = Number(argValue("characters-only") ?? 0);
 const RUN_TAG = argValue("tag") ?? new Date().toISOString().replace(/[:.]/g, "-");
 const OUTPUT_DIR = path.resolve(argValue("out") ?? `dry-runs/full-game/${RUN_TAG}`);
 
-type ReasoningPayload = { enabled?: boolean; effort?: string; max_tokens?: number };
 type ChatPayload = {
   model: string;
   provider?: "zenmux" | "dashscope" | "tokendance";
   messages: LLMMessage[];
   temperature?: number;
   max_tokens?: number;
-  reasoning?: ReasoningPayload;
+  reasoning?: ReasoningConfig;
   response_format?: unknown;
   prompt_scope?: PromptScope;
+  reasoning_profile?: unknown;
   stream?: boolean;
 };
 
@@ -95,7 +95,7 @@ function buildProviderRequest(payload: ChatPayload): { url: string; headers: Rec
   const ref = getModelRef(payload.model);
   const provider = payload.provider ?? ref?.provider ?? "zenmux";
   const rawTemperature = ref?.temperature ?? payload.temperature ?? 0.7;
-  const reasoning = ref?.reasoning ?? payload.reasoning;
+  const reasoning = resolveReasoning(ref, payload.reasoning, normalizeReasoningProfile(payload.reasoning_profile));
   let messages = coalesceTextParts(payload.messages);
   if (isDeepSeek(payload.model)) {
     messages = applyDeepSeekPromptScope(messages, payload.prompt_scope ?? "utility");
@@ -110,9 +110,7 @@ function buildProviderRequest(payload: ChatPayload): { url: string; headers: Rec
       temperature: Math.max(0, rawTemperature),
     };
     if (typeof payload.max_tokens === "number") body.max_tokens = Math.max(16, Math.floor(payload.max_tokens));
-    if (reasoning !== undefined) {
-      body.thinking = reasoning.enabled === true ? { type: "enabled" } : { type: "disabled" };
-    }
+    Object.assign(body, buildTokendanceThinking(reasoning));
     if (payload.response_format) applyTokenDanceResponseFormat(body, payload.response_format);
     if (payload.stream) body.stream = true;
     return {
@@ -596,7 +594,7 @@ async function runFullGame() {
 
       const voters = next.players.filter((p) => p.alive && !roundCandidates.includes(p.seat));
       const snapshot = next;
-      const ballots = await mapLimit(voters, VOTE_CONCURRENCY, async (voter) => {
+      const ballots = await mapLimit(voters, GAME_CONFIG.AI_VOTE_CONCURRENCY, async (voter) => {
         let target = await gm.generateAIBadgeVote(snapshot, voter);
         if (target !== gm.BADGE_VOTE_ABSTAIN && !roundCandidates.includes(target)) target = gm.BADGE_VOTE_ABSTAIN;
         return { voter, target };
@@ -672,7 +670,7 @@ async function runFullGame() {
     const revealedIdiotId = next.roleAbilities.idiotRevealed ? next.players.find((p) => p.role === "Idiot" && p.alive)?.playerId : undefined;
     const voters = next.players.filter((p) => p.alive && !pkTargets.includes(p.seat) && p.playerId !== revealedIdiotId);
     const snapshot = next;
-    const ballots = await mapLimit(voters, VOTE_CONCURRENCY, async (voter) => ({ voter, vote: await gm.generateAIVote(snapshot, voter) }));
+    const ballots = await mapLimit(voters, GAME_CONFIG.AI_VOTE_CONCURRENCY, async (voter) => ({ voter, vote: await gm.generateAIVote(snapshot, voter) }));
     next = {
       ...next,
       votes: Object.fromEntries(ballots.map((b) => [b.voter.playerId, b.vote.seat])),

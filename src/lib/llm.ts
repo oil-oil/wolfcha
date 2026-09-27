@@ -22,6 +22,7 @@ import { parseLLMJson } from "./llm-json";
 import { generateUUID } from "./utils";
 import { withTimeout } from "@/lib/request-timeout";
 import type { PromptScope } from "@/lib/deepseek-prompt-scope";
+import { resolveReasoning, type ReasoningProfile } from "@/lib/reasoning-profile";
 
 export type LLMContentPart =
   | { type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "1h" } }
@@ -221,6 +222,8 @@ export interface GenerateOptions {
   max_tokens?: number;
   reasoning?: ReasoningOptions;
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
+  /** 声明本次调用的用途，由服务端按模型配置决定思考量 */
+  reasoningProfile?: ReasoningProfile;
   response_format?: ResponseFormat;
 }
 
@@ -233,7 +236,8 @@ export function mergeOptionsFromModelRef<T extends GenerateOptions>(
   const out = { ...options } as T;
   (out as GenerateOptions).provider = modelRef.provider;
   if (modelRef.temperature !== undefined) (out as GenerateOptions).temperature = modelRef.temperature;
-  if (modelRef.reasoning !== undefined) (out as GenerateOptions).reasoning = modelRef.reasoning;
+  const reasoning = resolveReasoning(modelRef, options.reasoning, options.reasoningProfile);
+  if (reasoning !== undefined) (out as GenerateOptions).reasoning = reasoning;
   return out;
 }
 
@@ -741,6 +745,7 @@ export async function generateCompletion(
         max_tokens: maxTokens,
         ...(options.reasoning ? { reasoning: options.reasoning } : {}),
         ...(options.reasoning_effort ? { reasoning_effort: options.reasoning_effort } : {}),
+        ...(options.reasoningProfile ? { reasoning_profile: options.reasoningProfile } : {}),
         ...(options.response_format ? { response_format: options.response_format } : {}),
       }),
     },

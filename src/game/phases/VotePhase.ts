@@ -20,7 +20,8 @@ import {
   transitionPhase,
 } from "@/lib/game-master";
 import { getSystemMessages, getUiText } from "@/lib/game-texts";
-import { DELAY_CONFIG } from "@/lib/game-constants";
+import { DELAY_CONFIG, GAME_CONFIG } from "@/lib/game-constants";
+import { forEachWithConcurrency } from "@/lib/concurrency";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 import { getPlayerDiedKey } from "@/lib/narrator-voice";
@@ -97,17 +98,19 @@ export class VotePhase extends GamePhase {
         `${latest.gameId}:${latest.day}:${latest.pkSource}:${(latest.voteRounds ?? []).length}` === roundIdentity;
     };
     let tokenInvalidated = false;
+    // Prompt 不含本轮其他人的票，各玩家的决定互不依赖，可以并行；全部基于同一份快照。
+    const snapshot = currentState;
     setIsWaitingForAI(true);
     try {
-      for (const aiPlayer of aiPlayers) {
-        if (!stillCurrent()) {
+      await forEachWithConcurrency(aiPlayers, GAME_CONFIG.AI_VOTE_CONCURRENCY, async (aiPlayer) => {
+        if (tokenInvalidated || !stillCurrent()) {
           tokenInvalidated = true;
-          break;
+          return;
         }
-        const vote = await generateAIVote(currentState, aiPlayer);
-        if (!stillCurrent()) {
+        const vote = await generateAIVote(snapshot, aiPlayer);
+        if (tokenInvalidated || !stillCurrent()) {
           tokenInvalidated = true;
-          break;
+          return;
         }
 
         setGameState((prevState) => ({
@@ -120,7 +123,7 @@ export class VotePhase extends GamePhase {
           votes: { ...currentState.votes, [aiPlayer.playerId]: vote.seat },
           voteReasons: { ...(currentState.voteReasons || {}), [aiPlayer.playerId]: vote.reason },
         };
-      }
+      });
     } finally {
       if (stillCurrent()) setIsWaitingForAI(false);
     }

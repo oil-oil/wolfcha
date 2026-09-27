@@ -73,6 +73,8 @@ export interface ModelRef {
   temperature?: number;
   /** Override call-time reasoning/thinking for this model (e.g. some models must enable it) */
   reasoning?: { enabled: boolean, exclude?: boolean, effort?: "minimal" | "low" | "medium" | "high", max_tokens?: number };
+  /** 投票与夜间行动使用的思考配置；未设置时沿用 reasoning。发言不使用它，避免首句等待过长。 */
+  decisionReasoning?: { enabled: boolean, effort?: "minimal" | "low" | "medium" | "high", max_tokens?: number };
 }
 
 export interface Persona {
@@ -320,6 +322,7 @@ const BUILTIN_DEEPSEEK_V41_FLASH_MODEL: ModelRef = {
   provider: "tokendance",
   model: MODEL_IDS.tokendance.deepseekV41Flash,
   reasoning: { enabled: false },
+  decisionReasoning: { enabled: true, effort: "low" },
 };
 
 export const DEFAULT_MODEL_CONFIG = {

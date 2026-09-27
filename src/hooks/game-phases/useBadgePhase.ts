@@ -17,6 +17,7 @@ import {
 } from "@/lib/game-master";
 import { getSystemMessages, getUiText } from "@/lib/game-texts";
 import { DELAY_CONFIG, GAME_CONFIG } from "@/lib/game-constants";
+import { forEachWithConcurrency } from "@/lib/concurrency";
 import { delay, type FlowToken } from "@/lib/game-flow-controller";
 import { playNarrator } from "@/lib/narrator-audio-player";
 
@@ -543,12 +544,16 @@ export function useBadgePhase(
     setGameState(currentState);
     const aiPlayers = currentState.players.filter((p) => p.alive && !p.isHuman && !candidates.includes(p.seat) &&
       (!isResume || typeof currentState.badge.votes[p.playerId] !== "number"));
+    // Prompt 不含本轮其他人的票，各玩家的决定互不依赖，可以并行；全部基于同一份快照。
+    const snapshot = currentState;
+    let roundChanged = false;
+    setIsWaitingForAI(true);
     try {
-      for (const aiPlayer of aiPlayers) {
-        setIsWaitingForAI(true);
+      await forEachWithConcurrency(aiPlayers, GAME_CONFIG.AI_VOTE_CONCURRENCY, async (aiPlayer) => {
+        if (roundChanged) return;
         let targetSeat: number;
         try {
-          targetSeat = await generateAIBadgeVote(currentState, aiPlayer);
+          targetSeat = await generateAIBadgeVote(snapshot, aiPlayer);
         } catch (e) {
           console.warn("[wolfcha] AI badge vote threw, treating as abstain", e);
           targetSeat = BADGE_VOTE_ABSTAIN;
@@ -561,9 +566,12 @@ export function useBadgePhase(
 
         // 对局或投票轮次已经变化时，旧返回不能写入新一轮。
         const latestState = gameStateRef.current;
-        if (latestState.gameId !== state.gameId || latestState.day !== state.day ||
+        if (roundChanged || latestState.gameId !== state.gameId || latestState.day !== state.day ||
             latestState.phase !== "DAY_BADGE_ELECTION" ||
-            latestState.badge.revoteCount !== currentState.badge.revoteCount) return;
+            latestState.badge.revoteCount !== snapshot.badge.revoteCount) {
+          roundChanged = true;
+          return;
+        }
         currentState = {
           ...currentState,
           badge: {
@@ -573,10 +581,11 @@ export function useBadgePhase(
         };
         gameStateRef.current = currentState;
         setGameState(currentState);
-      }
+      });
     } finally {
       setIsWaitingForAI(false);
     }
+    if (roundChanged) return;
 
     // AI投票结束后统一结算一次
     await maybeResolveBadgeElection(currentState);

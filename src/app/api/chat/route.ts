@@ -24,6 +24,12 @@ import {
 } from "@/lib/deepseek-prompt-scope";
 import { recordGameSessionAiAttempt } from "@/lib/server-game-observability";
 import { trackSseAttempt } from "@/lib/sse-attempt-tracker";
+import {
+  buildTokendanceThinking,
+  DECISION_TIMEOUT_MS,
+  normalizeReasoningProfile,
+  resolveReasoning,
+} from "@/lib/reasoning-profile";
 
 // 9 人完整角色画像的正常流式输出实测可超过 80 秒。未启用 Fluid
 // Compute 的 Vercel 项目默认上限可能只有 60 秒，必须显式放宽；这只延长
@@ -376,31 +382,6 @@ function toZenMuxReasoning(
   return { enabled: false };
 }
 
-function toTokendanceThinking(
-  r: { enabled?: boolean; effort?: string; max_tokens?: number } | undefined
-): Record<string, unknown> | undefined {
-  if (r === undefined) return undefined;
-  if (r.enabled !== true) return { type: "disabled" };
-
-  const effortBudget: Record<string, number> = {
-    minimal: 64,
-    low: 128,
-    medium: 256,
-    high: 512,
-  };
-  const budget =
-    typeof r.max_tokens === "number" && Number.isFinite(r.max_tokens)
-      ? Math.max(32, Math.floor(r.max_tokens))
-      : r.effort
-        ? effortBudget[r.effort]
-        : undefined;
-
-  return {
-    type: "enabled",
-    ...(budget ? { budget_tokens: budget } : {}),
-  };
-}
-
 type ChatRequestPayload = {
   model: string;
   messages: unknown[];
@@ -411,6 +392,7 @@ type ChatRequestPayload = {
   stream?: boolean;
   reasoning?: ReasoningPayload;
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
+  reasoning_profile?: unknown;
   response_format?: unknown;
   provider?: Provider;
 };
@@ -448,6 +430,7 @@ async function runBatchItem(
     stream,
     reasoning,
     reasoning_effort,
+    reasoning_profile,
     response_format,
     provider,
   } = payload;
@@ -510,7 +493,12 @@ async function runBatchItem(
     }
     return Math.max(0, normalizedTemperature);
   })();
-  const effectiveReasoning = modelRefOverride?.reasoning !== undefined ? modelRefOverride.reasoning : reasoning;
+  const reasoningProfile = normalizeReasoningProfile(reasoning_profile);
+  const effectiveReasoning = resolveReasoning(modelRefOverride, reasoning, reasoningProfile);
+  // 思考中的决策调用在返回响应头之前就可能超过普通上限
+  const providerTimeoutMs = reasoningProfile === "decision" && effectiveReasoning?.enabled === true
+    ? DECISION_TIMEOUT_MS
+    : API_TIMEOUT_MS;
 
   let processedMessages: unknown[] = messages;
   if (!supportsMultipartContent(model)) {
@@ -628,9 +616,9 @@ async function runBatchItem(
 
     // GLM-4.7 / Kimi K2.5 默认开启思考，API 参数可关闭（已实测有效）
     const modelLower = model.toLowerCase();
-    const thinking = toTokendanceThinking(effectiveReasoning);
-    if (thinking) {
-      requestBody.thinking = thinking;
+    const thinking = buildTokendanceThinking(effectiveReasoning);
+    if (thinking.thinking) {
+      Object.assign(requestBody, thinking);
     } else if (modelLower.includes("glm") || modelLower.includes("kimi")) {
       requestBody.thinking = { type: "disabled" };
     }
@@ -640,7 +628,7 @@ async function runBatchItem(
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), providerTimeoutMs);
 
     let response: Response;
     try {
@@ -869,6 +857,7 @@ export async function POST(request: NextRequest) {
       stream,
       reasoning,
       reasoning_effort,
+      reasoning_profile,
       response_format,
       provider,
     } = body;
@@ -910,7 +899,12 @@ export async function POST(request: NextRequest) {
       }
       return Math.max(0, normalizedTemperature);
     })();
-    const effectiveReasoning = modelRefOverride?.reasoning !== undefined ? modelRefOverride.reasoning : reasoning;
+    const reasoningProfile = normalizeReasoningProfile(reasoning_profile);
+    const effectiveReasoning = resolveReasoning(modelRefOverride, reasoning, reasoningProfile);
+    // 思考中的决策调用在返回响应头之前就可能超过普通上限
+    const providerTimeoutMs = reasoningProfile === "decision" && effectiveReasoning?.enabled === true
+      ? DECISION_TIMEOUT_MS
+      : API_TIMEOUT_MS;
     const attemptContext: AttemptContext = {
       userId: auth.user.id,
       sessionId,
@@ -1104,9 +1098,9 @@ export async function POST(request: NextRequest) {
 
       // GLM-4.7 / Kimi K2.5 默认开启思考，API 参数可关闭（已实测有效）
       const modelLower = model.toLowerCase();
-      const thinking = toTokendanceThinking(effectiveReasoning);
-      if (thinking) {
-        requestBody.thinking = thinking;
+      const thinking = buildTokendanceThinking(effectiveReasoning);
+      if (thinking.thinking) {
+        Object.assign(requestBody, thinking);
       } else if (modelLower.includes("glm") || modelLower.includes("kimi")) {
         requestBody.thinking = { type: "disabled" };
       }
@@ -1116,7 +1110,7 @@ export async function POST(request: NextRequest) {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      const timeoutId = setTimeout(() => controller.abort(), providerTimeoutMs);
 
       let response: Response;
       try {

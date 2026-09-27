@@ -17,6 +17,7 @@ test("真实警徽结算：首轮票型公开进入 PK，复投保留各轮候�
     "@/i18n/translator": await import("@/i18n/translator"),
     "@/lib/game-texts": await import("@/lib/game-texts"),
     "@/lib/game-constants": await import("@/lib/game-constants"),
+    "@/lib/concurrency": await import("@/lib/concurrency"),
     "@/lib/game-flow-controller": { delay: async () => {} },
     "@/lib/narrator-audio-player": { playNarrator: async () => {} },
     "@/store/game-machine": { gameStateAtom: {} },
@@ -55,4 +56,60 @@ test("真实警徽结算：首轮票型公开进入 PK，复投保留各轮候�
   assert.equal(state.voteRounds![1].winnerSeat, 1);
   assert.equal(state.badge.holderSeat, 1);
   assert.deepEqual({ ...state.badge.history[1] }, state.voteRounds![1].votes);
+});
+
+test("AI 警徽票并行发出且不超过并发上限，全部记入后才结算", async () => {
+  const { GAME_CONFIG } = await import("@/lib/game-constants");
+  let active = 0;
+  let peak = 0;
+  const seenVoteCounts: number[] = [];
+  const modules: Record<string, unknown> = {
+    "@/lib/game-master": {
+      ...await import("@/lib/game-master"),
+      generateAIBadgeVote: async (snapshot: GameState) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        seenVoteCounts.push(Object.keys(snapshot.badge.votes).length);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        active -= 1;
+        return 1;
+      },
+    },
+    "@/lib/vote-rounds": await import("@/lib/vote-rounds"),
+    "@/i18n/translator": await import("@/i18n/translator"),
+    "@/lib/game-texts": await import("@/lib/game-texts"),
+    "@/lib/game-constants": await import("@/lib/game-constants"),
+    "@/lib/concurrency": await import("@/lib/concurrency"),
+    "@/lib/game-flow-controller": { delay: async () => {} },
+    "@/lib/narrator-audio-player": { playNarrator: async () => {} },
+    "@/store/game-machine": { gameStateAtom: {} },
+  };
+  let state = createSinglePlayerContextAuditState();
+  state.players = state.players.map((p) => ({ ...p, isHuman: false, alive: true }));
+  state.phase = "DAY_BADGE_SPEECH"; state.day = 1; state.messages = [];
+  state.badge = { ...state.badge, holderSeat: null, candidates: [0, 1, 2], revoteCount: 0, history: {}, allVotes: {}, votes: {} };
+  modules.react = { useCallback: (fn: unknown) => fn, useRef: (current: unknown) => ({ current }) };
+  modules.jotai = { useAtom: () => [state, (next: GameState) => { state = next; }] };
+  const source = readFileSync("src/hooks/game-phases/useBadgePhase.ts", "utf8");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const loadedModule = { exports: {} as { useBadgePhase: (callbacks: unknown) => BadgePhaseActions } };
+  runInNewContext(`(function(require,module,exports){${code}\n})`, { console })((id: string) => {
+    assert.ok(id in modules, id); return modules[id];
+  }, loadedModule, loadedModule.exports);
+  let completed: GameState | null = null;
+  const hook = loadedModule.exports.useBadgePhase({
+    setDialogue: () => {}, clearDialogue: () => {}, setIsWaitingForAI: () => {}, waitForUnpause: async () => {},
+    isTokenValid: () => true, runAISpeech: async () => {},
+    onBadgeElectionComplete: async (next: GameState) => { completed = next; state = next; }, onBadgeTransferComplete: async () => {},
+  });
+  await hook.startBadgeElectionPhase(state);
+
+  const voterCount = state.players.length - 3;
+  assert.ok(peak > 1, "警徽票应当并行");
+  assert.ok(peak <= GAME_CONFIG.AI_VOTE_CONCURRENCY, `并发 ${peak} 超过上限`);
+  assert.equal(seenVoteCounts.length, voterCount);
+  assert.ok(seenVoteCounts.every((count) => count === 0), "后发出的请求不应看到先返回的票");
+  assert.ok(completed, "全部票记入后应完成结算");
+  assert.equal(state.badge.holderSeat, 1);
+  assert.equal(Object.keys(state.voteRounds![0].votes).length, voterCount);
 });
