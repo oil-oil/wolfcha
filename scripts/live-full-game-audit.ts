@@ -9,6 +9,7 @@
  *   - state.json     终局 GameState
  *
  * 用法：pnpm audit:full-game:live [--players 10] [--max-days 6] [--tag name]
+ *      pnpm audit:full-game:live --characters-only 3   只验证角色生成
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -36,6 +37,7 @@ const argValue = (name: string): string | undefined => {
 };
 const PLAYER_COUNT = Number(argValue("players") ?? 10);
 const MAX_DAYS = Number(argValue("max-days") ?? 6);
+const CHARACTER_ROUNDS = Number(argValue("characters-only") ?? 0);
 const RUN_TAG = argValue("tag") ?? new Date().toISOString().replace(/[:.]/g, "-");
 const OUTPUT_DIR = path.resolve(argValue("out") ?? `dry-runs/full-game/${RUN_TAG}`);
 
@@ -261,6 +263,35 @@ async function runFullGame() {
     if (!text.startsWith("[VOTE_RESULT]")) events.push({ kind: "system", day: state.day, phase: state.phase, text });
     return gm.addSystemMessage(state, text);
   };
+
+  // ---- 仅验证角色生成：切换生成模型后确认结构、去重和耗时 ----
+  if (CHARACTER_ROUNDS > 0) {
+    const { getGeneratorModel } = await import("@/lib/api-keys");
+    print(`生成模型：${getGeneratorModel()}，每轮 ${PLAYER_COUNT} 人，共 ${CHARACTER_ROUNDS} 轮`);
+    let failures = 0;
+    for (let round = 1; round <= CHARACTER_ROUNDS; round++) {
+      const started = Date.now();
+      try {
+        const generated = await generateCharacters(PLAYER_COUNT, getRandomScenario(), {});
+        const incomplete = generated.filter((c) =>
+          !c.persona.voiceRules?.length || !c.persona.werewolfExperience || !c.persona.speechLengthHabit ||
+          !c.persona.wolfDeceptionStyle || !c.playerMind?.logicDepth || !c.playerMind?.memoryBias);
+        const unique = new Set(generated.map((c) => c.displayName)).size;
+        if (generated.length !== PLAYER_COUNT || unique !== PLAYER_COUNT || incomplete.length) failures += 1;
+        print(`  第${round}轮：${generated.length} 人，姓名不重复 ${unique}，字段缺失 ${incomplete.length}，耗时 ${((Date.now() - started) / 1000).toFixed(1)}s`);
+        print(`    ${generated.slice(0, 3).map((c) => `${c.displayName}(${c.persona.gender}/${c.persona.age}/${c.persona.mbti})：${c.persona.voiceRules[0]}`).join("；")}`);
+      } catch (error) {
+        failures += 1;
+        print(`  第${round}轮失败，耗时 ${((Date.now() - started) / 1000).toFixed(1)}s：${String(error).slice(0, 200)}`);
+      }
+    }
+    unsubscribe();
+    globalThis.fetch = originalFetch;
+    console.log = originalConsoleLog;
+    print(`Provider 调用 ${providerCalls} 次；失败轮数 ${failures}/${CHARACTER_ROUNDS}`);
+    if (failures) process.exitCode = 1;
+    return;
+  }
 
   // ---- 开局：真实角色生成 + 真实发牌 ----
   print(`[开局] 生成 ${PLAYER_COUNT} 名 AI 角色…`);
