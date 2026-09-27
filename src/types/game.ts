@@ -288,7 +288,7 @@ export interface DailySummaryVoteData {
 // Shared model IDs
 export const MODEL_IDS = {
   zenmux: {
-    geminiFlashLite: "google/gemini-3.1-flash-lite",
+    geminiFlashLite: "google/gemini-3.5-flash-lite",
     geminiFlashPreview: "google/gemini-3-flash-preview",
     deepseek: "deepseek/deepseek-v3.2",
     gpt52Chat: "openai/gpt-5.2-chat",
