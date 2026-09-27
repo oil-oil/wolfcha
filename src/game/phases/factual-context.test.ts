@@ -152,7 +152,7 @@ test("发言 Prompt 按身份和环节给出要完成的事，不指向具体座
   campaign.currentSpeakerSeat = 8;
   campaign.daySpeechStartSeat = 0;
   const seerCampaign = goalOf(campaign, campaign.players[8]);
-  assert.match(seerCampaign, /表明预言家身份；报出至今每一晚查验的对象和结果/);
+  assert.match(seerCampaign, /表明预言家身份；报出【你的查验记录】里的每一条查验/);
   assert.doesNotMatch(seerCampaign, /\d+号/);
   assert.doesNotMatch(seerCampaign, /倾向把放逐票投给谁/);
   assert.match(goalOf(campaign, campaign.players[0]), /伪装成普通好人竞选；或者悍跳预言家/);
@@ -170,6 +170,14 @@ test("发言 Prompt 按身份和环节给出要完成的事，不指向具体座
   lastWords.players[8].alive = false;
   lastWords.currentSpeakerSeat = 8;
   assert.match(goalOf(lastWords, lastWords.players[8]), /遗言是你最后一次传递信息的机会/);
+
+  // “报全每一晚（包括昨夜新增的）”曾让预言家在只过了一夜时编造第二条查验；所有环节都必须以记录为准。
+  discussion.players[8].alive = true;
+  for (const goal of [seerCampaign, goalOf(discussion, discussion.players[8]), goalOf(lastWords, lastWords.players[8])]) {
+    assert.match(goal, /【你的查验记录】/);
+    assert.match(goal, /记录里(有几条就报几条|没有的不要补充)/);
+    assert.doesNotMatch(goal, /昨夜新增/);
+  }
 });
 
 test("守卫上晚守过的座位在输出前再重申一次", async () => {

@@ -1024,19 +1024,19 @@
         "section": "【What you need to accomplish this turn】\n{goal}\nThis is what your role normally needs to get done in this phase. How you phrase it and what you lead with is up to you. Do not recite this section aloud.",
         "commit": "Before you finish, say whom you currently lean toward voting out. If you are still undecided, say which players you are choosing between and what speaks for each.",
         "seer": {
-          "campaign": "You are the Seer, and your check results are the most valuable information the village has. A sheriff campaign speech normally does three things: claim Seer, report every night's check target and result so far, and say whom you plan to check next. Hiding your role means the village never gets this information and you look no different from an ordinary player.",
-          "discussion": "You are the Seer. A daytime speech normally reports every check target and result so far (including last night's) and says whom you want eliminated based on those checks. If you have not claimed yet, claiming now usually helps the village more than staying hidden.",
-          "lastWords": "You are the Seer. Last words are your final chance to pass on information: report every check target and result, say who you believe is a wolf, and whom the village can trust."
+          "campaign": "You are the Seer, and your check results are the most valuable information the village has. A sheriff campaign speech normally does three things: claim Seer, report every check listed in your check record, and say whom you plan to check next. Report exactly the checks in the record; never add or invent a result that is not there. Hiding your role means the village never gets this information and you look no different from an ordinary player.",
+          "discussion": "You are the Seer. A daytime speech normally claims Seer and reports every check listed in your check record. Report exactly the checks in the record; never add, preview, or invent a result that is not there. Say whom you want eliminated based on those checks. When your checks do not point at anyone yet, give a read based on speeches and votes and say it is a read, not a check.",
+          "lastWords": "You are the Seer. Last words are your final chance to pass on information: report every check listed in your check record and add nothing that is not there, then say who you believe is a wolf and whom the village can trust."
         },
         "witch": {
           "campaign": "You are the Witch. You know your potion usage and the wolf target on every night you still held the antidote. Whether to claim during the campaign is your call: claiming provides information but makes you a night target. Either way, your reads must be consistent with this private information.",
           "discussion": "You are the Witch. Your private information (whom you saved, whom you poisoned, which wolf targets you saw) lets you test other players' claims, for example whether a reported check or a story about the night matches the target you saw. Whether to reveal your role and potion usage is your call, but your reads must be consistent with what you know.",
-          "lastWords": "You are the Witch. Last words normally reveal your role, report your potion usage on every night and the wolf targets you saw, to help the village reconstruct the nights."
+          "lastWords": "You are the Witch. Last words normally reveal your role and report each night from the wolf targets and potion usage listed in your potion record, adding nothing that is not there, to help the village reconstruct the nights."
         },
         "guard": {
           "campaign": "You are the Guard. You know whom you protected each night. You normally do not need to claim, to avoid becoming a night target, but your reads must be consistent with your protection record and each night's announced result. If you decide to stay hidden, do not say anything that gives your role away.",
           "discussion": "You are the Guard. You know whom you protected each night. You normally do not need to claim, to avoid becoming a night target, but your reads must be consistent with your protection record and each night's announced result. If you decide to stay hidden, do not say anything that gives your role away.",
-          "lastWords": "You are the Guard. Last words normally reveal your role and report whom you protected each night, to help the village reconstruct the nights."
+          "lastWords": "You are the Guard. Last words normally reveal your role and report whom you protected each night from your protection record, adding nothing that is not there, to help the village reconstruct the nights."
         },
         "hunter": {
           "campaign": "You are the Hunter. You normally do not need to claim. If you decide to stay hidden, do not say things like \"I have a role but will not reveal it yet\", which amounts to claiming.",
