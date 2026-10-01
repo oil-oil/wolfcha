@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { createSinglePlayerContextAuditState } from "../../../scripts/single-player-context-audit";
 import { setLocale } from "@/i18n/locale-store";
-import { buildGameContext, buildPastDaysTranscript } from "@/lib/prompt-utils";
+import { buildGameContext, buildPastDaysTranscript, PAST_DAYS_EXCERPT_ENABLED } from "@/lib/prompt-utils";
 import { recordVoteRound } from "@/lib/vote-rounds";
 import type { GameState, Phase, Role } from "@/types/game";
 
@@ -38,9 +39,13 @@ function seerFeedbackState(): GameState {
   }));
   state.messages = [
     message(state, "我是1号预言家，首夜查杀2号。", "DAY_BADGE_SPEECH", 0),
+    message(state, "预言家普通分析中段，可被摘录规则过滤。", "DAY_BADGE_SPEECH", 0),
+    message(state, "预言家警上发言收尾。", "DAY_BADGE_SPEECH", 0),
     message(state, "1号太急着推人了，我没有身份要跳。", "DAY_BADGE_SPEECH", 1),
     message(state, "全场没有第二个预言家，我站边1号，今天出2号。", "DAY_SPEECH", 5),
     { ...message(state, "我仍然报2号查杀，警徽交给6号。", "DAY_LAST_WORDS", 0), isLastWords: true },
+    { ...message(state, "遗言中段也必须完整传入。", "DAY_LAST_WORDS", 0), isLastWords: true },
+    { ...message(state, "遗言最后一段。", "DAY_LAST_WORDS", 0), isLastWords: true },
   ];
   state.dayHistory = { 1: { executed: { seat: 0, votes: 6 } } };
   state.nightHistory = { 1: { deaths: [], resultsAnnounced: true }, 2: { guardTarget: 5, deaths: [], resultsAnnounced: true } };
@@ -69,11 +74,50 @@ for (const locale of ["zh", "en"] as const) {
           assert.match(prompt.user, /我是1号预言家，首夜查杀2号/);
           assert.match(prompt.user, /我仍然报2号查杀，警徽交给6号/);
           assert.match(prompt.user, /我是6号，我明神了，警长归票2号/);
+          assert.equal(PAST_DAYS_EXCERPT_ENABLED, true);
+          assert.doesNotMatch(prompt.user, /预言家普通分析中段，可被摘录规则过滤/);
+          assert.match(prompt.user, /遗言中段也必须完整传入/);
+          assert.match(prompt.user, locale === "zh" ? /往日公开发言的逐字摘录/ : /verbatim excerpts of past days' public speeches/);
           assert.doesNotMatch(full, /只讨论(?:当前)?存活玩家|避免围绕已出局玩家|不要过度复盘已出局玩家|(?:Only discuss|Discuss) living players only|Only discuss living players|avoid postmortems|avoid over-analyzing eliminated players/);
           assert.match(full, locale === "zh" ? /已出局玩家的公开发言、身份声明、声称的查验、投票与警徽流转仍可作为推理依据/ : /Eliminated players' public speeches, role claims, claimed checks, votes, and badge transfers remain available for reasoning/);
           assert.match(full, locale === "zh" ? /单边声明或持有警徽不等于身份已确认/ : /An uncontested claim or holding the badge does not confirm a role/);
           assert.doesNotMatch(full, /<your_seer_checks>|<your_guard_info>|<your_wolf_team>/);
           assert.doesNotMatch(full, /必须投2号|必须服从警长|must vote for Seat 2/i);
+        }
+      } finally { setLocale("zh"); }
+    });
+  }
+}
+
+// SHA-256 of the complete PromptResult captured before excerpt mode was implemented.
+const dayOnePromptBaselines: Record<string, string> = {
+  "zh/false/DAY_SPEECH": "d30438db2b64df2571f426e57fafc70413daf727aeca08bb1d483add4e80e172",
+  "zh/false/DAY_VOTE": "778be97ecf3be5e93d5a08c98452490eafd8cf802c5c66586695e2527246effe",
+  "zh/true/DAY_SPEECH": "b27163a430aec1c4aae0e44add98eb0a54672223dcc405ef467ad39e13e9b467",
+  "zh/true/DAY_VOTE": "778be97ecf3be5e93d5a08c98452490eafd8cf802c5c66586695e2527246effe",
+  "en/false/DAY_SPEECH": "991bfb6084f54710c345b3dd832a85504466f3978c3b4384f9b466a611f6df96",
+  "en/false/DAY_VOTE": "6095b5b04557dcf26e30db4f48c99ce7c524aabf64442a855279927a399665ee",
+  "en/true/DAY_SPEECH": "eb8b4846d6449f3a1aeb7cee4339ef2c9b49b9b982017b50749b905d231eab64",
+  "en/true/DAY_VOTE": "6095b5b04557dcf26e30db4f48c99ce7c524aabf64442a855279927a399665ee",
+};
+
+for (const locale of ["zh", "en"] as const) {
+  for (const isGenshinMode of [false, true]) {
+    test(`第1天完整Prompt：${locale}/${isGenshinMode ? "原神" : "普通"}与摘录改动前逐字相同`, async () => {
+      await import("@/lib/game-master");
+      const { PhaseManager } = await import("../core/PhaseManager");
+      setLocale(locale);
+      try {
+        for (const phase of ["DAY_SPEECH", "DAY_VOTE"] as const) {
+          const state = fresh(phase);
+          state.isGenshinMode = isGenshinMode;
+          state.messages = ["今日开场原话", "今日中间原话", "今日收尾原话"].map((content) =>
+            message(state, content, "DAY_SPEECH", 2));
+          const actor = state.players[0];
+          assert.equal(buildGameContext(state, actor, { excerptPastDays: true }), buildGameContext(state, actor, { excerptPastDays: false }));
+          const prompt = new PhaseManager().getPrompt(phase, { state }, actor)!;
+          assert.equal(createHash("sha256").update(JSON.stringify(prompt)).digest("hex"), dayOnePromptBaselines[`${locale}/${isGenshinMode}/${phase}`]);
+          for (const m of state.messages) assert.ok(prompt.user.includes(m.content), m.content);
         }
       } finally { setLocale("zh"); }
     });

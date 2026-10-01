@@ -1701,6 +1701,7 @@
       "executionVote": "【Execution】Seat {seat} eliminated",
       "votersVotedFor": "{voters} voted for Seat {target}",
       "dayLabel": "【Day {day}】",
+      "pastDaysExcerptNote": "These are verbatim excerpts of past days' public speeches, retaining only some paragraphs from each speech; quote only the exact words shown here and do not retell or guess words absent here; use '<vote_rounds>' for past voting records.",
       "eliminated": " (eliminated)",
       "lastWordsLabel": "【Last words】",
       "focusReminder": "Choose action targets only from this phase's legal options. Eliminated players' public speeches, role claims, claimed checks, votes, and badge transfers remain available for reasoning. Player claims remain claims. An uncontested claim or holding the badge does not confirm a role; do not treat claims as host-confirmed facts.",
