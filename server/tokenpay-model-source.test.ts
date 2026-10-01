@@ -51,15 +51,18 @@ test("旧版本自动写入的 project 不会覆盖已连接的 TokenPay", () =>
   );
 });
 
-test("TokenPay 不会在没有用户 MiniMax Key 时调用项目语音", () => {
+test("TokenPay 暂停角色配音，即使本地保存了自有语音 Key", () => {
   assert.equal(resolveAiVoiceAvailability("project", false), true);
   assert.equal(resolveAiVoiceAvailability("tokenpay", false), false);
-  assert.equal(resolveAiVoiceAvailability("tokenpay", true), true);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", true), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", false, true), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", true, true), false);
   assert.equal(resolveAiVoiceAvailability("custom", false), false);
   assert.equal(resolveAiVoiceAvailability("custom", true), true);
+  assert.equal(resolveAiVoiceAvailability("custom", false, true), true);
 });
 
-test("TokenPay 无 MiniMax Key 时 AudioManager 不会发起 TTS 请求", async () => {
+test("TokenPay 有无自有语音 Key 时 AudioManager 都不会发起 TTS 请求", async () => {
   const { audioManager } = await import("@/lib/audio-manager");
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
   const originalFetch = globalThis.fetch;
@@ -94,13 +97,26 @@ test("TokenPay 无 MiniMax Key 时 AudioManager 不会发起 TTS 请求", async 
   try {
     setModelSource("tokenpay");
     audioManager.setEnabled(true);
-    assert.equal(audioManager.isEnabled(), false);
-    await audioManager.ensureReady({
-      id: "tokenpay-no-tts",
-      text: "测试",
-      voiceId: "voice",
-      playerId: "player",
-    });
+    for (const hasVoiceKeys of [false, true]) {
+      if (hasVoiceKeys) {
+        values.set("wolfcha_minimax_api_key", "test-minimax-key");
+        values.set("wolfcha_minimax_group_id", "test-group-id");
+        values.set("wolfcha_tokendance_api_key", "test-tokendance-key");
+      }
+      assert.equal(audioManager.isEnabled(), false);
+      for (const ttsProvider of ["minimax", "tokendance"] as const) {
+        const task = {
+          id: `tokenpay-no-tts-${hasVoiceKeys}-${ttsProvider}`,
+          text: "测试",
+          voiceId: "voice",
+          playerId: "player",
+          ttsProvider,
+        };
+        await audioManager.ensureReady(task);
+        await audioManager.prefetchTasks([task]);
+        audioManager.addToQueue(task);
+      }
+    }
     assert.equal(fetchCalls, 0);
   } finally {
     audioManager.setEnabled(false);

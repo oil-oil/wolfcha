@@ -4,7 +4,10 @@ import { isDemoModeActiveServer } from "@/lib/demo-config-server";
 import { isGuestUser } from "@/lib/demo-mode";
 import { GAME_SESSION_RESUME_WINDOW_MS } from "@/lib/game-session-policy";
 
-export async function authenticateRequest(request: Request): Promise<
+export async function authenticateRequest(
+  request: Request,
+  options: { allowGuest?: boolean } = {},
+): Promise<
   | { user: { id: string } }
   | { error: NextResponse }
 > {
@@ -21,7 +24,7 @@ export async function authenticateRequest(request: Request): Promise<
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
 
   if (!token) {
-    if (await isDemoModeActiveServer()) {
+    if (options.allowGuest !== false && await isDemoModeActiveServer()) {
       const guestId = request.headers.get("x-guest-id") || request.headers.get("X-Guest-Id");
       if (guestId && isGuestUser(guestId)) {
         return { user: { id: guestId } };

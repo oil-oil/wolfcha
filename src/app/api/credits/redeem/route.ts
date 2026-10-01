@@ -14,6 +14,24 @@ type RedeemPayload = {
   code?: string;
 };
 
+async function restoreRedemptionCode(codeId: string, userId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("redemption_codes")
+      .update({ is_redeemed: false, redeemed_by: null, redeemed_at: null } as never)
+      .eq("id", codeId)
+      .eq("redeemed_by", userId)
+      .select("id")
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error("Failed to restore redemption code after credit grant failure");
+    }
+  } catch {
+    console.error("Failed to restore redemption code after credit grant failure");
+  }
+}
+
 export async function POST(request: Request) {
   try {
     ensureAdminClient();
@@ -85,30 +103,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: REDEEM_ERROR.alreadyRedeemed }, { status: 400 });
   }
 
-  const { data: creditsData, error: creditsError } = await supabaseAdmin
-    .from("user_credits")
-    .select("credits")
-    .eq("id", user.id)
-    .single();
+  const creditsGranted = typedCodeRow.credits_amount;
+  let newCredits: number | undefined;
+  let creditsFailure = "Failed to update credits";
 
-  if (creditsError || !creditsData) {
-    return NextResponse.json({ error: "Failed to read credits" }, { status: 500 });
+  try {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      creditsFailure = "Failed to read credits";
+      const { data: creditsData, error: creditsError } = await supabaseAdmin
+        .from("user_credits")
+        .select("credits")
+        .eq("id", user.id)
+        .single();
+
+      if (creditsError || !creditsData) break;
+      const currentCredits = (creditsData as { credits: number }).credits;
+      creditsFailure = "Failed to update credits";
+      // Preserve a concurrent game-start debit by retrying against the latest balance.
+      const { data: updatedCredits, error: updateCreditsError } = await supabaseAdmin
+        .from("user_credits")
+        .update({ credits: currentCredits + creditsGranted, updated_at: now } as never)
+        .eq("id", user.id)
+        .eq("credits", currentCredits)
+        .select("credits")
+        .maybeSingle();
+
+      if (updateCreditsError) break;
+      if (updatedCredits) {
+        newCredits = (updatedCredits as { credits: number }).credits;
+        break;
+      }
+    }
+  } catch {
+    // A transport failure also needs to release the claimed code.
   }
 
-  const currentCredits = (creditsData as { credits: number }).credits;
-  const creditsGranted = typedCodeRow.credits_amount;
-  const newCredits = currentCredits + creditsGranted;
-
-  const { error: updateCreditsError } = await supabaseAdmin
-    .from("user_credits")
-    .update({
-      credits: newCredits,
-      updated_at: now,
-    } as never)
-    .eq("id", user.id);
-
-  if (updateCreditsError) {
-    return NextResponse.json({ error: "Failed to update credits" }, { status: 500 });
+  if (newCredits === undefined) {
+    await restoreRedemptionCode(typedCodeRow.id, user.id);
+    return NextResponse.json({ error: creditsFailure }, { status: 500 });
   }
 
   const { error: recordError } = await supabaseAdmin

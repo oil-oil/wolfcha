@@ -1,7 +1,6 @@
 import {
   getDashscopeApiKey,
   getTokendanceApiKey,
-  getTokendanceBaseUrl,
   getZenmuxApiKey,
   getModelSource,
   isCustomKeyEnabled,
@@ -44,10 +43,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 
-function getProviderForModel(model: string): Provider {
-  const modelRef =
-    ALL_MODELS.find((ref) => ref.model === model) ??
-    PROJECT_MODELS.find((ref) => ref.model === model);
+function getProviderForModel(model: string, source: ModelSource = getModelSource()): Provider {
+  const matches = [...ALL_MODELS, ...PROJECT_MODELS].filter((ref) => ref.model === model);
+  const modelRef = (source === "custom" ? matches.find((ref) => {
+    if (ref.provider === "dashscope") return Boolean(getDashscopeApiKey());
+    if (ref.provider === "tokendance") return Boolean(getTokendanceApiKey());
+    return Boolean(getZenmuxApiKey());
+  }) : undefined) ?? matches[0];
   return modelRef?.provider ?? "zenmux";
 }
 
@@ -66,14 +68,12 @@ export function resolveApiKeySource(model: string): ApiKeySource {
   if (source === "project") return "project";
   if (source === "tokenpay") return "user";
 
-  const provider = getProviderForModel(model);
+  const provider = getProviderForModel(model, source);
   if (provider === "dashscope") {
     return getDashscopeApiKey() ? "user" : "project";
   }
   if (provider === "tokendance") {
-    return getTokendanceApiKey() && getTokendanceBaseUrl()
-      ? "user"
-      : "project";
+    return getTokendanceApiKey() ? "user" : "project";
   }
   return getZenmuxApiKey() ? "user" : "project";
 }
@@ -95,8 +95,8 @@ export function resolveRequestModelForSource(
     // 自定义 Key 必须尊重用户显式选择；项目 Key 与 TokenPay 的模型发生
     // 归一化时，Provider 也必须跟随最终模型，不能沿用旧存档里的来源。
     provider: source === "custom"
-      ? provider ?? getProviderForModel(resolvedModel)
-      : getProviderForModel(resolvedModel),
+      ? provider ?? getProviderForModel(resolvedModel, source)
+      : getProviderForModel(resolvedModel, source),
   };
 }
 
@@ -107,14 +107,10 @@ function buildModelSourceHeaders(source: ModelSource): Record<string, string> {
   const zenmuxApiKey = getZenmuxApiKey();
   const dashscopeApiKey = getDashscopeApiKey();
   const tokendanceApiKey = getTokendanceApiKey();
-  const tokendanceBaseUrl = getTokendanceBaseUrl();
   return {
     ...(zenmuxApiKey ? { "X-Zenmux-Api-Key": zenmuxApiKey } : {}),
     ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
     ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
-    ...(tokendanceApiKey && tokendanceBaseUrl
-      ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
-      : {}),
   };
 }
 

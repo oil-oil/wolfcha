@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DASHSCOPE_VALIDATION_MODEL, TOKENDANCE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
-import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
-import { getTokenPayAppUrl } from "@/lib/tokenpay";
+import { authenticateRequest } from "@/lib/api-auth";
+import { getTokenPayAppUrl, getTokenPayGatewayUrl } from "@/lib/tokenpay-config";
 
 const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
@@ -122,11 +122,9 @@ function getTokendanceUrl(baseUrl: string): string {
   return `${withoutTrailingSlash}/chat/completions`;
 }
 
-async function validateTokendanceKey(apiKey: string, baseUrl: string): Promise<ValidationResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
-
-  const tokendanceUrl = getTokendanceUrl(baseUrl);
+async function validateTokendanceKey(apiKey: string): Promise<ValidationResult> {
+  // 上游地址固定，不接受请求头覆盖
+  const tokendanceUrl = getTokendanceUrl(getTokenPayGatewayUrl());
   if (!tokendanceUrl) {
     return {
       provider: "tokendance",
@@ -135,6 +133,9 @@ async function validateTokendanceKey(apiKey: string, baseUrl: string): Promise<V
       errorCode: "invalid_base_url",
     };
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
 
   try {
     const response = await fetch(tokendanceUrl, {
@@ -328,11 +329,13 @@ async function validateDashscopeKey(apiKey: string): Promise<ValidationResult> {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await authenticateRequest(request as unknown as Request, { allowGuest: false });
+  if ("error" in auth) return auth.error;
+
   try {
     const zenmuxKey = request.headers.get("x-zenmux-api-key")?.trim() || "";
     const dashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || "";
     const tokendanceKey = request.headers.get("x-tokendance-api-key")?.trim() || "";
-    const tokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim() || TOKENDANCE_BASE_URL;
 
     if (!zenmuxKey && !dashscopeKey && !tokendanceKey) {
       return NextResponse.json(
@@ -351,7 +354,7 @@ export async function POST(request: NextRequest) {
       validationPromises.push(validateDashscopeKey(dashscopeKey));
     }
     if (tokendanceKey) {
-      validationPromises.push(validateTokendanceKey(tokendanceKey, tokendanceBaseUrl));
+      validationPromises.push(validateTokendanceKey(tokendanceKey));
     }
 
     const settled = await Promise.all(validationPromises);

@@ -54,6 +54,7 @@ import {
   type ModelSource,
 } from "@/lib/api-keys";
 import { getModelLogoPath } from "@/lib/model-logo";
+import { getAuthHeaders } from "@/lib/auth-headers";
 import { REFERRAL_BONUS_ENABLED, SPRING_CAMPAIGN_ENABLED, REDEMPTION_CODE_ENABLED } from "@/lib/welfare-config";
 import { WatchaPayPurchase } from "@/components/game/WatchaPayPurchase";
 import { TokenPayPanel } from "@/components/game/TokenPayPanel";
@@ -365,6 +366,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
     const { provider, key } = options;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...await getAuthHeaders(),
     };
     if (provider === "zenmux") {
       headers["X-Zenmux-Api-Key"] = key;

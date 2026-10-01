@@ -10,7 +10,6 @@ import {
 import {
   getDashscopeApiKey,
   getTokendanceApiKey,
-  getTokendanceBaseUrl,
   getZenmuxApiKey,
   getModelSource,
   setTokenPayConnected,
@@ -193,7 +192,6 @@ export function useCredits() {
       const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
       const hasCustomKey = Boolean(headerApiKey || dashscopeApiKey || tokendanceApiKey);
       const tokenPayRequested = modelSource === "tokenpay";
-      const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
       const requestInit: RequestInit = {
         method: "POST",
         headers: {
@@ -203,9 +201,6 @@ export function useCredits() {
           ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
           ...(dashscopeApiKey ? { "X-Dashscope-Api-Key": dashscopeApiKey } : {}),
           ...(tokendanceApiKey ? { "X-Tokendance-Api-Key": tokendanceApiKey } : {}),
-          ...(tokendanceApiKey && tokendanceBaseUrl
-            ? { "X-Tokendance-Base-Url": tokendanceBaseUrl }
-            : {}),
           ...(tokenPayRequested ? { "X-TokenPay-Mode": "true" } : {}),
         },
         body: JSON.stringify({

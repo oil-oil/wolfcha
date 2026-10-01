@@ -3,7 +3,6 @@ import {
   getMinimaxGroupId,
   getModelSource,
   getTokendanceApiKey,
-  getTokendanceBaseUrl,
   hasMinimaxKey,
   hasTokendanceKey,
   resolveAiVoiceAvailability,
@@ -49,7 +48,6 @@ export class AudioManager {
 
     if (provider === "tokendance" && getModelSource() === "custom" && hasTokendanceKey()) {
       headers["X-Tokendance-Api-Key"] = getTokendanceApiKey();
-      headers["X-Tokendance-Base-Url"] = getTokendanceBaseUrl();
     }
 
     // Project and TokenPay credentials stay on the server. User-supplied

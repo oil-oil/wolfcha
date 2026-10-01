@@ -28,7 +28,6 @@ export async function POST(request: NextRequest) {
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
     const headerTokendanceKey = request.headers.get("x-tokendance-api-key")?.trim();
-    const headerTokendanceBaseUrl = request.headers.get("x-tokendance-base-url")?.trim();
     const headerTokenPayMode = request.headers.get("x-tokenpay-mode")?.trim();
     const headerGameSessionId = request.headers.get("x-game-session-id")?.trim();
     const origin = request.nextUrl.origin;
@@ -41,7 +40,6 @@ export async function POST(request: NextRequest) {
         ...(headerApiKey ? { "X-Zenmux-Api-Key": headerApiKey } : {}),
         ...(headerDashscopeKey ? { "X-Dashscope-Api-Key": headerDashscopeKey } : {}),
         ...(headerTokendanceKey ? { "X-Tokendance-Api-Key": headerTokendanceKey } : {}),
-        ...(headerTokendanceBaseUrl ? { "X-Tokendance-Base-Url": headerTokendanceBaseUrl } : {}),
         ...(headerTokenPayMode ? { "X-TokenPay-Mode": headerTokenPayMode } : {}),
         ...(headerGameSessionId ? { "X-Game-Session-Id": headerGameSessionId } : {}),
         Authorization: request.headers.get("Authorization") || "",

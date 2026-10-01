@@ -22,7 +22,6 @@ Copy `.env.example` to `.env.local` and fill in:
 - `DASHSCOPE_API_KEY` — Alibaba Cloud model support
 - `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` — 仅用于历史订单回调；新订单已停用
 - `NEXT_PUBLIC_WATCHA_CLIENT_ID` / `WATCHA_CLIENT_SECRET` — optional OAuth
-- `NEWAPI_API_KEY` / `NEWAPI_BASE_URL` — optional custom model endpoint
 
 ## Architecture Overview
 
@@ -54,7 +53,7 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 ### AI Integration
 
-- All LLM calls go through the **`/api/chat`** route (`src/app/api/chat/route.ts`), which proxies to ZenMux, Dashscope, or a custom NewAPI endpoint based on the model's provider
+- All LLM calls go through the **`/api/chat`** route (`src/app/api/chat/route.ts`), which proxies to ZenMux, DashScope, or TokenDance based on the model's provider
 - Models are registered in `src/types/game.ts` as `ALL_MODELS` and `PROJECT_MODELS` (each as `ModelRef` with `provider`, `model`, optional `temperature`/`reasoning`)
 - Prompt construction per phase is handled by `GamePhase` subclasses via `getPrompt(context, player): PromptResult`
 - `src/lib/llm.ts` — low-level streaming fetch helper
@@ -76,7 +75,7 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 | Route | Purpose |
 |-------|---------|
-| `/api/chat` | LLM proxy (ZenMux / Dashscope / NewAPI) |
+| `/api/chat` | LLM proxy (ZenMux / DashScope / TokenDance) |
 | `/api/tts` | MiniMax TTS synthesis |
 | `/api/stt` | Speech-to-text |
 | `/api/credits/*` | Credit consumption, daily bonus, referral, redeem |
@@ -88,5 +87,5 @@ Defined in `src/types/game.ts`. Night: `NIGHT_START → NIGHT_GUARD_ACTION → N
 
 - **`FlowToken` pattern**: Before any async operation, capture `flowController.getToken()`. After `await`, call `token.isValid()` to abort if the flow was interrupted (e.g., game reset mid-speech).
 - **Phase prompt generation**: Add a new phase by creating/extending a `GamePhase` subclass in `src/game/phases/`, then register it in `PhaseManager`.
-- **Model routing**: Built-in models use ZenMux or Dashscope providers. Custom user API keys route through the NewAPI provider path. See `src/lib/api-keys.ts` for key resolution.
+- **Model routing**: Built-in models use ZenMux or Dashscope providers. Custom user API keys are passed via the respective request headers for ZenMux, DashScope, and TokenDance. See `src/lib/api-keys.ts` for key resolution.
 - Uses **pnpm** as package manager.

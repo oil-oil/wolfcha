@@ -32,7 +32,7 @@ export function resolveAiVoiceAvailability(
   hasCustomTtsKey: boolean,
   hasCustomTokendanceKey = false,
 ): boolean {
-  return source === "project" || source === "tokenpay" || hasCustomTtsKey || hasCustomTokendanceKey;
+  return source === "project" || (source === "custom" && (hasCustomTtsKey || hasCustomTokendanceKey));
 }
 
 function canUseStorage(): boolean {
@@ -73,10 +73,6 @@ export function getDashscopeApiKey(): string {
 
 export function getTokendanceApiKey(): string {
   return readStorage(TOKENDANCE_API_KEY_STORAGE);
-}
-
-export function getTokendanceBaseUrl(): string {
-  return TOKENDANCE_BASE_URL;
 }
 
 export function setMinimaxApiKey(key: string) {
@@ -413,14 +409,15 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
   const zenmuxKey = getZenmuxApiKey();
   const dashscopeKey = getDashscopeApiKey();
   const tokendanceKey = getTokendanceApiKey();
-  const tokendanceBaseUrl = getTokendanceBaseUrl();
   if (!zenmuxKey && !dashscopeKey && !tokendanceKey) {
     return { valid: false, error: "未配置任何 API Key", errorCode: "no_key" };
   }
 
   try {
+    const { getAuthHeaders } = await import("@/lib/auth-headers");
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...await getAuthHeaders(),
     };
     if (zenmuxKey) {
       headers["X-Zenmux-Api-Key"] = zenmuxKey;
@@ -431,10 +428,6 @@ export async function validateApiKeyBalance(): Promise<KeyValidationResult> {
     if (tokendanceKey) {
       headers["X-Tokendance-Api-Key"] = tokendanceKey;
     }
-    if (tokendanceBaseUrl) {
-      headers["X-Tokendance-Base-Url"] = tokendanceBaseUrl;
-    }
-
     const response = await fetch("/api/validate-key", {
       method: "POST",
       headers,

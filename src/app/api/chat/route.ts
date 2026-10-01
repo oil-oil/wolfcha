@@ -409,7 +409,6 @@ async function runBatchItem(
   headerApiKey: string | null,
   headerDashscopeKey: string | null,
   headerTokendanceKey: string | null,
-  headerTokendanceBaseUrl: string | null,
   meta: RequestMeta,
 ): Promise<
   | { ok: true; data: unknown }
@@ -462,7 +461,7 @@ async function runBatchItem(
     inputChars: countMessageChars(messages),
   };
 
-  const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
+  const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model && ref.provider === modelProvider);
   if (!isDefaultModel) {
     if (modelProvider === "zenmux" && !headerApiKey) {
       return { ok: false, status: 401, error: "此模型需要您提供 Zenmux API Key" };
@@ -594,7 +593,8 @@ async function runBatchItem(
       return { ok: false, status: 401, error: "已启用自定义 Key，但未提供 TokenDance Key（已拒绝回退到系统 Key）" };
     }
     const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-    const tokendanceBaseUrl = headerTokendanceBaseUrl || getTokenPayGatewayUrl();
+    // 上游地址固定，不接受请求头覆盖
+    const tokendanceBaseUrl = getTokenPayGatewayUrl();
     if (!tokendanceApiKey || !tokendanceBaseUrl) {
       return { ok: false, status: 500, error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" };
     }
@@ -806,9 +806,6 @@ export async function POST(request: NextRequest) {
       const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim() || null;
       const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim() || null;
       const headerTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim() || null;
-      const headerTokendanceBaseUrl = tokenPayRequested
-        ? getTokenPayGatewayUrl()
-        : request.headers.get("x-tokendance-base-url")?.trim() || null;
       const requests = body.requests as ChatRequestPayload[];
       if (requests.length > MAX_BATCH_REQUESTS) {
         return NextResponse.json(
@@ -822,7 +819,6 @@ export async function POST(request: NextRequest) {
           headerApiKey,
           headerDashscopeKey,
           headerTokendanceKey,
-          headerTokendanceBaseUrl,
           {
             userId: auth.user.id,
             sessionId,
@@ -876,11 +872,8 @@ export async function POST(request: NextRequest) {
     const headerApiKey = request.headers.get("x-zenmux-api-key")?.trim();
     const headerDashscopeKey = request.headers.get("x-dashscope-api-key")?.trim();
     const headerTokendanceKey = tokenPayApiKey || request.headers.get("x-tokendance-api-key")?.trim();
-    const headerTokendanceBaseUrl = tokenPayRequested
-      ? getTokenPayGatewayUrl()
-      : request.headers.get("x-tokendance-base-url")?.trim();
     const hasAnyCustomKeyHeader = Boolean((headerApiKey ?? "").trim() || (headerDashscopeKey ?? "").trim() || (headerTokendanceKey ?? "").trim());
-    const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model);
+    const isDefaultModel = PROJECT_MODELS.some((ref) => ref.model === model && ref.provider === modelProvider);
 
     const modelRefOverride = getModelRef(model);
     const normalizedTemperature =
@@ -1066,7 +1059,8 @@ export async function POST(request: NextRequest) {
       }
 
       const tokendanceApiKey = headerTokendanceKey || process.env.TOKENDANCE_API_KEY;
-      const tokendanceBaseUrl = headerTokendanceBaseUrl || getTokenPayGatewayUrl();
+      // 上游地址固定，不接受请求头覆盖
+      const tokendanceBaseUrl = getTokenPayGatewayUrl();
       if (!tokendanceApiKey || !tokendanceBaseUrl) {
         return NextResponse.json(
           { error: "TOKENDANCE_API_KEY or TOKENDANCE_BASE_URL not configured on server" },

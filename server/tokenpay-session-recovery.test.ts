@@ -29,7 +29,7 @@ test("对局授权失效与余额不足使用不同错误码", () => {
 
 test("TokenPay 无自有语音 Key 时不会调用项目 MiniMax", () => {
   assert.match(audioManagerSource, /resolveAiVoiceAvailability/);
-  assert.match(audioManagerSource, /modelSource !== "project" && hasMinimaxKey\(\)/);
+  assert.match(audioManagerSource, /provider === "minimax" && getModelSource\(\) === "custom" && hasMinimaxKey\(\)/);
   assert.doesNotMatch(audioManagerSource, /X-TokenPay-Mode/);
   assert.doesNotMatch(ttsRouteSource, /hasAuthorizedActiveTokenPaySession/);
 });
