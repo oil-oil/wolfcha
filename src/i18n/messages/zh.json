@@ -1284,7 +1284,11 @@
     "emptyState": {
       "summoning": "召集",
       "playersEntering": "玩家们正在入场...",
-      "recruiting": "正在召集同伴"
+      "recruiting": "正在召集同伴",
+      "entered": "已进入",
+      "enteredCount": "已进入 {current}/{total} 位玩家",
+      "rosterUnavailable": "角色信息暂不可用，请重新加载。",
+      "avatarsUnavailable": "角色图片未能加载，请重新加载。"
     },
     "newMessages": "{count} 条新消息",
     "nextRoundHint": "轻触继续，轮到下一位",

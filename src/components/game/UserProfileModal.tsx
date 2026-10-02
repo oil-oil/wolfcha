@@ -411,7 +411,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setValidatedKeys((prev) => ({ ...prev, zenmux: "" }));
       if (zenmuxKey.trim() === getValidatedZenmuxKey()) setValidatedZenmuxKey("");
       toast(t("customKey.toasts.validateFailed"), {
-        description: t("customKey.toasts.validateFailedDesc"),
+        description: error instanceof Error ? error.message : t("customKey.toasts.validateFailedDesc"),
       });
     } finally {
       setIsValidatingZenmux(false);
@@ -433,7 +433,7 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
       setValidatedKeys((prev) => ({ ...prev, dashscope: "" }));
       if (dashscopeKey.trim() === getValidatedDashscopeKey()) setValidatedDashscopeKey("");
       toast(t("customKey.toasts.validateFailed"), {
-        description: t("customKey.toasts.validateFailedDesc"),
+        description: error instanceof Error ? error.message : t("customKey.toasts.validateFailedDesc"),
       });
     } finally {
       setIsValidatingDashscope(false);
@@ -454,13 +454,13 @@ import type { SpringCampaignSnapshot } from "@/lib/spring-campaign";
         tokendance: tokendanceKey.trim(),
       }));
       setValidatedTokendanceKey(tokendanceKey.trim());
-    } catch {
+    } catch (error) {
       setValidatedKeys((prev) => ({ ...prev, tokendance: "" }));
       if (tokendanceKey.trim() === getValidatedTokendanceKey()) {
         setValidatedTokendanceKey("");
       }
       toast(t("customKey.toasts.validateFailed"), {
-        description: t("customKey.toasts.validateFailedDesc"),
+        description: error instanceof Error ? error.message : t("customKey.toasts.validateFailedDesc"),
       });
     } finally {
       setIsValidatingTokendance(false);

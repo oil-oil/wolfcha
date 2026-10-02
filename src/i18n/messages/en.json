@@ -1226,7 +1226,11 @@
     "emptyState": {
       "summoning": "Summoning",
       "playersEntering": "Players are entering...",
-      "recruiting": "Gathering companions"
+      "recruiting": "Gathering companions",
+      "entered": "Joined",
+      "enteredCount": "{current}/{total} players have joined",
+      "rosterUnavailable": "Character information is unavailable. Please reload.",
+      "avatarsUnavailable": "Character images could not load. Please reload."
     },
     "newMessages": "{count} new messages",
     "nextRoundHint": "Tap to continue, next speaker",

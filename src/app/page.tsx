@@ -12,10 +12,8 @@ import {
   Shield,
   Drop,
   Crosshair,
-  GearSix,
 } from "@phosphor-icons/react";
 import {
-  WerewolfIcon,
   NightIcon,
   DayIcon,
   SpeechIcon,
@@ -44,6 +42,8 @@ import { DialogArea } from "@/components/game/DialogArea";
 import { BottomActionPanel } from "@/components/game/BottomActionPanel";
 import { Notebook } from "@/components/game/Notebook";
 import { GameBackground } from "@/components/game/GameBackground";
+import { GameTopBar } from "@/components/game/GameTopBar";
+import { GameMatchingEntrance } from "@/components/matching/GameMatchingEntrance";
 import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
 import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
 import { NightActionOverlay, type NightActionOverlayType } from "@/components/game/NightActionOverlay";
@@ -149,6 +149,7 @@ export default function Home() {
     gameStarted,
     gameState,
     isLoading,
+    matchingRoster,
     isWaitingForAI,
     currentDialogue,
     inputText,
@@ -157,6 +158,7 @@ export default function Home() {
     humanPlayer,
     isNight,
     startGame,
+    completeMatching,
     continueAfterRoleReveal,
     restartGame,
     handleHumanSpeech,
@@ -210,7 +212,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 768px)");
+    const media = window.matchMedia("(max-width: 767px)");
     const update = () => setIsMobile(media.matches);
     update();
     if (media.addEventListener) {
@@ -1037,7 +1039,7 @@ export default function Home() {
     nightActionOverlayTimerRef.current = window.setTimeout(() => {
       setNightActionOverlay(null);
     }, 1500);
-  }, [gameState.players, isRoleRevealOpen, showTable]);
+  }, [gameState.players, gameState.isGenshinMode, isRoleRevealOpen, showTable]);
 
   useEffect(() => {
     if (!showTable) {
@@ -1142,7 +1144,7 @@ export default function Home() {
     }
     if (!canClickSeat(player)) return;
     setSelectedSeat(prev => prev === player.seat ? null : player.seat);
-  }, [canClickSeat, isRoleRevealOpen, humanPlayer, gameState.phase, gameState.roleAbilities.witchPoisonUsed]);
+  }, [canClickSeat, isRoleRevealOpen, humanPlayer, gameState.phase, gameState.roleAbilities.witchPoisonUsed, t]);
 
   const confirmSelectedSeat = useCallback(async () => {
     if (isRoleRevealOpen) return;
@@ -1439,91 +1441,36 @@ export default function Home() {
             />
 
             {showTable && (
-              <div className="wc-topbar wc-topbar--responsive shrink-0 transition-all duration-300">
-                {/* 移动端第一行：Logo + 设置按钮 */}
-                <div className="wc-topbar__row-1 flex items-center justify-between w-full md:w-auto md:contents">
-                  <div className="wc-topbar__title">
-                    <WerewolfIcon size={22} className="text-[var(--color-blood)]" />
-                    <span>WOLFCHA</span>
-                  </div>
-
-                  {/* 移动端设置按钮 - 只显示图标 */}
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsOpen(true)}
-                    title={t("page.audioSettings")}
-                    aria-label={t("page.audioSettings")}
-                    className="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]"
-                  >
-                    <GearSix size={16} />
-                  </button>
-                </div>
-
-                <div className="wc-topbar__info">
-                  <div className="wc-topbar__item">
-                    <span className="text-xs uppercase tracking-wider opacity-60">Day</span>
-                    <span className="font-serif text-lg font-bold">{String(gameState.day).padStart(2, '0')}</span>
-                  </div>
-                  <div className="wc-topbar__item">
-                    <span className="text-xs uppercase tracking-wider opacity-60">Alive</span>
-                    <span className="font-serif text-lg font-bold">{gameState.players.filter((p) => p.alive).length}/{gameState.players.length}</span>
-                  </div>
-                  {gameState.badge.holderSeat !== null && (
-                    <div className="wc-topbar__item">
-                      <span className="text-xs uppercase tracking-wider opacity-60">{t("page.badgeLabel")}</span>
-                      <span className="font-serif text-lg font-bold text-[var(--color-gold)]">
-                        {t("mentions.seatLabel", { seat: gameState.badge.holderSeat + 1 })}
-                      </span>
-                    </div>
-                  )}
-                  <div className="wc-phase-badge">
-                    <span className="opacity-90">{renderPhaseIcon()}</span>
-                    <span>{getPhaseDescription()}</span>
-                    {showWaitingIndicator && (
-                      <span className="flex items-center gap-1 ml-1">
-                        <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0 }} className="w-1.5 h-1.5 rounded-full bg-current" />
-                        <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.15 }} className="w-1.5 h-1.5 rounded-full bg-current" />
-                        <motion.span animate={{ scale: [1, 1.25, 1] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.3 }} className="w-1.5 h-1.5 rounded-full bg-current" />
-                      </span>
-                    )}
-                    {needsHumanAction && (
-                      <span className="flex items-center gap-1.5 font-semibold text-xs px-2 py-0.5 rounded-full ml-1 bg-[var(--color-gold)]/20 text-[var(--color-gold)]">
-                        <span className="w-1.5 h-1.5 bg-current rounded-full animate-pulse" />
-                        {t("ui.waitingAction")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 桌面端右侧区域 */}
-                <div className="hidden md:flex items-center gap-3">
-                  <div className="wc-topbar__item wc-topbar__item--role">
-                    <span className="text-xs uppercase tracking-wider opacity-60">{t("page.roleLabel")}</span>
-                    <span className="font-bold text-[var(--color-gold)]">
-                      {canShowRole ? getRoleLabel(humanPlayer?.role) : t("page.rolePending")}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsSettingsOpen(true)}
-                    title={t("page.audioSettings")}
-                    aria-label={t("page.audioSettings")}
-                    className="inline-flex items-center gap-2 rounded-md border-2 border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1 text-xs text-[var(--text-primary)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-bg)]"
-                  >
-                    <GearSix size={16} />
-                    {t("page.settings")}
-                  </button>
-                </div>
-              </div>
+              <GameTopBar
+                day={gameState.day}
+                aliveCount={gameState.players.filter((p) => p.alive).length}
+                totalCount={gameState.players.length}
+                badgeSeat={gameState.badge.holderSeat}
+                phaseIcon={renderPhaseIcon()}
+                phaseLabel={getPhaseDescription()}
+                roleLabel={canShowRole ? getRoleLabel(humanPlayer?.role) : t("page.rolePending")}
+                showWaitingIndicator={showWaitingIndicator}
+                needsHumanAction={needsHumanAction}
+                onSettingsOpen={() => setIsSettingsOpen(true)}
+              />
             )}
 
+            {matchingRoster ? (
+              <GameMatchingEntrance
+                roster={matchingRoster}
+                players={gameState.players}
+                isMobile={isMobile}
+                onComplete={() => completeMatching(matchingRoster.roundId)}
+                onError={(message) => { toast.error(message); restartGame(); }}
+              />
+            ) : (
             <div className="flex flex-1 overflow-hidden">
               <div className="flex-1 flex flex-col bg-transparent min-h-0 overflow-hidden">
                 <AnimatePresence mode="wait" initial={false}>
                   {(
                     <motion.div
                       key="table-screen"
-                      initial={{ opacity: 0, y: 10, filter: "blur(10px)" }}
+                      initial={!gameState.isGenshinMode ? false : { opacity: 0, y: 10, filter: "blur(10px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       exit={{ opacity: 0, y: -10, filter: "blur(10px)" }}
                       transition={{ duration: 0.45, ease: "easeOut" }}
@@ -1547,6 +1494,8 @@ export default function Home() {
                           <PlayerCardCompact
                             key={player.playerId}
                             player={player}
+                            facing="right"
+                            skipEntranceAnimation={!gameState.isGenshinMode}
                             isSpeaking={gameState.currentSpeakerSeat === player.seat}
                             canClick={canClickSeat(player)}
                             isSelected={selectedSeat === player.seat}
@@ -1620,6 +1569,7 @@ export default function Home() {
                             <PlayerCardCompact
                               key={player.playerId}
                               player={player}
+                              facing={player.seat < Math.ceil(gameState.players.length / 2) ? "right" : "left"}
                               isSpeaking={gameState.currentSpeakerSeat === player.seat}
                               canClick={canClickSeat(player)}
                               isSelected={selectedSeat === player.seat}
@@ -1633,6 +1583,7 @@ export default function Home() {
                               isBadgeHolder={gameState.badge.holderSeat === player.seat}
                               isBadgeCandidate={isBadgeCandidate}
                               variant="mobile"
+                              skipEntranceAnimation={!gameState.isGenshinMode}
                               showRoleBadge={canShowRole}
                               selectionTone={selectionTone}
                               isInSelectionPhase={isSelectionPhase}
@@ -1659,6 +1610,8 @@ export default function Home() {
                           <PlayerCardCompact
                             key={player.playerId}
                             player={player}
+                            facing="left"
+                            skipEntranceAnimation={!gameState.isGenshinMode}
                             isSpeaking={gameState.currentSpeakerSeat === player.seat}
                             canClick={canClickSeat(player)}
                             isSelected={selectedSeat === player.seat}
@@ -1686,6 +1639,7 @@ export default function Home() {
           </AnimatePresence>
         </div>
       </div>
+      )}
     </motion.div>
   )}
 </AnimatePresence>
@@ -1742,7 +1696,7 @@ export default function Home() {
         onSoundEnabledChange={setSoundEnabled}
         onAiVoiceEnabledChange={setAiVoiceEnabled}
         onAutoAdvanceDialogueEnabledChange={setAutoAdvanceDialogueEnabled}
-        isGameInProgress={gameInProgress}
+        isGameInProgress={gameInProgress || !!matchingRoster}
         onExitGame={restartGame}
       />
 

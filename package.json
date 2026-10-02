@@ -12,6 +12,8 @@
     "audit:character-generation:live": "node --env-file=.env.local --import tsx scripts/live-character-generation-audit.ts",
     "audit:full-game:live": "node --env-file=.env.local --import tsx scripts/live-full-game-audit.ts",
     "lint": "eslint",
+    "test:matching": "tsx --test src/components/matching/matching-roster.test.ts src/components/matching/matching-motion.test.ts src/components/matching/game-matching-roster.test.ts src/lib/game-entry-gate.test.ts",
+    "test:zenmux": "NODE_OPTIONS=--conditions=react-server tsx --test server/zenmux-*.test.ts",
     "test:tokenpay": "NODE_OPTIONS=--conditions=react-server tsx --test server/tokenpay-*.test.ts",
     "migrate:game-sessions-user-id": "node scripts/migrate-game-sessions-user-id.mjs"
   },
@@ -38,6 +40,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.24.0",
+    "gsap": "^3.15.0",
     "html-to-image": "^1.11.11",
     "jotai": "^2.16.1",
     "lucide-react": "^0.562.0",

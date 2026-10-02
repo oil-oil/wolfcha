@@ -4,7 +4,7 @@ import test from "node:test";
 process.env.NEXT_PUBLIC_SUPABASE_URL ||= "https://example.supabase.co";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||= "test-publishable-key";
 
-test("TokenPay 角色流已返回部分内容后中断也不会重新付费请求", async () => {
+test("TokenPay 角色返回不完整 JSON 后不会重新付费请求", async () => {
   const { supabase } = await import("@/lib/supabase");
   const originalGetSession = supabase.auth.getSession.bind(supabase.auth);
   const originalFetch = globalThis.fetch;
@@ -39,10 +39,14 @@ test("TokenPay 角色流已返回部分内容后中断也不会重新付费请�
   setTokenPayConnected(true);
   setModelSource("tokenpay");
   let baseCalls = 0;
-  let streamCalls = 0;
+  let personaCalls = 0;
   globalThis.fetch = async (_input, init) => {
-    const body = JSON.parse(String(init?.body ?? "{}")) as { stream?: boolean };
-    if (!body.stream) {
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      stream?: boolean;
+      response_format?: { json_schema?: { name?: string } };
+    };
+    assert.notEqual(body.stream, true);
+    if (body.response_format?.json_schema?.name === "base_profiles") {
       baseCalls += 1;
       return Response.json({
         choices: [{
@@ -63,22 +67,20 @@ test("TokenPay 角色流已返回部分内容后中断也不会重新付费请�
       });
     }
 
-    streamCalls += 1;
-    return new Response(new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode(
-          'data: {"choices":[{"delta":{"content":"{\\"characters\\":["}}]}\n\n',
-        ));
-        controller.close();
-      },
-    }), { status: 200, headers: { "content-type": "text/event-stream" } });
+    personaCalls += 1;
+    return Response.json({
+      choices: [{
+        message: { role: "assistant", content: '{"characters":[' },
+        finish_reason: "stop",
+      }],
+    });
   };
 
   try {
     const { generateCharacters } = await import("@/lib/character-generator");
-    await assert.rejects(generateCharacters(1), /\[DONE\] 前意外结束/);
+    await assert.rejects(generateCharacters(1), /Character batch 0 returned invalid JSON/);
     assert.equal(baseCalls, 1);
-    assert.equal(streamCalls, 1);
+    assert.equal(personaCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
     Object.defineProperty(supabase.auth, "getSession", {

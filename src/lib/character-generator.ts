@@ -1,7 +1,8 @@
 import {
   generateJSON,
-  generateCompletionStream,
+  generateCompletion,
   stripMarkdownCodeFences,
+  type ChatCompletionResponse,
   type ResponseFormat,
 } from "./llm";
 import {
@@ -28,7 +29,6 @@ import { GAME_TEMPERATURE } from "./ai-config";
 import { getRandomScenario } from "./scenarios";
 import { resolveVoiceId, VOICE_PRESETS, type AppLocale } from "./voice-constants";
 import { getI18n } from "@/i18n/translator";
-import { parseLLMJson } from "./llm-json";
 
 export interface GeneratedCharacter {
   displayName: string;
@@ -243,7 +243,7 @@ const buildBaseProfilesPrompt = (count: number, scenario: GameScenario) => {
 };
 
 const buildCharacterSchemaLine = (p: BaseProfile): string => (
-  `  { "displayName": "${p.displayName}", "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string }, "playerMind": { "courage": string, "memoryBias": string, "suspicionThreshold": string, "selfProtection": string, "logicDepth": string, "tablePresence": string } }`
+  `  { "displayName": ${JSON.stringify(p.displayName)}, "persona": { "voiceRules": string[], "werewolfExperience": string, "vocabularyStyle": string, "reasoningStyle": string, "speechLengthHabit": string, "pressureStyle": string, "uncertaintyStyle": string, "mistakePattern": string, "wolfDeceptionStyle": string }, "playerMind": { "courage": string, "memoryBias": string, "suspicionThreshold": string, "selfProtection": string, "logicDepth": string, "tablePresence": string } }`
 );
 
 const normalizeGeneratedCharacters = (
@@ -589,12 +589,13 @@ export async function generateCharacters(
       batchProfiles,
     );
     const batchCharacters: GeneratedCharacter[] = [];
-    const emittedLocalIndices = new Set<number>();
     let accumulatedContent = "";
+    let rawResponse: ChatCompletionResponse | undefined;
+    let finishReason: string | undefined;
 
     try {
-      // 三人一批并行生成，避免九人长输出达到 token 上限；每批只调用一次。
-      const stream = generateCompletionStream({
+      // 三人一批并行生成，每批只调用一次；完整校验后再发布，避免上游提前结束 SSE 时接受半截角色。
+      const completion = await generateCompletion({
         model: batchModel,
         messages: [{ role: "user", content: fullPrompt }],
         temperature: GAME_TEMPERATURE.CHARACTER_PERSONA,
@@ -602,89 +603,46 @@ export async function generateCharacters(
         reasoning: CHARACTER_GENERATOR_REASONING,
         response_format: buildPersonaBatchResponseFormat(batchProfiles),
       });
-
-      for await (const chunk of stream) {
-        accumulatedContent += chunk;
-        const cleaned = stripMarkdownCodeFences(accumulatedContent);
-        const characterPattern = /\{\s*"displayName"\s*:\s*"[^"]+"\s*,\s*"persona"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*,\s*"playerMind"\s*:\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\}/g;
-        const matches = cleaned.match(characterPattern);
-
-        for (const match of matches ?? []) {
-          const rawCharacter = parseLLMJson<GeneratedCharacter>(match);
-          if (!rawCharacter?.displayName) continue;
-          const localIndex = batchProfiles.findIndex(
-            (profile, index) =>
-              profile.displayName === rawCharacter.displayName &&
-              !emittedLocalIndices.has(index),
-          );
-          if (localIndex === -1) continue;
-
-          const profile = batchProfiles[localIndex];
-          const normalized = normalizeGeneratedCharacterForProfile(rawCharacter, profile);
-          if (
-            !normalized ||
-            !isValidPersonaForProfile(normalized.persona, profile) ||
-            !isValidPlayerMind(normalized.playerMind)
-          ) {
-            continue;
-          }
-
-          const voiceId = resolveVoiceId(
-            normalized.persona.voiceId,
-            normalized.persona.gender,
-            normalized.persona.age,
-            "zh" as AppLocale,
-          );
-          const character: GeneratedCharacter = {
-            displayName: profile.displayName,
-            persona: {
-              ...normalized.persona,
-              basicInfo: profile.basicInfo,
-              voiceId,
-              relationships: undefined,
-            },
-            playerMind: normalized.playerMind,
-          };
-          emittedLocalIndices.add(localIndex);
-          batchCharacters[localIndex] = character;
-          emitCharacter(batchStartIndex + localIndex, character);
-        }
+      accumulatedContent = completion.content;
+      rawResponse = completion.raw;
+      finishReason = rawResponse.choices?.[0]?.finish_reason;
+      if (finishReason === "length" || finishReason === "content_filter") {
+        throw new Error(`Character batch ${batchStartIndex} ended with finish_reason=${finishReason}`);
       }
 
-      if (batchCharacters.filter(Boolean).length < batchProfiles.length) {
-        const fullResult = parseLLMJson<unknown>(stripMarkdownCodeFences(accumulatedContent));
-        if (!fullResult) {
-          throw new Error(`Character batch ${batchStartIndex} returned invalid JSON`);
-        }
-        const normalized = normalizeGeneratedCharacters(fullResult);
-        const aligned = alignCharactersToProfiles(normalized.characters, batchProfiles);
-        if (!aligned) {
-          throw new Error(`Character batch ${batchStartIndex} returned invalid schema`);
-        }
-
-        aligned.forEach((character, localIndex) => {
-          if (batchCharacters[localIndex]) return;
-          const profile = batchProfiles[localIndex];
-          const voiceId = resolveVoiceId(
-            character.persona.voiceId,
-            character.persona.gender,
-            character.persona.age,
-            "zh" as AppLocale,
-          );
-          const completed: GeneratedCharacter = {
-            displayName: profile.displayName,
-            persona: {
-              ...character.persona,
-              basicInfo: profile.basicInfo,
-              voiceId,
-              relationships: undefined,
-            },
-            playerMind: character.playerMind,
-          };
-          batchCharacters[localIndex] = completed;
-          emitCharacter(batchStartIndex + localIndex, completed);
-        });
+      let fullResult: unknown;
+      try {
+        fullResult = JSON.parse(stripMarkdownCodeFences(accumulatedContent));
+      } catch {
+        throw new Error(`Character batch ${batchStartIndex} returned invalid JSON`);
       }
+      const normalized = normalizeGeneratedCharacters(fullResult);
+      const aligned = alignCharactersToProfiles(normalized.characters, batchProfiles);
+      if (!aligned) {
+        throw new Error(`Character batch ${batchStartIndex} returned invalid schema`);
+      }
+
+      aligned.forEach((character, localIndex) => {
+        const profile = batchProfiles[localIndex];
+        const voiceId = resolveVoiceId(
+          character.persona.voiceId,
+          character.persona.gender,
+          character.persona.age,
+          "zh" as AppLocale,
+        );
+        const completed: GeneratedCharacter = {
+          displayName: profile.displayName,
+          persona: {
+            ...character.persona,
+            basicInfo: profile.basicInfo,
+            voiceId,
+            relationships: undefined,
+          },
+          playerMind: character.playerMind,
+        };
+        batchCharacters[localIndex] = completed;
+        emitCharacter(batchStartIndex + localIndex, completed);
+      });
 
       await aiLogger.log({
         type: "character_generation",
@@ -708,7 +666,9 @@ export async function generateCharacters(
             playerMind: c.playerMind,
           }))),
           duration: Date.now() - batchStartedAt,
-          rawResponse: JSON.stringify({ batchStartIndex }),
+          raw: rawResponse?.choices?.[0]?.message?.content ?? accumulatedContent,
+          rawResponse: JSON.stringify({ ...rawResponse, batchStartIndex }),
+          finishReason,
         },
       });
       return batchCharacters;
@@ -722,8 +682,9 @@ export async function generateCharacters(
         response: {
           content: accumulatedContent,
           duration: Date.now() - batchStartedAt,
-          raw: accumulatedContent,
-          rawResponse: JSON.stringify({ batchStartIndex }),
+          raw: rawResponse?.choices?.[0]?.message?.content ?? accumulatedContent,
+          rawResponse: JSON.stringify({ ...rawResponse, batchStartIndex }),
+          finishReason,
         },
         error: String(error),
       });

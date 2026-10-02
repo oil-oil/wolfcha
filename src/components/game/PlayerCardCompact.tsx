@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Microphone, Sparkle } from "@phosphor-icons/react";
+import { Microphone } from "@phosphor-icons/react";
 import type { Player, Role } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import { cn } from "@/lib/utils";
-import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
+import { buildSimpleAvatarUrl, getModelLogoUrl, getAvatarScaleX, getAvatarBgColor, type AvatarFacing } from "@/lib/avatar-config";
 import { useTranslations } from "next-intl";
+import { PlayerAvatarPlaceholder } from "./PlayerAvatarPlaceholder";
 
 interface PlayerCardCompactProps {
   player: Player;
@@ -28,7 +29,15 @@ interface PlayerCardCompactProps {
   isBadgeHolder?: boolean;
   isBadgeCandidate?: boolean;
   variant?: "default" | "mobile";
+  facing?: AvatarFacing;
   isInSelectionPhase?: boolean;
+  className?: string;
+  skipEntranceAnimation?: boolean;
+  entrance?: {
+    arrived: boolean;
+    onAvatarRef: (element: HTMLDivElement | null) => void;
+    onAvatarError?: () => void;
+  };
 }
 
 export function PlayerCardCompact({
@@ -50,7 +59,11 @@ export function PlayerCardCompact({
   isBadgeHolder = false,
   isBadgeCandidate = false,
   variant = "default",
+  facing = "right",
   isInSelectionPhase = false,
+  className,
+  skipEntranceAnimation = false,
+  entrance,
 }: PlayerCardCompactProps) {
   const t = useTranslations();
   const isDead = !player.alive;
@@ -68,12 +81,12 @@ export function PlayerCardCompact({
     prevIsReadyRef.current = isReady;
     
     // 当从 loading 变为 ready 时触发动画（首次渲染时 wasReady 为 null，不触发）
-    if (isReady && wasReady === false) {
-      setRevealPop(true);
+    if (isReady && wasReady === false && !skipEntranceAnimation) {
+      queueMicrotask(() => setRevealPop(true));
       const timer = window.setTimeout(() => setRevealPop(false), 600);
       return () => window.clearTimeout(timer);
     }
-  }, [isReady]);
+  }, [isReady, skipEntranceAnimation]);
 
   useEffect(() => {
     const prevAlive = prevAliveRef.current;
@@ -128,10 +141,12 @@ export function PlayerCardCompact({
   const modelLabel = player.agentProfile?.modelRef?.model;
 
   const isModelAvatar = isGenshinMode && !player.isHuman;
+  const transparentAvatar = !isModelAvatar && skipEntranceAnimation;
   const avatarSrc = isModelAvatar
     ? getModelLogoUrl(player.agentProfile?.modelRef)
     : buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, {
         gender: player.agentProfile?.persona?.gender,
+        ...(transparentAvatar ? { backgroundColor: "transparent" } : {}),
       });
   const avatarClassName = cn(
     "w-full h-full transition-transform duration-500",
@@ -150,7 +165,7 @@ export function PlayerCardCompact({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+      initial={skipEntranceAnimation ? false : { opacity: 0, y: 10, scale: 0.95 }}
       animate={
         deathPulse
           ? {
@@ -174,6 +189,9 @@ export function PlayerCardCompact({
       whileHover={variant === "mobile" ? {} : {}}
       whileTap={isReady ? { scale: 0.98 } : {}}
       onClick={handleClick}
+      data-player-id={player.playerId}
+      data-seat={player.seat}
+      data-ready={entrance?.arrived}
       className={cn(
         "wc-player-card relative group transition-all duration-300",
         variant === "mobile" && "wc-player-card--mobile",
@@ -186,7 +204,8 @@ export function PlayerCardCompact({
         isDisabledInSelection && "wc-player-card--disabled opacity-50 grayscale-[0.3] pointer-events-none",
         canClick && isReady && "wc-player-card--selectable border-[var(--color-gold)]/50 hover:border-[var(--color-gold)] cursor-pointer",
         isSelected && "scale-[1.02]",
-        isSelected && selectionClass
+        isSelected && selectionClass,
+        className
       )}
     >
       {/* Loading Shimmer Effect */}
@@ -205,50 +224,43 @@ export function PlayerCardCompact({
       )}
 
       {/* 头像区域 */}
-      <div className="wc-player-card__avatar relative overflow-hidden">
+      <div
+        ref={entrance?.onAvatarRef}
+        className="wc-player-card__avatar relative overflow-hidden"
+        data-player-id={player.playerId}
+        data-avatar-seat={player.seat}
+        data-avatar-facing={isModelAvatar ? undefined : facing}
+      >
+        {entrance && <div className="absolute inset-0" style={{ opacity: "calc(1 - var(--arrival-progress, 0))" }} aria-hidden="true"><PlayerAvatarPlaceholder /></div>}
         <AnimatePresence mode="wait">
           {isReady ? (
             <motion.div
               key="avatar-image"
-              initial={{ opacity: 0, scale: 0.8, filter: "blur(8px)" }}
+              initial={skipEntranceAnimation ? false : { opacity: 0, scale: 0.8, filter: "blur(8px)" }}
               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
               transition={{ duration: 0.5, ease: "easeOut" }}
               className="w-full h-full"
             >
-              <img 
-                src={avatarSrc} 
-                alt={player.displayName} 
-                className={avatarClassName} 
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="avatar-placeholder"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="w-full h-full flex items-center justify-center bg-black/10"
-            >
-              <div className="relative flex items-center justify-center">
-                <motion.div
-                  className="absolute inset-0 rounded-full border border-[var(--color-gold)]/25"
-                  style={{ width: 46, height: 46 }}
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
-                />
-                <motion.div
-                  className="absolute inset-2 rounded-full border border-dashed border-[var(--color-blood)]/30"
-                  animate={{ rotate: -360, opacity: [0.4, 0.9, 0.4] }}
-                  transition={{ duration: 4.8, repeat: Infinity, ease: "linear" }}
-                />
-                <div className="absolute inset-0 bg-[var(--color-gold)]/20 blur-xl rounded-full animate-pulse" />
-                <Sparkle
-                  size={22}
-                  weight="fill"
-                  className="text-[var(--text-secondary)]/45 animate-[spin_5s_linear_infinite]"
+              <div
+                className="w-full h-full"
+                data-avatar-facing={isModelAvatar ? undefined : facing}
+                style={{
+                  transform: `scaleX(${isModelAvatar ? 1 : getAvatarScaleX(facing)})`,
+                  backgroundColor: transparentAvatar ? `#${getAvatarBgColor(player.avatarSeed ?? player.playerId)}` : undefined,
+                  opacity: entrance ? "var(--arrival-progress, 0)" : undefined,
+                }}
+              >
+                <img
+                  src={avatarSrc}
+                  alt={player.displayName}
+                  className={avatarClassName}
+                  onError={entrance?.onAvatarError}
+                  crossOrigin={transparentAvatar ? "anonymous" : undefined}
                 />
               </div>
             </motion.div>
+          ) : (
+            <PlayerAvatarPlaceholder key="avatar-placeholder" />
           )}
         </AnimatePresence>
 
@@ -310,7 +322,7 @@ export function PlayerCardCompact({
               {isReady ? (
                 <motion.span
                   key="name-text"
-                  initial={{ opacity: 0, y: 5 }}
+                  initial={skipEntranceAnimation ? false : { opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="truncate font-medium text-[var(--text-primary)] flex-1 min-w-0"
                 >
@@ -354,7 +366,7 @@ export function PlayerCardCompact({
                 {isReady ? (
                   <motion.span
                     key="name-text"
-                    initial={{ opacity: 0, y: 5 }}
+                    initial={skipEntranceAnimation ? false : { opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="block truncate font-medium text-[var(--text-primary)]"
                   >
@@ -379,7 +391,7 @@ export function PlayerCardCompact({
         <div className="wc-player-card__meta min-h-[1.25rem] space-y-0.5">
           {isReady && basicInfoLabel && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={skipEntranceAnimation ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
               className="truncate"

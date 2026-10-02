@@ -6,6 +6,7 @@ type MiniGameItem = {
   y: number;
   r: number;
   speed: number;
+  drift: number;
   isBad: boolean;
 };
 
@@ -18,6 +19,9 @@ type CatchEffect = {
 
 const CANVAS_WIDTH = 300;
 const CANVAS_HEIGHT = 170;
+const RAIN_CANVAS_HEIGHT = 210;
+const ORB_RADIUS = 90;
+const RAIN_OVERLAP = 18;
 
 const COLOR_GOLD = "#c5a059";
 const COLOR_GOLD_SOFT = "rgba(197, 160, 89, 0.35)";
@@ -79,7 +83,9 @@ const drawRoundedRect = (
   ctx.closePath();
 };
 
-const LoadingMiniGame = () => {
+const LoadingMiniGame = ({ variant = "classic" }: { variant?: "classic" | "orb-rain" }) => {
+  const isOrbRain = variant === "orb-rain";
+  const canvasHeight = isOrbRain ? RAIN_CANVAS_HEIGHT : CANVAS_HEIGHT;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<number | null>(null);
   const itemsRef = useRef<MiniGameItem[]>([]);
@@ -98,9 +104,9 @@ const LoadingMiniGame = () => {
 
     const dpr = window.devicePixelRatio || 1;
     canvas.width = CANVAS_WIDTH * dpr;
-    canvas.height = CANVAS_HEIGHT * dpr;
+    canvas.height = canvasHeight * dpr;
     canvas.style.width = `${CANVAS_WIDTH}px`;
-    canvas.style.height = `${CANVAS_HEIGHT}px`;
+    canvas.style.height = `${canvasHeight}px`;
     ctx.scale(dpr, dpr);
 
     let isActive = true;
@@ -113,11 +119,14 @@ const LoadingMiniGame = () => {
 
     const spawnItem = () => {
       const isBad = Math.random() < 0.18;
+      const offset = (Math.random() - 0.5) * 132;
       itemsRef.current.push({
-        x: Math.random() * (CANVAS_WIDTH - 20) + 10,
-        y: -10,
+        x: isOrbRain ? CANVAS_WIDTH / 2 + offset : Math.random() * (CANVAS_WIDTH - 20) + 10,
+        // Follow the orb's lower arc; the canvas overlaps its bottom by 18px.
+        y: isOrbRain ? Math.sqrt(ORB_RADIUS ** 2 - offset ** 2) - ORB_RADIUS + RAIN_OVERLAP : -10,
         r: isBad ? 6.5 : 6,
         speed: Math.random() * 0.8 + 1.2,
+        drift: isOrbRain ? offset * 0.004 : 0,
         isBad,
       });
     };
@@ -132,7 +141,7 @@ const LoadingMiniGame = () => {
       const height = 6;
 
       ctx.save();
-      ctx.translate(paddle.x, CANVAS_HEIGHT - 20);
+      ctx.translate(paddle.x, canvasHeight - 20);
       ctx.lineWidth = 1;
       ctx.strokeStyle = COLOR_GOLD;
       ctx.fillStyle = COLOR_GOLD_SOFT;
@@ -145,6 +154,19 @@ const LoadingMiniGame = () => {
     const drawItem = (item: MiniGameItem) => {
       ctx.save();
       ctx.translate(item.x, item.y);
+      if (isOrbRain) {
+        const tailLength = 12 + item.speed * 6;
+        const trail = ctx.createLinearGradient(0, -tailLength, 0, -item.r);
+        const color = item.isBad ? "191, 46, 46" : "197, 160, 89";
+        trail.addColorStop(0, `rgba(${color}, 0)`);
+        trail.addColorStop(1, `rgba(${color}, 0.25)`);
+        ctx.strokeStyle = trail;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-item.drift * 5, -tailLength);
+        ctx.lineTo(0, -item.r);
+        ctx.stroke();
+      }
       if (item.isBad) {
         ctx.fillStyle = COLOR_BLOOD;
         ctx.beginPath();
@@ -185,7 +207,7 @@ const LoadingMiniGame = () => {
       paddle.x += (paddle.targetX - paddle.x) * paddleLerp;
       paddle.x = clamp(paddle.x, 20, CANVAS_WIDTH - 20);
 
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.clearRect(0, 0, CANVAS_WIDTH, canvasHeight);
 
       drawPaddle();
 
@@ -193,9 +215,10 @@ const LoadingMiniGame = () => {
       for (const item of itemsRef.current) {
         // Apply time scale to item movement
         item.y += item.speed * timeScale;
+        item.x += item.drift * timeScale;
         drawItem(item);
 
-        const dy = item.y - (CANVAS_HEIGHT - 20);
+        const dy = item.y - (canvasHeight - 20);
         const dx = item.x - paddle.x;
         if (Math.abs(dy) < 10 && Math.abs(dx) < 28) {
           setScore((prev) => Math.max(0, prev + (item.isBad ? -10 : 1)));
@@ -212,7 +235,7 @@ const LoadingMiniGame = () => {
           continue;
         }
 
-        if (item.y < CANVAS_HEIGHT + 10) nextItems.push(item);
+        if (item.y < canvasHeight + 10) nextItems.push(item);
       }
       itemsRef.current = nextItems;
 
@@ -252,8 +275,9 @@ const LoadingMiniGame = () => {
     return () => {
       isActive = false;
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
     };
-  }, []);
+  }, [canvasHeight, isOrbRain]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -261,7 +285,7 @@ const LoadingMiniGame = () => {
 
     const handleMove = (clientX: number) => {
       const rect = canvas.getBoundingClientRect();
-      const nextX = clientX - rect.left;
+      const nextX = ((clientX - rect.left) / rect.width) * CANVAS_WIDTH;
       paddleRef.current.targetX = clamp(nextX, 20, CANVAS_WIDTH - 20);
     };
 
@@ -271,19 +295,21 @@ const LoadingMiniGame = () => {
     };
 
     canvas.addEventListener("mousemove", handleMouse);
+    canvas.addEventListener("touchstart", handleTouch, { passive: true });
     canvas.addEventListener("touchmove", handleTouch, { passive: true });
 
     return () => {
       canvas.removeEventListener("mousemove", handleMouse);
+      canvas.removeEventListener("touchstart", handleTouch);
       canvas.removeEventListener("touchmove", handleTouch);
     };
   }, []);
 
   return (
-    <div className="relative flex flex-col items-center gap-2">
+    <div className="relative flex flex-col items-center gap-2" data-minigame-variant={variant}>
       <canvas
         ref={canvasRef}
-        className="rounded-[8px]"
+        className={`${isOrbRain ? "" : "rounded-[8px]"} touch-none`}
         aria-label="loading mini game"
       />
       <div

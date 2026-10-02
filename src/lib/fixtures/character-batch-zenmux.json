@@ -1,0 +1,71 @@
+{
+  "description": "Real ZenMux response: premature SSE [DONE] followed by a successful non-streaming control using the identical prompt and schema.",
+  "model": "google/gemini-3.5-flash-lite",
+  "responseFormat": "json_schema",
+  "profiles": [
+    {
+      "displayName": "陈默",
+      "gender": "male",
+      "age": 32,
+      "mbti": "INTJ",
+      "basicInfo": "在写字楼上班的程序员"
+    },
+    {
+      "displayName": "王琳",
+      "gender": "female",
+      "age": 28,
+      "mbti": "ENFJ",
+      "basicInfo": "社区医院的注册护士"
+    },
+    {
+      "displayName": "李强",
+      "gender": "male",
+      "age": 41,
+      "mbti": "ISTP",
+      "basicInfo": "街角修车铺的师傅"
+    }
+  ],
+  "failedStream": "data: {\"id\":\"8c1ce3ad1ab64984a28a03cab1165990\",\"model\":\"google/gemini-3.5-flash-lite\",\"choices\":[{\"finish_reason\":null,\"delta\":{\"role\":\"assistant\"},\"index\":0,\"logprobs\":null}],\"object\":\"chat.completion.chunk\",\"created\":1790861636,\"service_tier\":null}\n\ndata: {\"id\":\"8c1ce3ad1ab64984a28a03cab1165990\",\"model\":\"google/gemini-3.5-flash-lite\",\"choices\":[{\"finish_reason\":null,\"delta\":{\"content\":\"{\\n  \\\"characters\\\": [\\n    \"},\"index\":0,\"logprobs\":null}],\"object\":\"chat.completion.chunk\",\"created\":1790861636,\"service_tier\":null}\n\ndata: {\"id\":\"8c1ce3ad1ab64984a28a03cab1165990\",\"model\":\"google/gemini-3.5-flash-lite\",\"choices\":[{\"finish_reason\":null,\"delta\":{\"content\":\"{\\n      \\\"displayName\\\": \\\"陈默\\\",\\n      \\\"persona\\\": {\\n        \\\"voiceRules\\\": [\\n          \\\"说话语速偏快，逻辑清晰，喜欢用排比句式\\\",\\n          \\\"习惯在发言\"},\"index\":0,\"logprobs\":null}],\"object\":\"chat.completion.chunk\",\"created\":1790861636,\"service_tier\":null}\n\ndata: [DONE]\n\n",
+  "completeResponse": {
+    "id": "db149b84e6a44e8382b7d57218368a21",
+    "model": "google/gemini-3.5-flash-lite",
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"characters\": [\n    {\n      \"displayName\": \"陈默\",\n      \"persona\": {\n        \"voiceRules\": [\n          \"说话语速偏快，逻辑清晰但略带急躁\",\n          \"喜欢用其实和逻辑上作为承接\",\n          \"偶尔推眼镜或用手指敲击桌子\"\n        ],\n        \"werewolfExperience\": \"玩过较多局数，习惯把狼人杀当成推导代码逻辑和排除法游戏\",\n        \"vocabularyStyle\": \"喜欢用闭环、收益、硬逻辑、视角对立等偏理性的词汇\",\n        \"reasoningStyle\": \"最先注意前后发言的逻辑矛盾和时间线上的对齐情况\",\n        \"speechLengthHabit\": \"平时发言精炼，被质疑时会开始条理清晰地长篇大论\",\n        \"pressureStyle\": \"被点名时会冷笑一声，然后立刻用对方的逻辑漏洞进行反拍\",\n        \"uncertaintyStyle\": \"会直接说目前这个点我不作数，等下一轮看票型再定\",\n        \"mistakePattern\": \"容易过度相信逻辑完美的人，忽略了对方可能提前打好草稿\",\n        \"wolfDeceptionStyle\": \"拿狼时会伪装成极度客观的好人，用复杂的逻辑去带偏方向\"\n      },\n      \"playerMind\": {\n        \"courage\": \"敢于在关键轮次带头冲票，也敢直面场上声量最大的人\",\n        \"memoryBias\": \"对玩家的前后发言时间线和具体的票型分布记得最清楚\",\n        \"suspicionThreshold\": \"需要看到两条以上明显的逻辑断层或者行为不一才会彻底改站边\",\n        \"selfProtection\": \"被攻击时会立刻把焦点转移到攻击者的逻辑闭环是否有漏洞上\",\n        \"logicDepth\": \"擅长将多名玩家的发言和历史投票轨迹串联成完整的产业链\",\n        \"tablePresence\": \"平时安静观察，一旦开始发言就会占据全场注意力，成为焦点\"\n      }\n    },\n    {\n      \"displayName\": \"王琳\",\n      \"persona\": {\n        \"voiceRules\": [\n          \"语气平和温和，语速不紧不慢\",\n          \"常用我觉得、大家听我仔细说\",\n          \"喜欢在思考时轻轻点头\"\n        ],\n        \"werewolfExperience\": \"线下聚会常客，更偏向通过直觉和长期接触的微表情来判断身份\",\n        \"vocabularyStyle\": \"语言朴素接地气，常说感同身受、这个人听着挺真诚的\",\n        \"reasoningStyle\": \"最先捕捉发言时的语气起伏、犹豫和情绪不自然的瞬间\",\n        \"speechLengthHabit\": \"平时长短适中，被强行针对时会耐心地把自己的委屈和心路历程解释清楚\",\n        \"pressureStyle\": \"被怀疑时会表现得有些无奈，苦笑并反问对方为什么总盯着自己\",\n        \"uncertaintyStyle\": \"会说我心里现在还在打鼓，暂时保留意见，看看别人怎么说\",\n        \"mistakePattern\": \"容易被那些态度诚恳、语气温柔的狼人牌所迷惑\",\n        \"wolfDeceptionStyle\": \"拿狼时会打感情牌，表现得像个无辜且有些受伤的好人\"\n      },\n      \"playerMind\": {\n        \"courage\": \"面对强势的盘逻辑玩家时敢于坚持自己的直觉，但很少主动带头踩人\",\n        \"memoryBias\": \"对盘逻辑时的语气、眼神交流以及某些突兀的情绪记忆深刻\",\n        \"suspicionThreshold\": \"只要发现某个人的行为和之前的温和态度反差极大，就会迅速改变看法\",\n        \"selfProtection\": \"被攻击时会用温和但坚定的语气诉说自己的心路历程，争取同情\",\n        \"logicDepth\": \"能抓出单个玩家的逻辑漏洞，但不太习惯把全场十几个人复杂交织的票型理透\",\n        \"tablePresence\": \"温和地参与讨论，说话不多但总能切中大家的直观感受\"\n      }\n    },\n    {\n      \"displayName\": \"李强\",\n      \"persona\": {\n        \"voiceRules\": [\n          \"嗓门偏大，说话直来直去不拐弯\",\n          \"口头禅是话糙理不糙、我这人直\",\n          \"手势较多，经常一挥手结束发言\"\n        ],\n        \"werewolfExperience\": \"玩过不少局，喜欢凭直来直去的江湖经验和直觉判断好坏\",\n        \"vocabularyStyle\": \"词汇简单直接，喜欢用藏不住、装啥呢、这人有鬼\",\n        \"reasoningStyle\": \"最先注意一个人的态度是不是痛快、有没有藏着掖着或者推卸责任\",\n        \"speechLengthHabit\": \"平时三言两语就过，被激怒或者要归票时嗓门会变大，说得又快又急\",\n        \"pressureStyle\": \"被点到时会直接拍桌子或者大声反驳，情绪容易被瞬间点燃\",\n        \"uncertaintyStyle\": \"拿不准时会直接放狠话，说这局要是看走眼了随你们投\",\n        \"mistakePattern\": \"容易被那些态度强硬、看似清白但实际上在带节奏的好人或者狼人误导\",\n        \"wolfDeceptionStyle\": \"拿狼时会故意装成什么都不懂的暴躁好人，用大嗓门来掩盖底气不足\"\n      },\n      \"playerMind\": {\n        \"courage\": \"胆子极大，敢直接跟全场最强势的玩家正面硬刚，甚至裸打\",\n        \"memoryBias\": \"最记得谁在关键轮次投了谁的票，谁在被点时眼神躲闪\",\n        \"suspicionThreshold\": \"直觉一旦觉得某人不顺眼，只需要一个稍微奇怪的动作就会立刻转投对方\",\n        \"selfProtection\": \"被攻击时会立刻反击，用更大的声音和更直白的话把火力引开\",\n        \"logicDepth\": \"不太纠结细枝末节的概率和收益，习惯抓核心的对抗关系和谁在帮谁说话\",\n        \"tablePresence\": \"存在感极强，只要开口全场都能听见，属于自带节奏的活跃型玩家\"\n      }\n    }\n  ]\n}",
+          "refusal": null
+        },
+        "index": 0,
+        "logprobs": null
+      }
+    ],
+    "usage": {
+      "completion_tokens": 1457,
+      "prompt_tokens": 2109,
+      "total_tokens": 3566,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "trafficType": "ON_DEMAND",
+      "prompt_tokens_details": {
+        "audio_tokens": 0,
+        "cached_tokens": 0,
+        "audio_cached_tokens": 0
+      },
+      "web_search": 0,
+      "web_search_queries": 0,
+      "tool_use": 0,
+      "cost": "0.0042752",
+      "cost_details": {
+        "prompt": "0.0006327",
+        "completion": "0.0036425",
+        "web_search": "0",
+        "input_cache_read": "0"
+      }
+    },
+    "object": "chat.completion",
+    "created": 1790863082
+  }
+}
