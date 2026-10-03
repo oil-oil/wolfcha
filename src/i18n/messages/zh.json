@@ -1787,6 +1787,7 @@
       "executionVote": "【公投】{seat}号出局",
       "votersVotedFor": "{voters}投给{target}号",
       "dayLabel": "【第{day}天】",
+      "pastDaysExcerptNote": "这是往日公开发言的逐字摘录，每次发言只保留了部分段落；引用往日发言时只引用这里出现的原话，这里没有的不要复述或猜测；往日票型以 '<vote_rounds>' 为准。",
       "eliminated": "（已出局）",
       "lastWordsLabel": "【遗言】",
       "focusReminder": "行动目标以本阶段可选范围为准。已出局玩家的公开发言、身份声明、声称的查验、投票与警徽流转仍可作为推理依据；玩家声明仍是声明，单边声明或持有警徽不等于身份已确认，不要把声明当作主持人公布的事实。",

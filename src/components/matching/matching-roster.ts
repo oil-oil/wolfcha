@@ -59,7 +59,8 @@ export function parseMatchingRoster(value: unknown): MatchingRoster {
       playerId,
       displayName: entry.displayName.trim(),
       seat,
-      avatarSeed: typeof entry.avatarSeed === "string" && entry.avatarSeed.trim() ? entry.avatarSeed.trim() : playerId,
+      // The assigned seed must stay identical to the game's destination avatar.
+      avatarSeed: typeof entry.avatarSeed === "string" ? entry.avatarSeed : playerId,
       ...(entry.gender !== undefined ? { gender: entry.gender as Gender } : {}),
     };
   }).sort((a, b) => a.seat - b.seat);

@@ -447,18 +447,72 @@ const shouldIncludeHistoricalSystemLine = (content: string): boolean => {
 };
 
 
-/**
- * Build full past days' transcripts.
- * The current default model has enough context for complete game history, so do not trim old speeches here.
- */
-export const buildPastDaysTranscript = (state: GameState): string => {
+// Set to false to restore full past-day transcripts in every single-player prompt.
+export const PAST_DAYS_EXCERPT_ENABLED = true;
+
+const CLAIM_SENTENCE_GAP = "[^。！？.!?\\r\\n]";
+const CLAIM_ROLES_ZH = "(?:预言家|女巫|守卫|猎人|白痴)";
+const CLAIM_ACTIONS_ZH = `(?:查验|验了|验的|验出|验到|查杀|发金水|给${CLAIM_SENTENCE_GAP}{0,6}金水|解药|救了|救的|毒了|毒的|毒药|守了|守的|守护|开枪)`;
+const SPEECH_CLAIM_PATTERNS = [
+  new RegExp(`我${CLAIM_SENTENCE_GAP}{0,14}${CLAIM_ROLES_ZH}`, "u"),
+  new RegExp(`${CLAIM_ROLES_ZH}${CLAIM_SENTENCE_GAP}{0,6}(?:是我|在我这)`, "u"),
+  new RegExp(`我${CLAIM_SENTENCE_GAP}{0,16}${CLAIM_ACTIONS_ZH}`, "u"),
+  new RegExp(`(?:第\\s*[0-9一二三四五六七八九十百零两]+\\s*夜|昨晚|首夜)${CLAIM_SENTENCE_GAP}{0,10}${CLAIM_ACTIONS_ZH}`, "u"),
+  // Also retain inverted potion claims, e.g. “解药我昨晚用了”.
+  new RegExp(`(?:解药|毒药)${CLAIM_SENTENCE_GAP}{0,16}我`, "u"),
+  new RegExp(`\\b(?:I\\s+am|I['’]m)\\b${CLAIM_SENTENCE_GAP}{0,40}\\b(?:seer|witch|guard|hunter|idiot)\\b`, "iu"),
+  new RegExp(`\\bI\\b${CLAIM_SENTENCE_GAP}{0,40}\\b(?:checked|verified|saved|poisoned|guarded|protected|shot)\\b`, "iu"),
+];
+
+/** Public role/skill claims only; intentionally prefer extra matches over lost evidence. */
+export const isSpeechClaim = (content: string): boolean =>
+  SPEECH_CLAIM_PATTERNS.some((pattern) => pattern.test(content));
+
+const excerptPastDayMessages = (messages: ChatMessage[], player?: Player): ChatMessage[] => {
+  // Old saves without phase/speaker metadata cannot be grouped reliably: retain the full day.
+  if (messages.some((m) => !m.isSystem && (!m.playerId || !m.phase))) return messages;
+
+  const kept: ChatMessage[] = [];
+  let speech: ChatMessage[] = [];
+  const flushSpeech = () => {
+    const tailLength = player && speech[0]?.playerId === player.playerId ? 2 : 1;
+    const isLastWords = speech.some((m) => m.isLastWords);
+    speech.forEach((m, index) => {
+      if (isLastWords || isSpeechClaim(m.content) || index >= speech.length - tailLength) kept.push(m);
+    });
+    speech = [];
+  };
+
+  messages.forEach((m) => {
+    const previous = speech.at(-1);
+    if (m.isSystem) {
+      flushSpeech();
+      // Keep even filtered system lines as speech boundaries; the formatter still owns filtering.
+      kept.push(m);
+      return;
+    }
+    if (previous && (m.playerId !== previous.playerId || m.day !== previous.day ||
+      m.phase !== previous.phase || m.speechRound !== previous.speechRound)) flushSpeech();
+    speech.push(m);
+  });
+  flushSpeech();
+  return kept;
+};
+
+/** Build verbatim past-day excerpts (or full transcripts when the switch is disabled). */
+export const buildPastDaysTranscript = (
+  state: GameState,
+  player?: Player,
+  excerpt = PAST_DAYS_EXCERPT_ENABLED
+): string => {
   const { t } = getI18n();
   if (state.day <= 1) return "";
 
   // Group past-day messages by day (excluding current day)
   const dayGroups: { day: number; transcript: string }[] = [];
   for (let d = 1; d < state.day; d++) {
-    const transcript = formatTranscriptMessages(state, state.messages.filter((m) => m.day === d));
+    const messages = state.messages.filter((m) => m.day === d);
+    const transcript = formatTranscriptMessages(state, excerpt ? excerptPastDayMessages(messages, player) : messages);
     dayGroups.push({ day: d, transcript });
   }
 
@@ -470,7 +524,8 @@ export const buildPastDaysTranscript = (state: GameState): string => {
   });
 
   if (sections.length === 0) return "";
-  return `<history>\n${sections.join("\n\n")}\n</history>`;
+  const excerptNote = excerpt ? `${t("promptUtils.gameContext.pastDaysExcerptNote")}\n` : "";
+  return `<history>\n${excerptNote}${sections.join("\n\n")}\n</history>`;
 };
 
 export const getDayStartIndex = (state: GameState): number => {
@@ -772,7 +827,7 @@ ${lastSeat !== undefined ? `【上次守护】${lastSeat + 1}号${lastTarget?.di
 export const buildGameContext = (
   state: GameState,
   player: Player,
-  options?: { excludePendingDeaths?: boolean }
+  options?: { excludePendingDeaths?: boolean; excerptPastDays?: boolean }
 ): string => {
   options = { ...options, excludePendingDeaths: options?.excludePendingDeaths || !areNightResultsVisible(state) };
   const { t } = getI18n();
@@ -899,7 +954,7 @@ alive_count: ${alivePlayers.length}
     context += `\n\n<rules>\n${rulesText}\n</rules>`;
   }
 
-  const pastDaysSection = buildPastDaysTranscript(state);
+  const pastDaysSection = buildPastDaysTranscript(state, player, options?.excerptPastDays);
   if (pastDaysSection) {
     context += `\n\n${pastDaysSection}`;
   }

@@ -7,6 +7,8 @@ import {
   buildPastDaysTranscript,
   buildPublicRoleConfiguration,
   buildTodayTranscript,
+  isSpeechClaim,
+  PAST_DAYS_EXCERPT_ENABLED,
 } from "./prompt-utils";
 
 setLocale("zh");
@@ -387,4 +389,229 @@ test("旧存档缺少投票时警长快照时不使用当前警长伪造历史�
   assert.match(execution, /3号玩家3: \{投票者: \[1,7,9\]\}/);
   assert.doesNotMatch(execution, /9号玩家9: \{票数:/);
   assert.doesNotMatch(execution, /3号玩家3: \{票数:/);
+});
+
+// Copied verbatim from the 43 real claims in the design study; no runtime dry-runs dependency.
+const realClaimSentences = [
+  "我是3号苏婷，上警，本来想等前面几位说完再决定要不要亮身份——现在听完了，我直接说：我是预言家。",
+  "我是4号赵凯，预言家。",
+  "我是4号赵凯，预言家，警长，本轮最后一个发言。",
+  "先亮身份——我是守卫，好人牌，不是坏人。",
+  "我是7号王伟，警长，预言家。",
+  "先接7号 王伟的话——你点我名，说我可能在身份定义上前后打架，那我这次就把身份定义说清楚：我认好人，不跳预言家，拿警徽靠逻辑不靠底牌。",
+  "我是7号王伟，警长，预言家。",
+  "先按流程把底牌亮出来：我是9号周杰，守卫。",
+  "我是女巫。",
+  "我是10号苏婷，猎人。",
+  "前面几位的发言我都听完了，先说我的立场：我跳预言家。",
+  "先亮底牌：我是猎人。",
+  "我是预言家，9号李静，警徽我必须要。",
+  "不是接不住，是我一个守卫没必要靠金水撑腰，先听完前面这一圈再动，稳一点。",
+  "那就把话说完，我是10号赵博文，女巫。",
+  "我是9号李静，预言家。",
+  "先说5号徐峰和6号陈强冲我这张守卫牌——你们要我交代昨晚守了谁、为什么守。",
+  "先说身份，我是预言家。",
+  "先说一件事——我是预言家，昨晚查验结果：3号苏曼是好人，金水。",
+  "还有一句我先放这——我猎人身份，跟前几天一个态度，你们别急着逼我亮牌，该开的时候我会开。",
+  "我猎人这张牌，前两天亮了一半收回去，7号林婉、2号陈思远、3号苏曼都点过我这个动作。",
+  "先说身份定位——我拿的是预言家牌。",
+  "那个……我5号周彤说几句啊，我是猎人牌，真的，我先把身份拍了，省得后面有人拿我身份做文章。",
+  "先说我自己的牌：我是预言家。",
+  "我不藏着，我是猎人牌。",
+  "我是8号周正，预言家。",
+  "我5号李强，是预言家。",
+  "先认账：我是猎人，被票出去我不亏，反正我还能带走一个人。",
+  "首先，我是预言家。",
+  "首先，把身份和我全部的查验交代清楚，一个都不留：我是预言家。",
+  "先把最硬的一条放前面：我是女巫。",
+  "最后一个发言，我先把最硬的信息给出来：我是预言家，第一晚查验了3号王强，结果是好人。",
+  "我是10号周杰，女巫。",
+  "我是预言家，第一夜验的是1号李娜，结果是好人。",
+  "首先，我是3号陈强，猎人。",
+  "警徽竞选我上警，身份是预言家。",
+  "其实我上警是因为我有身份要报——我是预言家。",
+  "先说一个信息点，我不绕：我是女巫，第一夜我用了解药，救的就是7号郑雅琪。",
+  "先说一个我这边必须对清楚的信息，不绕弯子：我是女巫，第一夜的解药我用了，救的就是7号郑雅琪。",
+  "我是预言家，第一夜查的是3号孙建国，结果好人，金水。",
+  "我9号刘志国，猎人牌，今天我认这个出局，但我的话得说透。",
+  "那个…轮到我，我是预言家也是警长，我先把三条查验一口气报清楚，一条不多一条不少。",
+  "这三条是我女巫视角的实账，谁的对夜间描述跟这条对不上，可以直接点名。"
+];
+
+realClaimSentences.forEach((sentence, index) => {
+  test(`声明识别：真实句子 ${index + 1}/43`, () => {
+    assert.equal(isSpeechClaim(sentence), true, sentence);
+  });
+});
+
+const claimVariants = [
+  "我猎人身份", "我拿的是预言家牌", "预言家是我", "女巫这张牌在我这",
+  "我认 2 号预言家", "我昨晚查验3号", "我验了3号", "我验的是3号",
+  "我验出3号是狼", "我验到3号是狼", "我报3号查杀", "我给3号发金水",
+  "我给 3 号金水", "我用了解药", "我救了3号", "我毒了3号", "我用了毒药",
+  "我守了3号", "昨晚我守的是 3 号", "我守护3号", "我开枪带走3号",
+  "解药我昨晚用了", "毒药我已经用了", "首夜查杀3号", "第 12 夜查验3号",
+  "第十二夜毒了3号", "第六夜守护3号", "昨晚解药救了3号",
+  "I'm the seer", "I’m the witch", "I am a guard", "I AM THE HUNTER", "I am the idiot",
+  "I checked seat 3 last night", "I verified seat 3", "I saved seat 3", "I poisoned seat 3",
+  "I guarded seat 3", "I protected seat 3", "I shot seat 3",
+  `我${"啊".repeat(14)}白痴`, `猎人${"啊".repeat(6)}是我`,
+  `我${"啊".repeat(16)}验到3号`, `首夜${"啊".repeat(10)}发金水`,
+  `I am${" ".repeat(40)}seer`, `I${" ".repeat(40)}verified seat 3`,
+];
+
+claimVariants.forEach((sentence) => {
+  test(`声明识别：变体 ${sentence}`, () => {
+    assert.equal(isSpeechClaim(sentence), true, sentence);
+  });
+});
+
+test("声明识别不命中纯客套话或跨句拼接", () => {
+  for (const sentence of [
+    "大家好，轮到我说几句。", "谢谢大家，我说完了。", "各位辛苦了，继续吧。",
+    "Hello everyone, good luck!", "Thank you, I appreciate your time.", "I'm happy to be here.",
+    "我说完了。预言家请继续。", "I am ready. The seer speaks next.",
+  ]) assert.equal(isSpeechClaim(sentence), false, sentence);
+});
+
+for (const locale of ["zh", "en"] as const) {
+  for (const isGenshinMode of [false, true]) {
+    const mode = `${locale}/${isGenshinMode ? "原神" : "普通"}`;
+    test(`往日摘录：${mode}保留声明、本人末两段与完整遗言，逐字可溯源`, () => {
+      setLocale(locale);
+      try {
+        assert.equal(PAST_DAYS_EXCERPT_ENABLED, true);
+        const text = locale === "zh" ? [
+          "我先听听大家的意见。", "这一点还需要核对。", "今天我倾向投3号。",
+          "先讨论这轮的逻辑。", "我是预言家，首夜查杀3号。", "中间这段只是重复分析。", "最终归票3号。",
+          "我的遗言第一段。", "我的遗言第二段。", "我的遗言第三段。",
+        ] : [
+          "Let me hear everyone first.", "This still needs checking.", "My final vote is seat 3.",
+          "Let's discuss the reasoning.", "I'm the seer. I checked seat 3: wolf.", "This is just repeated analysis.", "Vote seat 3 in the end.",
+          "My first last-words paragraph.", "My second last-words paragraph.", "My third last-words paragraph.",
+        ];
+        const state = makeState([
+          ...text.slice(0, 3).map((content) => message(0, content, "DAY_SPEECH")),
+          ...text.slice(3, 7).map((content) => message(1, content, "DAY_SPEECH")),
+          ...text.slice(7).map((content) => message(2, content, "DAY_LAST_WORDS", true)),
+        ]);
+        state.day = 2;
+        state.phase = "DAY_SPEECH";
+        state.isGenshinMode = isGenshinMode;
+        state.players[1].alive = false;
+        state.dailySummaries = { 1: ["SUMMARY_MUST_NOT_ENTER_HISTORY"] };
+        state.dailySummaryFacts = { 1: [{ day: 1, fact: "FACT_MUST_NOT_ENTER_HISTORY", type: "claim", speakerSeat: 1 }] };
+        const before = structuredClone(state);
+        const history = buildPastDaysTranscript(state, state.players[0]);
+        const full = buildPastDaysTranscript(state, state.players[0], false);
+        const withoutViewer = buildPastDaysTranscript(state);
+
+        for (const index of [1, 2, 4, 6, 7, 8, 9]) assert.ok(history.includes(text[index]), text[index]);
+        for (const index of [0, 3, 5]) assert.ok(!history.includes(text[index]), text[index]);
+        assert.ok(!withoutViewer.includes(text[1]));
+        assert.ok(withoutViewer.includes(text[2]));
+        for (const content of text) assert.ok(full.includes(content), content);
+        assert.ok(history.indexOf(text[1]) < history.indexOf(text[4]));
+        assert.ok(history.indexOf(text[6]) < history.indexOf(text[7]));
+
+        const playerLines = history.split("\n").filter((line) => /^(?:【遗言】|【Last words】)?(?:\d+号|Seat \d+): /.test(line));
+        assert.equal(playerLines.length, 7);
+        for (const line of playerLines) {
+          const content = line.slice(line.indexOf(": ") + 2);
+          assert.ok(state.messages.some((m) => !m.isSystem && m.content.includes(content)), line);
+        }
+        assert.match(history, locale === "zh" ? /逐字摘录.*不要复述或猜测.*<vote_rounds>/ : /verbatim excerpts.*do not retell or guess.*<vote_rounds>/);
+        assert.doesNotMatch(full, /逐字摘录|verbatim excerpts/);
+        assert.doesNotMatch(history, /SUMMARY_MUST_NOT_ENTER_HISTORY|FACT_MUST_NOT_ENTER_HISTORY|其余内容已省略|可自行回忆|已出局|currently eliminated/);
+        assert.equal(buildGameContext(state, state.players[0]).match(/<history>[\s\S]*?<\/history>/)?.[0], history);
+        assert.equal(buildGameContext(state, state.players[0], { excerptPastDays: false }).match(/<history>[\s\S]*?<\/history>/)?.[0], full);
+        assert.deepEqual(state, before);
+      } finally { setLocale("zh"); }
+    });
+
+    test(`今天全文：${mode}第1天开关逐字相同，第2天只压缩往日`, () => {
+      setLocale(locale);
+      try {
+        const today = locale === "zh"
+          ? ["今日开场完整原话。", "今日中间完整原话。", "今日收尾完整原话。"]
+          : ["Today's complete opening.", "Today's complete reasoning.", "Today's complete conclusion."];
+        const state = makeState(today.map((content) => message(1, content, "DAY_SPEECH")));
+        state.phase = "DAY_SPEECH";
+        state.isGenshinMode = isGenshinMode;
+        const player = state.players[0];
+        const buildPromptContext = (excerptPastDays: boolean) =>
+          `${buildGameContext(state, player, { excerptPastDays })}\n\n<today_transcript>\n${buildTodayTranscript(state)}\n</today_transcript>`;
+        assert.equal(buildPastDaysTranscript(state, player, true), "");
+        assert.equal(buildPastDaysTranscript(state, player, false), "");
+        assert.equal(buildPromptContext(true), buildPromptContext(false));
+        for (const excerpt of [true, false]) {
+          for (const content of today) assert.ok(buildPromptContext(excerpt).includes(content));
+        }
+
+        state.day = 2;
+        state.messages.forEach((m) => { m.day = 2; });
+        const old = ["OLD_OPENING", "OLD_REASONING", "OLD_CONCLUSION"];
+        state.messages.unshift(...old.map((content) => message(2, content, "DAY_SPEECH")));
+        const fullToday = buildTodayTranscript(state);
+        for (const excerpt of [true, false]) {
+          const prompt = buildPromptContext(excerpt);
+          assert.equal(prompt.split("<today_transcript>\n")[1], `${fullToday}\n</today_transcript>`);
+          for (const content of today) assert.ok(prompt.includes(content));
+          const history = buildPastDaysTranscript(state, player, excerpt);
+          for (const content of today) assert.ok(!history.includes(content));
+        }
+        assert.ok(!buildPromptContext(true).includes(old[0]));
+        assert.ok(buildPromptContext(false).includes(old[0]));
+      } finally { setLocale("zh"); }
+    });
+  }
+}
+
+test("往日分组按连续玩家、日期、阶段与speechRound分开，保留主持人原有过滤和标题", () => {
+  const chunk = (label: string, phase: ChatMessage["phase"], speechRound?: number, seat = 1, day = 1) =>
+    ["开场", "收尾"].map((part) => ({ ...message(seat, `${label}-${part}`, phase), speechRound, day }));
+  const system = (content: string): ChatMessage => ({ ...message(0, content), playerId: "system", isSystem: true });
+  const state = makeState([
+    ...chunk("警上", "DAY_BADGE_SPEECH", 0),
+    ...chunk("其他玩家", "DAY_BADGE_SPEECH", 0, 2),
+    ...chunk("同人再次", "DAY_BADGE_SPEECH", 0),
+    system("天亮了"),
+    ...chunk("被系统行隔开", "DAY_BADGE_SPEECH", 0),
+    system("3号已由主持人宣布出局"),
+    ...chunk("PK1", "DAY_PK_SPEECH", 1).map((m) => ({ ...m, pkSource: "badge" as const })),
+    ...chunk("PK2", "DAY_PK_SPEECH", 2).map((m) => ({ ...m, pkSource: "badge" as const })),
+    ...chunk("警下", "DAY_SPEECH", undefined),
+    ...chunk("隔天", "DAY_SPEECH", undefined, 1, 2),
+    system("[VOTE_RESULT]已有票型区块"),
+  ]);
+  state.day = 3;
+  const history = buildPastDaysTranscript(state);
+  const full = buildPastDaysTranscript(state, undefined, false);
+  for (const label of ["警上", "其他玩家", "同人再次", "被系统行隔开", "PK1", "PK2", "警下", "隔天"]) {
+    assert.ok(history.includes(`${label}-收尾`), label);
+    assert.ok(!history.includes(`${label}-开场`), label);
+  }
+  assert.ok(history.includes("系统: 3号已由主持人宣布出局"));
+  assert.doesNotMatch(history, /系统: 天亮了|VOTE_RESULT/);
+  assert.match(history, /PK.*警徽.*第1轮/);
+  assert.match(history, /PK.*警徽.*第2轮/);
+  assert.deepEqual(history.split("\n").filter((line) => line.startsWith("【")), full.split("\n").filter((line) => line.startsWith("【")));
+  const previousRound = state.messages.find((m) => m.content === "PK1-收尾")!;
+  state.messages.push({ ...previousRound, id: "repeat-content", day: 2 });
+  assert.equal(buildPastDaysTranscript(state).split("PK1-收尾").length - 1, 2);
+});
+
+test("旧消息缺少分组阶段时回退当天全文，其他天仍能摘录", () => {
+  const state = makeState([
+    { ...message(1, "旧存档开场"), phase: undefined },
+    message(1, "旧存档收尾"),
+    { ...message(2, "第二天开场", "DAY_SPEECH"), day: 2 },
+    { ...message(2, "第二天收尾", "DAY_SPEECH"), day: 2 },
+  ]);
+  state.day = 3;
+  const history = buildPastDaysTranscript(state);
+  assert.ok(history.includes("旧存档开场"));
+  assert.ok(history.includes("旧存档收尾"));
+  assert.ok(!history.includes("第二天开场"));
+  assert.ok(history.includes("第二天收尾"));
 });

@@ -15,7 +15,9 @@ test("actual all-AI setup preserves shuffled personas, assigned seats and random
   for (const count of [6, 12]) {
     const characters: GeneratedCharacter[] = Array.from({ length: count }, (_, index) => ({
       displayName: `真实角色${index}`,
-      ...(index === 2 ? { avatarSeed: "custom-character-avatar" } : {}),
+      ...(index === 2 ? { avatarSeed: " custom-character-avatar " } : {}),
+      ...(index === 3 ? { avatarSeed: " \t " } : {}),
+      ...(index === 4 ? { avatarSeed: "" } : {}),
       persona: { gender: index % 2 ? "female" : "male", age: 25 + index, mbti: "INTJ", voiceRules: [] },
     }));
     const playerIds = Array.from({ length: count }, (_, seat) => `random-player-id-${seat}`);
@@ -41,10 +43,11 @@ test("actual all-AI setup preserves shuffled personas, assigned seats and random
   }
 });
 
-test("human games include the assigned human avatar on either side without exposing roles", async () => {
-  const { setupPlayers } = await import("@/lib/game-master");
+test("human games preserve every randomly assigned seat and avatar without exposing roles", async () => {
+  const { getRandomHumanSeat, setupPlayers } = await import("@/lib/game-master");
   for (const count of [6, 10, 12]) {
-    for (const humanSeat of [0, count - 1]) {
+    for (let seat = 0; seat < count; seat++) {
+      const humanSeat = getRandomHumanSeat(count, () => (seat + 0.25) / count);
       const characters: GeneratedCharacter[] = Array.from({ length: count - 1 }, (_, index) => ({
         displayName: `同桌${index + 1}`,
         persona: { gender: index % 2 ? "female" : "male", age: 25, mbti: "INTJ", voiceRules: [] },
@@ -59,6 +62,7 @@ test("human games include the assigned human avatar on either side without expos
       const figure = figures[humanSeat];
 
       assert.equal(players.filter((player) => player.isHuman).length, 1);
+      assert.equal(humanSeat, seat);
       assert.equal(human.agentProfile, undefined);
       assert.equal(human.role, "Seer");
       assert.equal(roster.participants.length, count);
@@ -66,7 +70,7 @@ test("human games include the assigned human avatar on either side without expos
       assert.equal(participant.avatarSeed, human.avatarSeed);
       assert.equal(figure.avatarUrl, buildSimpleAvatarUrl(human.avatarSeed ?? human.playerId));
       assert.equal(figure.figureUrl, buildSimpleAvatarUrl(human.avatarSeed ?? human.playerId, { backgroundColor: "transparent" }));
-      assert.equal(figure.facing, humanSeat === 0 ? "right" : "left");
+      assert.equal(figure.facing, humanSeat < Math.ceil(count / 2) ? "right" : "left");
       assert.ok(!JSON.stringify(roster).includes("Seer"));
       assert.ok(!JSON.stringify(roster).includes("playerMind"));
 

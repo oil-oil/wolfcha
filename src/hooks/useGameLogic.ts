@@ -35,6 +35,7 @@ import {
   checkWinCondition,
   killPlayer,
   generateDailySummary,
+  getRandomHumanSeat,
   generateWhiteWolfKingBoomDecision,
 } from "@/lib/game-master";
 import { buildGenshinModelRefs, generateCharacters, generateGenshinModeCharacters, sampleModelRefs, type GeneratedCharacter } from "@/lib/character-generator";
@@ -1460,9 +1461,9 @@ export function useGameLogic() {
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();
 
-      // 真人固定在 1 号位（seat = 0）；UI、阶段推进和 Prompt 都读取同一个 seat。
+      // 每局只随机一次真人座位；UI、阶段推进和 Prompt 都读取同一个 seat。
       // 观战模式没有人类玩家。
-      const humanSeat = isSpectatorMode ? -1 : 0;
+      const humanSeat = isSpectatorMode ? -1 : getRandomHumanSeat(totalPlayers);
 
       const aiSeats = Array.from({ length: totalPlayers }, (_, seat) => seat).filter(
         (seat) => seat !== humanSeat
