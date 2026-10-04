@@ -22,6 +22,9 @@ import { useTranslations } from "next-intl";
 
 import { ALL_MODELS, PLAYER_MODELS, PROJECT_MODELS, isWolfRole, type GameState, type Player, type Phase, type Role, type DevPreset, type ModelRef, type StartGameOptions } from "@/types/game";
 import { gameStateAtom, isValidTransition, clearPersistedGameState, isRestorableGameState } from "@/store/game-machine";
+import { GameEntryGate } from "@/lib/game-entry-gate";
+import { createGameMatchingRoster } from "@/components/matching/game-matching-roster";
+import type { MatchingRoster } from "@/components/matching/matching-roster";
 import { getGeneratorModel, getModelSource } from "@/lib/api-keys";
 import {
   createInitialGameState,
@@ -96,6 +99,8 @@ export function useGameLogic() {
   const [gameStarted, setGameStarted] = useState(false);
   const [gameState, setGameState] = useAtom(gameStateAtom);
   const [isLoading, setIsLoading] = useState(false);
+  const [matchingRoster, setMatchingRoster] = useState<MatchingRoster | null>(null);
+  const entryGateRef = useRef(new GameEntryGate());
   const [inputText, setInputText] = useState("");
   const [showTable, setShowTable] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
@@ -184,7 +189,14 @@ export function useGameLogic() {
     [],
   );
 
-  useEffect(() => () => clearCancellableTimeouts(), [clearCancellableTimeouts]);
+  useEffect(() => () => {
+    clearCancellableTimeouts();
+    entryGateRef.current.cancel();
+  }, [clearCancellableTimeouts]);
+
+  const completeMatching = useCallback((roundId: string) => {
+    entryGateRef.current.complete(roundId);
+  }, []);
 
   // 回调 refs（用于人类操作后继续流程）
   const afterLastWordsRef = useRef<((state: GameState) => Promise<void>) | null>(null);
@@ -1397,9 +1409,16 @@ export function useGameLogic() {
     } = options ?? {};
 
     const totalPlayers = playerCount;
+    // Both human and all-AI games use the avatar entrance; model logos keep their own entry.
+    const useMatchingEntrance = !isGenshinMode;
 
+    flowController.current.interrupt();
+    const startToken = getToken();
+    entryGateRef.current.cancel();
+    setMatchingRoster(null);
     clearCancellableTimeouts();
     const characterAnimationGeneration = cancellableTimeoutGenerationRef.current;
+    const isCurrentStart = () => startToken.isValid() && characterAnimationGeneration === cancellableTimeoutGenerationRef.current;
     resetDialogueState();
     setInputText("");
     setShowTable(false);
@@ -1433,6 +1452,7 @@ export function useGameLogic() {
         console.error("[game-session] Failed to create:", err);
         return null;
       });
+      if (!isCurrentStart()) return;
       if (sessionId) {
         gameStatsTracker.setSessionId(sessionId);
       }
@@ -1441,7 +1461,7 @@ export function useGameLogic() {
       const scenario = isGenshinMode ? undefined : getRandomScenario();
       const makeId = () => generateUUID();
 
-      // 普通模式每局只随机一次人类座位；之后 UI、阶段推进和 Prompt 都读取同一个 seat。
+      // 每局只随机一次真人座位；UI、阶段推进和 Prompt 都读取同一个 seat。
       // 观战模式没有人类玩家。
       const humanSeat = isSpectatorMode ? -1 : getRandomHumanSeat(totalPlayers);
 
@@ -1475,8 +1495,9 @@ export function useGameLogic() {
 
       const seedPlayerIds = initialPlayers.map((p) => p.playerId);
 
+      const startingState = createInitialGameState();
       setGameState({
-        ...createInitialGameState(),
+        ...startingState,
         gameSessionId: sessionId,
         scenario,
         players: initialPlayers,
@@ -1489,6 +1510,9 @@ export function useGameLogic() {
 
       setGameStarted(true);
       setShowTable(true);
+      if (useMatchingEntrance) {
+        setMatchingRoster({ roundId: startingState.gameId, playerCount: totalPlayers, participants: [] });
+      }
 
       let characters: GeneratedCharacter[] = [];
       let genshinModelRefs: ModelRef[] | undefined = undefined;
@@ -1511,7 +1535,7 @@ export function useGameLogic() {
       }));
 
       const applyCustomCharactersToState = (customList: GeneratedCharacter[]) => {
-        if (customList.length === 0) return;
+        if (useMatchingEntrance || customList.length === 0) return;
         const seatMap = new Map<number, { character: GeneratedCharacter; index: number }>();
         customList.forEach((character, index) => {
           const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
@@ -1556,6 +1580,7 @@ export function useGameLogic() {
         // Custom characters appear immediately (no delay), generated ones animate in
         const customCount = customGeneratedCharacters.length;
         characters.forEach((character, index) => {
+          if (useMatchingEntrance) return;
           const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
           const isCustom = index < customCount;
           const delay = isCustom ? 0 : 200 + (index - customCount) * 180;
@@ -1610,6 +1635,7 @@ export function useGameLogic() {
       } else {
         characters = await generateCharacters(numAiPlayers, scenario, {
           onBaseProfiles: (profiles) => {
+            if (useMatchingEntrance) return;
             profiles.forEach((p, i) => {
               const seat = aiSeatOrder[i] ?? aiSeats[i] ?? i;
               scheduleCancellableTimeout(characterAnimationGeneration, () => {
@@ -1624,6 +1650,7 @@ export function useGameLogic() {
             });
           },
           onCharacter: (index, character) => {
+            if (useMatchingEntrance) return;
             const seat = aiSeatOrder[index] ?? aiSeats[index] ?? index;
             scheduleCancellableTimeout(characterAnimationGeneration, () => {
               setGameState((prev) => {
@@ -1648,10 +1675,12 @@ export function useGameLogic() {
         });
       }
 
+      if (!isCurrentStart()) return;
       if (sessionId) {
         await gameSessionTracker.markRunning().catch((error) => {
           console.error("[game-session] Failed to mark session running:", error);
         });
+        if (!isCurrentStart()) return;
       }
 
       const players = setupPlayers(
@@ -1666,8 +1695,20 @@ export function useGameLogic() {
         preferredRole
       );
 
+      if (useMatchingEntrance) {
+        const roster = createGameMatchingRoster(startingState.gameId, players);
+        const entranceFinished = entryGateRef.current.wait(roster.roundId);
+        // Keep NIGHT_START, narrator audio and AI actions behind the entrance.
+        setGameState((prev) => prev.gameId === startingState.gameId ? { ...prev, players } : prev);
+        setMatchingRoster(roster);
+        if (!await entranceFinished || !isCurrentStart()) return;
+        setMatchingRoster(null);
+      }
+
       let newState: GameState = {
         ...createInitialGameState(),
+        gameId: startingState.gameId,
+        startTime: startingState.startTime,
         gameSessionId: sessionId,
         scenario,
         players,
@@ -1749,12 +1790,17 @@ export function useGameLogic() {
         isAwaitingRoleRevealRef.current = true;
       }
     } catch (error) {
+      if (!isCurrentStart()) return;
+      entryGateRef.current.cancel();
+      setMatchingRoster(null);
+      setIsLoading(false);
       clearCancellableTimeouts();
       if (sessionId) {
         await gameSessionTracker.markFailed().catch((statusError) => {
           console.error("[game-session] Failed to mark session failed:", statusError);
         });
       }
+      if (!startToken.isValid()) return;
       const msg = String(error);
       if (isQuotaExhaustedMessage(msg)) {
         toast.error(t("gameLogicMessages.quotaExhausted.title"), {
@@ -1771,7 +1817,7 @@ export function useGameLogic() {
       setShowTable(false);
       throw error;
     } finally {
-      setIsLoading(false);
+      if (characterAnimationGeneration === cancellableTimeoutGenerationRef.current) setIsLoading(false);
     }
   }, [clearCancellableTimeouts, getToken, humanName, isTokenValid, resetDialogueState, runNightPhaseAction, scheduleCancellableTimeout, setDialogue, setGameStarted, setGameState, setInputText, setIsLoading, setShowTable, speakerHost, t]);
 
@@ -1809,6 +1855,9 @@ export function useGameLogic() {
     });
     gameSessionTracker.reset();
     clearCancellableTimeouts();
+    entryGateRef.current.cancel();
+    setMatchingRoster(null);
+    setIsLoading(false);
 
     // Clear persisted game state from localStorage
     clearPersistedGameState();
@@ -2325,6 +2374,7 @@ export function useGameLogic() {
     gameStarted,
     gameState,
     isLoading,
+    matchingRoster,
     isWaitingForAI,
     waitingForNextRound,
     currentDialogue,
@@ -2337,6 +2387,7 @@ export function useGameLogic() {
 
     // Actions
     startGame,
+    completeMatching,
     continueAfterRoleReveal,
     restartGame,
     handleHumanSpeech,

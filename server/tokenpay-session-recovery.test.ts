@@ -27,11 +27,12 @@ test("对局授权失效与余额不足使用不同错误码", () => {
   );
 });
 
-test("TokenPay 无自有语音 Key 时不会调用项目 MiniMax", () => {
+test("仅自定义来源发送用户 MiniMax Key，服务端语音始终校验对局授权", () => {
   assert.match(audioManagerSource, /resolveAiVoiceAvailability/);
-  assert.match(audioManagerSource, /modelSource !== "project" && hasMinimaxKey\(\)/);
+  assert.match(audioManagerSource, /getModelSource\(\) === "custom" && hasMinimaxKey\(\)/);
   assert.doesNotMatch(audioManagerSource, /X-TokenPay-Mode/);
   assert.doesNotMatch(ttsRouteSource, /hasAuthorizedActiveTokenPaySession/);
+  assert.match(ttsRouteSource, /hasAuthorizedActiveGameSession\(auth\.user\.id, sessionId\)/);
 });
 
 test("TokenPay 授权失效会同步存储、模型来源与页面连接状态", () => {

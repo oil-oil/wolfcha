@@ -1,0 +1,123 @@
+.preview {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.preview > header { z-index: 10; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.animation { position: relative; flex: 1; height: 100%; min-height: 0; overflow: hidden; }
+.scene, .canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.scene { z-index: 2; }
+.canvas { display: block; }
+.loadingState { position: absolute; z-index: 3; inset: 0 0 220px; opacity: 1; visibility: visible; pointer-events: none; transition: opacity .3s ease, visibility .3s; }
+.loadingState > div { pointer-events: auto; }
+.loadingState > div > div { transform: translateY(-8px) scale(.9); }
+.loadingState [data-slot="loading-orb"] { z-index: 1; margin-bottom: 0; pointer-events: none; }
+.loadingState [data-slot="loading-message"] { font-family: var(--font-chinese), ui-serif, Georgia, serif; font-size: 17px; font-weight: 500; letter-spacing: .035em; }
+.loadingState [data-slot="loading-minigame"] { margin-top: -18px; margin-bottom: 12px; }
+.loadingState [data-slot="loading-minigame"] canvas { border-radius: 0; }
+.loadingState[data-active="false"] { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.demoActions { display: flex; align-items: center; gap: 2px; }
+.iconButton { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); opacity: .7; cursor: pointer; transition: color .2s, background .2s, opacity .2s; }
+.iconButton:hover, .iconButton[data-state="open"] { color: var(--text-secondary); background: var(--color-accent-bg); opacity: 1; }
+.iconButton:disabled { opacity: .28; cursor: default; }
+.iconButton:focus-visible, .roomSize select:focus-visible, .attribution a:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 3px; }
+.demoMenu { width: 192px; padding: 8px; }
+.demoMenu [role="menuitemcheckbox"] { font-size: 12px; }
+.demoMenu [role="menuitem"] { font-size: 12px; }
+.roomSize { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px; color: var(--text-secondary); font-size: 12px; }
+.roomSize select { padding: 3px 4px; border: 1px solid var(--surface-border); border-radius: 4px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
+.menuDivider { height: 1px; margin: 6px 4px; background: var(--surface-border); }
+.attribution { position: absolute; z-index: 3; bottom: 10px; right: 16px; padding: 3px 6px; border-radius: 4px; background: var(--bg-main); color: var(--text-muted); opacity: .6; font-size: 9px; }
+.attribution a { color: inherit; text-decoration: none; }
+.attribution a:hover { color: var(--color-blood); }
+.assetError { position: absolute; top: 45%; left: 20px; right: 20px; margin: 0; text-align: center; font-size: 13px; color: var(--color-blood); }
+
+.rosterDialog { max-width: 560px; width: calc(100vw - 32px); max-height: calc(100svh - 40px); overflow-y: auto; border-width: 1px; border-radius: 10px; }
+.rosterLabel { font-size: 12px; color: var(--text-secondary); }
+.rosterInput { width: 100%; height: min(320px, 40svh); resize: vertical; padding: 12px; border: 1px solid var(--surface-border); border-radius: 6px; background: var(--bg-main); color: var(--text-primary); font: 12px/1.6 ui-monospace, monospace; }
+.rosterInput:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; }
+.rosterError { margin: 0; color: var(--color-blood); font-size: 12px; }
+.importButton { justify-self: end; padding: 8px 14px; border: 0; border-radius: 5px; background: var(--color-blood); color: white; font-size: 12px; cursor: pointer; }
+.importButton:focus-visible { outline: 2px solid var(--color-gold); outline-offset: 3px; }
+
+.seatLayout { position: absolute; z-index: 1; inset: 0 0 16px; opacity: 0; visibility: hidden; transition: opacity .4s ease, visibility .4s; }
+.seatLayout[data-visible="true"] { opacity: 1; visibility: visible; }
+.gameMobileSeatLayout { position: absolute; z-index: 1; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; opacity: 0; visibility: hidden; transition: opacity .4s ease, visibility .4s; }
+.gameMobileSeatLayout[data-visible="true"] { opacity: 1; visibility: visible; }
+.seatColumn { position: absolute; top: 0; bottom: 0; width: 220px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: visible; }
+.leftColumn { left: 0; }
+.rightColumn { right: 0; }
+.seatCard { flex-shrink: 0; cursor: default; }
+.seatCard:hover { transform: none; }
+.seatCard[data-ready="false"] { opacity: .8; }
+.seatAvatar { --arrival-progress: 0; z-index: 1; }
+.avatarPlaceholder, .avatarImage { position: absolute; inset: 0; width: 100%; height: 100%; }
+.avatarPlaceholder { opacity: calc(1 - var(--arrival-progress)); }
+.avatarImage { object-fit: cover; opacity: var(--arrival-progress); }
+.seatName { opacity: 0; transition: opacity .35s ease; }
+.gameSeatCard[data-ready="false"] :global(.wc-player-card__info) { opacity: 0; }
+.gameSeatCard :global(.wc-player-card__info) { transition: opacity .35s ease; }
+.nameSkeleton { position: absolute; inset: 0; transition: opacity .3s ease; }
+.seatCard[data-ready="true"] .seatName { opacity: 1; }
+.seatCard[data-ready="true"] .nameSkeleton { opacity: 0; }
+
+@media (min-width: 768px) {
+  /* The game keeps these cards flexible when its sidebar is short. */
+  .seatCard.gameSeatCard { padding: 12px; gap: 12px; flex-shrink: 1; }
+  .seatColumn.gameSeatColumn { gap: 12px; }
+  .seatLayout.gameSeatLayout { inset: 0; }
+}
+
+@media (min-width: 1024px) {
+  .seatLayout { inset: 24px; }
+  .seatLayout.gameSeatLayout { inset: 24px; }
+  .seatColumn { width: 240px; }
+}
+@media (min-width: 1280px) { .seatColumn { width: 260px; } }
+@media (min-width: 1536px) {
+  .seatColumn { width: 300px; }
+  /* 1280px center + two 300px columns with -8px margins + two 24px gaps. */
+  .seatLayout.gameSeatLayout { left: max(24px, calc((100% - 1912px) / 2)); right: max(24px, calc((100% - 1912px) / 2)); }
+}
+
+@media (max-width: 767px) {
+  .iconButton { width: 26px; height: 28px; }
+  .loadingState { bottom: 240px; }
+  .seatLayout { inset: 12px 10px 30px; }
+  .seatColumn { width: 132px; gap: 8px; }
+  .seatCard { padding: 8px; gap: 6px; min-height: 72px; }
+  .seatCard :global(.wc-player-card__avatar) { width: 42px; height: 42px; border-width: 1px; }
+  .seatAvatar .avatarPlaceholder > div { transform: scale(.7); }
+  .seatCard :global(.wc-player-card__name) { font-size: 11px; }
+  .seatCard :global(.wc-player-card__meta) { font-size: 10px; }
+  .seatCard :global(.wc-player-card__meta) > div { font-size: 10px; }
+  .seatCard :global(.wc-seat-badge) { font-size: 9px; }
+  .nameSkeleton > div { height: 5px; width: 42px; }
+  .loadingState > div > div { transform: translateY(-12px) scale(.8); }
+  .attribution { bottom: 10px; right: 50%; transform: translateX(50%); font-size: 8px; white-space: nowrap; }
+}
+
+@media (min-width: 768px) and (max-height: 700px) {
+  .seatCard { padding: 8px; gap: 8px; }
+  .seatAvatar { width: 48px; height: 48px; }
+  .seatColumn { gap: 8px; }
+  .loadingState { bottom: 190px; }
+  .loadingState > div > div { transform: translateY(-10px) scale(.65); }
+}
+
+@media (max-width: 767px) and (max-height: 700px) {
+  .loadingState { bottom: 140px; }
+  .loadingState > div > div { transform: scale(.72); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconButton, .seatLayout, .gameMobileSeatLayout, .seatName, .nameSkeleton, .loadingState { transition: none; }
+}

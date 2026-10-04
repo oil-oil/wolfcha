@@ -15,7 +15,7 @@ import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
 import { EventLog } from "./EventLog";
 import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { RoleRevealHistoryCard, type RoleRevealEntry } from "@/components/game/RoleRevealHistoryCard";
-import LoadingMiniGame from "./MiniGame/LoadingMiniGame";
+import { GameLoadingState } from "./GameLoadingState";
 import type { GameState, Player, ChatMessage, Phase } from "@/types/game";
 import { isWolfRole } from "@/types/game";
 import { cn } from "@/lib/utils";
@@ -404,7 +404,7 @@ export function DialogArea({
   const bottomRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const historyContentRef = useRef<HTMLDivElement>(null);
-  const lastPortraitPlayerRef = useRef<Player | null>(null);
+  const [lastPortraitPlayer, setLastPortraitPlayer] = useState<Player | null>(null);
   const voiceRecorderRef = useRef<VoiceRecorderHandle | null>(null);
 
   const [talkingPlayerId, setTalkingPlayerId] = useState<string | null>(null);
@@ -506,13 +506,12 @@ export function DialogArea({
       return gameState.players.find((p) => p.seat === gameState.currentSpeakerSeat) || null;
     }
     return currentSpeaker?.player || null;
-  }, [isHumanTurn, humanPlayer, gameState.currentSpeakerSeat, gameState.players, currentSpeaker?.player?.playerId]);
+  }, [isHumanTurn, humanPlayer, gameState.currentSpeakerSeat, gameState.players, currentSpeaker?.player]);
 
-  useEffect(() => {
-    if (portraitPlayer) lastPortraitPlayerRef.current = portraitPlayer;
-  }, [portraitPlayer?.playerId]);
-
-  const stablePortraitPlayer = portraitPlayer || lastPortraitPlayerRef.current;
+  if (portraitPlayer && portraitPlayer !== lastPortraitPlayer) {
+    setLastPortraitPlayer(portraitPlayer);
+  }
+  const stablePortraitPlayer = portraitPlayer || lastPortraitPlayer;
 
   const portraitNode = (
     <AnimatePresence mode="wait" initial={false}>
@@ -812,38 +811,43 @@ export function DialogArea({
 
   // 处理新消息到来
   useEffect(() => {
-    const newCount = visibleMessages.length;
-    const prevCount = prevMessageCountRef.current;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const newCount = visibleMessages.length;
+      const prevCount = prevMessageCountRef.current;
     
-    if (newCount > prevCount) {
-      const addedCount = newCount - prevCount;
+      if (newCount > prevCount) {
+        const addedCount = newCount - prevCount;
 
-      const shouldAutoFollow =
-        isAtBottom &&
-        !userInteractionSuppressRef.current &&
-        !userScrolledDuringTypingRef.current;
+        const shouldAutoFollow =
+          isAtBottom &&
+          !userInteractionSuppressRef.current &&
+          !userScrolledDuringTypingRef.current;
 
-      if (shouldAutoFollow) {
-        manualScrollLockRef.current = false;
-        setIsManualScrollLocked(false);
-        setUnreadCount(0);
-        // 未锁定，自动滚动到底部
-        requestAnimationFrame(() => {
-          if (historyRef.current && !userInteractionSuppressRef.current && !userScrolledDuringTypingRef.current) {
-            isAutoScrollingRef.current = true;
-            historyRef.current.scrollTop = historyRef.current.scrollHeight;
-            window.setTimeout(() => {
-              isAutoScrollingRef.current = false;
-            }, 100);
-          }
-        });
-      } else {
-        // 已锁定，累加未读数
-        setUnreadCount((prev) => prev + addedCount);
+        if (shouldAutoFollow) {
+          manualScrollLockRef.current = false;
+          setIsManualScrollLocked(false);
+          setUnreadCount(0);
+          // 未锁定，自动滚动到底部
+          requestAnimationFrame(() => {
+            if (historyRef.current && !userInteractionSuppressRef.current && !userScrolledDuringTypingRef.current) {
+              isAutoScrollingRef.current = true;
+              historyRef.current.scrollTop = historyRef.current.scrollHeight;
+              window.setTimeout(() => {
+                isAutoScrollingRef.current = false;
+              }, 100);
+            }
+          });
+        } else {
+          // 已锁定，累加未读数
+          setUnreadCount((prev) => prev + addedCount);
+        }
       }
-    }
-    
-    prevMessageCountRef.current = newCount;
+
+      prevMessageCountRef.current = newCount;
+    });
+    return () => { cancelled = true; };
   }, [visibleMessages.length, isAtBottom, isManualScrollLocked]);
 
   // 对话内容更新时也检查是否需要滚动
@@ -864,63 +868,7 @@ export function DialogArea({
 
   // 空状态
   if (gameState.messages.length === 0 && !currentDialogue) {
-    return (
-      <div className="h-full w-full flex flex-col items-center justify-center text-[var(--text-muted)]">
-        <div className="relative flex flex-col items-center">
-          <div className="relative mb-6">
-            <motion.div
-              className="absolute inset-0 rounded-full border border-[var(--color-gold)]/20"
-              style={{ width: 180, height: 180 }}
-              animate={{ rotate: 360 }}
-              transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-            />
-            <motion.div
-              className="absolute inset-5 rounded-full border border-dashed border-[var(--color-blood)]/30"
-              animate={{ rotate: -360, opacity: [0.4, 0.8, 0.4] }}
-              transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
-            />
-            <motion.div
-              className="absolute inset-10 rounded-full border border-[var(--color-gold)]/20"
-              animate={{ scale: [0.96, 1.04, 0.96], opacity: [0.35, 0.7, 0.35] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.div
-              className="relative flex items-center justify-center rounded-full"
-              style={{ width: 180, height: 180 }}
-              animate={{ y: [0, -6, 0] }}
-              transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_center,rgba(197,160,89,0.12),rgba(0,0,0,0)_70%)]" />
-              <WerewolfIcon size={56} className="text-[var(--color-gold)]/60 drop-shadow-[0_0_18px_rgba(197,160,89,0.3)]" />
-            </motion.div>
-          </div>
-          <motion.div
-            className="flex flex-col items-center gap-2"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-          >
-            <div className="text-sm font-serif tracking-[0.2em] text-[var(--color-gold)]/80 uppercase">
-              {t("dialog.emptyState.summoning")}
-            </div>
-            <div className="text-base font-semibold text-[var(--text-primary)]/85">
-              {t("dialog.emptyState.playersEntering")}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              <motion.span
-                className="inline-block w-2 h-2 rounded-full bg-[var(--color-gold)]/60"
-                animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0.9, 0.4] }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-              />
-              <span>{t("dialog.emptyState.recruiting")}</span>
-            </div>
-            <div className="mt-4">
-              <LoadingMiniGame />
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    );
+    return <GameLoadingState />;
   }
 
   // 获取角色中文名
@@ -1697,7 +1645,7 @@ export function DialogArea({
                           className="wc-action-btn wc-action-btn--danger text-sm h-9 px-4"
                           type="button"
                         >
-                          {t("dialog.hunter.skipShoot" as any)}
+                          {t("dialog.hunter.skipShoot")}
                           <CaretRight size={14} weight="bold" />
                         </button>
                       )}
@@ -1781,6 +1729,7 @@ function ChatMessageItem({
   if (isSystem) {
     // 检查是否是身份揭晓消息
     if (msg.content.startsWith('[ROLE_REVEAL]')) {
+      let revealCardProps: React.ComponentProps<typeof RoleRevealHistoryCard> | null = null;
       try {
         const jsonData = msg.content.substring('[ROLE_REVEAL]'.length);
         const revealData = JSON.parse(jsonData) as { title?: string; players?: RoleRevealEntry[] };
@@ -1797,21 +1746,21 @@ function ChatMessageItem({
                 isHuman: p.isHuman,
                 modelRef: p.agentProfile?.modelRef,
               }));
-        return (
-          <RoleRevealHistoryCard
-            title={revealData.title || t("specialEvents.roleRevealTitle")}
-            entries={entries}
-            players={players}
-            isNight={isNight}
-            isGenshinMode={isGenshinMode}
-          />
-        );
+        revealCardProps = {
+          title: revealData.title || t("specialEvents.roleRevealTitle"),
+          entries,
+          players,
+          isNight,
+          isGenshinMode,
+        };
       } catch (e) {
         console.error('Failed to parse role reveal:', e);
       }
+      if (revealCardProps) return <RoleRevealHistoryCard {...revealCardProps} />;
     }
     // 检查是否是投票结果消息
     if (msg.content.startsWith('[VOTE_RESULT]')) {
+      let voteCardProps: React.ComponentProps<typeof VoteResultCard> | null = null;
       try {
         const jsonData = msg.content.substring('[VOTE_RESULT]'.length);
         const voteData = JSON.parse(jsonData) as {
@@ -1824,20 +1773,18 @@ function ChatMessageItem({
           }>;
         };
         if (voteData.results && voteData.results.length > 0) {
-          return (
-            <VoteResultCard
-              title={voteData.title || t("votePhase.voteDetailTitle")}
-              results={voteData.results}
-              players={players}
-              isNight={isNight}
-              isGenshinMode={isGenshinMode}
-            />
-          );
+          voteCardProps = {
+            title: voteData.title || t("votePhase.voteDetailTitle"),
+            results: voteData.results,
+            players,
+            isNight,
+            isGenshinMode,
+          };
         }
       } catch (e) {
         console.error('Failed to parse vote result:', e);
       }
-      return null;
+      return voteCardProps ? <VoteResultCard {...voteCardProps} /> : null;
     }
     
     return (

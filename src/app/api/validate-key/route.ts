@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { DASHSCOPE_VALIDATION_MODEL, TOKENDANCE_VALIDATION_MODEL, ZENMUX_VALIDATION_MODEL } from "@/types/game";
 import { TOKENDANCE_BASE_URL } from "@/lib/api-keys";
 import { getTokenPayAppUrl } from "@/lib/tokenpay";
+import { fetchZenmux } from "@/lib/server-zenmux";
+import { getProviderNetworkError } from "@/lib/provider-network-error";
 
-const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
 
 const VALIDATION_TIMEOUT_MS = 15000;
@@ -22,7 +23,7 @@ async function validateZenmuxKey(apiKey: string): Promise<ValidationResult> {
   const timeoutId = setTimeout(() => controller.abort(), VALIDATION_TIMEOUT_MS);
 
   try {
-    const response = await fetch(ZENMUX_API_URL, {
+    const response = await fetchZenmux({
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -98,12 +99,13 @@ async function validateZenmuxKey(apiKey: string): Promise<ValidationResult> {
     };
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
+    const networkError = getProviderNetworkError(error);
+    if (networkError) {
       return {
         provider: "zenmux",
         valid: false,
-        error: "验证超时，请检查网络连接",
-        errorCode: "timeout",
+        error: networkError.error,
+        errorCode: networkError.status === 504 ? "timeout" : "network_error",
       };
     }
     return {

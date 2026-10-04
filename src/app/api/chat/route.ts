@@ -23,6 +23,8 @@ import {
   type PromptScope,
 } from "@/lib/deepseek-prompt-scope";
 import { recordGameSessionAiAttempt } from "@/lib/server-game-observability";
+import { fetchZenmux, ZENMUX_CHAT_COMPLETIONS_URL } from "@/lib/server-zenmux";
+import { getProviderNetworkError } from "@/lib/provider-network-error";
 import { trackSseAttempt } from "@/lib/sse-attempt-tracker";
 import {
   buildTokendanceThinking,
@@ -40,7 +42,7 @@ export const maxDuration = 300;
 // 避免访问国内 API 网关（如 tokendance）时因建连慢而提前失败
 setGlobalDispatcher(new Agent({ connectTimeout: 60_000 }));
 
-const ZENMUX_API_URL = "https://zenmux.ai/api/v1/chat/completions";
+const ZENMUX_API_URL = ZENMUX_CHAT_COMPLETIONS_URL;
 const DASHSCOPE_API_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const DASHSCOPE_CHAT_COMPLETIONS_URL = `${DASHSCOPE_API_BASE_URL}/chat/completions`;
 
@@ -150,7 +152,7 @@ async function recordAttempt(context: AttemptContext, outcome: AttemptOutcome, e
 
 async function fetchProvider(url: string, init: RequestInit, context: AttemptContext): Promise<Response> {
   try {
-    const response = await fetch(url, init);
+    const response = await (url === ZENMUX_API_URL ? fetchZenmux(init) : fetch(url, init));
     if (!response.ok) {
       await recordAttempt(context, "http_error", {
         httpStatus: response.status,
@@ -160,7 +162,7 @@ async function fetchProvider(url: string, init: RequestInit, context: AttemptCon
     return response;
   } catch (error) {
     await recordAttempt(context, "network_error", {
-      errorCode: error instanceof DOMException && error.name === "AbortError" ? "aborted" : "network_error",
+      errorCode: getProviderNetworkError(error)?.code ?? "network_error",
     });
     throw error;
   }
@@ -829,13 +831,16 @@ export async function POST(request: NextRequest) {
             attempt: requestAttempt,
             requestId: request.headers.get(REQUEST_ID_HEADER),
           },
-        ).catch(() => ({
-          ok: false as const,
-          status: 502,
-          error: "Upstream request failed",
-          details: undefined,
-          recoveryAction: undefined,
-        })))
+        ).catch((error: unknown) => {
+          const networkError = getProviderNetworkError(error);
+          return {
+            ok: false as const,
+            status: networkError?.status ?? 502,
+            error: networkError?.error ?? "Upstream request failed",
+            details: undefined,
+            recoveryAction: undefined,
+          };
+        }))
       );
       if (
         tokenPayRequested &&
@@ -1262,6 +1267,14 @@ export async function POST(request: NextRequest) {
       throw error;
     }
   } catch (error) {
+    const networkError = getProviderNetworkError(error);
+    if (networkError) {
+      console.error("[api/chat] Upstream connection failed:", networkError.code);
+      return NextResponse.json(
+        { error: networkError.error, code: networkError.code },
+        { status: networkError.status },
+      );
+    }
     console.error("[api/chat] Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

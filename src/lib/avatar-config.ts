@@ -160,6 +160,13 @@ export function getDefaultIdleLips(): string {
 // URL 构建
 // ============================================
 
+export type AvatarFacing = "left" | "right";
+
+/** Notionists' shared head artwork faces right; mirror the whole figure to face left. */
+export function getAvatarScaleX(facing: AvatarFacing): 1 | -1 {
+  return facing === "left" ? -1 : 1;
+}
+
 export interface AvatarUrlOptions {
   seed: string;
   gender?: Gender;
