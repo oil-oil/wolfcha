@@ -1,6 +1,7 @@
 import { gsap } from "gsap";
 import { getAvatarScaleX, type AvatarFacing } from "@/lib/avatar-config";
 import type { MatchingPlayer, MatchedPlayer } from "./matching-characters";
+import { loadMatchingImage } from "./matching-assets";
 import { createCrowdStopSlots, createWalkingRoute, walkingRouteX, type CrowdStopSlot } from "./matching-motion";
 
 export interface CrowdSnapshot {
@@ -71,23 +72,6 @@ interface Peep {
 
 const randomRange = (min: number, max: number) => min + Math.random() * (max - min);
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    const timer = window.setTimeout(() => finish(false), 20_000);
-    function finish(ok: boolean) {
-      window.clearTimeout(timer);
-      image.onload = image.onerror = null;
-      if (ok) resolve(image);
-      else reject(new Error(`Unable to load matching image: ${src}`));
-    }
-    image.onload = () => { void image.decode().then(() => finish(true), () => finish(false)); };
-    image.onerror = () => finish(false);
-    image.src = src;
-  });
-}
-
 /**
  * Adapted from Skiper UI 39 and Zadvorsky's Crowd Simulator.
  * The original mode uses Open Peeps; matching uses the game's own Notionists.
@@ -120,7 +104,6 @@ export function createCrowdScene(canvas: HTMLCanvasElement, options: SceneOption
   let stopSlots: CrowdStopSlot[] = [];
   let activePlayers = options.players;
   let rosterVersion = 0;
-  const imageCache = new Map<string, Promise<HTMLImageElement>>();
 
   const peepScale = () => snapshot.variant === "original" ? 1 : options.compact ?
     Math.min(stage.width < 640 ? 0.5 : 0.72, stage.height / 1100) : stage.width < 640 ? 0.55 : 0.95;
@@ -650,12 +633,7 @@ export function createCrowdScene(canvas: HTMLCanvasElement, options: SceneOption
     try {
       const unique = [...new Map(players.map((player) => [player.id, player])).values()];
       const results = await Promise.allSettled(unique.map(async (player): Promise<Sprite> => {
-        let pending = imageCache.get(player.figureUrl);
-        if (!pending) {
-          pending = loadImage(player.figureUrl).catch((error) => { imageCache.delete(player.figureUrl); throw error; });
-          imageCache.set(player.figureUrl, pending);
-        }
-        const image = await pending;
+        const image = await loadMatchingImage(player.figureUrl);
         return { image, player, rect: [0, 0, image.naturalWidth, image.naturalHeight], width: 300, height: 300 };
       }));
       if (disposed || version !== rosterVersion) return;
@@ -681,7 +659,7 @@ export function createCrowdScene(canvas: HTMLCanvasElement, options: SceneOption
   async function loadSprites() {
     try {
       if (options.initial.variant === "original") {
-        const image = await loadImage(options.src);
+        const image = await loadMatchingImage(options.src);
         if (disposed) return;
         const width = image.naturalWidth / options.rows;
         const height = image.naturalHeight / options.cols;

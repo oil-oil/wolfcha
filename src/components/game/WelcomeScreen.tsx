@@ -22,6 +22,7 @@ import { LocaleSwitcher } from "@/components/game/LocaleSwitcher";
 import { CustomCharacterModal } from "@/components/game/CustomCharacterModal";
 import { useCustomCharacters } from "@/hooks/useCustomCharacters";
 import { useCredits, type ConsumeCreditResult } from "@/hooks/useCredits";
+import { scheduleMatchingAssetWarmup } from "@/components/matching/matching-assets";
 import { difficultyAtom, playerCountAtom, preferredRoleAtom } from "@/store/settings";
 import {
   getGeneratorModel,
@@ -258,6 +259,9 @@ export function WelcomeScreen({
 }: WelcomeScreenProps) {
   const t = useTranslations();
   const { locale } = useAppLocale();
+  useEffect(() => {
+    if (!isGenshinMode) return scheduleMatchingAssetWarmup();
+  }, [isGenshinMode]);
   const discordInviteUrl = "https://discord.gg/ETkdZWgy";
   const sponsorEmail = "zhihuang.oiloil@gmail.com";
   const sponsorMailto = useMemo(() => {

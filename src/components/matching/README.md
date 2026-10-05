@@ -91,4 +91,6 @@ const roster: MatchingRoster = {
 
 匹配模式使用游戏现有的 DiceBear 头像服务，没有新增头像库。原版素材在 `/images/peeps/all-peeps.png`。复用免费动效时保留 Skiper UI 署名，`MatchingAnimation` 已包含它。参见 [素材署名](../../../public/images/peeps/README.md)。
 
+欢迎页空闲时以低优先级、最多四个并发请求预热固定的 48 张人群素材；进入原神模式或离开欢迎页后停止排队，省流量模式跳过预热。动画实例和不同对局共享正在加载及已解码的图片，最多保留 128 张；失败请求移出缓存，正式入场仍可重试。完整刷新继续使用 DiceBear 的浏览器 HTTP 缓存。本局新随机头像首次出现时仍需下载，AI 生成角色的接口耗时由业务流程决定。
+
 验证名单、真实开局映射、原有行走轨迹和入场取消：`pnpm test:matching`。
