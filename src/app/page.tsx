@@ -46,13 +46,17 @@ import { GameTopBar } from "@/components/game/GameTopBar";
 import { GameMatchingEntrance } from "@/components/matching/GameMatchingEntrance";
 import { PlayerDetailModal } from "@/components/game/PlayerDetailModal";
 import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
-import { NightActionOverlay, type NightActionOverlayType } from "@/components/game/NightActionOverlay";
+import { NightActionOverlay } from "@/components/game/NightActionOverlay";
+import { WolfStrikeOverlay } from "@/components/game/WolfStrikeOverlay";
+import { wolfStrikeForSeat } from "@/lib/wolf-strike";
+import { getVisibleHunterHitSeats, getVisibleWhiteWolfHitSeats, getVisibleGuardTarget, getSkillTargetCursor, isHunterAiming, roleSkillForSeat } from "@/lib/role-skill-effects";
+import { SKILL_TARGET_CURSORS } from "@/lib/skill-cursors";
+import { useGameSkillEffects } from "@/hooks/useGameSkillEffects";
 import { TutorialOverlay, type TutorialPayload } from "@/components/game/TutorialOverlay";
 import { DevConsole, DevModeButton } from "@/components/DevTools";
 import { SettingsModal } from "@/components/game/SettingsModal";
 import { TokenPayRecoveryHost } from "@/components/game/TokenPayRecoveryHost";
 
-import { buildSimpleAvatarUrl, getModelLogoUrl } from "@/lib/avatar-config";
 import { audioManager, makeAudioTaskId } from "@/lib/audio-manager";
 import { getNarratorPlayer } from "@/lib/narrator-audio-player";
 import { resolveVoiceId, type AppLocale } from "@/lib/voice-constants";
@@ -74,16 +78,6 @@ const nightBgm = "/bgm/night.mp3";
 
 const WC_EYE_FEATHER_VAR = "--wc-eye-feather";
 const WC_LID_VAR = "--wc-lid";
-
-const getPlayerAvatarUrl = (player: Player, isGenshinMode: boolean) => {
-  const isModelAvatar = isGenshinMode && !player.isHuman;
-  if (isModelAvatar) {
-    return getModelLogoUrl(player.agentProfile?.modelRef);
-  }
-  return buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, {
-    gender: player.agentProfile?.persona?.gender,
-  });
-};
 
 const getRoleLabel = (role?: Role | null) => {
   const { t } = getI18n();
@@ -539,21 +533,13 @@ export default function Home() {
   const [hasShownRoleReveal, setHasShownRoleReveal] = useState(false);
   const [activeTutorial, setActiveTutorial] = useState<TutorialPayload | null>(null);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
-  const [nightActionOverlay, setNightActionOverlay] = useState<{
-    type: NightActionOverlayType;
-    id: number;
-    target?: { seat: number; name: string; avatarUrl?: string };
-  } | null>(null);
-  const nightActionOverlayTimerRef = useRef<number | null>(null);
+  const { wolfStrike, roleSkillEvent } = useGameSkillEffects(gameState, humanPlayer, showTable && !isRoleRevealOpen, isSoundEnabled, bgmVolume);
+  const hunterAiming = showTable && !isRoleRevealOpen && !gameState.isPaused && isHunterAiming(gameState, humanPlayer);
+  const hunterHitSeats = getVisibleHunterHitSeats(gameState, humanPlayer);
+  const whiteWolfHitSeats = getVisibleWhiteWolfHitSeats(gameState);
+  const guardProtectedSeat = getVisibleGuardTarget(gameState, humanPlayer);
   const showDevTools =
     process.env.NODE_ENV !== "production" && (process.env.NEXT_PUBLIC_SHOW_DEVTOOLS ?? "true") === "true";
-  const lastNightActionRef = useRef<{
-    wolfTarget?: number;
-    witchSave?: boolean;
-    witchPoison?: number;
-    seerTarget?: number;
-    hunterShotKey?: string | null;
-  }>({});
   
   // 检查玩家是否准备就绪（用于召集阶段显示加载状态）
   const isReady = useMemo(() => {
@@ -1018,100 +1004,6 @@ export default function Home() {
     });
   }, [showTable]);
 
-  const triggerNightOverlay = useCallback((type: NightActionOverlayType, targetSeat?: number) => {
-    if (!showTable) return;
-    if (isRoleRevealOpen) return;
-    const target =
-      typeof targetSeat === "number"
-        ? gameState.players.find((p) => p.seat === targetSeat)
-        : null;
-    const targetPayload = target
-      ? {
-          seat: target.seat,
-          name: target.displayName,
-          avatarUrl: getPlayerAvatarUrl(target, gameState.isGenshinMode ?? false),
-        }
-      : undefined;
-    setNightActionOverlay({ type, id: Date.now(), target: targetPayload });
-    if (nightActionOverlayTimerRef.current !== null) {
-      window.clearTimeout(nightActionOverlayTimerRef.current);
-    }
-    nightActionOverlayTimerRef.current = window.setTimeout(() => {
-      setNightActionOverlay(null);
-    }, 1500);
-  }, [gameState.players, gameState.isGenshinMode, isRoleRevealOpen, showTable]);
-
-  useEffect(() => {
-    if (!showTable) {
-      lastNightActionRef.current = {};
-      queueMicrotask(() => {
-        setNightActionOverlay(null);
-      });
-      return;
-    }
-
-    const { wolfTarget, witchSave, witchPoison, seerTarget } = gameState.nightActions;
-    const last = lastNightActionRef.current;
-    const role = humanPlayer?.role;
-    const isHumanAlive = humanPlayer?.alive;
-    const canSeeWolf = isWolfRole(role as Role) && isHumanAlive;
-    const canSeeWitch = role === "Witch" && isHumanAlive;
-    const canSeeSeer = role === "Seer" && isHumanAlive;
-    const canSeeHunter = role === "Hunter";
-
-    if (canSeeWolf && typeof wolfTarget === "number" && wolfTarget !== last.wolfTarget) {
-      queueMicrotask(() => {
-        triggerNightOverlay("wolf", wolfTarget);
-      });
-    }
-
-    if (canSeeWitch && witchSave && witchSave !== last.witchSave) {
-      queueMicrotask(() => {
-        triggerNightOverlay("witch-save", wolfTarget);
-      });
-    }
-
-    if (canSeeWitch && typeof witchPoison === "number" && witchPoison !== last.witchPoison) {
-      queueMicrotask(() => {
-        triggerNightOverlay("witch-poison", witchPoison);
-      });
-    }
-
-    if (canSeeSeer && typeof seerTarget === "number" && seerTarget !== last.seerTarget) {
-      queueMicrotask(() => {
-        triggerNightOverlay("seer", seerTarget);
-      });
-    }
-
-    const hunterShot =
-      gameState.nightHistory?.[gameState.day]?.hunterShot ||
-      gameState.dayHistory?.[gameState.day]?.hunterShot;
-    const hunterShotKey = hunterShot
-      ? `${gameState.day}-${hunterShot.hunterSeat}-${hunterShot.targetSeat}`
-      : null;
-    if (canSeeHunter && hunterShot && hunterShotKey && hunterShotKey !== last.hunterShotKey) {
-      queueMicrotask(() => {
-        triggerNightOverlay("hunter", hunterShot.targetSeat);
-      });
-    }
-
-    lastNightActionRef.current = {
-      wolfTarget,
-      witchSave,
-      witchPoison,
-      seerTarget,
-      hunterShotKey,
-    };
-  }, [
-    gameState.day,
-    gameState.dayHistory,
-    gameState.nightActions,
-    gameState.nightHistory,
-    humanPlayer,
-    showTable,
-    triggerNightOverlay,
-  ]);
-
   // ============ 交互逻辑 ============
 
   // 判断是否可以点击座位（使用状态机配置）
@@ -1225,6 +1117,8 @@ export default function Home() {
     return false;
   }, [gameState, gameState.phase, hasSelectableTargets, humanPlayer]);
 
+  const skillTargetCursor = getSkillTargetCursor(gameState, humanPlayer, showTable && !isRoleRevealOpen && !gameState.isPaused && isSelectionPhase && hasSelectableTargets);
+
   const renderPhaseIcon = () => {
     switch (gameState.phase) {
       case "NIGHT_SEER_ACTION":
@@ -1330,6 +1224,7 @@ export default function Home() {
         ) : (
           <motion.div
             key="game-stage"
+            data-skill-surface
             initial={{ opacity: 0, y: 10, filter: "blur(10px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: -10, filter: "blur(10px)" }}
@@ -1430,7 +1325,8 @@ export default function Home() {
               />
             )}
 
-            <NightActionOverlay overlay={nightActionOverlay} />
+            <NightActionOverlay event={roleSkillEvent} />
+            <WolfStrikeOverlay strike={wolfStrike} />
 
             <TutorialOverlay
               open={isTutorialOpen}
@@ -1477,7 +1373,7 @@ export default function Home() {
                       className="flex-1 flex flex-col min-h-0 overflow-hidden"
                     >
                 {/* 主布局 - 严格对齐 style-unification-preview.html */}
-                <div className="flex-1 flex gap-4 lg:gap-6 lg:px-6 lg:py-6 overflow-hidden w-full justify-center min-h-0">
+                <div className={`flex-1 flex gap-4 lg:gap-6 lg:px-6 lg:py-6 overflow-hidden w-full justify-center min-h-0 ${hunterAiming ? "wc-hunter-aiming" : ""}`} data-skill-cursor={skillTargetCursor ?? undefined} style={skillTargetCursor ? { "--wc-skill-cursor": SKILL_TARGET_CURSORS[skillTargetCursor] } as CSSProperties : undefined}>
                   {/* 左侧玩家卡片 */}
                   <div className="hidden md:flex w-[220px] lg:w-[240px] xl:w-[260px] 2xl:w-[300px] flex-col gap-3 shrink-0 overflow-y-auto overflow-x-visible scrollbar-hide pt-2 pb-2 px-1 -mx-1">
                     <AnimatePresence>
@@ -1511,6 +1407,13 @@ export default function Home() {
                             showRoleBadge={canShowRole}
                             showModel={gameState.phase === "GAME_END"}
                             selectionTone={selectionTone}
+                            wolfStrike={wolfStrikeForSeat(wolfStrike, player.seat)}
+                            roleSkill={roleSkillForSeat(roleSkillEvent, player.seat)}
+                            hunterLocked={hunterAiming && selectedSeat === player.seat}
+                            hunterHit={hunterHitSeats.has(player.seat)}
+                            whiteWolfHit={whiteWolfHitSeats.has(player.seat)}
+                            guardProtected={guardProtectedSeat === player.seat}
+                            isRevealedIdiot={gameState.roleAbilities.idiotRevealed && player.role === "Idiot"}
                             isInSelectionPhase={isSelectionPhase}
                           />
                         );
@@ -1586,6 +1489,13 @@ export default function Home() {
                               skipEntranceAnimation={!gameState.isGenshinMode}
                               showRoleBadge={canShowRole}
                               selectionTone={selectionTone}
+                              wolfStrike={wolfStrikeForSeat(wolfStrike, player.seat)}
+                              roleSkill={roleSkillForSeat(roleSkillEvent, player.seat)}
+                              hunterLocked={hunterAiming && selectedSeat === player.seat}
+                              hunterHit={hunterHitSeats.has(player.seat)}
+                              whiteWolfHit={whiteWolfHitSeats.has(player.seat)}
+                              guardProtected={guardProtectedSeat === player.seat}
+                              isRevealedIdiot={gameState.roleAbilities.idiotRevealed && player.role === "Idiot"}
                               isInSelectionPhase={isSelectionPhase}
                             />
                           );
@@ -1627,6 +1537,13 @@ export default function Home() {
                             showRoleBadge={canShowRole}
                             showModel={gameState.phase === "GAME_END"}
                             selectionTone={selectionTone}
+                            wolfStrike={wolfStrikeForSeat(wolfStrike, player.seat)}
+                            roleSkill={roleSkillForSeat(roleSkillEvent, player.seat)}
+                            hunterLocked={hunterAiming && selectedSeat === player.seat}
+                            hunterHit={hunterHitSeats.has(player.seat)}
+                            whiteWolfHit={whiteWolfHitSeats.has(player.seat)}
+                            guardProtected={guardProtectedSeat === player.seat}
+                            isRevealedIdiot={gameState.roleAbilities.idiotRevealed && player.role === "Idiot"}
                             isInSelectionPhase={isSelectionPhase}
                           />
                         );

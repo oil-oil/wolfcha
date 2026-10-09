@@ -1,0 +1,28 @@
+{
+  "sourceEntry": "clips/wolf-strike-a.wav",
+  "version": "User-approved V4 A",
+  "sha256": "a86d85967f13af196865bffdbebe697073df3e991f436909e79d0d57698e9177",
+  "bytes": 211244,
+  "durationMs": 1100,
+  "slashMs": 45,
+  "impactMs": 235,
+  "processing": "NONE — byte-identical to the approved WAV",
+  "sources": [
+    {
+      "id": "kenney-rpg-audio",
+      "title": "RPG Audio",
+      "author": "Kenney",
+      "page": "https://kenney.nl/assets/rpg-audio",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    {
+      "id": "oga-wet-impacts",
+      "title": "8 wet squish, slurp impacts",
+      "author": "Independent.nu (submitted by qubodup)",
+      "page": "https://opengameart.org/content/8-wet-squish-slurp-impacts",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+    }
+  ]
+}

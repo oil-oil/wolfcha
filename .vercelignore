@@ -3,3 +3,8 @@
 node_modules
 .next
 supabase/.temp
+
+# Local review evidence, runtime logs and rollback copies
+artifacts
+logs
+.local-backups

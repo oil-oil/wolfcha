@@ -9,6 +9,10 @@ import { cn } from "@/lib/utils";
 import { buildSimpleAvatarUrl, getModelLogoUrl, getAvatarScaleX, getAvatarBgColor, type AvatarFacing } from "@/lib/avatar-config";
 import { useTranslations } from "next-intl";
 import { PlayerAvatarPlaceholder } from "./PlayerAvatarPlaceholder";
+import { useWolfStrikeAvatar } from "@/hooks/useWolfStrikeAvatar";
+import type { WolfStrikeEvent } from "@/lib/wolf-strike";
+import { isKnownNightWolf, roleSkillForSeat, type RoleSkillEvent } from "@/lib/role-skill-effects";
+import { GuardProtectionMark, HunterAvatarMarks, IdiotCelebration, WhiteWolfClawMark } from "./PlayerSkillMarks";
 
 interface PlayerCardCompactProps {
   player: Player;
@@ -33,6 +37,13 @@ interface PlayerCardCompactProps {
   isInSelectionPhase?: boolean;
   className?: string;
   skipEntranceAnimation?: boolean;
+  wolfStrike?: WolfStrikeEvent | null;
+  roleSkill?: RoleSkillEvent | null;
+  hunterLocked?: boolean;
+  hunterHit?: boolean;
+  whiteWolfHit?: boolean;
+  guardProtected?: boolean;
+  isRevealedIdiot?: boolean;
   entrance?: {
     arrived: boolean;
     onAvatarRef: (element: HTMLDivElement | null) => void;
@@ -63,13 +74,23 @@ export function PlayerCardCompact({
   isInSelectionPhase = false,
   className,
   skipEntranceAnimation = false,
+  wolfStrike = null,
+  roleSkill = null,
+  hunterLocked = false,
+  hunterHit = false,
+  whiteWolfHit = false,
+  guardProtected = false,
+  isRevealedIdiot = false,
   entrance,
 }: PlayerCardCompactProps) {
   const t = useTranslations();
   const isDead = !player.alive;
   const isMe = player.isHuman;
   const isReady = isMe ? !!player.displayName?.trim() : !!player.agentProfile?.persona;
+  const isPublicIdiot = isRevealedIdiot && player.role === "Idiot";
   const isDisabledInSelection = isInSelectionPhase && !canClick && isReady && !isDead;
+  const playerSkill = roleSkillForSeat(roleSkill, player.seat);
+  const { avatarRef, cardRef, portraitRef, hitFrameRef, hitBackgroundRef, hit, isPoisonHit } = useWolfStrikeAvatar(wolfStrike, player.seat, playerSkill);
 
   const prevAliveRef = useRef<boolean>(player.alive);
   const prevIsReadyRef = useRef<boolean | null>(null);
@@ -102,6 +123,7 @@ export function PlayerCardCompact({
     isWolfRole(player.role) && 
     !player.isHuman;
   const showWolfTeamBadge = humanPlayer && isWolfRole(humanPlayer.role) && isWolfRole(player.role);
+  const knownNightWolf = isKnownNightWolf(player, humanPlayer, isNight);
   const selectionClass = (() => {
     if (!isSelected) return "";
     switch (selectionTone) {
@@ -141,7 +163,8 @@ export function PlayerCardCompact({
   const modelLabel = player.agentProfile?.modelRef?.model;
 
   const isModelAvatar = isGenshinMode && !player.isHuman;
-  const transparentAvatar = !isModelAvatar && skipEntranceAnimation;
+  // Keep the base color beneath a transparent portrait throughout the hit cue.
+  const transparentAvatar = !isModelAvatar;
   const avatarSrc = isModelAvatar
     ? getModelLogoUrl(player.agentProfile?.modelRef)
     : buildSimpleAvatarUrl(player.avatarSeed ?? player.playerId, {
@@ -149,8 +172,8 @@ export function PlayerCardCompact({
         ...(transparentAvatar ? { backgroundColor: "transparent" } : {}),
       });
   const avatarClassName = cn(
-    "w-full h-full transition-transform duration-500",
-    isModelAvatar ? "object-contain p-2 bg-[var(--bg-secondary)]" : "object-cover group-hover:scale-110",
+    "relative w-full h-full transition-transform duration-500",
+    isModelAvatar ? "object-contain p-2" : "object-cover group-hover:scale-110",
     isSpeaking && "border-[var(--color-gold)]"
   );
 
@@ -165,6 +188,7 @@ export function PlayerCardCompact({
 
   return (
     <motion.div
+      ref={cardRef}
       initial={skipEntranceAnimation ? false : { opacity: 0, y: 10, scale: 0.95 }}
       animate={
         deathPulse
@@ -191,6 +215,8 @@ export function PlayerCardCompact({
       onClick={handleClick}
       data-player-id={player.playerId}
       data-seat={player.seat}
+      data-wolf-hit-id={!isPoisonHit ? hit?.id : undefined}
+      data-poison-hit-id={isPoisonHit ? hit?.id : undefined}
       data-ready={entrance?.arrived}
       className={cn(
         "wc-player-card relative group transition-all duration-300",
@@ -225,28 +251,45 @@ export function PlayerCardCompact({
 
       {/* 头像区域 */}
       <div
-        ref={entrance?.onAvatarRef}
-        className="wc-player-card__avatar relative overflow-hidden"
+        ref={(element) => {
+          avatarRef.current = element;
+          entrance?.onAvatarRef(element);
+        }}
+        className={cn("wc-player-card__avatar relative overflow-hidden", knownNightWolf && "wc-player-card__avatar--known-wolf")}
         data-player-id={player.playerId}
         data-avatar-seat={player.seat}
         data-avatar-facing={isModelAvatar ? undefined : facing}
+        data-known-night-wolf={knownNightWolf || undefined}
+        style={{ backgroundColor: knownNightWolf ? undefined : isModelAvatar ? "var(--bg-secondary)" : `#${getAvatarBgColor(player.avatarSeed ?? player.playerId)}` }}
       >
+        {isReady && <div
+          className="absolute inset-0"
+          data-avatar-base
+          style={{
+            backgroundColor: knownNightWolf ? "transparent" : isModelAvatar ? "var(--bg-secondary)" : `#${getAvatarBgColor(player.avatarSeed ?? player.playerId)}`,
+            opacity: entrance ? "var(--arrival-progress, 0)" : undefined,
+          }}
+          aria-hidden="true"
+        />}
+        {isReady && hit && <span ref={hitBackgroundRef} className={cn("wc-wolf-hit-background", isPoisonHit && "wc-poison-hit")} aria-hidden="true" />}
         {entrance && <div className="absolute inset-0" style={{ opacity: "calc(1 - var(--arrival-progress, 0))" }} aria-hidden="true"><PlayerAvatarPlaceholder /></div>}
         <AnimatePresence mode="wait">
           {isReady ? (
             <motion.div
+              ref={portraitRef}
+              data-avatar-portrait
               key="avatar-image"
               initial={skipEntranceAnimation ? false : { opacity: 0, scale: 0.8, filter: "blur(8px)" }}
               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="w-full h-full"
+              className="relative z-[1] w-full h-full"
             >
               <div
-                className="w-full h-full"
+                className="relative w-full h-full"
+                data-avatar-art
                 data-avatar-facing={isModelAvatar ? undefined : facing}
                 style={{
                   transform: `scaleX(${isModelAvatar ? 1 : getAvatarScaleX(facing)})`,
-                  backgroundColor: transparentAvatar ? `#${getAvatarBgColor(player.avatarSeed ?? player.playerId)}` : undefined,
                   opacity: entrance ? "var(--arrival-progress, 0)" : undefined,
                 }}
               >
@@ -257,6 +300,7 @@ export function PlayerCardCompact({
                   onError={entrance?.onAvatarError}
                   crossOrigin={transparentAvatar ? "anonymous" : undefined}
                 />
+                <IdiotCelebration revealed={isPublicIdiot} />
               </div>
             </motion.div>
           ) : (
@@ -269,7 +313,11 @@ export function PlayerCardCompact({
             <span className="text-[10px] font-bold text-white tracking-widest border border-white/30 px-2 py-0.5 rounded-sm">RIP</span>
           </div>
         )}
+        <HunterAvatarMarks event={playerSkill} locked={hunterLocked} hit={hunterHit} />
+        <WhiteWolfClawMark event={playerSkill} hit={whiteWolfHit} />
+        <GuardProtectionMark protected={guardProtected} />
       </div>
+      {hit && <span ref={hitFrameRef} className={cn("wc-wolf-hit-frame", isPoisonHit && "wc-poison-hit")} aria-hidden="true" />}
 
       {/* 狼人队友标记 */}
       {showWolfTeamBadge && !isDead && isReady && (
@@ -302,9 +350,9 @@ export function PlayerCardCompact({
         </div>
       )}
 
-      {/* 自己的身份图标 */}
-      {isMe && !isDead && isReady && showRoleBadge && (
-        <div className="absolute bottom-0 right-0 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 bg-[var(--color-gold)] shadow-sm translate-x-1 translate-y-1 text-[10px] font-bold text-[var(--bg-dark)]">
+      {/* 自己的身份，以及已公开翻牌的白痴身份 */}
+      {isReady && (isPublicIdiot || (isMe && !isDead && showRoleBadge)) && (
+        <div data-public-role={isPublicIdiot ? "Idiot" : undefined} className="absolute bottom-0 right-0 px-1.5 py-0.5 rounded-sm flex items-center justify-center z-10 bg-[var(--color-gold)] shadow-sm translate-x-1 translate-y-1 text-[10px] font-bold text-[var(--bg-dark)]">
           {getRoleLabel(player.role)}
         </div>
       )}

@@ -1322,7 +1322,8 @@
       "tear": "撕毁警徽（不移交）"
     },
     "hunter": {
-      "skipShoot": "不开枪"
+      "skipShoot": "不开枪",
+      "chooseTargetAfterDeath": "你已被淘汰，请选择一个头像，开枪带走一名玩家"
     },
     "nightAction": {
       "wolfAwake": "狼人请睁眼",

@@ -2045,7 +2045,10 @@ export function useGameLogic() {
 
       await delay(1000);
       await waitForUnpause();
-      await runNightPhaseAction(currentState, token, "CONTINUE_NIGHT_AFTER_GUARD");
+      if (!isTokenValid(token)) return;
+      const latest = gameStateRef.current;
+      if (latest.gameId !== currentState.gameId || latest.phase !== "NIGHT_GUARD_ACTION") return;
+      await runNightPhaseAction(latest, token, "CONTINUE_NIGHT_AFTER_GUARD");
     }
     // 狼人击杀
     else if (gameState.phase === "NIGHT_WOLF_ACTION" && isWolfRole(humanPlayer.role)) {
@@ -2069,7 +2072,10 @@ export function useGameLogic() {
 
       await delay(800);
       await waitForUnpause();
-      await runNightPhaseAction(currentState, token, "CONTINUE_NIGHT_AFTER_WOLF");
+      if (!isTokenValid(token)) return;
+      const latest = gameStateRef.current;
+      if (latest.gameId !== currentState.gameId || latest.phase !== "NIGHT_WOLF_ACTION") return;
+      await runNightPhaseAction(latest, token, "CONTINUE_NIGHT_AFTER_WOLF");
     }
     // 女巫用药
     else if (gameState.phase === "NIGHT_WITCH_ACTION" && humanPlayer.role === "Witch") {
@@ -2095,7 +2101,10 @@ export function useGameLogic() {
 
       await delay(800);
       await waitForUnpause();
-      await runNightPhaseAction(currentState, token, "CONTINUE_NIGHT_AFTER_WITCH");
+      if (!isTokenValid(token)) return;
+      const latest = gameStateRef.current;
+      if (latest.gameId !== currentState.gameId || latest.phase !== "NIGHT_WITCH_ACTION") return;
+      await runNightPhaseAction(latest, token, "CONTINUE_NIGHT_AFTER_WITCH");
     }
     // 预言家查验
     else if (gameState.phase === "NIGHT_SEER_ACTION" && humanPlayer.role === "Seer") {
@@ -2168,11 +2177,13 @@ export function useGameLogic() {
 
       await continueAfterHunterShot(currentState, async (nextState) => {
         await delay(1200);
+        if (!isTokenValid(token)) return;
         if (diedAtNight) {
           let dayState = transitionPhase(nextState, "DAY_START");
           dayState = addSystemMessage(dayState, systemMessages.dayBreak);
           setGameState(dayState);
           await delay(800);
+          if (!isTokenValid(token)) return;
           await startDayPhaseInternal(dayState, token, { skipAnnouncements: true });
         } else {
           await proceedToNight(nextState, token);
@@ -2230,6 +2241,7 @@ export function useGameLogic() {
         const boomTarget = currentState.players.find((p) => p.seat === targetSeat);
         if (boomTarget?.role === "Hunter" && currentState.roleAbilities.hunterCanShoot) {
           await delay(1200);
+          if (!isTokenValid(token)) return;
           const hunterFn = hunterDeathRef.current;
           if (hunterFn) await hunterFn(currentState, boomTarget, false);
           return;
@@ -2243,9 +2255,10 @@ export function useGameLogic() {
       }
 
       await delay(1200);
+      if (!isTokenValid(token)) return;
       await proceedToNight(currentState, token);
     }
-  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGameSafely, transitionPhase, speakerHost, t, continueAfterHunterShot]);
+  }, [gameState, humanPlayer, setGameState, setDialogue, setIsWaitingForAI, waitForUnpause, getToken, isTokenValid, runNightPhaseAction, resolveNight, startDayPhaseInternal, proceedToNight, endGameSafely, transitionPhase, speakerHost, t, continueAfterHunterShot]);
 
   /** 人类白狼王自爆（进入 WHITE_WOLF_KING_BOOM 阶段） */
   const handleWhiteWolfKingBoom = useCallback(async () => {

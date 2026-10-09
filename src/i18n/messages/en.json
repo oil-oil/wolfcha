@@ -1264,7 +1264,8 @@
       "tear": "Tear the badge (no transfer)"
     },
     "hunter": {
-      "skipShoot": "Skip"
+      "skipShoot": "Skip",
+      "chooseTargetAfterDeath": "You have been eliminated. Choose a player's avatar to shoot and take them out."
     },
     "nightAction": {
       "wolfAwake": "Werewolves, open your eyes",

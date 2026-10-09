@@ -12,6 +12,8 @@
     "audit:character-generation:live": "node --env-file=.env.local --import tsx scripts/live-character-generation-audit.ts",
     "audit:full-game:live": "node --env-file=.env.local --import tsx scripts/live-full-game-audit.ts",
     "lint": "eslint",
+    "test:wolf-strike": "node --import tsx --test src/lib/wolf-strike.test.ts",
+    "test:role-skills": "node --import tsx --test src/lib/wolf-strike.test.ts src/lib/role-skill-effects.test.ts src/lib/game-skill-effects.test.ts src/lib/seer-water.test.ts src/hooks/useWolfStrikeAvatar.test.ts src/components/game/PlayerCardCompact.test.tsx src/components/game/DialogArea.test.tsx src/components/game/SeerWaterSurface.test.ts src/components/game/RoleSkillOverlays.test.tsx",
     "test:matching": "tsx --test src/components/matching/matching-roster.test.ts src/components/matching/matching-motion.test.ts src/components/matching/game-matching-roster.test.ts src/components/matching/matching-assets.test.ts src/lib/game-entry-gate.test.ts",
     "test:zenmux": "NODE_OPTIONS=--conditions=react-server tsx --test server/zenmux-*.test.ts",
     "test:tokenpay": "NODE_OPTIONS=--conditions=react-server tsx --test server/tokenpay-*.test.ts",

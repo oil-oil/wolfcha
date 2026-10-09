@@ -865,8 +865,16 @@ export function DialogArea({
     }, 100);
   }, [isTyping, isAtBottom]);
 
+  const showHunterTargetPrompt = phase === "HUNTER_SHOOT"
+    && humanPlayer?.role === "Hunter"
+    && !humanPlayer.alive
+    && gameState.roleAbilities.hunterCanShoot
+    && selectedSeat === null
+    && ![...Object.entries(gameState.dayHistory ?? {}), ...Object.entries(gameState.nightHistory ?? {})]
+      .some(([, record]) => record.hunterShot?.hunterSeat === humanPlayer.seat);
+
   // 空状态
-  if (gameState.messages.length === 0 && !currentDialogue) {
+  if (gameState.messages.length === 0 && !currentDialogue && !showHunterTargetPrompt) {
     return <GameLoadingState />;
   }
 
@@ -889,8 +897,9 @@ export function DialogArea({
     : (displayedText || currentSpeaker?.text || "");
   // When human has voted in badge election, show "你已经投票给 x 号" instead of "点击头像投票选警徽"
   const humanBadgeVote = humanPlayer ? gameState.badge.votes[humanPlayer.playerId] : undefined;
-  const dialogueText =
-    phase === "DAY_BADGE_ELECTION" &&
+  const dialogueText = showHunterTargetPrompt
+    ? t("dialog.hunter.chooseTargetAfterDeath")
+    : phase === "DAY_BADGE_ELECTION" &&
     humanPlayer &&
     typeof humanBadgeVote === "number" &&
     humanBadgeVote >= 0
@@ -899,6 +908,9 @@ export function DialogArea({
           return t("dialog.alreadyVotedFor", { seat: humanBadgeVote + 1, name: vp?.displayName || "" });
         })()
       : baseDialogueText;
+  const dialogueContent = waitingForNextRound && !showHunterTargetPrompt
+    ? t("dialog.nextRoundHint")
+    : dialogueText;
   const shouldShowDialogue = waitingForNextRound || dialogueText.trim().length > 0;
   const isNightActionPhase = [
     "NIGHT_GUARD_ACTION",
@@ -945,7 +957,7 @@ export function DialogArea({
   const showWitchPanel = phase === "NIGHT_WITCH_ACTION" && humanPlayer?.role === "Witch" && !isWaitingForAI;
   const showHumanInput = isHumanTurn && phase !== "GAME_END" && phase !== "DAY_BADGE_SIGNUP";
   const showDialogueBlock = !isHumanTurn
-    && (currentSpeaker || waitingForNextRound)
+    && (currentSpeaker || waitingForNextRound || showHunterTargetPrompt)
     && shouldShowDialogue
     && phase !== "GAME_END"
     && selectedSeat === null
@@ -1605,17 +1617,17 @@ export function DialogArea({
                     )}
                     
                     {/* 对话内容 - 带玩家标签，逐字输入效果，文字调大；流式时也用 * 渲染斜体 */}
-                    <div className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 pr-1 whitespace-pre-wrap break-words">
+                    <div data-hunter-choose-target={showHunterTargetPrompt || undefined} className="text-xl leading-relaxed text-[var(--text-primary)] flex-1 pr-1 whitespace-pre-wrap break-words">
                       {isTyping ? (
                         renderStreamingMarkdown(
-                          waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText,
+                          dialogueContent,
                           gameState.players,
                           isNight,
                           isGenshinMode
                         )
                       ) : (
                         <MentionsMarkdown
-                          content={waitingForNextRound ? t("dialog.nextRoundHint") : dialogueText}
+                          content={dialogueContent}
                           players={gameState.players}
                           isNight={isNight}
                           isGenshinMode={isGenshinMode}

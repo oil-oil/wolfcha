@@ -3596,413 +3596,91 @@ input[type="submit"]:not(:disabled),
   line-height: 1.8;
 }
 
-/* ========== Night Action Overlays (Abstract) ========== */
-.wc-night-action-overlay {
+/* ========== Role skills: bounded, transient presentation ========== */
+.wc-wolf-strike {
   position: fixed;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  width: min(52vw, 440px);
+  max-height: 56vh;
+  transform: translate(-50%, -50%);
   z-index: 58;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  isolation: isolate;
+  overflow: visible;
+  filter: drop-shadow(0 1px 3px rgba(38, 0, 0, 0.55));
 }
-
-.wc-night-action-overlay::before {
-  content: "";
+.wc-wolf-strike__mark { opacity: 0; }
+.wc-wolf-hit-frame {
   position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 28%, rgba(0, 0, 0, 0.5) 86%);
-  opacity: 0.4;
+  inset: -1px;
+  border: 2px solid var(--wc-hit-border, #ee5b62);
+  border-radius: inherit;
+  background: var(--wc-hit-tint, rgba(161, 35, 45, 0.2));
+  box-shadow: 0 0 14px 2px rgba(var(--wc-hit-rgb, 224, 51, 62), 0.6), inset 0 0 18px rgba(var(--wc-hit-rgb, 184, 35, 45), 0.28);
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
 }
-
-.wc-night-action-overlay::after {
-  content: "";
-  position: absolute;
-  inset: 0;
+.wc-wolf-hit-background { position: absolute; inset: 0; background: var(--wc-hit-solid, #b33240); opacity: 0; pointer-events: none; }
+.wc-skill-edge {
+  position: fixed; inset: 0; z-index: 54; pointer-events: none; opacity: 0; contain: paint;
   background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.035), transparent 40%),
-    radial-gradient(circle at 78% 68%, rgba(255, 255, 255, 0.025), transparent 45%);
-  mix-blend-mode: screen;
-  opacity: 0.35;
+    radial-gradient(ellipse 38vw 42vh at 0 0, rgba(var(--wc-aura-rgb), 0.54), rgba(var(--wc-aura-rgb), 0.12) 42%, transparent 76%),
+    radial-gradient(ellipse 38vw 42vh at 100% 0, rgba(var(--wc-aura-rgb), 0.5), rgba(var(--wc-aura-rgb), 0.11) 42%, transparent 76%),
+    radial-gradient(ellipse 38vw 42vh at 0 100%, rgba(var(--wc-aura-rgb), 0.5), rgba(var(--wc-aura-rgb), 0.1) 42%, transparent 76%),
+    radial-gradient(ellipse 38vw 42vh at 100% 100%, rgba(var(--wc-aura-rgb), 0.54), rgba(var(--wc-aura-rgb), 0.12) 42%, transparent 76%),
+    linear-gradient(90deg, rgba(var(--wc-aura-rgb), 0.11), transparent 12%, transparent 88%, rgba(var(--wc-aura-rgb), 0.11));
 }
-
-.wc-night-action-target {
-  position: absolute;
-  bottom: 12%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 14px;
-  background: rgba(9, 9, 12, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  color: var(--text-primary);
-  min-width: 200px;
-  justify-content: center;
-}
-
-.wc-night-action-target__avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.wc-night-action-target__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.wc-night-action-target__label {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.wc-night-action-target__name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* Screen shake for impact moments */
-.wc-night-action-overlay[data-variant="wolf"],
-.wc-night-action-overlay[data-variant="hunter"] {
-  animation: wc-night-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
-}
-
-@keyframes wc-night-shake {
-  10%, 90% { transform: translate3d(-2px, 0, 0); }
-  20%, 80% { transform: translate3d(4px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-  40%, 60% { transform: translate3d(6px, 0, 0); }
-}
-
-/* Wolf slash */
-.wc-night-wolf-flash {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(138, 28, 28, 0.42) 0%, transparent 70%);
-  opacity: 0;
-  mix-blend-mode: screen;
-  animation: wc-night-flash 0.7s ease-out forwards;
-}
-
-.wc-night-wolf-shade {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 40% 50%, rgba(60, 0, 0, 0.45), transparent 55%);
-  opacity: 0;
-  animation: wc-night-wolf-shade 0.9s ease-out forwards;
-}
-
-.wc-night-wolf-claws {
-  position: absolute;
-  width: min(70vw, 720px);
-  height: min(70vw, 720px);
-  transform: rotate(-12deg);
-  filter: drop-shadow(0 0 14px rgba(138, 28, 28, 0.6));
-}
-
-.wc-night-wolf-claw {
-  fill: none;
-  stroke: rgba(185, 54, 54, 0.95);
-  stroke-width: 6;
-  stroke-linecap: round;
-  stroke-dasharray: 260;
-  stroke-dashoffset: 260;
-  opacity: 0;
-}
-
-.wc-night-wolf-claw--1 { animation: wc-night-claw 0.45s ease-out 0.05s forwards; }
-.wc-night-wolf-claw--2 { animation: wc-night-claw 0.45s ease-out 0.12s forwards; }
-.wc-night-wolf-claw--3 { animation: wc-night-claw 0.45s ease-out 0.2s forwards; }
-
-@keyframes wc-night-claw {
-  0% { stroke-dashoffset: 260; opacity: 0; filter: blur(2px); }
-  30% { opacity: 1; filter: blur(0.5px); }
-  100% { stroke-dashoffset: 0; opacity: 0; filter: blur(1px); }
-}
-
-@keyframes wc-night-wolf-shade {
-  0% { opacity: 0; transform: scale(0.95); }
-  30% { opacity: 0.6; transform: scale(1.02); }
-  100% { opacity: 0; transform: scale(1); }
-}
-
-@keyframes wc-night-flash {
-  0% { opacity: 0; transform: scale(0.92); }
-  18% { opacity: 0.85; transform: scale(1.04); }
-  100% { opacity: 0; transform: scale(1); }
-}
-
-/* Witch save (heal) */
-.wc-night-heal-core {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow:
-    0 0 80px 36px rgba(197, 160, 89, 0.75),
-    0 0 160px 80px rgba(197, 160, 89, 0.28);
-  opacity: 0;
-  transform: scale(0.55);
-  animation: wc-night-heal-bloom 2.2s ease-out forwards;
-}
-
-.wc-night-heal-ring {
-  position: absolute;
-  border: 1px solid rgba(197, 160, 89, 0.35);
-  border-radius: 999px;
-  width: 10px;
-  height: 10px;
-  opacity: 0;
-}
-
-.wc-night-heal-ring--1 { animation: wc-night-ripple 2.2s ease-out 0s forwards; }
-.wc-night-heal-ring--2 { animation: wc-night-ripple 2.2s ease-out 0.6s forwards; }
-.wc-night-heal-ring--3 { animation: wc-night-ripple 2.2s ease-out 1.2s forwards; }
-
-.wc-night-heal-sparkles {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 30% 45%, rgba(255, 255, 255, 0.18) 0%, transparent 35%),
-    radial-gradient(circle at 70% 55%, rgba(255, 255, 255, 0.14) 0%, transparent 32%),
-    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.12) 0%, transparent 30%);
-  filter: blur(1px);
-  opacity: 0;
-  animation: wc-night-heal-sparkle 2.2s ease-out forwards;
-}
-
-@keyframes wc-night-heal-sparkle {
-  0% { opacity: 0; transform: scale(0.9); }
-  45% { opacity: 0.7; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.1); }
-}
-
-@keyframes wc-night-heal-bloom {
-  0% { opacity: 0; transform: scale(0.6); filter: blur(10px); }
-  45% { opacity: 1; transform: scale(1.35); filter: blur(20px); }
-  100% { opacity: 0; transform: scale(2.1); filter: blur(40px); }
-}
-
-@keyframes wc-night-ripple {
-  0% { width: 14px; height: 14px; opacity: 0.7; border-width: 2px; }
-  100% { width: 680px; height: 680px; opacity: 0; border-width: 0; }
-}
-
-/* Witch poison (mist + distortion) */
-.wc-night-poison-mist {
-  position: absolute;
-  inset: -50%;
-  background:
-    radial-gradient(circle at 30% 40%, rgba(107, 70, 193, 0.24), transparent 45%),
-    radial-gradient(circle at 70% 60%, rgba(74, 222, 128, 0.14), transparent 45%),
-    radial-gradient(circle at 50% 20%, rgba(180, 120, 255, 0.08), transparent 50%);
-  filter: blur(48px);
-  opacity: 0;
-  animation:
-    wc-night-mist-fade 0.7s ease-out forwards,
-    wc-night-mist-swirl 4.2s ease-in-out infinite alternate;
-}
-
-.wc-night-poison-distort {
-  position: absolute;
-  inset: 0;
-  backdrop-filter: blur(0px) hue-rotate(0deg);
-  animation: wc-night-distort 3.4s ease-in-out forwards;
-}
-
-.wc-night-poison-grain {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  mix-blend-mode: overlay;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0.5px, transparent 0.5px);
-  background-size: 3px 3px;
-  animation: wc-night-grain 1.8s ease-out forwards;
-}
-
-@keyframes wc-night-grain {
-  0% { opacity: 0; }
-  40% { opacity: 0.12; }
-  100% { opacity: 0; }
-}
-
-@keyframes wc-night-mist-fade {
-  to { opacity: 1; }
-}
-
-@keyframes wc-night-mist-swirl {
-  0% { transform: rotate(0deg) scale(1); }
-  100% { transform: rotate(10deg) scale(1.08); }
-}
-
-@keyframes wc-night-distort {
-  0% { backdrop-filter: blur(0px) hue-rotate(0deg); }
-  50% { backdrop-filter: blur(3px) hue-rotate(22deg); }
-  100% { backdrop-filter: blur(0px) hue-rotate(0deg); }
-}
-
-/* Hunter burst */
-.wc-night-hunter-flash {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 246, 233, 0.92);
-  opacity: 0;
-  animation: wc-night-flash-white 0.25s ease-out forwards;
-}
-
-.wc-night-hunter-burst {
-  position: absolute;
-  width: 2px;
-  height: 2px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 0 rgba(192, 86, 33, 0.38);
-  animation: wc-night-shockwave 0.65s ease-out forwards;
-}
-
-.wc-night-hunter-lines {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  animation: wc-night-impact 1s ease-out 0.1s forwards;
-}
-
-.wc-night-hunter-line {
-  position: absolute;
+.wc-poison-hit { --wc-hit-border: #c481ec; --wc-hit-solid: #8e45c1; --wc-hit-tint: rgba(116, 48, 167, 0.2); --wc-hit-rgb: 156, 78, 203; }
+.wc-player-card__avatar--known-wolf { background: #742431; border-color: #b94451; }
+.wc-role-skill-central {
+  position: fixed;
   top: 50%;
   left: 50%;
-  width: 50%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(192, 86, 33, 0.75), transparent);
-  transform-origin: left center;
-  transform: rotate(var(--wc-rot));
-}
-
-.wc-night-hunter-core {
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 246, 233, 0.7), transparent 70%);
-  filter: blur(8px);
-  opacity: 0;
-  animation: wc-night-hunter-core 0.8s ease-out forwards;
-}
-
-@keyframes wc-night-hunter-core {
-  0% { opacity: 0; transform: scale(0.7); }
-  30% { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.2); }
-}
-
-@keyframes wc-night-shockwave {
-  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.9); opacity: 1; }
-  50% { box-shadow: 0 0 0 48vw rgba(192, 86, 33, 0.3); opacity: 1; }
-  100% { box-shadow: 0 0 0 96vw rgba(192, 86, 33, 0); opacity: 0; }
-}
-
-@keyframes wc-night-flash-white {
-  0% { opacity: 0.75; }
-  100% { opacity: 0; }
-}
-
-@keyframes wc-night-impact {
-  0% { opacity: 0; transform: scale(0.92); }
-  20% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.08); }
-}
-
-/* Seer check */
-.wc-night-seer-lens {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(74, 144, 226, 0.18) 0%, transparent 70%);
-  opacity: 0;
-  mix-blend-mode: screen;
-  animation: wc-night-seer-lens 1.6s ease-out forwards;
-}
-
-.wc-night-seer-eye {
-  position: absolute;
-  width: 140px;
-  height: 140px;
-  border-radius: 999px;
-  border: 1px solid rgba(74, 144, 226, 0.35);
-  box-shadow:
-    0 0 24px rgba(74, 144, 226, 0.25),
-    inset 0 0 20px rgba(74, 144, 226, 0.18);
-  opacity: 0;
-  animation: wc-night-seer-eye 1.4s ease-out forwards;
-}
-
-.wc-night-seer-eye::before,
-.wc-night-seer-eye::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
+  width: min(58vw, 500px);
+  max-height: 62vh;
   transform: translate(-50%, -50%);
+  z-index: 58;
+  pointer-events: none;
+  overflow: visible;
 }
-
-.wc-night-seer-eye::before {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(74, 144, 226, 0.95) 0%, rgba(74, 144, 226, 0.4) 55%, transparent 70%);
-  box-shadow: 0 0 14px rgba(74, 144, 226, 0.45);
-}
-
-.wc-night-seer-eye::after {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.2) 65%, transparent 75%);
-  transform: translate(-20%, -35%);
-}
-
-.wc-night-seer-ring {
-  position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  border: 1px dashed rgba(74, 144, 226, 0.35);
-  opacity: 0;
-}
-
-.wc-night-seer-ring--1 {
-  animation: wc-night-seer-ring 1.6s ease-out 0.1s forwards;
-}
-
-.wc-night-seer-ring--2 {
-  animation: wc-night-seer-ring 1.6s ease-out 0.4s forwards;
-}
-
-@keyframes wc-night-seer-lens {
-  0% { opacity: 0; transform: scale(0.9); }
-  35% { opacity: 0.7; transform: scale(1.02); }
-  100% { opacity: 0; transform: scale(1.06); }
-}
-
-@keyframes wc-night-seer-eye {
-  0% { opacity: 0; transform: scale(0.7); filter: blur(6px); }
-  40% { opacity: 1; transform: scale(1); filter: blur(0); }
-  100% { opacity: 0; transform: scale(1.1); filter: blur(2px); }
-}
-
-@keyframes wc-night-seer-ring {
-  0% { opacity: 0.8; transform: scale(0.2); }
-  100% { opacity: 0; transform: scale(10); }
+.wc-skill-core, .wc-skill-fog { opacity: 0; transform-origin: 210px 210px; }
+.wc-poison-bubble { opacity: 0; }
+.wc-skull-sway { transform-origin: 210px 195px; }
+.wc-shield-piece, .wc-shield-seam, .wc-roaring-wolf { opacity: 0; transform-origin: 210px 210px; }
+.wc-roar-ray { opacity: 0; transform-origin: 210px 220px; }
+.wc-roar-echo, .wc-roar-grain { opacity: 0; }
+.wc-wolf-jaw { transform-origin: 210px 260px; }
+.wc-white-wolf-claws { position: absolute; inset: 0; pointer-events: none; z-index: 25; }
+.wc-white-wolf-claws svg { width: 100%; height: 100%; fill: none; }
+.wc-guard-protection { position: absolute; inset: 0; z-index: 24; pointer-events: none; }
+.wc-guard-protection svg { width: 100%; height: 100%; }
+[data-skill-cursor] { cursor: var(--wc-skill-cursor); }
+[data-skill-cursor] .wc-player-card--selectable, [data-skill-cursor] button { cursor: var(--wc-skill-cursor); }
+.wc-seer-water { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 58; pointer-events: none; overflow: hidden; }
+.wc-hunter-aiming, .wc-hunter-aiming .wc-player-card--selectable, .wc-hunter-aiming button { cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2232%22%20height%3D%2232%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%231b1714%22%20stroke-width%3D%223%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2210%22%2F%3E%3Cpath%20d%3D%22M16%202v9m0%2010v9M2%2016h9m10%200h9%22%2F%3E%3C%2Fg%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%23e4c492%22%20stroke-width%3D%221.2%22%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%2210%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%227.5%22%20opacity%3D%22.6%22%2F%3E%3Cpath%20d%3D%22M16%202v9m0%2010v9M2%2016h9m10%200h9M8%208l3%203m10%2010%203%203m0-16-3%203M11%2021l-3%203%22%2F%3E%3C%2Fg%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%221.2%22%20fill%3D%22%23f2d9b2%22%2F%3E%3C%2Fsvg%3E") 16 16, crosshair; }
+.wc-hunter-lock, .wc-hunter-bullet { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.wc-hunter-lock svg, .wc-hunter-bullet svg { width: 100%; height: 100%; }
+.wc-hunter-lock { color: #f0c684; filter: drop-shadow(0 1px 2px #1c120d); }
+.wc-hunter-lock svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.wc-hunter-bullet { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)); }
+.wc-idiot-party-hat { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 25; pointer-events: none; }
+.wc-idiot-confetti { position: fixed; inset: 0; z-index: 58; pointer-events: none; overflow: hidden; contain: paint; }
+.wc-idiot-confetti [data-confetti-piece] { position: absolute; width: 6px; height: 11px; border-radius: 1px; background: var(--piece-color); opacity: 0; }
+.wc-idiot-confetti [data-confetti-kind="ribbon"] { width: 12px; height: clamp(28px, 3vw, 42px); background: none; color: var(--piece-color); }
+.wc-idiot-confetti [data-confetti-kind="ribbon"] svg { width: 100%; height: 100%; overflow: visible; }
+.wc-idiot-confetti [data-confetti-kind="chip"] { width: 5px; height: 5px; border-radius: 50%; }
+.wc-idiot-confetti [data-confetti-corner="top-left"] { left: 12px; top: 12px; }
+.wc-idiot-confetti [data-confetti-corner="top-right"] { right: 12px; top: 12px; }
+.wc-idiot-confetti [data-confetti-corner="bottom-right"] { right: 12px; bottom: 12px; }
+.wc-idiot-confetti [data-confetti-corner="bottom-left"] { left: 12px; bottom: 12px; }
+.wc-idiot-clown { position: absolute; top: 48%; left: 50%; width: min(54vw, 250px); transform: translate(-50%, -50%); }
+.wc-idiot-clown svg { display: block; width: 100%; opacity: 0; transform-origin: 50% 62%; }
+@media (max-width: 767px) { .wc-idiot-clown { top: 41%; width: min(56vw, 215px); } }
+@media (max-width: 767px) {
+  .wc-wolf-strike { width: min(74vw, 360px); }
+  .wc-role-skill-central { width: min(88vw, 420px); }
+  .wc-royal-skill { top: 45%; width: min(82vw, 380px); }
 }
 
 /* ========== Sponsors - Background Stamps ========== */

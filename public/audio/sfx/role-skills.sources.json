@@ -1,0 +1,112 @@
+[
+  {
+    "filename": "idiot-skill.wav",
+    "purpose": "白痴技能音效，使用已确认的原素材末尾两秒。",
+    "duration_seconds": 2.0,
+    "sha256": "151c956809bb5fb65e82d072fc360d871560ae935e32b376a728f93562d62a62",
+    "author": "Tomlija",
+    "source_url": "https://freesound.org/people/Tomlija/sounds/105419/",
+    "source_license_identifier": "CC BY 3.0",
+    "source_license_url": "https://creativecommons.org/licenses/by/3.0/",
+    "prior_processing": "取原件末尾两秒；试听副本仅将 AIFF 无损转换为 WAV。"
+  },
+  {
+    "filename": "hunter-ready.wav",
+    "purpose": "猎人被夜间击杀后，进入技能准备／目标选择阶段。",
+    "duration_seconds": 0.5121315192743764,
+    "sha256": "01523ab136c24d9840bcf3bbd15a561b3e8562c19aed8610ca504a699ca71113",
+    "author": "Snapper4298",
+    "source_url": "https://freesound.org/people/Snapper4298/sounds/178186/",
+    "source_license_identifier": "CC BY 4.0",
+    "source_license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "prior_processing": "原件，无处理。"
+  },
+  {
+    "filename": "hunter-shot.wav",
+    "purpose": "猎人选定目标后，完成技能发动时的枪响；与准备声独立。",
+    "duration_seconds": 1.9178229166666667,
+    "sha256": "d9b3a5316181aafb92af2e8b57e8371fc4bc369d2141d05a946a0bc2f137b3d9",
+    "author": "okieactor",
+    "source_url": "https://freesound.org/people/okieactor/sounds/415912/",
+    "source_license_identifier": "CC0",
+    "source_license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "prior_processing": "原件，无处理。"
+  },
+  {
+    "filename": "seer-skill.wav",
+    "purpose": "用户选定预言家音效（853303）。",
+    "duration_seconds": 2.5,
+    "sha256": "316d684b0a2346e739388b93a49e05e6d1579e0018fe843387c9e213e980ace8",
+    "author": "TommasoMotteran",
+    "source_url": "https://freesound.org/people/TommasoMotteran/sounds/853303/",
+    "source_license_identifier": "CC BY 4.0",
+    "source_license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "prior_processing": "原件，无处理。"
+  },
+  {
+    "filename": "witch-poison-a.wav",
+    "sha256": "00d129fb28043804e70bf366c44864066ea4e245d97d2a37e035506e303fcc4c",
+    "duration_seconds": 1.48,
+    "source_version": "已通过 · V7 A",
+    "sourceIds": [
+      "spookymodem-acid"
+    ],
+    "sources": [
+      {
+        "id": "spookymodem-acid",
+        "title": "Bubbling Acid",
+        "author": "spookymodem",
+        "page": "https://opengameart.org/content/bubbling-acid",
+        "license": "CC BY 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/"
+      }
+    ]
+  },
+  {
+    "filename": "witch-antidote-b-compact.wav",
+    "sha256": "0b270b9518116a9e8bd80f9e566833c468f22b3b5895a4b043a21832b7f77381",
+    "duration_seconds": 1.6,
+    "source_version": "已通过 · V9 紧凑 B",
+    "sourceIds": [
+      "pmiller-wind-chimes"
+    ],
+    "sources": [
+      {
+        "id": "pmiller-wind-chimes",
+        "title": "Wind Chimes",
+        "author": "pmiller",
+        "page": "https://opengameart.org/content/wind-chimes",
+        "license": "CC0 1.0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    ]
+  },
+  {
+    "filename": "white-wolf-king-howl.wav",
+    "purpose": "白狼王发动自爆时的完整狼吼。",
+    "duration_seconds": 2.718095238095238,
+    "sha256": "d8f10a44fb60b855b1c6a57985433dc3e056cb68ab2f19787449402aafac9865",
+    "source_filename": "565848__maljwilliams__wolf.wav",
+    "author": "maljwilliams",
+    "source_url": "https://freesound.org/people/maljwilliams/sounds/565848/",
+    "source_license_text_original": "Attribution NonCommercial 4.0",
+    "source_license_identifier": "CC BY-NC 4.0",
+    "source_license_url_original": "https://creativecommons.org/licenses/by-nc/4.0/",
+    "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
+    "prior_processing": "原件，无处理。"
+  },
+  {
+    "filename": "guard-block.wav",
+    "purpose": "守卫守护／格挡音效。",
+    "duration_seconds": 1.8181859410430838,
+    "sha256": "c8484580898f7c0706c8a4af9fe66b645667b79f54da7740350977761e5df4ee",
+    "source_filename": "388895__mrthenoronha__single-iron-hit-hard-2.wav",
+    "author": "Mrthenoronha",
+    "source_url": "https://freesound.org/people/Mrthenoronha/sounds/388895/",
+    "source_license_text_original": "Attribution NonCommercial 4.0",
+    "source_license_identifier": "CC BY-NC 4.0",
+    "source_license_url_original": "https://creativecommons.org/licenses/by-nc/4.0/",
+    "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
+    "prior_processing": "原件，无处理。"
+  }
+]
