@@ -32,7 +32,11 @@ export function resolveAiVoiceAvailability(
   hasCustomTtsKey: boolean,
   hasCustomTokendanceKey = false,
 ): boolean {
-  return source === "project" || source === "tokenpay" || hasCustomTtsKey || hasCustomTokendanceKey;
+  return source === "custom" && (hasCustomTtsKey || hasCustomTokendanceKey);
+}
+
+export function isAiVoiceAvailable(): boolean {
+  return resolveAiVoiceAvailability(getModelSource(), hasMinimaxKey(), hasTokendanceKey());
 }
 
 function canUseStorage(): boolean {

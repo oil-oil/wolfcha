@@ -51,26 +51,23 @@ test("旧版本自动写入的 project 不会覆盖已连接的 TokenPay", () =>
   );
 });
 
-test("项目与 TokenPay 使用已授权的服务端语音，自定义来源需要本地语音 Key", () => {
-  assert.equal(resolveAiVoiceAvailability("project", false), true);
-  assert.equal(resolveAiVoiceAvailability("tokenpay", false), true);
-  assert.equal(resolveAiVoiceAvailability("tokenpay", true), true);
+test("TokenPay 暂停角色配音，即使本地保存了自有语音 Key", () => {
+  assert.equal(resolveAiVoiceAvailability("project", false), false);
+  assert.equal(resolveAiVoiceAvailability("project", true, true), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", false), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", true), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", false, true), false);
+  assert.equal(resolveAiVoiceAvailability("tokenpay", true, true), false);
   assert.equal(resolveAiVoiceAvailability("custom", false), false);
   assert.equal(resolveAiVoiceAvailability("custom", true), true);
   assert.equal(resolveAiVoiceAvailability("custom", false, true), true);
 });
 
-test("TokenPay 语音请求不混用已保存的自定义 Key，切换到自定义来源后才发送", async () => {
-  const { AudioManager } = await import("@/lib/audio-manager");
-  const audioManager = new AudioManager();
+test("项目 Key、TokenPay 和未配置语音 Key 的自有 Key 模式都不会发起 TTS 请求", async () => {
+  const { audioManager } = await import("@/lib/audio-manager");
   const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
-  const originalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
   const originalFetch = globalThis.fetch;
-  const values = new Map<string, string>([
-    ["wolfcha_guest_id", "guest_voice_test"],
-    ["wolfcha_minimax_api_key", "test-user-minimax-key"],
-    ["wolfcha_minimax_group_id", "test-user-minimax-group"],
-  ]);
+  const values = new Map<string, string>();
   const fakeWindow = new EventTarget() as EventTarget & {
     localStorage: Storage;
   };
@@ -88,40 +85,43 @@ test("TokenPay 语音请求不混用已保存的自定义 Key，切换到自定�
     } satisfies Storage,
   });
 
-  const requestHeaders: Headers[] = [];
+  let fetchCalls = 0;
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: fakeWindow,
   });
-  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: fakeWindow.localStorage });
-  globalThis.fetch = async (input, init) => {
-    assert.equal(input, "/api/tts");
-    requestHeaders.push(new Headers(init?.headers));
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
     return new Response(null, { status: 500 });
   };
 
   try {
-    setModelSource("tokenpay");
     audioManager.setEnabled(true);
-    assert.equal(audioManager.isEnabled(), true);
-    const task = {
-      id: "tokenpay-server-tts",
-      text: "测试",
-      voiceId: "voice",
-      playerId: "player",
-    };
-    await assert.rejects(audioManager.ensureReady(task), /TTS request failed: 500/);
-    assert.equal(requestHeaders.length, 1);
-    assert.equal(requestHeaders[0].get("X-Guest-Id"), "guest_voice_test");
-    assert.equal(requestHeaders[0].has("X-Minimax-Api-Key"), false);
-    assert.equal(requestHeaders[0].has("X-Minimax-Group-Id"), false);
-    assert.equal(requestHeaders[0].has("X-TokenPay-Mode"), false);
-
-    setModelSource("custom");
-    await assert.rejects(audioManager.ensureReady(task), /TTS request failed: 500/);
-    assert.equal(requestHeaders.length, 2);
-    assert.equal(requestHeaders[1].get("X-Minimax-Api-Key"), "test-user-minimax-key");
-    assert.equal(requestHeaders[1].get("X-Minimax-Group-Id"), "test-user-minimax-group");
+    for (const [source, hasVoiceKeys] of [
+      ["project", false], ["tokenpay", false], ["custom", false],
+      ["project", true], ["tokenpay", true],
+    ] as const) {
+      setModelSource(source);
+      if (hasVoiceKeys) {
+        values.set("wolfcha_minimax_api_key", "test-minimax-key");
+        values.set("wolfcha_minimax_group_id", "test-group-id");
+        values.set("wolfcha_tokendance_api_key", "test-tokendance-key");
+      }
+      assert.equal(audioManager.isEnabled(), false);
+      for (const ttsProvider of ["minimax", "tokendance"] as const) {
+        const task = {
+          id: `tokenpay-no-tts-${hasVoiceKeys}-${ttsProvider}`,
+          text: "测试",
+          voiceId: "voice",
+          playerId: "player",
+          ttsProvider,
+        };
+        await audioManager.ensureReady(task);
+        await audioManager.prefetchTasks([task]);
+        audioManager.addToQueue(task);
+      }
+    }
+    assert.equal(fetchCalls, 0);
   } finally {
     audioManager.setEnabled(false);
     globalThis.fetch = originalFetch;
@@ -130,8 +130,6 @@ test("TokenPay 语音请求不混用已保存的自定义 Key，切换到自定�
     } else {
       Reflect.deleteProperty(globalThis, "window");
     }
-    if (originalStorageDescriptor) Object.defineProperty(globalThis, "localStorage", originalStorageDescriptor);
-    else Reflect.deleteProperty(globalThis, "localStorage");
   }
 });
 

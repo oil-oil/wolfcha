@@ -229,6 +229,7 @@
       "masterDescription": "关闭后将静音所有音效",
       "aiVoice": "角色配音",
       "aiVoiceDescription": "控制 AI 角色语音播放",
+      "aiVoiceRequiresKey": "切换到自有 Key 模式并配置 TokenDance Key，或 MiniMax Key 和 Group ID 后可开启；语音费用由你承担。",
       "autoAdvance": "自动播放对话",
       "autoAdvanceDesc": "开启后将自动推进对话，无需按回车"
     },
@@ -2286,7 +2287,7 @@
     },
     "voice": {
       "title": "语音与音效（可选）",
-      "description": "配置 Minimax 后可启用语音播报与音效"
+      "description": "角色配音仅在自有 Key 模式下可用，使用你的 TokenDance Key 或下方的 MiniMax Key 和 Group ID，语音费用由你承担。"
     },
     "minimax": {
       "get": "获取 Minimax Key",

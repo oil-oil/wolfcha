@@ -6,7 +6,7 @@ import {
   getTokendanceBaseUrl,
   hasMinimaxKey,
   hasTokendanceKey,
-  resolveAiVoiceAvailability,
+  isAiVoiceAvailable,
 } from "@/lib/api-keys";
 import { getAuthHeaders } from "@/lib/auth-headers";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
@@ -52,8 +52,7 @@ export class AudioManager {
       headers["X-Tokendance-Base-Url"] = getTokendanceBaseUrl();
     }
 
-    // Project and TokenPay credentials stay on the server. User-supplied
-    // credentials are sent only while custom keys are the active source.
+    // TTS only uses user-supplied credentials while custom keys are active.
     if (provider === "minimax" && getModelSource() === "custom" && hasMinimaxKey()) {
       headers["X-Minimax-Api-Key"] = getMinimaxApiKey();
       headers["X-Minimax-Group-Id"] = getMinimaxGroupId();
@@ -85,11 +84,7 @@ export class AudioManager {
   }
 
   isEnabled(): boolean {
-    return this.enabled && resolveAiVoiceAvailability(
-      getModelSource(),
-      hasMinimaxKey(),
-      hasTokendanceKey(),
-    );
+    return this.enabled && isAiVoiceAvailable();
   }
 
   async ensureReady(task: AudioTask): Promise<void> {
@@ -118,10 +113,18 @@ export class AudioManager {
   }
 
   private async fetchAndCache(task: AudioTask) {
-    const ttsProvider = task.ttsProvider ?? "minimax";
+    if (!isAiVoiceAvailable()) throw new Error("Character voice requires your own TTS API key");
+    // A character's LLM provider does not determine which TTS key the user owns.
+    const ttsProvider: TtsProvider = task.ttsProvider === "tokendance" && hasTokendanceKey()
+      ? "tokendance"
+      : hasMinimaxKey() ? "minimax" : "tokendance";
+    const headers = await this.buildTtsHeaders(ttsProvider);
+    if (!headers["X-Tokendance-Api-Key"] && !headers["X-Minimax-Api-Key"]) {
+      throw new Error("Character voice credentials changed before the request");
+    }
     const response = await fetch("/api/tts", {
       method: "POST",
-      headers: await this.buildTtsHeaders(ttsProvider),
+      headers,
       body: JSON.stringify({ text: task.text, voiceId: task.voiceId, ttsProvider }),
     });
     if (!response.ok) {

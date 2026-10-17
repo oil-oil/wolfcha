@@ -70,3 +70,100 @@ test("旧 TTS 加载失败不能清掉已开始的新语音任务", async () => 
     assert.equal(h.audios.length, 1);
   } finally { h.restore(); }
 });
+
+test("缓冲 TTS 仅使用自有语音 Key，并按已配置的 Key 选择服务商", async () => {
+  const h = await setup();
+  const { makeAudioTaskId } = await import("./audio-manager");
+  const originalFetch = globalThis.fetch;
+  const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  const values = new Map<string, string>();
+  const fakeWindow = new EventTarget() as EventTarget & { localStorage: Storage };
+  Object.defineProperty(fakeWindow, "localStorage", {
+    configurable: true,
+    value: {
+      get length() { return values.size; },
+      clear: () => values.clear(),
+      getItem: (key: string) => values.get(key) ?? null,
+      key: (index: number) => [...values.keys()][index] ?? null,
+      removeItem: (key: string) => values.delete(key),
+      setItem: (key: string, value: string) => values.set(key, value),
+    } satisfies Storage,
+  });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: fakeWindow });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: fakeWindow.localStorage,
+  });
+
+  const requests: Array<{ url: string; body?: string; headers: Headers }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/demo-config") return Response.json({ active: false });
+    requests.push({ url, body: typeof init?.body === "string" ? init.body : undefined, headers: new Headers(init?.headers) });
+    return new Response(new Uint8Array([1, 2, 3]));
+  };
+
+  const internals = h.manager as unknown as {
+    fetchAndCache: (task: AudioTask) => Promise<void>;
+    getDurationMs: (url: string) => Promise<number>;
+  };
+  internals.getDurationMs = async () => 0;
+
+  try {
+    assert.equal(makeAudioTaskId("voice", "台词", "tokendance"), "tokendance::voice::台词");
+    assert.equal(makeAudioTaskId("voice", "台词"), "minimax::voice::台词");
+
+    const task: AudioTask = {
+      id: "custom-default",
+      text: "请投 3 号",
+      voiceId: "male-qn-jingying",
+      playerId: "player",
+    };
+    await assert.rejects(internals.fetchAndCache(task), /requires your own/);
+    assert.equal(requests.length, 0);
+
+    values.set("wolfcha_model_source", "custom");
+    values.set("wolfcha_model_source_explicit_v1", "true");
+    values.set("wolfcha_tokendance_api_key", "user-tokendance-key");
+    await internals.fetchAndCache(task);
+    await internals.fetchAndCache({
+      id: "tokendance-explicit",
+      text: "我选择 5 号",
+      voiceId: "male-qn-jingying",
+      playerId: "player",
+      ttsProvider: "minimax", // 没有 MiniMax Key 时使用已有的 TokenDance Key。
+    });
+
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url, "/api/tts");
+    assert.deepEqual(JSON.parse(requests[0].body ?? "{}"), {
+      text: "请投 3 号",
+      voiceId: "male-qn-jingying",
+      ttsProvider: "tokendance",
+    });
+    assert.equal(requests[0].headers.get("X-Tokendance-Api-Key"), "user-tokendance-key");
+    assert.equal(JSON.parse(requests[1].body ?? "{}").ttsProvider, "tokendance");
+
+    values.delete("wolfcha_tokendance_api_key");
+    values.set("wolfcha_minimax_api_key", "user-minimax-key");
+    values.set("wolfcha_minimax_group_id", "user-group");
+    await internals.fetchAndCache({ ...task, id: "minimax-key", ttsProvider: "tokendance" });
+    assert.equal(JSON.parse(requests[2].body ?? "{}").ttsProvider, "minimax");
+    assert.equal(requests[2].headers.get("X-Minimax-Api-Key"), "user-minimax-key");
+    assert.equal(requests[2].headers.get("X-Minimax-Group-Id"), "user-group");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindowDescriptor) {
+      Object.defineProperty(globalThis, "window", originalWindowDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "window");
+    }
+    if (originalLocalStorageDescriptor) {
+      Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
+    h.restore();
+  }
+});

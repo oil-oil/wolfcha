@@ -14,7 +14,7 @@ export interface AudioSettings {
 const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   bgmVolume: 0.35,
   isSoundEnabled: true,
-  isAiVoiceEnabled: true,
+  isAiVoiceEnabled: false,
   isGenshinMode: false,
   isAutoAdvanceDialogueEnabled: false,
   isSpectatorMode: false,

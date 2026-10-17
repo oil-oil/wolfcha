@@ -229,6 +229,7 @@
       "masterDescription": "Mute all sound effects when off",
       "aiVoice": "Character voice",
       "aiVoiceDescription": "Control AI character voice playback",
+      "aiVoiceRequiresKey": "Use custom-key mode with your TokenDance key, or a MiniMax key and Group ID, to enable voices. Voice usage is billed to you.",
       "autoAdvance": "Auto-advance dialogue",
       "autoAdvanceDesc": "Automatically advance dialogue without pressing Enter"
     },
@@ -2204,7 +2205,7 @@
     },
     "voice": {
       "title": "Voice & Sound (Optional)",
-      "description": "Configure Minimax to enable voice narration and sound effects"
+      "description": "Character voices require custom-key mode and your TokenDance key, or the MiniMax key and Group ID below. Voice usage is billed to you."
     },
     "minimax": {
       "get": "Get Minimax Key",

@@ -8,6 +8,7 @@ import type { GameState } from "@/types/game";
 import { aiLogger, type AILogEntry } from "@/lib/ai-logger";
 import { useTranslations } from "next-intl";
 import { useAppLocale } from "@/i18n/useAppLocale";
+import { useAiVoiceAvailability } from "@/hooks/useAiVoiceAvailability";
 
 interface SoundSettingsSectionProps {
   bgmVolume: number;
@@ -49,6 +50,7 @@ export function SoundSettingsSection({
 }: SoundSettingsSectionProps) {
   const t = useTranslations();
   const volumePercent = Math.round(bgmVolume * 100);
+  const aiVoiceAvailable = useAiVoiceAvailability();
 
   return (
     <div className="space-y-5">
@@ -78,12 +80,13 @@ export function SoundSettingsSection({
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="text-sm font-medium text-[var(--text-primary)]">{t("settings.audio.aiVoice")}</div>
-          <div className="text-xs text-[var(--text-muted)]">{t("settings.audio.aiVoiceDescription")}</div>
+          <div className="text-xs text-[var(--text-muted)]">{t(aiVoiceAvailable ? "settings.audio.aiVoiceDescription" : "settings.audio.aiVoiceRequiresKey")}</div>
         </div>
         <Switch
-          checked={isAiVoiceEnabled}
+          checked={isAiVoiceEnabled && aiVoiceAvailable}
           onCheckedChange={onAiVoiceEnabledChange}
-          disabled={!isSoundEnabled}
+          disabled={!isSoundEnabled || !aiVoiceAvailable}
+          className="shrink-0"
         />
       </div>
 

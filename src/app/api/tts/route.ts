@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateRequest, hasAuthorizedActiveGameSession } from "@/lib/api-auth";
-import {
-  GAME_SESSION_EXPIRED_CODE,
-  GAME_SESSION_EXPIRED_MESSAGE,
-} from "@/lib/game-session-policy";
+import { authenticateRequest } from "@/lib/api-auth";
 import type { IncomingHttpHeaders } from "node:http";
 import * as https from "node:https";
 import { URL } from "node:url";
@@ -32,26 +28,17 @@ export async function POST(req: NextRequest) {
   const headerApiKey = req.headers.get("x-minimax-api-key")?.trim();
   const headerGroupId = req.headers.get("x-minimax-group-id")?.trim();
   const headerTokendanceKey = req.headers.get("x-tokendance-api-key")?.trim();
-  const hasCustomTtsKey = ttsProvider === "tokendance"
-    ? Boolean(headerTokendanceKey)
-    : Boolean(headerApiKey || headerGroupId);
+  const apiKey = ttsProvider === "tokendance" ? headerTokendanceKey : headerApiKey;
 
-  if (ttsProvider === "minimax" && hasCustomTtsKey && (!headerApiKey || !headerGroupId)) {
+  if (ttsProvider === "minimax" && (headerApiKey || headerGroupId) && (!headerApiKey || !headerGroupId)) {
     return NextResponse.json({ error: "MiniMax API key and group ID are both required" }, { status: 400 });
   }
 
-  if (!hasCustomTtsKey) {
-    const sessionId = req.headers.get("x-game-session-id")?.trim() || null;
-    const hasAuthorizedSession = await hasAuthorizedActiveGameSession(auth.user.id, sessionId);
-    if (!hasAuthorizedSession) {
-      return NextResponse.json(
-        {
-          error: GAME_SESSION_EXPIRED_MESSAGE,
-          code: GAME_SESSION_EXPIRED_CODE,
-        },
-        { status: 409 },
-      );
-    }
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Character voice requires your own API key for the selected TTS provider", code: "tts_custom_key_required" },
+      { status: 403 },
+    );
   }
 
   try {
@@ -62,15 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing text or voiceId" }, { status: 400 });
     }
 
-    const apiKey = ttsProvider === "tokendance"
-      ? (hasCustomTtsKey ? headerTokendanceKey : process.env.TOKENDANCE_API_KEY)?.trim()
-      : (hasCustomTtsKey ? headerApiKey : process.env.MINIMAX_API_KEY)?.trim();
-    const groupId = hasCustomTtsKey ? headerGroupId : process.env.MINIMAX_GROUP_ID;
-
-    if (!apiKey || (ttsProvider === "minimax" && !groupId)) {
-      console.error(`Missing ${ttsProvider === "tokendance" ? "TokenDance" : "MiniMax"} TTS credentials`);
-      return NextResponse.json({ error: "TTS server configuration error" }, { status: 500 });
-    }
+    const groupId = headerGroupId;
 
     // MiniMax T2A V2 API Endpoint
     // 参考文档：https://platform.minimaxi.com/document/T2A%20V2
@@ -308,9 +287,9 @@ export async function POST(req: NextRequest) {
     }
 
     // The TokenDance branch above has returned. From here on, MiniMax's
-    // native T2A endpoint always has both server or user credentials.
-    if (!apiKey || !groupId) {
-      return NextResponse.json({ error: "MiniMax TTS server configuration error" }, { status: 500 });
+    // native T2A endpoint always has both user credentials.
+    if (!groupId) {
+      return NextResponse.json({ error: "MiniMax group ID is required" }, { status: 400 });
     }
 
     const pickFallbackVoiceId = (badVoiceId: string) => {

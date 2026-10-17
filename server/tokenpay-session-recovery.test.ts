@@ -17,22 +17,18 @@ test("本地恢复与服务端授权共用同一个有效期", () => {
 });
 
 test("对局授权失效与余额不足使用不同错误码", () => {
-  for (const source of [chatRouteSource, ttsRouteSource]) {
-    assert.match(source, /GAME_SESSION_EXPIRED_CODE/);
-    assert.match(source, /GAME_SESSION_EXPIRED_MESSAGE/);
-  }
+  assert.match(chatRouteSource, /GAME_SESSION_EXPIRED_CODE/);
+  assert.match(chatRouteSource, /GAME_SESSION_EXPIRED_MESSAGE/);
   assert.doesNotMatch(
     chatRouteSource,
     /!hasAuthorizedSession\)[\s\S]{0,180}Insufficient credits/,
   );
 });
 
-test("仅自定义来源发送用户 MiniMax Key，服务端语音始终校验对局授权", () => {
-  assert.match(audioManagerSource, /resolveAiVoiceAvailability/);
-  assert.match(audioManagerSource, /getModelSource\(\) === "custom" && hasMinimaxKey\(\)/);
+test("TokenPay 无自有语音 Key 时不会调用项目 MiniMax", () => {
+  // Behavioral coverage lives in tokenpay-model-source.test.ts and audio-manager.test.ts.
   assert.doesNotMatch(audioManagerSource, /X-TokenPay-Mode/);
   assert.doesNotMatch(ttsRouteSource, /hasAuthorizedActiveTokenPaySession/);
-  assert.match(ttsRouteSource, /hasAuthorizedActiveGameSession\(auth\.user\.id, sessionId\)/);
 });
 
 test("TokenPay 授权失效会同步存储、模型来源与页面连接状态", () => {
