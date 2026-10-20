@@ -12,7 +12,7 @@ export function WatchaPayPurchase({ onCreditsChange }: { onCreditsChange?: () =>
   const t = useTranslations("customKey.payAsYouGo");
   const [purchase, setPurchase] = useState<Purchase | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<{ unavailable: boolean; traceId?: string } | null>(null);
   const [qrFailed, setQrFailed] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
   useEffect(() => () => activeRequest.current?.abort(), []);
@@ -23,9 +23,10 @@ export function WatchaPayPurchase({ onCreditsChange }: { onCreditsChange?: () =>
     activeRequest.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15_000);
     setLoading(true);
-    setError(false);
+    setError(null);
     setPurchase(null);
     setQrFailed(false);
+    let failure: { unavailable: boolean; traceId?: string } | null = null;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session || controller.signal.aborted) throw new Error("Unauthorized");
@@ -35,6 +36,13 @@ export function WatchaPayPurchase({ onCreditsChange }: { onCreditsChange?: () =>
         signal: controller.signal,
       });
       const data = await response.json();
+      if (data.code === "watcha_pay_unavailable") {
+        failure = {
+          unavailable: true,
+          ...(typeof data.traceId === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(data.traceId)
+            ? { traceId: data.traceId } : {}),
+        };
+      }
       if (!response.ok || data.access === "unavailable" || !data.purchaseUrl) throw new Error("Unavailable");
       if (controller.signal.aborted) return;
       setPurchase(data);
@@ -42,7 +50,7 @@ export function WatchaPayPurchase({ onCreditsChange }: { onCreditsChange?: () =>
         window.location.assign(data.purchaseUrl);
       }
     } catch {
-      setError(true);
+      setError(failure ?? { unavailable: false });
     } finally {
       clearTimeout(timeout);
       activeRequest.current = null;
@@ -65,7 +73,10 @@ export function WatchaPayPurchase({ onCreditsChange }: { onCreditsChange?: () =>
       <Button type="button" onClick={handlePurchase} disabled={loading} className="w-full">
         {loading ? t("redirecting") : t("watchaPayPurchase")}
       </Button>
-      {error && <p role="alert" className="text-sm text-red-500">{t("error")}</p>}
+      {error && <div role="alert" className="space-y-1 text-sm text-red-500">
+        <p>{t(error.unavailable ? "watchaPayUnavailable" : "error")}</p>
+        {error.traceId && <p className="break-all text-xs">{t("watchaPayTraceId", { id: error.traceId })}</p>}
+      </div>}
       {purchase && qrValue && (
         <div className="flex flex-col items-center gap-3" aria-live="polite">
           <p className="text-sm">{t("watchaPayScan")}</p>
