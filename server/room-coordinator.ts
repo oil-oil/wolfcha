@@ -1,9 +1,11 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   advanceMultiplayerGame,
   applyMultiplayerGameCommand,
   buildStartedRoomState,
   normalizeMultiplayerPlayerCount,
+  listPendingMultiplayerAiActions,
   projectMultiplayerState,
   stampMultiplayerDeadline,
   takeOverMultiplayerPlayer,
@@ -83,18 +85,59 @@ export class RoomCoordinator {
     const normalized = this.normalizeJoin(input); if (!normalized) return error("INVALID_INPUT", "加入参数无效");
     const existing = await this.store.getRoom(normalized.code); if (!existing) return error("ROOM_NOT_FOUND", "房间不存在");
     return this.lock(existing.room.id, async () => {
-      const aggregate = await this.store.getRoom(existing.room.id); if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
-      const current = aggregate.members.find((m) => m.userId === userId);
-      if (aggregate.room.status !== "lobby" && !current) return error("ROOM_CONFLICT", "游戏已经开始");
-      if (current) { current.displayName = normalized.displayName; current.isConnected = true; const version = await this.store.saveMember(aggregate.room.id, current, aggregate.room.version, { type: "member_rejoined", payload: { userId, seat: current.seat }, actorUserId: userId }); if (version === null) return error("ROOM_CONFLICT", "房间状态已变化"); const refreshed = await this.store.getRoom(aggregate.room.id); return refreshed ? ok(this.view(refreshed, userId)) : error("INTERNAL_ERROR", "房间读取失败"); }
-      const capacity = normalizeMultiplayerPlayerCount(aggregate.room.settings.playerCount);
-      const occupied = new Set(aggregate.members.filter((m) => m.role !== "spectator" && m.seat !== null).map((m) => m.seat));
-      const seat = [...Array(capacity).keys()].find((candidate) => !occupied.has(candidate));
-      if (seat === undefined) return error("ROOM_FULL", "房间已满");
-      const member: MultiplayerRoomMember = { userId, displayName: normalized.displayName, role: "player", seat, isReady: false, isConnected: true };
-      const version = await this.store.saveMember(aggregate.room.id, member, aggregate.room.version, { type: "member_joined", payload: { userId, seat }, actorUserId: userId });
-      if (version === null) return error("ROOM_CONFLICT", "房间状态已变化");
-      const refreshed = await this.store.getRoom(aggregate.room.id); return refreshed ? ok(this.view(refreshed, userId)) : error("INTERNAL_ERROR", "房间读取失败");
+      // A bounded CAS retry also makes duplicate joins from separate server workers
+      // converge on the same member instead of allocating a second seat or failing.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const aggregate = await this.store.getRoom(existing.room.id);
+        if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
+        const current = aggregate.members.find((member) => member.userId === userId);
+        if (aggregate.room.status !== "lobby" && !current) return error("ROOM_CONFLICT", "游戏已经开始");
+        if (current && aggregate.room.status !== "lobby") {
+          // Re-entering a running/finished/closed game restores presence only.
+          // In particular, a timed-out spectator remains detached from game identity.
+          await this.store.setPresence(aggregate.room.id, userId, true);
+          const refreshed = await this.store.getRoom(aggregate.room.id);
+          return refreshed ? ok(this.view(refreshed, userId)) : error("ROOM_NOT_FOUND", "房间不存在");
+        }
+        if (current && current.role !== "spectator" && current.seat !== null && current.isConnected && current.displayName === normalized.displayName) {
+          return ok(this.view(aggregate, userId));
+        }
+
+        const capacity = normalizeMultiplayerPlayerCount(aggregate.room.settings.playerCount);
+        const occupied = new Set(aggregate.members.filter((member) => member.role !== "spectator" && member.seat !== null).map((member) => member.seat));
+        let member: MultiplayerRoomMember;
+        let eventType: string;
+        if (current) {
+          current.displayName = normalized.displayName;
+          current.isConnected = true;
+          if (current.role === "spectator" || current.seat === null) {
+            const seat = [...Array(capacity).keys()].find((candidate) => !occupied.has(candidate));
+            if (seat === undefined) return error("ROOM_FULL", "房间已满");
+            current.role = "player";
+            current.seat = seat;
+            current.isReady = false;
+          }
+          member = current;
+          eventType = "member_rejoined";
+        } else {
+          const seat = [...Array(capacity).keys()].find((candidate) => !occupied.has(candidate));
+          if (seat === undefined) return error("ROOM_FULL", "房间已满");
+          member = { userId, displayName: normalized.displayName, role: "player", seat, isReady: false, isConnected: true };
+          eventType = "member_joined";
+        }
+        const version = await this.store.saveMember(aggregate.room.id, member, aggregate.room.version, {
+          type: eventType,
+          payload: { userId, seat: member.seat },
+          actorUserId: userId,
+        });
+        if (version !== null) {
+          const refreshed = await this.store.getRoom(aggregate.room.id);
+          return refreshed ? ok(this.view(refreshed, userId)) : error("INTERNAL_ERROR", "房间读取失败");
+        }
+        // A concurrent join may have committed this same user, or another member
+        // may have consumed the candidate seat. Re-read and recalculate before failing.
+      }
+      return error("ROOM_CONFLICT", "房间状态已变化，请刷新");
     });
   }
 
@@ -102,11 +145,34 @@ export class RoomCoordinator {
     const key = typeof roomIdOrCode === "string" ? roomIdOrCode.trim() : ""; if (!key) return error("INVALID_INPUT", "房间标识无效");
     const aggregate = await this.store.getRoom(key); if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
     const member = aggregate.members.find((item) => item.userId === userId); if (!member) return error("FORBIDDEN", "你不是该房间成员");
+    if (aggregate.room.status === "lobby" && (member.role === "spectator" || member.seat === null)) {
+      // Reuse join's locked re-read and CAS seat allocation. Do this before
+      // acquiring resume's presence lock to avoid recursively locking the room.
+      return this.join(userId, { code: aggregate.room.code, displayName: member.displayName });
+    }
     return this.lock(aggregate.room.id, async () => { await this.store.setPresence(aggregate.room.id, userId, true); const current = await this.store.getRoom(aggregate.room.id); return current ? ok(this.view(current, userId)) : error("ROOM_NOT_FOUND", "房间不存在"); });
   }
 
   async ready(userId: string, roomId: string, isReady: boolean, expectedVersion: number): Promise<MultiplayerRoomAck> {
-    return this.mutateMember(userId, roomId, expectedVersion, async (aggregate, member) => { if (aggregate.room.status !== "lobby") return { code: "ROOM_CONFLICT", message: "房间已开始" }; member.isReady = Boolean(isReady); return null; }, "member_ready");
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) return error("INVALID_INPUT", "房间版本无效");
+    return this.lock(roomId, async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const aggregate = await this.store.getRoom(roomId);
+        if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
+        if (aggregate.room.status !== "lobby" || expectedVersion > aggregate.room.version) return error("ROOM_CONFLICT", "房间状态已变化，请查看最新状态");
+        const member = aggregate.members.find(item => item.userId === userId && item.role !== "spectator" && item.seat !== null);
+        if (!member) return error("FORBIDDEN", "你当前没有玩家席位");
+        if (member.isReady === isReady) return ok(this.view(aggregate, userId));
+        // Readiness is an absolute per-user value. Unrelated members' updates can
+        // safely rebase, while game commands retain their strict version checks.
+        const version = await this.store.saveMember(roomId, { ...member, isReady }, aggregate.room.version, { type: "member_ready", payload: { userId }, actorUserId: userId });
+        if (version !== null) {
+          const current = await this.store.getRoom(roomId);
+          return current ? ok(this.view(current, userId)) : error("ROOM_NOT_FOUND", "房间不存在");
+        }
+      }
+      return error("ROOM_CONFLICT", "准备状态更新冲突，请重试");
+    });
   }
 
   async start(userId: string, roomId: string, expectedVersion: number, gameSessionId?: string | null): Promise<MultiplayerRoomAck> {
@@ -194,10 +260,14 @@ export class RoomCoordinator {
         return error("ROOM_CONFLICT", "当前房间不接受游戏动作");
       }
 
+      if (aggregate.room.version !== command.expectedVersion) {
+        return error("ROOM_CONFLICT", "牌局状态已变化，请按最新状态重试");
+      }
       let nextState;
       try {
         nextState = applyMultiplayerGameCommand(
-          aggregate.room.serverState,
+          // The room CAS is authoritative, including older saves whose member updates drifted the inner version.
+          { ...aggregate.room.serverState, version: aggregate.room.version },
           userId,
           command,
           { autoAi: false },
@@ -245,9 +315,15 @@ export class RoomCoordinator {
     return this.lock(roomId, async () => {
       const aggregate = await this.store.getRoom(roomId);
       if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
+      const member = aggregate.members.find((item) => item.userId === userId);
+      if (!member) return error("FORBIDDEN", "你不是该房间成员");
+      if (member.role === "spectator") {
+        await this.closeUnattendedRoom(aggregate);
+        await this.store.setPresence(roomId, userId, false);
+        const current = await this.store.getRoom(roomId);
+        return current ? ok(this.view(current, userId)) : error("ROOM_NOT_FOUND", "房间不存在");
+      }
       if (aggregate.room.version !== expectedVersion) return error("ROOM_CONFLICT", "房间状态已变化，请刷新");
-      const member = aggregate.members.find((item) => item.userId === userId && item.role !== "spectator");
-      if (!member) return error("FORBIDDEN", "你不是该房间玩家");
       const remainingHumans = aggregate.members.filter(
         (item) => item.userId !== userId && item.role !== "spectator",
       );
@@ -319,25 +395,30 @@ export class RoomCoordinator {
             .map((player) => player.userId as string);
       next.version = expectedVersion + 1;
       const finished = next.phase === "GAME_END" || next.winner !== null;
+      const unattended = !finished && !this.hasHumanMember(aggregate, next);
+      if (unattended) { next.deadlineAt = null; next.turnKey = null; }
+      const status = finished ? "finished" : unattended ? "closed" : "in_game";
+      const eventType = finished ? "game_finished" : unattended ? "room_closed" : "turn_expired";
       const result = turnKey.startsWith("ai:")
         ? await this.store.applyCommand(
         roomId,
         expectedVersion,
         `timeout:${turnKey}:${expectedVersion}`,
         aggregate.room.hostUserId,
-        { status: finished ? "finished" : "in_game", phase: next.phase, day: next.day, winner: next.winner, serverState: next },
-        { type: finished ? "game_finished" : "turn_expired", payload: { turnKey }, visibility: "public" },
+        { status, phase: next.phase, day: next.day, winner: next.winner, serverState: next },
+        { type: eventType, payload: { turnKey }, visibility: "public" },
       )
         : await this.store.applyTimeout(
           roomId,
           expectedVersion,
           `timeout:${turnKey}:${expectedVersion}`,
           timedOutUserIds,
-          { status: finished ? "finished" : "in_game", phase: next.phase, day: next.day, winner: next.winner, serverState: next },
-          { type: finished ? "game_finished" : "turn_expired", payload: { turnKey, timedOutUserIds }, actorUserId: aggregate.room.hostUserId, visibility: "public" },
+          { status, phase: next.phase, day: next.day, winner: next.winner, serverState: next },
+          { type: eventType, payload: { turnKey, timedOutUserIds, ...(unattended ? { reason: "no_human_members" } : {}) }, actorUserId: aggregate.room.hostUserId, visibility: "public" },
         );
       if (!result) return false;
       if (finished) await this.completeSession(next);
+      if (unattended && next.gameSessionId) await this.releaseClaim(aggregate.room.gameSessionOwnerId ?? next.gameSessionOwnerId ?? aggregate.room.hostUserId, next.gameSessionId, roomId);
       return true;
     });
   }
@@ -349,7 +430,7 @@ export class RoomCoordinator {
   } | null> {
     const aggregate = await this.store.getRoom(roomId);
     const state = aggregate?.room.serverState;
-    if (!aggregate || aggregate.room.status !== "in_game" || !state?.turnKey || !state.deadlineAt) return null;
+    if (!aggregate || aggregate.room.status !== "in_game" || !state?.turnKey || !state.deadlineAt || state.aiFailure?.count) return null;
     return { version: aggregate.room.version, turnKey: state.turnKey, deadlineAt: state.deadlineAt };
   }
 
@@ -358,17 +439,51 @@ export class RoomCoordinator {
   /** 在真人动作已提交后独立推进 AI；失败不会回滚真人动作。 */
   async progressAi(roomId: string, signal?: AbortSignal): Promise<boolean> {
     if (signal?.aborted) return false;
-    const snapshot = await this.lock(roomId, async () => this.store.getRoom(roomId));
+    const snapshot = await this.lock(roomId, async () => {
+      const current = await this.store.getRoom(roomId);
+      if (current?.room.serverState && current.room.status === "in_game" && !this.hasHumanMember(current, current.room.serverState)) {
+        await this.closeUnattendedRoom(current);
+        return null;
+      }
+      return current;
+    });
     const state = snapshot?.room.serverState;
-    if (!snapshot || snapshot.room.status !== "in_game" || !state) return false;
-    if (!(await this.isAiAvailable())) throw new MultiplayerAiUnavailableError("AI_PROVIDER_NOT_CONFIGURED");
-
+    if (!snapshot) return (await this.store.getRoom(roomId))?.room.status === "closed";
+    if (snapshot.room.status !== "in_game" || !state || state.aiFailure?.paused) return false;
     // 模型请求绝不能占用房间互斥锁；真人操作和离房必须可以立即按版本落库。
     const prepared = this.prepareHumanState(state);
-    const resolved = await this.aiService!.resolveAiTurns(prepared, snapshot.room.settings.difficulty, signal);
+    let resolved: MultiplayerServerState;
+    try {
+      if (listPendingMultiplayerAiActions(prepared).length) {
+        if (!(await this.isAiAvailable())) throw new MultiplayerAiUnavailableError("AI_PROVIDER_NOT_CONFIGURED");
+        resolved = await this.aiService!.resolveAiTurns(prepared, snapshot.room.settings.difficulty, signal);
+      } else {
+        resolved = prepared;
+      }
+    } catch (cause) {
+      if (signal?.aborted) return false;
+      let recorded: boolean;
+      try {
+        recorded = await this.lock(roomId, async () => {
+          const current = await this.store.getRoom(roomId);
+          if (!current?.room.serverState || current.room.status !== "in_game" || current.room.version !== snapshot.room.version) return false;
+          const count = (current.room.serverState.aiFailure?.count ?? 0) + 1;
+          const failed = structuredClone(current.room.serverState);
+          failed.aiFailure = { count, paused: count >= 3, updatedAt: this.now().toISOString(), code: safeAiErrorCode(cause) };
+          failed.deadlineAt = null; failed.turnKey = null; failed.version = current.room.version + 1;
+          return (await this.store.transitionRoom(roomId, current.room.version, { serverState: failed }, { type: "ai_progress_failed", payload: { count, paused: count >= 3, code: failed.aiFailure.code }, actorUserId: current.room.hostUserId })) !== null;
+        });
+      } catch (persistenceCause) {
+        throw new MultiplayerAiUnavailableError("AI_FAILURE_CHECKPOINT_FAILED", { cause: persistenceCause });
+      }
+      if (!recorded) return true; // Discard errors from a state a human has already changed.
+      throw cause;
+    }
     if (signal?.aborted) return false;
-    const next = this.prepareHumanState(resolved);
-    if (JSON.stringify(next) === JSON.stringify(state)) return false;
+    const next = this.prepareHumanState({ ...resolved, aiFailure: undefined });
+    // JSONB can reorder object keys. Compare persisted JSON values so an unchanged
+    // human turn neither increments the version nor continuously reschedules AI.
+    if (isDeepStrictEqual(JSON.parse(JSON.stringify(next)), JSON.parse(JSON.stringify({ ...state, aiFailure: undefined })))) return false;
 
     return this.lock(roomId, async () => {
       if (signal?.aborted) return false;
@@ -394,6 +509,43 @@ export class RoomCoordinator {
     });
   }
 
+  async aiProgressState(roomId: string): Promise<{ active: boolean; paused: boolean; failures: number; version: number | null }> {
+    const aggregate = await this.store.getRoom(roomId);
+    const state = aggregate?.room.serverState;
+    const paused = Boolean(state?.aiFailure?.paused);
+    return { active: Boolean(aggregate && state && aggregate.room.status === "in_game" && this.hasHumanMember(aggregate, state) && !paused), paused, failures: state?.aiFailure?.count ?? 0, version: aggregate?.room.version ?? null };
+  }
+
+  async retryAi(userId: string, roomId: string, expectedVersion: number): Promise<MultiplayerRoomAck> {
+    return this.lock(roomId, async () => {
+      const aggregate = await this.store.getRoom(roomId);
+      if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
+      if (aggregate.room.hostUserId !== userId || !aggregate.members.some(m => m.userId === userId && m.role !== "spectator" && m.seat !== null)) return error("FORBIDDEN", "只有房主可以重试 AI");
+      if (aggregate.room.version !== expectedVersion || aggregate.room.status !== "in_game" || !aggregate.room.serverState?.aiFailure?.paused) return error("ROOM_CONFLICT", "请根据最新牌局状态重试");
+      const state = this.prepareHumanState({ ...aggregate.room.serverState, aiFailure: undefined });
+      state.version = expectedVersion + 1;
+      const changed = await this.store.transitionRoom(roomId, expectedVersion, { serverState: state }, { type: "ai_retry_requested", payload: {}, actorUserId: userId });
+      if (changed === null) return error("ROOM_CONFLICT", "房间状态已变化");
+      const current = await this.store.getRoom(roomId);
+      return current ? ok(this.view(current, userId)) : error("ROOM_NOT_FOUND", "房间不存在");
+    });
+  }
+
+  private hasHumanMember(aggregate: RoomAggregate, state: MultiplayerServerState): boolean {
+    // Death and temporary disconnection do not relinquish the right to watch AI finish.
+    return state.players.some(p => p.kind === "human" && p.userId && aggregate.members.some(m => m.userId === p.userId && m.role !== "spectator" && m.seat === p.seat));
+  }
+
+  private async closeUnattendedRoom(aggregate: RoomAggregate): Promise<boolean> {
+    const state = aggregate.room.serverState;
+    if (aggregate.room.status !== "in_game" || !state || this.hasHumanMember(aggregate, state)) return false;
+    const closed = { ...state, deadlineAt: null, turnKey: null, version: aggregate.room.version + 1 };
+    const changed = await this.store.transitionRoom(aggregate.room.id, aggregate.room.version, { status: "closed", serverState: closed }, { type: "room_closed", payload: { reason: "no_human_members" }, actorUserId: aggregate.room.hostUserId });
+    if (changed === null) return false;
+    if (state.gameSessionId) await this.releaseClaim(aggregate.room.gameSessionOwnerId ?? state.gameSessionOwnerId ?? aggregate.room.hostUserId, state.gameSessionId, aggregate.room.id);
+    return true;
+  }
+
   async viewFor(roomId: string, userId: string): Promise<MultiplayerRoomView | null> { const aggregate = await this.store.getRoom(roomId); return aggregate ? this.view(aggregate, userId) : null; }
   async activeRoomIds(): Promise<string[]> { return this.store.listActiveRoomIds(); }
   async purgeHistory(retentionDays: number): Promise<number> { return this.store.purgeExpiredRooms?.(retentionDays) ?? 0; }
@@ -405,6 +557,7 @@ export class RoomCoordinator {
   async members(roomId: string): Promise<MultiplayerRoomMember[]> { const aggregate = await this.store.getRoom(roomId); return aggregate?.members ?? []; }
 
   private prepareHumanState(input: MultiplayerServerState): MultiplayerServerState {
+    if (input.aiFailure?.count) return { ...advanceMultiplayerGame(input, { autoAi: false }), deadlineAt: null, turnKey: null };
     return stampMultiplayerDeadline(
       advanceMultiplayerGame(input, { autoAi: false }),
       this.now(),
@@ -435,17 +588,6 @@ export class RoomCoordinator {
     } catch (cause) {
       console.warn("[multiplayer] game session claim release failed", cause);
     }
-  }
-
-  private async mutateMember(userId: string, roomId: string, expectedVersion: number, mutate: (aggregate: RoomAggregate, member: MultiplayerRoomMember) => Promise<MultiplayerRoomError | null>, event: string): Promise<MultiplayerRoomAck> {
-    return this.lock(roomId, async () => {
-      const aggregate = await this.store.getRoom(roomId); if (!aggregate) return error("ROOM_NOT_FOUND", "房间不存在");
-      if (aggregate.room.version !== expectedVersion) return error("ROOM_CONFLICT", "房间状态已变化，请刷新");
-      const member = aggregate.members.find((item) => item.userId === userId); if (!member) return error("FORBIDDEN", "你不是该房间成员");
-      const issue = await mutate(aggregate, member); if (issue) return { ok: false, error: issue };
-      const version = await this.store.saveMember(roomId, member, expectedVersion, { type: event, payload: { userId }, actorUserId: userId }); if (version === null) return error("ROOM_CONFLICT", "房间状态已变化，请刷新");
-      const current = await this.store.getRoom(roomId); return current ? ok(this.view(current, userId)) : error("INTERNAL_ERROR", "房间读取失败");
-    });
   }
 
   private view(aggregate: RoomAggregate, userId: string): MultiplayerRoomView {
@@ -487,10 +629,17 @@ export class RoomCoordinator {
             wolfVotes: {},
           },
         };
+    const state = aggregate.room.serverState;
+    if (aggregate.room.status === "in_game" && state) {
+      const failure = state.aiFailure;
+      projected.publicState.aiProgress = failure?.count || listPendingMultiplayerAiActions(state).length
+        ? { status: failure?.paused ? "paused" : failure?.count ? "retrying" : "waiting", failures: failure?.count ?? 0, maxAutomaticFailures: 3, updatedAt: failure?.updatedAt ?? null }
+        : null;
+    }
     const publicMemberId = (member: MultiplayerRoomMember) =>
       member.userId === userId
         ? userId
-        : `member-${aggregate.room.id.slice(0, 8)}-${member.seat ?? "spectator"}`;
+        : `member-${aggregate.room.id.slice(0, 8)}-${member.seat ?? `spectator-${createHash("sha256").update(`${aggregate.room.id}:${member.userId}`).digest("hex").slice(0, 12)}`}`;
     const members = aggregate.members.map((member) => ({
       ...member,
       userId: publicMemberId(member),
@@ -523,4 +672,9 @@ function isRoomCodeConflict(cause: unknown): boolean {
   return record.code === "23505" && [record.constraint, record.message].some(
     (value) => typeof value === "string" && value.includes("multiplayer_rooms_code"),
   );
+}
+
+export function safeAiErrorCode(cause: unknown): string {
+  const code = cause instanceof Error ? cause.message : "";
+  return /^AI_[A-Z0-9_]{1,70}$/.test(code) ? code : "AI_PROGRESS_FAILED";
 }

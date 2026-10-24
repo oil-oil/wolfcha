@@ -11,6 +11,7 @@ const lobby = readFileSync(join(process.cwd(), "src/components/multiplayer/RoomL
 const hook = readFileSync(join(process.cwd(), "src/hooks/useMultiplayerRoom.ts"), "utf8");
 const audio = readFileSync(join(process.cwd(), "src/lib/audio-manager.ts"), "utf8");
 const roomPage = readFileSync(join(process.cwd(), "src/app/rooms/[code]/page.tsx"), "utf8");
+const pendingCreditSession = readFileSync(join(process.cwd(), "src/lib/multiplayer/pending-credit-session.ts"), "utf8");
 const roleReveal = readFileSync(join(process.cwd(), "src/components/game/RoleRevealOverlay.tsx"), "utf8");
 
 test("多人牌桌响应式覆盖常见手机宽度且动作栏避让安全区", () => {
@@ -105,7 +106,8 @@ test("多人交互复用项目的兼容复制与 UUID 工具", () => {
 
 test("开局额度 session 可跨刷新恢复且有明确过期时间", () => {
   assert.match(roomPage, /sessionStorage/);
-  assert.match(roomPage, /PENDING_MULTIPLAYER_SESSION_TTL_MS/);
   assert.match(roomPage, /writePendingMultiplayerSession/);
   assert.match(roomPage, /clearPendingMultiplayerSession/);
+  assert.match(pendingCreditSession, /PENDING_MULTIPLAYER_SESSION_TTL_MS/);
+  assert.match(pendingCreditSession, /scopedKey\(roomId, userId\)/);
 });

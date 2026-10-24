@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { StaticAvatar } from "@/components/game/Avatar";
+import { MultiplayerAvatar as StaticAvatar } from "./MultiplayerAvatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MultiplayerConnectionStatus } from "@/hooks/useMultiplayerRoom";
@@ -101,7 +101,7 @@ export function RoomLobby({ view, status, actionLoading = false, error, onReady,
         <DialogContent className="w-[92vw] max-w-md" aria-busy={actionLoading}>
           <DialogHeader>
             <DialogTitle className="font-serif text-[var(--text-primary)]">{confirmAction === "close" ? "关闭房间？" : "退出房间？"}</DialogTitle>
-            <DialogDescription className="text-[var(--text-muted)]">{confirmAction === "close" ? "关闭后所有玩家将无法继续加入。" : isHost ? "退出后会把房主身份移交给下一位玩家，你的席位将由 AI 接管。" : "退出后席位会释放给 AI。"}</DialogDescription>
+            <DialogDescription className="text-[var(--text-muted)]">{confirmAction === "close" ? "关闭后所有玩家将无法继续加入。" : me?.role === "spectator" || room.status === "closed" ? "退出后返回多人入口，不会改变其他玩家的牌局。" : isHost ? "退出后会把房主身份移交给下一位玩家，你的席位将由 AI 接管。" : "退出后席位会释放给 AI。"}</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={actionLoading} onClick={() => setConfirmAction(null)}>取消</Button>
@@ -165,14 +165,14 @@ export function RoomLobby({ view, status, actionLoading = false, error, onReady,
         <section className={`${styles.panel} ${styles.identityPanel}`}>
           <div className={styles.panelHeading}><div><span className={styles.sectionKicker}>仅你可见</span><h2>你的身份</h2></div></div>
           <div className={styles.privateRole}>
-            {privateState.role ? <><span className={styles.roleMark} aria-hidden="true">◆</span><strong>{getRoleName(privateState.role)}</strong><span>{privateState.alignment === "wolf" ? "狼人阵营" : privateState.alignment === "village" ? "好人阵营" : "阵营待揭晓"}</span></> : <><span className={styles.roleMark} aria-hidden="true">?</span><strong>开局后揭晓</strong><span>身份信息将只发给你</span></>}
+            {privateState.role ? <><span className={styles.roleMark} aria-hidden="true">◆</span><strong>{getRoleName(privateState.role)}</strong><span>{privateState.alignment === "wolf" ? "狼人阵营" : privateState.alignment === "village" ? "好人阵营" : "阵营待揭晓"}</span></> : <><span className={styles.roleMark} aria-hidden="true">?</span><strong>{room.status === "closed" ? "房间已关闭" : me?.role === "spectator" ? "当前为观战身份" : "开局后揭晓"}</strong><span>{room.status === "closed" ? "本局不能重新入座" : "身份信息将只发给你"}</span></>}
           </div>
           {privateState.wolfTeammates.length > 0 ? <div className={styles.teammates}><span className={styles.sectionKicker}>狼队友</span>{privateState.wolfTeammates.map((teammate) => <span key={teammate.seat}>#{teammate.seat + 1} {teammate.displayName}</span>)}</div> : null}
 
           {room.status === "lobby" ? <div className={styles.actions}>
             {me && me.role !== "spectator" ? <Button size="lg" variant={me.isReady ? "secondary" : "default"} disabled={actionLoading || status !== "connected"} onClick={() => onReady(!me.isReady)}>{actionLoading ? "提交中…" : me.isReady ? "取消准备" : "准备"}</Button> : null}
             {isHost ? <Button size="lg" variant={canStart ? "default" : "outline"} disabled={!canStart} onClick={onStart}>{actionLoading ? "正在开始…" : "开始游戏"}</Button> : <p className={styles.waitingHint}>等待房主开始，空席将由 AI 补位</p>}
-          </div> : <div className={styles.phaseSummary}><span className={styles.sectionKicker}>当前阶段</span><strong>{phaseLabel(publicState.phase)}</strong>{room.status === "finished" ? <span>胜负已揭晓</span> : room.status === "closed" ? <span>房主已关闭房间</span> : null}</div>}
+          </div> : <div className={styles.phaseSummary}><span className={styles.sectionKicker}>当前阶段</span><strong>{phaseLabel(publicState.phase)}</strong>{room.status === "finished" ? <span>胜负已揭晓</span> : room.status === "closed" ? <span>房间已关闭</span> : null}</div>}
         </section>
       </div>
     </main>

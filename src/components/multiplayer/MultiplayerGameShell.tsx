@@ -2,7 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useAtom } from "jotai";
-import { StaticAvatar } from "@/components/game/Avatar";
+import { MultiplayerAvatar as StaticAvatar } from "./MultiplayerAvatar";
 import { RoleRevealOverlay } from "@/components/game/RoleRevealOverlay";
 import { SoundSettingsSection } from "@/components/game/SettingsModal";
 import { Button } from "@/components/ui/button";
@@ -211,6 +211,7 @@ interface MultiplayerGameShellProps {
   actionLoading?: boolean;
   error?: string | null;
   onSubmit: SubmitCommand;
+  onRetryAi: () => void;
   onLeave: () => void;
   onBack: () => void;
 }
@@ -238,7 +239,7 @@ function targetPayload(type: TargetAction, targetSeat: number | null): CommandPa
   }
 }
 
-export function MultiplayerGameShell({ view, status, actionLoading = false, error, onSubmit, onLeave, onBack }: MultiplayerGameShellProps) {
+export function MultiplayerGameShell({ view, status, actionLoading = false, error, onSubmit, onRetryAi, onLeave, onBack }: MultiplayerGameShellProps) {
   const { room, publicState, privateState } = view;
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [speech, setSpeech] = useState("");
@@ -300,6 +301,7 @@ export function MultiplayerGameShell({ view, status, actionLoading = false, erro
     if (previousActionContextKey.current === actionContextKey) return;
     previousActionContextKey.current = actionContextKey;
     queueMicrotask(() => {
+      setLocalError(null);
       setSelectedSeat(null);
       setSpeech("");
       setPoisonMode(false);
@@ -447,14 +449,17 @@ export function MultiplayerGameShell({ view, status, actionLoading = false, erro
           <div className={styles.connection} data-status={status}><span aria-hidden="true">●</span>{status === "connected" ? "已连接" : status === "reconnecting" ? "正在重连" : "同步中"}</div>
           {audioSettings.isSoundEnabled && !bgmUnlocked ? <button type="button" className={styles.textAction} onClick={unlockBgm}>开启声音</button> : null}
           <button type="button" className={styles.textAction} onClick={() => setSettingsOpen(true)}>声音设置</button>
-          <button type="button" className={styles.textAction} disabled={actionLoading} onClick={() => setConfirmLeave(true)}>退出并托管</button>
+          <button type="button" className={styles.textAction} disabled={actionLoading} onClick={() => setConfirmLeave(true)}>{privateState.seat === null ? "退出观战" : "退出并托管"}</button>
         </div>
       </header>
+      {publicState.aiProgress ? <section role="status" className={styles.waitingHint} aria-live="polite">
+        {publicState.aiProgress.status === "paused" ? <><p>AI 连续失败，自动重试已暂停。你仍可退出房间；房主可以手动重试。</p>{room.hostUserId === view.currentUserId ? <Button disabled={actionLoading} onClick={onRetryAi}>重试 AI（会重新调用模型）</Button> : null}</> : publicState.aiProgress.status === "retrying" ? `AI 暂时未响应，正在重试（${publicState.aiProgress.failures}/${publicState.aiProgress.maxAutomaticFailures}），期间暂停行动计时。` : "AI 正在处理当前阶段，完成后将逐步同步结果…"}
+      </section> : null}
       <Dialog open={confirmLeave} onOpenChange={(open) => { if (!actionLoading) setConfirmLeave(open); }}>
         <DialogContent className="w-[92vw] max-w-md" aria-busy={actionLoading}>
           <DialogHeader>
-            <DialogTitle className="font-serif text-[var(--text-primary)]">退出并交给 AI 托管？</DialogTitle>
-            <DialogDescription className="text-[var(--text-muted)]">退出后你的角色和座位将由同一套 AI 决策服务接管，本局不能重新入座。</DialogDescription>
+            <DialogTitle className="font-serif text-[var(--text-primary)]">{privateState.seat === null ? "退出观战？" : "退出并交给 AI 托管？"}</DialogTitle>
+            <DialogDescription className="text-[var(--text-muted)]">{privateState.seat === null ? "退出不会改变其他玩家的牌局。" : "退出后不能重新入座。仍有真人席位时由 AI 接管；最后一名真人退出会关闭房间。"}</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
             <Button variant="outline" disabled={actionLoading} onClick={() => setConfirmLeave(false)}>取消</Button>
@@ -555,7 +560,7 @@ function ActionBar({ allowed, privateState, selectedSeat, speech, setSpeech, poi
     void onSend({ type: "speech", content });
   };
   return <section data-multiplayer-action-bar className={styles.actionBar} aria-label="游戏操作"><div className={styles.actionDockContent}>
-    {has("speech") ? <form className={styles.speechAction} onSubmit={submitSpeech}><Input value={speech} onChange={(e) => setSpeech(e.target.value)} maxLength={500} placeholder="输入你的发言…" disabled={pending} /><Button type="submit" disabled={pending || !speech.trim()}>{pending ? "提交中…" : "发送发言"}</Button></form> : null}
+    {has("speech") ? <form className={styles.speechAction} onSubmit={submitSpeech}><Input aria-label="你的发言" value={speech} onChange={(e) => setSpeech(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229)) e.preventDefault(); }} maxLength={500} placeholder="输入你的发言…" disabled={pending} /><Button type="submit" disabled={pending || !speech.trim()}>{pending ? "提交中…" : "发送发言"}</Button></form> : null}
     {has("badge_signup") ? <div className={styles.actionRow}><span>是否参加警徽竞选？</span><Button disabled={pending} onClick={() => onSend({ type: "badge_signup", signup: true })}>报名</Button><Button variant="outline" disabled={pending} onClick={() => onSend({ type: "badge_signup", signup: false })}>不报名</Button></div> : null}
     {has("witch") ? <div className={styles.actionRow}><span>女巫行动</span>{privateState.witchHealAvailable && privateState.witchNightKill != null ? <Button variant={savePotion ? "default" : "outline"} disabled={pending} onClick={() => { setSavePotion(!savePotion); setPoisonMode(false); }}>使用解药（#{privateState.witchNightKill + 1}）</Button> : null}<Button variant={poisonMode ? "destructive" : "outline"} disabled={pending || !privateState.witchPoisonAvailable} onClick={() => { setPoisonMode(!poisonMode); setSavePotion(false); }}>使用毒药</Button><Button disabled={pending || (poisonMode && selectedSeat === null)} onClick={() => onSend({ type: "witch", save: savePotion, poisonTargetSeat: poisonMode ? selectedSeat : null })}>确认</Button></div> : null}
     {targetAction ? <div className={styles.actionRow}><span>{selectedSeat == null ? "选择目标后确认" : `目标：第 ${selectedSeat + 1} 号`}</span><Button disabled={pending || !canTarget} onClick={() => { const payload = targetPayload(targetAction, selectedSeat); if (payload) onSend(payload); }}>{pending ? "提交中…" : TARGET_BUTTON_LABEL[targetAction]}</Button>{has("guard") ? <Button variant="outline" disabled={pending} onClick={() => onSend({ type: "guard", targetSeat: null })}>跳过守护</Button> : null}{has("day_vote") ? <Button variant="outline" disabled={pending} onClick={() => onSend({ type: "day_vote", targetSeat: null })}>弃票</Button> : null}{has("hunter_shot") ? <Button variant="outline" disabled={pending} onClick={() => onSend({ type: "hunter_shot", targetSeat: null })}>不开枪</Button> : null}{has("badge_transfer") ? <Button variant="outline" disabled={pending} onClick={() => onSend({ type: "badge_transfer", targetSeat: null, destroy: true })}>销毁警徽</Button> : null}</div> : null}

@@ -58,9 +58,17 @@ export interface MultiplayerPrivateState {
   wolfVotes: Record<string, number>;
 }
 
+export interface MultiplayerAiProgress {
+  status: "waiting" | "retrying" | "paused";
+  failures: number;
+  maxAutomaticFailures: number;
+  updatedAt: string | null;
+}
+
 export interface MultiplayerPublicState {
   phase: Phase;
   day: number;
+  aiProgress?: MultiplayerAiProgress | null;
   players: MultiplayerPublicPlayer[];
   messages: MultiplayerChatMessage[];
   currentSpeakerSeat: number | null;
@@ -109,6 +117,8 @@ export interface MultiplayerAiProfile {
 }
 
 export interface MultiplayerServerState {
+  /** Durable circuit breaker. Never contains provider responses or private prompts. */
+  aiFailure?: { count: number; paused: boolean; updatedAt: string; code: string };
   phase: Phase;
   day: number;
   players: MultiplayerServerPlayer[];
@@ -252,6 +262,10 @@ export interface MultiplayerClientToServerEvents {
     callback: (result: MultiplayerRoomAck) => void
   ) => void;
   "room:leave": (
+    input: { roomId: string; expectedVersion: number },
+    callback: (result: MultiplayerRoomAck) => void
+  ) => void;
+  "room:retry-ai": (
     input: { roomId: string; expectedVersion: number },
     callback: (result: MultiplayerRoomAck) => void
   ) => void;

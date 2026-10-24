@@ -1,0 +1,28 @@
+{
+  "source": "Local eight-player game with real model response; player 2 was eliminated.",
+  "provider": "zenmux",
+  "model": "google/gemini-2.5-flash",
+  "allowedPlayerNumbers": [
+    1,
+    3,
+    5,
+    6,
+    7,
+    8
+  ],
+  "response": {
+    "model": "google/gemini-2.5-flash",
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "{\"action\":\"day_vote\",\"targetSeat\":2}",
+          "refusal": null
+        },
+        "index": 0,
+        "logprobs": null
+      }
+    ]
+  }
+}

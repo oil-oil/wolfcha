@@ -37,6 +37,8 @@ const AUTH_EVENT = {
 
 export type ConsumeCreditOptions = {
   createSession?: boolean;
+  /** Reserve an unpaid session for this multiplayer room; charge happens in its atomic start transaction. */
+  deferredMultiplayerRoomId?: string;
   playerCount?: number;
   difficulty?: string;
   usedCustomKey?: boolean;
@@ -109,10 +111,11 @@ export function useCredits() {
 
     try {
       const customEnabled = isCustomKeyEnabled();
-      const headerApiKey = customEnabled ? getZenmuxApiKey() : "";
-      const dashscopeApiKey = customEnabled ? getDashscopeApiKey() : "";
-      const tokendanceApiKey = customEnabled ? getTokendanceApiKey() : "";
-      const tokendanceBaseUrl = customEnabled ? getTokendanceBaseUrl() : "";
+      const deferredMultiplayer = Boolean(options.deferredMultiplayerRoomId);
+      const headerApiKey = customEnabled && !deferredMultiplayer ? getZenmuxApiKey() : "";
+      const dashscopeApiKey = customEnabled && !deferredMultiplayer ? getDashscopeApiKey() : "";
+      const tokendanceApiKey = customEnabled && !deferredMultiplayer ? getTokendanceApiKey() : "";
+      const tokendanceBaseUrl = customEnabled && !deferredMultiplayer ? getTokendanceBaseUrl() : "";
       const res = await fetch("/api/credits/consume", {
         method: "POST",
         headers: {

@@ -3,8 +3,8 @@ import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
 import type { MultiplayerSocketData } from "@/types/multiplayer";
 import { MemoryRoomStore, SupabaseRoomStore } from "./room-store";
-import { RoomCoordinator } from "./room-coordinator";
-import { MultiplayerAiUnavailableError, ServerMultiplayerAiService } from "./ai-service";
+import { RoomCoordinator, safeAiErrorCode } from "./room-coordinator";
+import { ServerMultiplayerAiService } from "./ai-service";
 
 type SocketLike = any;
 type IoLike = any;
@@ -56,6 +56,7 @@ export function createMultiplayerServer(options: {
   const aiRuns = new Map<string, Promise<void>>();
   const aiAbortControllers = new Map<string, AbortController>();
   const aiRequested = new Set<string>();
+  const aiPersistenceBlocked = new Set<string>();
   const aiRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const roomEntryLimiter = createFixedWindowRateLimiter(12, 60_000, 4_096);
   const aiRetryMs = positiveInteger(process.env.GAME_SERVER_AI_RETRY_MS, 5_000);
@@ -78,6 +79,7 @@ export function createMultiplayerServer(options: {
     aiAbortControllers.clear();
     aiRuns.clear();
     aiRequested.clear();
+    aiPersistenceBlocked.clear();
     enterLocks.clear();
     historySweepTimer = null;
     return true;
@@ -165,8 +167,17 @@ export function createMultiplayerServer(options: {
     timer.unref?.();
     roomTimers.set(roomId, timer);
   };
+  const stopRoomAi = (roomId: string) => {
+    aiAbortControllers.get(roomId)?.abort();
+    const retry = aiRetryTimers.get(roomId);
+    if (retry) clearTimeout(retry);
+    aiRetryTimers.delete(roomId);
+    aiRequested.delete(roomId);
+  };
   const broadcast = async (roomId: string) => {
     if (disposed) return;
+    const aiState = await coordinator.aiProgressState(roomId);
+    if (!aiState.active) stopRoomAi(roomId);
     const sockets = await io.in(roomChannel(roomId)).fetchSockets();
     if (disposed) return;
     const views = await coordinator.viewsFor(roomId, sockets.map((socket: SocketLike) => socket.data.userId as string));
@@ -189,7 +200,7 @@ export function createMultiplayerServer(options: {
   };
   const drainAiProgress = (roomId: string) => {
     if (disposed) return;
-    if (aiRuns.has(roomId) || aiRetryTimers.has(roomId)) return;
+    if (aiPersistenceBlocked.has(roomId) || aiRuns.has(roomId) || aiRetryTimers.has(roomId)) return;
     aiRequested.delete(roomId);
     const abortController = new AbortController();
     aiAbortControllers.set(roomId, abortController);
@@ -203,9 +214,24 @@ export function createMultiplayerServer(options: {
         }
       } catch (cause) {
         if (disposed || abortController.signal.aborted) return;
-        const reason = cause instanceof MultiplayerAiUnavailableError ? cause.message : cause;
-        logger.warn("[multiplayer] background AI progress failed; retry scheduled", reason);
-        scheduleAiRetry(roomId);
+        try {
+          const state = await coordinator.aiProgressState(roomId);
+          const persistenceFailed = safeAiErrorCode(cause) === "AI_FAILURE_CHECKPOINT_FAILED";
+          if (persistenceFailed) { aiPersistenceBlocked.add(roomId); stopRoomAi(roomId); }
+          logger.warn("[multiplayer] background AI progress failed", {
+            at: new Date().toISOString(), roomId, version: state.version,
+            code: safeAiErrorCode(cause),
+            causeCode: safeAiErrorCode(cause instanceof Error ? cause.cause : undefined),
+            failures: state.failures, paused: state.paused, retryScheduled: state.active && !persistenceFailed,
+          });
+          await broadcast(roomId);
+          if (!disposed && state.active && !persistenceFailed) scheduleAiRetry(roomId);
+        } catch {
+          // A persistence outage must not become an unbounded provider retry loop.
+          aiPersistenceBlocked.add(roomId);
+          stopRoomAi(roomId);
+          logger.error("[multiplayer] AI failure checkpoint unavailable", { roomId, at: new Date().toISOString() });
+        }
       }
     })();
     aiRuns.set(roomId, run);
@@ -216,7 +242,7 @@ export function createMultiplayerServer(options: {
     });
   };
   enqueueAiProgress = (roomId: string) => {
-    if (disposed) return;
+    if (disposed || aiPersistenceBlocked.has(roomId)) return;
     aiRequested.add(roomId);
     queueMicrotask(() => drainAiProgress(roomId));
   };
@@ -292,6 +318,7 @@ export function createMultiplayerServer(options: {
     socket.on("room:ready", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const result = await coordinator.ready(userId(), String(input?.roomId ?? ""), Boolean(input?.isReady), Number(input?.expectedVersion)); if (result.ok) await broadcast(result.view.room.id); fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "准备状态更新失败" } }); } });
     socket.on("room:start", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const result = await coordinator.start(userId(), String(input?.roomId ?? ""), Number(input?.expectedVersion), typeof input?.gameSessionId === "string" ? input.gameSessionId : null); if (result.ok) { await broadcast(result.view.room.id); enqueueAiProgress(result.view.room.id); } fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "开始游戏失败" } }); } });
     socket.on("room:leave", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const roomId = String(input?.roomId ?? ""); const result = await coordinator.leave(userId(), roomId, Number(input?.expectedVersion)); if (result.ok) { await socket.leave(roomChannel(roomId)); socket.data.roomId = undefined; await broadcast(roomId); if (result.view.room.status === "in_game") enqueueAiProgress(roomId); } fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "退出房间失败" } }); } });
+    socket.on("room:retry-ai", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const roomId = String(input?.roomId ?? ""); const result = await coordinator.retryAi(userId(), roomId, Number(input?.expectedVersion)); if (result.ok) { await broadcast(roomId); enqueueAiProgress(roomId); } fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "AI 重试未确认，请查看最新状态" } }); } });
     socket.on("room:close", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const result = await coordinator.close(userId(), String(input?.roomId ?? ""), Number(input?.expectedVersion)); if (result.ok) await broadcast(result.view.room.id); fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "关闭房间失败" } }); } });
     socket.on("game:command", async (input: any, callback: any) => { if (!acceptTask(socket, callback)) return; try { const result = await coordinator.command(userId(), input); if (result.ok) { await broadcast(result.view.room.id); enqueueAiProgress(result.view.room.id); } fail(socket, callback, result); } catch { fail(socket, callback, { ok: false, error: { code: "INTERNAL_ERROR", message: "游戏动作提交失败" } }); } });
     socket.on("disconnect", () => {

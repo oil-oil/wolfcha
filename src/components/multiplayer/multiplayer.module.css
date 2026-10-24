@@ -112,9 +112,9 @@
 .form { display: grid; gap: 17px; }
 .field { display: grid; gap: 7px; }
 .form label { color: var(--mp-muted); font-size: .82rem; letter-spacing: .03em; }
-.form input { color: var(--mp-ink); border-color: var(--mp-line); background: rgba(11, 8, 7, .5); }
-.form input::placeholder { color: var(--mp-dim); }
-.form input:focus-visible { border-color: var(--mp-gold); box-shadow: 0 0 0 3px rgba(197, 160, 89, .12); }
+.form input, .speechAction input { color: var(--mp-ink); border-color: var(--mp-line); background: rgba(11, 8, 7, .5); }
+.form input::placeholder, .speechAction input::placeholder { color: var(--mp-dim); }
+.form input:focus-visible, .speechAction input:focus-visible { border-color: var(--mp-gold); box-shadow: 0 0 0 3px rgba(197, 160, 89, .12); }
 .inlineFields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .select { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid var(--mp-line); border-radius: 6px; color: var(--mp-ink); background: rgba(11, 8, 7, .5); font: inherit; }
 .select:focus-visible { outline: 2px solid var(--mp-gold); outline-offset: 2px; }

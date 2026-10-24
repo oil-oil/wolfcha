@@ -321,3 +321,82 @@ function createMockSocket(id: string, userId: string, roomId: string) {
     disconnected: () => isDisconnected,
   };
 }
+
+test("最后真人离房会取消该房正在执行的AI请求，其他服务不受牵连", async () => {
+  let markStarted!: () => void, markAborted!: () => void;
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  const aborted = new Promise<void>(resolve => { markAborted = resolve; });
+  const coordinator = new RoomCoordinator({ store: new MemoryRoomStore(), aiService: {
+    isAvailable: () => true,
+    async resolveAiTurns(state, _difficulty, signal) {
+      markStarted();
+      await new Promise<void>(resolve => { signal?.addEventListener("abort", () => { markAborted(); resolve(); }, { once: true }); });
+      return state;
+    },
+  }});
+  const created = await coordinator.create("last-human", { displayName: "最后真人", playerCount: 8, difficulty: "normal", locale: "zh" }); assert.ok(created.ok);
+  const ready = await coordinator.ready("last-human", created.view.room.id, true, 0); assert.ok(ready.ok);
+  const game = await coordinator.start("last-human", created.view.room.id, ready.view.room.version); assert.ok(game.ok);
+  const mock = createMockIo();
+  const server = createMultiplayerServer({ io: mock.io, coordinator, authenticateToken: async () => null });
+  try {
+    await server.recovery; await started;
+    const socket = createMockSocket("last-socket", "last-human", game.view.room.id); mock.connect(socket.socket);
+    const ack = await new Promise<unknown>(resolve => socket.trigger("room:leave", { roomId: game.view.room.id, expectedVersion: game.view.room.version }, resolve));
+    assert.ok((ack as { ok: boolean }).ok);
+    await aborted;
+    assert.equal((await coordinator.viewFor(game.view.room.id, "last-human"))?.room.status, "closed");
+    assert.equal(server.isDisposed(), false, "只取消房间任务，不关闭整个服务");
+  } finally { await server.shutdown({ graceMs: 100 }); }
+});
+
+test("自动失败重试有持久上限，日志保留房间和安全错误码", async () => {
+  const retryBefore = process.env.GAME_SERVER_AI_RETRY_MS;
+  process.env.GAME_SERVER_AI_RETRY_MS = "5";
+  let calls = 0;
+  const logs: unknown[][] = [];
+  const coordinator = new RoomCoordinator({ store: new MemoryRoomStore(), aiService: {
+    isAvailable: () => true,
+    async resolveAiTurns() { calls++; throw new Error("AI_RETRY_EXHAUSTED", { cause: new Error("AI_HTTP_503") }); },
+  }});
+  const created = await coordinator.create("human", { displayName: "真人", playerCount: 8, difficulty: "normal", locale: "zh" }); assert.ok(created.ok);
+  const ready = await coordinator.ready("human", created.view.room.id, true, 0); assert.ok(ready.ok);
+  const game = await coordinator.start("human", created.view.room.id, ready.view.room.version); assert.ok(game.ok);
+  const server = createMultiplayerServer({ io: createMockIo().io, coordinator, authenticateToken: async () => null, logger: { info: () => {}, error: (...args) => logs.push(args), warn: (...args) => logs.push(args) } });
+  try {
+    await server.recovery;
+    for (let i = 0; i < 100 && calls < 3; i++) await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise(resolve => setTimeout(resolve, 40));
+    assert.equal(calls, 3);
+    assert.equal((await coordinator.viewFor(game.view.room.id, "human"))?.publicState.aiProgress?.status, "paused");
+    assert.equal(logs.length, 3);
+    const last = logs.at(-1)?.[1] as { roomId: string; causeCode: string; retryScheduled: boolean };
+    assert.equal(last.roomId, game.view.room.id); assert.equal(last.causeCode, "AI_HTTP_503"); assert.equal(last.retryScheduled, false);
+  } finally { await server.shutdown({ graceMs: 100 }); if (retryBefore === undefined) delete process.env.GAME_SERVER_AI_RETRY_MS; else process.env.GAME_SERVER_AI_RETRY_MS = retryBefore; }
+});
+
+test("失败checkpoint无法写入时停止本房请求，不因重新连接再次调用模型", async () => {
+  const previous = process.env.GAME_SERVER_AI_RETRY_MS; process.env.GAME_SERVER_AI_RETRY_MS = "5";
+  class BrokenCheckpointStore extends MemoryRoomStore {
+    override async transitionRoom(...args: [...Parameters<MemoryRoomStore["transitionRoom"]>, event?: { type: string }]) {
+      if (args[3]?.type === "ai_progress_failed") throw Error("storage unavailable");
+      return super.transitionRoom(args[0], args[1], args[2]);
+    }
+  }
+  let calls = 0;
+  const c = new RoomCoordinator({ store: new BrokenCheckpointStore(), aiService: { isAvailable: () => true, async resolveAiTurns() { calls++; throw Error("AI_HTTP_503"); } } });
+  const created = await c.create("human", { displayName: "真人", playerCount: 8, difficulty: "normal", locale: "zh" }); assert.ok(created.ok);
+  const ready = await c.ready("human", created.view.room.id, true, 0); assert.ok(ready.ok);
+  const game = await c.start("human", created.view.room.id, ready.view.room.version); assert.ok(game.ok);
+  const mock = createMockIo(), logs: unknown[][] = [];
+  const server = createMultiplayerServer({ io: mock.io, coordinator: c, authenticateToken: async () => null, logger: { info: () => {}, warn: (...a) => logs.push(a), error: (...a) => logs.push(a) } });
+  try {
+    await server.recovery;
+    await new Promise(resolve => setTimeout(resolve, 40));
+    assert.equal(calls, 1);
+    const s = createMockSocket("reconnect", "human", game.view.room.id); mock.connect(s.socket);
+    await new Promise(resolve => s.trigger("room:resume", { roomIdOrCode: game.view.room.id }, resolve));
+    await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(calls, 1);
+    assert.equal((logs[0]?.[1] as { code: string }).code, "AI_FAILURE_CHECKPOINT_FAILED");
+  } finally { await server.shutdown({ graceMs: 100 }); if (previous === undefined) delete process.env.GAME_SERVER_AI_RETRY_MS; else process.env.GAME_SERVER_AI_RETRY_MS = previous; }
+});

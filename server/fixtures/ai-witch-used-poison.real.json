@@ -1,0 +1,20 @@
+{
+  "source": "Real ZenMux response selected player 3 after poison was used; nullable enum [null] was not enforced.",
+  "provider": "zenmux",
+  "model": "google/gemini-2.5-flash-lite",
+  "response": {
+    "model": "google/gemini-2.5-flash-lite",
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "{\"action\": \"witch\", \"save\": false, \"poisonTargetSeat\": 3}",
+          "refusal": null
+        },
+        "index": 0,
+        "logprobs": null
+      }
+    ]
+  }
+}

@@ -113,7 +113,7 @@ export default async function RootLayout({
 
   return (
     <html lang={localeToHtmlLang[initialLocale]} suppressHydrationWarning>
-      <Analytics />
+      {process.env.VERCEL === "1" ? <Analytics /> : null}
       <head>
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-3SSRH8KPLY"

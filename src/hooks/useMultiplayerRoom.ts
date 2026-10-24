@@ -11,6 +11,7 @@ import type {
   MultiplayerGameCommand,
 } from "@/types/multiplayer";
 import { createMultiplayerSocket, type MultiplayerSocket } from "@/lib/multiplayer/socket";
+import { newestMultiplayerView, sendMultiplayerCommandWithRecovery } from "@/lib/multiplayer/room-state";
 
 export type MultiplayerConnectionStatus =
   | "idle"
@@ -38,6 +39,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
   const [authStatus, setAuthStatus] = useState<MultiplayerAuthStatus>("loading");
   const [actionLoading, setActionLoading] = useState(false);
   const socketRef = useRef<MultiplayerSocket | null>(null);
+  const viewRef = useRef<MultiplayerRoomView | null>(null);
   const connectingRef = useRef(false);
   const connectRef = useRef<((knownAccessToken?: string) => Promise<void>) | null>(null);
   const resumeCodeRef = useRef(options.roomCode);
@@ -46,16 +48,23 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
     resumeCodeRef.current = options.roomCode;
   }, [options.roomCode]);
 
+  const receiveView = useCallback((incoming: MultiplayerRoomView) => {
+    const latest = newestMultiplayerView(viewRef.current, incoming);
+    viewRef.current = latest;
+    setView(latest);
+    return latest;
+  }, []);
+
   const handleAck = useCallback((result: MultiplayerRoomAck): ActionResult => {
     if (!result.ok) {
       setError(result.error);
       return { ok: false, error: result.error };
     }
-    setView(result.view);
+    receiveView(result.view);
     setError(null);
     setAuthStatus("authenticated");
     return { ok: true };
-  }, []);
+  }, [receiveView]);
 
   useEffect(() => {
     let disposed = false;
@@ -110,7 +119,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
         }
       });
       socket.on("room:view", (nextView) => {
-        setView(nextView);
+        receiveView(nextView);
         setError(null);
       });
       socket.on("room:error", (roomError) => setError(roomError));
@@ -126,6 +135,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
         if (!session?.access_token) {
           socketRef.current?.disconnect();
           socketRef.current = null;
+          viewRef.current = null;
           setView(null);
           setAuthStatus("unauthenticated");
           setStatus("idle");
@@ -153,7 +163,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
       connectingRef.current = false;
       connectRef.current = null;
     };
-  }, [handleAck]);
+  }, [handleAck, receiveView]);
 
   const retryConnection = useCallback(() => {
     setError(null);
@@ -167,7 +177,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
   }, []);
 
   const request = useCallback(async (
-    invoke: (socket: MultiplayerSocket, callback: (result: MultiplayerRoomAck) => void) => void,
+    invoke: (socket: MultiplayerSocket, callback: (result: MultiplayerRoomAck) => void, isActive: () => boolean) => void,
   ): Promise<ActionResult> => {
     const socket = socketRef.current;
     if (!socket || !socket.connected) {
@@ -191,7 +201,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
         });
         socket.once("disconnect", onDisconnect);
         try {
-          invoke(socket, finish);
+          invoke(socket, finish, () => !settled && socket.connected && socket === socketRef.current);
         } catch (cause) {
           finish({
             ok: false,
@@ -252,6 +262,11 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
     }, callback));
   }, [request, view]);
 
+  const retryAi = useCallback(() => {
+    if (!view) return Promise.resolve({ ok: false } as ActionResult);
+    return request((socket, callback) => socket.emit("room:retry-ai", { roomId: view.room.id, expectedVersion: view.room.version }, callback));
+  }, [request, view]);
+
   const closeRoom = useCallback(() => {
     if (!view) return Promise.resolve({ ok: false } as ActionResult);
     return request((socket, callback) => socket.emit("room:close", {
@@ -262,8 +277,13 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
 
   /** 提交游戏阶段动作；所有动作统一走 game:command 并携带版本号。 */
   const submitGameCommand = useCallback((command: MultiplayerGameCommand) => {
-    return request((socket, callback) => socket.emit("game:command", command, callback));
-  }, [request]);
+    return request((socket, callback, isActive) => sendMultiplayerCommandWithRecovery(command, view, {
+      send: (input, finish) => socket.emit("game:command", input, finish),
+      resume: (roomId, finish) => socket.emit("room:resume", { roomIdOrCode: roomId }, finish),
+      receive: receiveView,
+      isActive,
+    }, callback));
+  }, [request, receiveView, view]);
 
   return {
     view,
@@ -280,6 +300,7 @@ export function useMultiplayerRoom(options: UseMultiplayerRoomOptions = {}) {
     startRoom,
     leaveRoom,
     closeRoom,
+    retryAi,
     submitGameCommand,
   };
 }

@@ -209,6 +209,220 @@ test("人类猎人完成开枪后不会卡在特殊阶段", () => {
   assert.equal(next.players.find((player) => player.seat === target.seat)?.alive, false);
 });
 
+test("最后一只狼人发表遗言后直接结束当日，不虚增下一夜", () => {
+  const state = buildStartedRoomState(members, 8, "last-wolf-last-words-day");
+  state.day = 2;
+  state.players.forEach((player) => {
+    player.alive = player.seat !== 0;
+    player.role = player.seat === 0 ? "Werewolf" : "Villager";
+    player.alignment = player.seat === 0 ? "wolf" : "village";
+  });
+  state.phase = "DAY_LAST_WORDS";
+  state.currentSpeakerSeat = 0;
+  state.speechQueue = [0];
+  state.lastWordsSeat = 0;
+  state.continuationPhase = "NIGHT_START";
+  state.pendingDeaths = [{ seat: 0, reason: "execution" }];
+
+  const ended = applyMultiplayerGameCommand(state, "user-1", {
+    commandId: "last-wolf-final-words",
+    roomId: state.roomId ?? "",
+    expectedVersion: state.version ?? 0,
+    type: "speech",
+    content: "这是最后一只狼人的遗言。",
+  });
+
+  assert.equal(ended.phase, "GAME_END");
+  assert.equal(ended.winner, "village");
+  assert.equal(ended.day, 2);
+  assert.ok(ended.messages?.some((message) => message.content === "这是最后一只狼人的遗言。"));
+});
+
+test("遗言后的猎人开枪可以改变胜负且不虚增天数", () => {
+  const state = buildStartedRoomState(members, 8, "hunter-changes-winner-day");
+  state.day = 2;
+  state.players.forEach((player) => {
+    player.alive = false;
+    player.role = "Villager";
+    player.alignment = "village";
+  });
+  const hunter = state.players.find((player) => player.seat === 0)!;
+  const lastWolf = state.players.find((player) => player.seat === 1)!;
+  const lastVillager = state.players.find((player) => player.seat === 2)!;
+  hunter.role = "Hunter";
+  hunter.alignment = "village";
+  hunter.alive = false;
+  lastWolf.role = "Werewolf";
+  lastWolf.alignment = "wolf";
+  lastWolf.alive = true;
+  lastVillager.role = "Villager";
+  lastVillager.alignment = "village";
+  lastVillager.alive = true;
+  state.phase = "DAY_LAST_WORDS";
+  state.currentSpeakerSeat = hunter.seat;
+  state.speechQueue = [hunter.seat];
+  state.lastWordsSeat = hunter.seat;
+  state.continuationPhase = "NIGHT_START";
+  state.pendingTrigger = "hunter_shot";
+  state.roleAbilities!.hunterCanShoot = true;
+
+  const hunterTurn = applyMultiplayerGameCommand(state, hunter.userId!, {
+    commandId: "hunter-final-words",
+    roomId: state.roomId ?? "",
+    expectedVersion: state.version ?? 0,
+    type: "speech",
+    content: "猎人遗言。",
+  });
+  assert.equal(hunterTurn.phase, "HUNTER_SHOOT");
+  assert.equal(hunterTurn.winner, null, "胜负要等猎人技能结算后再判定");
+
+  const ended = applyMultiplayerGameCommand(hunterTurn, hunter.userId!, {
+    commandId: "hunter-shoot-last-wolf",
+    roomId: hunterTurn.roomId ?? "",
+    expectedVersion: hunterTurn.version ?? 0,
+    type: "hunter_shot",
+    targetSeat: lastWolf.seat,
+  });
+
+  assert.equal(ended.phase, "GAME_END");
+  assert.equal(ended.winner, "village");
+  assert.equal(ended.day, 2);
+});
+
+test("警长遗言后的警徽移交先完成，再进入下一夜并只推进一天", () => {
+  const state = buildStartedRoomState(members, 8, "sheriff-transfer-before-next-night");
+  state.day = 2;
+  state.players.forEach((player) => {
+    player.alive = false;
+    player.role = "Villager";
+    player.alignment = "village";
+  });
+  const sheriff = state.players.find((player) => player.seat === 0)!;
+  const wolf = state.players.find((player) => player.seat === 1)!;
+  const successor = state.players.find((player) => player.seat === 2)!;
+  const otherVillager = state.players.find((player) => player.seat === 3)!;
+  sheriff.role = "Werewolf";
+  sheriff.alignment = "wolf";
+  wolf.role = "Werewolf";
+  wolf.alignment = "wolf";
+  wolf.alive = true;
+  successor.alive = true;
+  otherVillager.alive = true;
+  state.badge!.holderSeat = sheriff.seat;
+  state.phase = "DAY_LAST_WORDS";
+  state.currentSpeakerSeat = sheriff.seat;
+  state.speechQueue = [sheriff.seat];
+  state.lastWordsSeat = sheriff.seat;
+  state.continuationPhase = "NIGHT_START";
+  state.pendingTrigger = "badge_transfer";
+
+  const transferTurn = applyMultiplayerGameCommand(state, sheriff.userId!, {
+    commandId: "sheriff-final-words",
+    roomId: state.roomId ?? "",
+    expectedVersion: state.version ?? 0,
+    type: "speech",
+    content: "警徽遗言。",
+  });
+  assert.equal(transferTurn.phase, "BADGE_TRANSFER");
+
+  const nextNight = applyMultiplayerGameCommand(transferTurn, sheriff.userId!, {
+    commandId: "sheriff-transfer",
+    roomId: transferTurn.roomId ?? "",
+    expectedVersion: transferTurn.version ?? 0,
+    type: "badge_transfer",
+    targetSeat: successor.seat,
+  });
+
+  assert.equal(nextNight.badge?.holderSeat, successor.seat);
+  assert.equal(nextNight.day, 3);
+  assert.equal(nextNight.phase, "NIGHT_WOLF_ACTION");
+  assert.ok(nextNight.messages?.some((message) => message.content.includes("第 3 天夜晚开始")));
+});
+
+test("白狼王自爆后先等待被带走猎人开枪，再按原天数结算胜负", () => {
+  const state = buildStartedRoomState(members, 8, "white-wolf-hunter-chain-day");
+  state.day = 2;
+  state.players.forEach((player) => {
+    player.alive = false;
+    player.role = "Villager";
+    player.alignment = "village";
+  });
+  const whiteWolf = state.players.find((player) => player.seat === 0)!;
+  const hunter = state.players.find((player) => player.seat === 1)!;
+  const lastWolf = state.players.find((player) => player.seat === 2)!;
+  const villager = state.players.find((player) => player.seat === 3)!;
+  const secondVillager = state.players.find((player) => player.seat === 4)!;
+  whiteWolf.kind = "ai";
+  whiteWolf.userId = null;
+  whiteWolf.role = "WhiteWolfKing";
+  whiteWolf.alignment = "wolf";
+  whiteWolf.alive = true;
+  hunter.role = "Hunter";
+  hunter.alignment = "village";
+  hunter.alive = true;
+  lastWolf.role = "Werewolf";
+  lastWolf.alignment = "wolf";
+  lastWolf.alive = true;
+  villager.alive = true;
+  secondVillager.alive = true;
+  state.phase = "DAY_SPEECH";
+  state.speechQueue = [whiteWolf.seat];
+  state.currentSpeakerSeat = whiteWolf.seat;
+
+  const hunterTurn = advanceMultiplayerGame(state, { autoAi: true });
+  assert.equal(hunterTurn.phase, "HUNTER_SHOOT");
+  assert.equal(hunterTurn.day, 2);
+  assert.equal(hunterTurn.winner, null, "不能在白狼王连带的猎人技能前结束牌局");
+  assert.equal(hunterTurn.roleAbilities?.whiteWolfKingBoomUsed, true);
+
+  const ended = applyMultiplayerGameCommand(hunterTurn, hunter.userId!, {
+    commandId: "white-wolf-chain-hunter-shot",
+    roomId: hunterTurn.roomId ?? "",
+    expectedVersion: hunterTurn.version ?? 0,
+    type: "hunter_shot",
+    targetSeat: lastWolf.seat,
+  });
+  assert.equal(ended.phase, "GAME_END");
+  assert.equal(ended.winner, "village");
+  assert.equal(ended.day, 2);
+});
+
+test("遗言没有决定胜负时正常进入下一夜并推进一天", () => {
+  const state = buildStartedRoomState(members, 8, "continue-to-real-next-night");
+  state.day = 2;
+  state.players.forEach((player) => {
+    player.alive = false;
+    player.role = "Villager";
+    player.alignment = "village";
+  });
+  const lastWords = state.players.find((player) => player.seat === 0)!;
+  const wolf = state.players.find((player) => player.seat === 1)!;
+  const villagers = state.players.filter((player) => player.seat === 2 || player.seat === 3);
+  lastWords.alive = false;
+  wolf.role = "Werewolf";
+  wolf.alignment = "wolf";
+  wolf.alive = true;
+  villagers.forEach((player) => { player.alive = true; });
+  state.phase = "DAY_LAST_WORDS";
+  state.currentSpeakerSeat = lastWords.seat;
+  state.speechQueue = [lastWords.seat];
+  state.lastWordsSeat = lastWords.seat;
+  state.continuationPhase = "NIGHT_START";
+
+  const nextNight = applyMultiplayerGameCommand(state, lastWords.userId!, {
+    commandId: "ordinary-last-words",
+    roomId: state.roomId ?? "",
+    expectedVersion: state.version ?? 0,
+    type: "speech",
+    content: "遗言结束，继续正常下一夜。",
+  });
+
+  assert.equal(nextNight.winner, null);
+  assert.equal(nextNight.day, 3);
+  assert.equal(nextNight.phase, "NIGHT_WOLF_ACTION");
+  assert.ok(nextNight.messages?.some((message) => message.content.includes("第 3 天夜晚开始")));
+});
+
 test("AI 白狼王在劣势发言轮可以发动自爆并继续结算", () => {
   const state = buildStartedRoomState(members, 10, "ai-boom");
   const whiteWolf = state.players.find((player) => player.role === "WhiteWolfKing");
@@ -261,6 +475,107 @@ test("首日警徽报名期间不公开夜间死亡", () => {
   assert.deepEqual(view.publicState.pendingDeaths, []);
   assert.equal(view.publicState.lastResult, null);
   assert.equal(view.publicState.messages.some((message) => message.content.includes("出局")), false);
+});
+
+test("旧 checkpoint 隐藏窗口恢复报名、白狼王行动和待公布目标", () => {
+  const signup = buildStartedRoomState(members, 8, "legacy-hidden-death-signup");
+  const pendingHuman = signup.players.find((player) => player.seat === 7)!;
+  pendingHuman.kind = "human";
+  pendingHuman.userId = "legacy-pending-human";
+  pendingHuman.alive = false;
+  signup.phase = "DAY_BADGE_SIGNUP";
+  signup.pendingDeaths = [{ seat: pendingHuman.seat, reason: "wolf" }];
+  signup.lastResult = { type: "night", day: 1, deaths: [{ seat: pendingHuman.seat, reason: "wolf" }] };
+
+  const signupView = projectMultiplayerState(signup, pendingHuman.userId, "in_game");
+  assert.equal(signupView.publicState.players.find((player) => player.seat === pendingHuman.seat)?.alive, true);
+  assert.deepEqual(signupView.privateState.allowedActions, ["badge_signup"]);
+  assert.equal(signupView.privateState.eligibleTargets.includes(pendingHuman.seat), false);
+  assert.equal(signup.players.find((player) => player.seat === pendingHuman.seat)?.alive, false, "projection must not mutate the stored checkpoint");
+  const submitted = applyMultiplayerGameCommand(signup, pendingHuman.userId, {
+    commandId: "legacy-hidden-signup",
+    roomId: signup.roomId ?? "",
+    expectedVersion: signup.version ?? 0,
+    type: "badge_signup",
+    signup: true,
+  });
+  assert.equal(submitted.players.find((player) => player.seat === pendingHuman.seat)?.alive, true);
+  assert.equal(submitted.badge?.signup[pendingHuman.userId], true);
+
+  const boom = buildStartedRoomState(members, 8, "legacy-hidden-death-boom");
+  const whiteWolf = boom.players.find((player) => player.seat === 0)!;
+  const pendingTarget = boom.players.find((player) => player.seat === 7)!;
+  whiteWolf.role = "WhiteWolfKing";
+  whiteWolf.alignment = "wolf";
+  whiteWolf.alive = false;
+  pendingTarget.alive = false;
+  boom.phase = "DAY_BADGE_SPEECH";
+  boom.currentSpeakerSeat = whiteWolf.seat;
+  boom.speechQueue = [whiteWolf.seat, pendingTarget.seat];
+  boom.badge!.candidates = [whiteWolf.seat];
+  boom.pendingDeaths = [
+    { seat: whiteWolf.seat, reason: "wolf" },
+    { seat: pendingTarget.seat, reason: "wolf" },
+  ];
+  boom.lastResult = { type: "night", day: 1, deaths: boom.pendingDeaths.map((death) => ({ ...death })) };
+
+  const boomView = projectMultiplayerState(boom, "user-1", "in_game");
+  assert.deepEqual(boomView.privateState.allowedActions, ["speech", "white_wolf_boom"]);
+  assert.ok(boomView.privateState.eligibleTargets.includes(pendingTarget.seat));
+  const resolvedBoom = applyMultiplayerGameCommand(boom, "user-1", {
+    commandId: "legacy-hidden-boom",
+    roomId: boom.roomId ?? "",
+    expectedVersion: boom.version ?? 0,
+    type: "white_wolf_boom",
+    targetSeat: pendingTarget.seat,
+  });
+  assert.equal(resolvedBoom.roleAbilities?.whiteWolfKingBoomUsed, true);
+
+  const published = buildStartedRoomState(members, 8, "published-death-stays-dead");
+  published.phase = "DAY_SPEECH";
+  published.day = 1;
+  published.players[7].alive = false;
+  published.currentSpeakerSeat = 0;
+  published.lastResult = { type: "night", day: 1, deaths: [{ seat: 7, reason: "wolf" }] };
+  const publishedView = projectMultiplayerState(published, "user-1", "in_game");
+  assert.equal(publishedView.publicState.players.find((player) => player.seat === 7)?.alive, false);
+  assert.equal(publishedView.privateState.eligibleTargets.includes(7), false);
+});
+
+test("旧 checkpoint 的待公布猎人死亡在警徽结算后只公开一次并正常触发技能", () => {
+  const state = buildStartedRoomState(members, 8, "legacy-pending-hunter");
+  const hunter = state.players.find((player) => player.seat === 7)!;
+  hunter.kind = "human";
+  hunter.userId = "legacy-pending-hunter-user";
+  hunter.role = "Hunter";
+  hunter.alignment = "village";
+  hunter.alive = false;
+  state.phase = "DAY_BADGE_ELECTION";
+  state.day = 1;
+  state.badge!.candidates = [0];
+  state.badge!.votes = Object.fromEntries(
+    state.players.filter((player) => player.seat !== 0).map((player) => [playerKeyForTest(player), 0]),
+  );
+  state.pendingDeaths = [{ seat: hunter.seat, reason: "wolf" }];
+  state.lastResult = { type: "night", day: 1, deaths: [{ seat: hunter.seat, reason: "wolf" }] };
+  state.messages = [{
+    id: "legacy-hidden-night-result",
+    playerId: null,
+    playerName: "系统",
+    content: "天亮了，昨夜猎人出局",
+    day: 1,
+    phase: "NIGHT_RESOLVE",
+    isSystem: true,
+  }];
+
+  const resolved = advanceMultiplayerGame(state, { autoAi: false });
+  assert.equal(resolved.phase, "HUNTER_SHOOT");
+  assert.equal(resolved.players.find((player) => player.seat === hunter.seat)?.alive, false);
+  assert.deepEqual(resolved.pendingDeaths, []);
+  assert.equal((resolved.messages ?? []).filter((message) => message.content.includes("昨夜") && message.content.includes("出局")).length, 1);
+  assert.deepEqual(projectMultiplayerState(resolved, hunter.userId, "in_game").privateState.allowedActions, ["hunter_shot"]);
+  const settledAgain = advanceMultiplayerGame(resolved, { autoAi: false });
+  assert.equal((settledAgain.messages ?? []).filter((message) => message.content.includes("昨夜") && message.content.includes("出局")).length, 1);
 });
 
 test("首日警徽报名期间同样隐藏平安夜，竞选结束后再公布", () => {

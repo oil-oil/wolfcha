@@ -213,6 +213,14 @@ function ensureRuntime(state: MultiplayerServerState): void {
   }
   state.turnKey ??= null;
   state.deadlineAt ??= null;
+  // 旧检查点可能在首次夜间结果公布前就把待公布死者标为出局。
+  // 只在该隐藏窗口按 pendingDeaths 修复，后续正式结算仍会执行 kill。
+  if (concealsFirstNightResult(state)) {
+    for (const death of state.pendingDeaths ?? []) {
+      const player = state.players.find((item) => item.seat === death.seat);
+      if (player) player.alive = true;
+    }
+  }
 }
 
 function cloneState(state: MultiplayerServerState): MultiplayerServerState {
@@ -363,9 +371,10 @@ function eligibleBadgeVoters(state: MultiplayerServerState): MultiplayerServerPl
 }
 
 export function buildMultiplayerPublicState(
-  state: MultiplayerServerState,
+  input: MultiplayerServerState,
   revealRoles = false,
 ): MultiplayerPublicState {
+  const state = cloneState(input);
   const concealNightDeaths = concealsFirstNightResult(state);
   const concealedSeats = new Set((state.pendingDeaths ?? []).map((death) => death.seat));
   const badgeVoters = eligibleBadgeVoters(state);
@@ -417,10 +426,11 @@ export function buildMultiplayerPublicState(
 }
 
 export function projectMultiplayerState(
-  state: MultiplayerServerState,
+  input: MultiplayerServerState,
   viewerUserId: string,
   status: MultiplayerRoomStatus,
 ): { publicState: MultiplayerPublicState; privateState: MultiplayerPrivateState } {
+  const state = cloneState(input);
   const viewer = state.players.find((player) => player.userId === viewerUserId) ?? null;
   return {
     publicState: buildMultiplayerPublicState(state, status === "finished"),
@@ -808,6 +818,9 @@ function continueCycle(state: MultiplayerServerState): void {
     state.phase = "DAY_START";
     return;
   }
+  // 夜间确实开始前先结算胜负。遗言、猎人行动和警徽移交等延迟流程
+  // 都必须先完成；若它们已经决定胜负，就不应再把 day 计数推进到下一天。
+  if (finishWinner(state)) return;
   state.day += 1;
   state.phase = "NIGHT_START";
 }

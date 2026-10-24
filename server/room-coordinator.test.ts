@@ -212,7 +212,7 @@ test("房主退出大厅后原子转移房主，退出者转为观战", async ()
   assert.equal(aggregate?.members.find((member) => member.userId === "u1")?.role, "spectator");
 });
 
-test("真人操作超时后转为 AI 托管，牌局不会停在等待阶段", async () => {
+test("最后真人超时后关闭房间，不再让无人牌局继续AI调用", async () => {
   let now = new Date("2026-08-23T10:00:00.000Z");
   const store = new MemoryRoomStore();
   const coordinator = new RoomCoordinator({ store, aiService: testAiService, now: () => now, actionTimeoutMs: 1_000, speechTimeoutMs: 1_000 });
@@ -236,9 +236,10 @@ test("真人操作超时后转为 AI 托管，牌局不会停在等待阶段", a
   assert.equal(await coordinator.expireTurn(created.view.room.id, deadline.version, deadline.turnKey), true);
   let aggregate = await store.getRoom(created.view.room.id);
   assert.equal(aggregate?.room.serverState?.players.find((player) => player.displayName === "房主")?.kind, "ai");
-  assert.equal(await coordinator.progressAi(created.view.room.id), true);
+  assert.equal(await coordinator.progressAi(created.view.room.id), false);
   aggregate = await store.getRoom(created.view.room.id);
-  assert.notEqual(aggregate?.room.phase, started.view.room.phase);
+  assert.equal(aggregate?.room.status, "closed");
+  assert.equal(aggregate?.room.serverState?.deadlineAt, null);
   const takenOver = aggregate?.members.find((member) => member.userId === "u1");
   assert.equal(takenOver?.role, "spectator");
   assert.equal(takenOver?.seat, null);

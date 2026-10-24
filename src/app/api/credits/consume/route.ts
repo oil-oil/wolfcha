@@ -20,6 +20,7 @@ type CampaignQuotaRow = {
 
 type ConsumeCreditPayload = {
   createSession?: boolean;
+  deferredMultiplayerRoomId?: string;
   playerCount?: number;
   difficulty?: string;
   usedCustomKey?: boolean;
@@ -184,6 +185,45 @@ export async function POST(request: Request) {
   const springCampaignBase = buildSpringCampaignBase(now);
   const springCampaignActive = isSpringCampaignActive(now);
   const quotaDate = springCampaignActive ? getShanghaiDateKey(now) : null;
+
+  // Multiplayer sessions are reserved by room and charged only in the atomic
+  // room-start RPC. Do not fall back to eager campaign consumption.
+  if (payload.deferredMultiplayerRoomId) {
+    if (springCampaignActive) {
+      return NextResponse.json(
+        { error: "Campaign credits are temporarily unavailable for multiplayer starts" },
+        { status: 409 },
+      );
+    }
+
+    const playerCount = Number(payload.playerCount);
+    if (!payload.createSession || !Number.isFinite(playerCount) || playerCount <= 0) {
+      return NextResponse.json({ error: "Invalid multiplayer session" }, { status: 400 });
+    }
+
+    const { data, error } = await supabaseAdmin.rpc(
+      "reserve_multiplayer_game_session" as never,
+      {
+        p_user_id: user.id,
+        p_room_id: payload.deferredMultiplayerRoomId,
+        p_player_count: Math.floor(playerCount),
+        p_difficulty: payload.difficulty || null,
+        p_model_used: payload.modelUsed || null,
+        p_user_email: payload.userEmail ?? user.email ?? null,
+        p_region: payload.region || null,
+      } as never,
+    );
+    if (error) {
+      console.error("[credits/consume] multiplayer session reservation failed", error);
+      return NextResponse.json({ error: "Failed to reserve multiplayer session" }, { status: 409 });
+    }
+    const row = (data as unknown as Array<{ session_id: string; credits: number }> | null)?.[0];
+    if (!row?.session_id) {
+      return NextResponse.json({ error: "Failed to reserve multiplayer session" }, { status: 409 });
+    }
+    return NextResponse.json({ success: true, credits: Number(row.credits ?? 0), sessionId: row.session_id });
+  }
+
   let campaignRow: CampaignQuotaRow | null = null;
 
   if (springCampaignActive && quotaDate) {
