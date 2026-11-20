@@ -69,7 +69,7 @@ Open [http://localhost:3000](http://localhost:3000). Configure the providers you
 
 - [TokenDance](https://tokendance.space/) — core game flow, roleplay, and summaries
 - [DashScope](https://bailian.console.aliyun.com/) — AI capability support
-- [Watcha](https://watcha.cn/) — AI capability and showcase platform support
+- [Watcha](https://watcha.cn/r/FfbaEZ) — AI capability and showcase platform support
 
 ## Roadmap
 
