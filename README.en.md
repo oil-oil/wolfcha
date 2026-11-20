@@ -18,7 +18,7 @@ Current sponsors:
 
 *   [TokenDance](https://tokendance.space/) - Powers the core game flow, roleplay, and summary features
 *   [Dashscope](https://bailian.console.aliyun.com/) - Provides AI capability support
-*   [Watcha](https://watcha.cn/) - Provides AI capability and showcase platform support
+*   [Watcha](https://watcha.cn/r/FfbaEZ) - Provides AI capability and showcase platform support
 
 ---
 
