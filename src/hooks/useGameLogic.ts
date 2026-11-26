@@ -55,6 +55,7 @@ import { supabase } from "@/lib/supabase";
 import { gameStatsTracker } from "@/hooks/useGameStats";
 import { gameSessionTracker } from "@/lib/game-session-tracker";
 import { continueAfterHunterShotWithBadgeTransfer } from "@/lib/hunter-badge-flow";
+import { createExecutionLastWordsContinuation, resumeExecutionLastWords } from "@/lib/last-words-flow";
 import { isQuotaExhaustedMessage } from "@/lib/llm";
 import { aiLogger } from "@/lib/ai-logger";
 
@@ -840,6 +841,43 @@ export function useGameLogic() {
   }, [isTokenValid, maybeGenerateDailySummary, runNightPhaseAction, setGameState, setDialogue, speakerHost, transitionPhase]);
   proceedToNightRef.current = proceedToNight;
 
+  const transferBadge = badgePhase.handleBadgeTransfer;
+  const handleHunterDeath = specialEvents.handleHunterDeath;
+  const continueAfterHunterShot = useCallback(async (
+    state: GameState,
+    continuation: (nextState: GameState) => Promise<void>
+  ) => {
+    await continueAfterHunterShotWithBadgeTransfer(
+      state,
+      transferBadge,
+      continuation
+    );
+  }, [transferBadge]);
+
+  const createLastWordsContinuation = useCallback(
+    (seat: number, token: ReturnType<typeof getToken>) =>
+      createExecutionLastWordsContinuation(seat, {
+        isCurrent: () => isTokenValid(token),
+        transferBadge: async (state, sheriff, afterTransfer) => {
+          afterBadgeTransferRef.current = afterTransfer;
+          await transferBadge(state, sheriff, async (nextState) => {
+            if (afterBadgeTransferRef.current !== afterTransfer) return;
+            afterBadgeTransferRef.current = null;
+            await afterTransfer(nextState);
+          });
+        },
+        handleHunter: async (state, hunter) => {
+          await handleHunterDeath(state, hunter, false, token, async (afterHunterState) => {
+            await continueAfterHunterShot(afterHunterState, (nextState) => proceedToNight(nextState, token));
+          });
+        },
+        checkWinner: checkWinCondition,
+        endGame: endGameSafely,
+        proceedToNight: (state) => proceedToNight(state, token),
+      }),
+    [isTokenValid, transferBadge, handleHunterDeath, continueAfterHunterShot, endGameSafely, proceedToNight]
+  );
+
   // ============================================
   // 从检查点恢复后的细粒度推进
   // 根据恢复的具体阶段决定如何继续流程
@@ -1059,17 +1097,12 @@ export function useGameLogic() {
           break;
         }
 
-        if (lastWordsSpeaker.isHuman) {
-          // 人类玩家：始终恢复到可以继续发言的状态，让玩家决定是否继续或结束
-          setDialogue(speakerHint, uiText.yourTurn, false);
-          break;
-        }
-
-        // AI 遗言发言者：由于无法可靠判断是否已完整说完（可能只说了一部分就刷新了）
-        // 因此不检查历史消息，直接重新触发 AI 发言
-        // AI 会根据历史消息自行判断是否需要继续说，如果已经说过遗言，AI 会生成简短的补充或确认
-        console.info('[wolfcha] DAY_LAST_WORDS: Restoring AI last words, re-triggering speech');
-        void runAISpeech(s, lastWordsSpeaker);
+        // The saved state has the executed player, but in-memory callbacks are lost on reload.
+        void resumeExecutionLastWords(s, lastWordsSpeaker, createLastWordsContinuation(lastWordsSpeaker.seat, token), {
+          setHumanContinuation: (callback) => { afterLastWordsRef.current = callback; },
+          showHumanTurn: () => setDialogue(speakerHint, uiText.yourTurn, false),
+          runAISpeech,
+        });
         break;
       }
 
@@ -1098,19 +1131,7 @@ export function useGameLogic() {
         break;
       }
     }
-  }, [badgePhase, buildVotePhaseExtras, getToken, proceedToNight, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
-
-  const transferBadgeAfterHunterShot = badgePhase.handleBadgeTransfer;
-  const continueAfterHunterShot = useCallback(async (
-    state: GameState,
-    continuation: (nextState: GameState) => Promise<void>
-  ) => {
-    await continueAfterHunterShotWithBadgeTransfer(
-      state,
-      transferBadgeAfterHunterShot,
-      continuation
-    );
-  }, [transferBadgeAfterHunterShot]);
+  }, [badgePhase, buildVotePhaseExtras, createLastWordsContinuation, getToken, proceedToNight, runAISpeech, runDaySpeechAction, runNightPhaseAction, resolveNight, resolveVotesSafely, setDialogue, setWaitingForNextRound, startDayPhaseInternal, t]);
 
   hunterDeathRef.current = async (state: GameState, hunter: Player, diedAtNight: boolean) => {
     const token = getToken();
@@ -1134,60 +1155,10 @@ export function useGameLogic() {
     token: ReturnType<typeof getToken>
   ) => {
     if (result) {
-      const executedPlayer = state.players.find((p) => p.seat === result.seat);
-      const isSheriff = state.badge.holderSeat === result.seat;
-
       await delay(DELAY_CONFIG.MEDIUM);
       if (!isTokenValid(token)) return;
 
-      await startLastWordsPhase(state, result.seat, async (s) => {
-        // 警长死亡，先移交警徽
-        if (isSheriff && executedPlayer) {
-          afterBadgeTransferRef.current = async (afterTransferState) => {
-            if (executedPlayer?.role === "Hunter" && afterTransferState.roleAbilities.hunterCanShoot) {
-              await specialEvents.handleHunterDeath(afterTransferState, executedPlayer, false, token, async (afterHunterState) => {
-                await continueAfterHunterShot(afterHunterState, async (nextState) => {
-                  await proceedToNight(nextState, token);
-                });
-              });
-              return;
-            }
-
-            const winnerAfterTransfer = checkWinCondition(afterTransferState);
-            if (winnerAfterTransfer) {
-              await endGameSafely(afterTransferState, winnerAfterTransfer);
-              return;
-            }
-
-            await proceedToNight(afterTransferState, token);
-          };
-          await badgePhase.handleBadgeTransfer(s, executedPlayer, async (afterTransferState) => {
-            const cb = afterBadgeTransferRef.current;
-            afterBadgeTransferRef.current = null;
-            if (cb) await cb(afterTransferState);
-          });
-          return;
-        }
-
-        // 猎人开枪
-        if (executedPlayer?.role === "Hunter" && s.roleAbilities.hunterCanShoot) {
-          await specialEvents.handleHunterDeath(s, executedPlayer, false, token, async (afterHunterState) => {
-            await continueAfterHunterShot(afterHunterState, async (nextState) => {
-              await proceedToNight(nextState, token);
-            });
-          });
-          return;
-        }
-
-        // 检查胜负
-        const winnerAfterLastWords = checkWinCondition(s);
-        if (winnerAfterLastWords) {
-          await endGameSafely(s, winnerAfterLastWords);
-          return;
-        }
-
-        await proceedToNight(s, token);
-      }, token);
+      await startLastWordsPhase(state, result.seat, createLastWordsContinuation(result.seat, token), token);
       return;
     }
 
@@ -1195,7 +1166,7 @@ export function useGameLogic() {
     await delay(DELAY_CONFIG.MEDIUM);
     if (!isTokenValid(token)) return;
     await proceedToNight(state, token);
-  }, [isTokenValid, startLastWordsPhase, badgePhase, specialEvents, endGameSafely, proceedToNight, continueAfterHunterShot]);
+  }, [isTokenValid, startLastWordsPhase, createLastWordsContinuation, proceedToNight]);
   handleVoteCompleteRef.current = handleVoteComplete;
 
   
